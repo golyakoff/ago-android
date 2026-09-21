@@ -1,7 +1,7 @@
 package ago.chat.android
 
-import android.os.Bundle
 import ago.chat.android.core.domain.shortId
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
