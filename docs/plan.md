@@ -137,49 +137,32 @@ nothing, not because they are excluded.
 
 ## A product decision this app forces, and the console will want too
 
-### The visitor emoji pool needs a curated category set, and today's is too narrow
+### The visitor avatar is a badge, not a bare pair, and Domain does not change (`25-207`)
 
-A visitor's identity in this product is an **emoji pair** — one creature, one food — permanent from
-the moment it is assigned, rendered before the visitor's short code in the conversation list and the
-open thread (`Ago.Chat.Domain.VisitorEmojiDictionary`, `workspace/visitorEmoji.ts`, `25-56`). Two
-lists of twenty give 400 combinations, which the original decision accepted as "a mnemonic, not a
-uniqueness guarantee".
+A visitor's identity in this product is an emoji pair — one creature, one food — permanent from the
+moment it is assigned (`Ago.Chat.Domain.VisitorEmojiDictionary`, `workspace/visitorEmoji.ts`, `25-56`).
+An earlier draft of this section proposed widening that dictionary to five categories; **that
+proposal was walked back the same day, through a live design conversation, and is not this item's
+scope**. The final decision, settled in `25-207`:
 
-Twenty creatures and twenty foods is a small world, and it is also a *lopsided* one: half the
-creature list is animal faces that read alike at 40dp. The author's instruction is to widen the pool
-and to curate it by category, Telegram's own top-level groups being the reference:
+- **The pool and the category roles do not change at all.** `Creatures` stays the large, centered
+  icon; `Foods` stays the badge. No fifth category, no cross-category pairing, no `Ago.Chat.Domain`
+  change, no migration.
+- **The visual fix is a badge composition, not a pair side by side**: the creature large and centred
+  (`28px`), the food emoji as a small badge overlapping the bottom-right edge (`16px`) with no
+  background circle of its own — settled live, several variants compared in a dedicated Artifact
+  before landing on this one.
+- **A nameless visitor's label reads as words, not a bare pair and a hash**: `Лиса · Апельсин` rather
+  than the glyphs themselves, with the short code kept as a small, faint trailing detail rather than
+  dropped. The name comes from a client-side i18n table keyed by the emoji glyph itself (copied
+  byte-for-byte from `VisitorEmojiDictionary.cs`, to avoid a Unicode variation-selector mismatch) —
+  **not a translated field added to `Ago.Chat.Domain`**, which stays free of any language-specific
+  content.
 
-**Included — five categories:**
-
-| Category | Examples of the kind of glyph that qualifies |
-|---|---|
-| Животные и природа | 🦊 🐙 🦩 🌵 🍁 |
-| Еда и напитки | 🍊 🥑 🍜 ☕ 🍩 |
-| Активности | ⚽ 🎸 🎣 🎲 🎨 |
-| Путешествия и места | ✈️ 🚂 ⛵ 🗼 🏔️ |
-| Объекты | 🔑 📚 🕯️ 🧭 ⌛ |
-
-**Excluded, deliberately:** flags (political, and many are indistinguishable at small size), plain
-geometric shapes and symbols (nothing to remember), human and smiley faces, hands and fingers,
-families and people, and anything that reads as a near-duplicate of another member at a glance —
-which is the existing dictionary's own stated rule ("no near-duplicates like both a generic cat face
-and a grinning cat"), applied to a wider pool rather than abandoned by it.
-
-The pair stays a pair, and the two halves still come from two *different* categories — that is the
-existing domain rule (`25-56` decision 2), and widening from two categories to five makes it cheaper
-to satisfy rather than harder. Five categories at twenty-five members each is 25 × 100 = 2 500
-ordered pairs against today's 400.
-
-**This is a change to `Ago.Chat.Domain`, not to the Android app**, and therefore not this item's to
-make: the dictionary is a domain rule, the assignment is permanent per visitor, and the backfill
-migration already froze today's lists into a SQL literal that must not be edited. What changes for an
-existing visitor is nothing. What changes for a new one is which lists they are drawn from — one
-domain change, one migration-free deployment, and the console gets the wider pool for free, because
-both clients render whatever the server assigned. **Flagged here as a future item in `ago-chat`, with
-a console-side consequence and no console-side work.**
-
-The mockup draws its avatars from this wider set, as pairs — which is also a correction: the first
-iteration drew a single emoji per visitor, which is not what the product does.
+This mockup's own avatars were updated to match: every avatar uses the badge composition, every
+invalid round-2 placeholder pair (drawn from a five-category set that was never real) was corrected
+to an actual `Creatures`/`Foods` member, and every nameless-visitor label shows the localized pair
+name instead of a bare pair and hex code.
 
 ## One commercial risk that is not technical
 
