@@ -18,8 +18,16 @@ android {
         minSdk = 26
         targetSdk = 34
 
-        versionCode = 1
-        versionName = "0.1.0"
+        // `26-09`/`adr/0051`: the build is a function of the commit alone, so the commit is the
+        // only truthful name for it — the same rule that keeps a GHCR image tag honest in the
+        // backend and frontend repositories, ported here. CI passes `-PagoVersionName` (the short
+        // commit sha) and `-PagoVersionCode` (`github.run_number`, monotonic across the repo's
+        // whole history — a commit sha cannot serve as `versionCode` itself, since Android
+        // requires it to be an increasing integer). Left unset, a local `./gradlew assembleDebug`
+        // still works and says so rather than claiming a commit it was not built from — the same
+        // choice `GIT_COMMIT` defaults to `unknown` for in the three frontend Dockerfiles.
+        versionCode = (project.findProperty("agoVersionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("agoVersionName") as String?) ?: "0.1.0-dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
