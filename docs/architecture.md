@@ -38,13 +38,13 @@ prevents that day.
 | Concern | Choice | What it replaces, and why the alternative loses |
 |---|---|---|
 | UI | Jetpack Compose + Material 3 | Views/XML. Compose is Google's stated direction, and Material 3's own components (bottom sheets, list-detail scaffold, contextual app bar) are exactly the ones the redesigns in `scope-inventory.md` call for. |
-| Navigation | Navigation Compose, single `Activity` | Multiple activities, or a hand-rolled back stack. The back-button contract in `navigation.md` is the part that must be right, and Navigation Compose is what implements it without being written. |
+| Navigation | Navigation Compose, single `Activity` | Multiple activities, or a hand-rolled back stack. The back-button contract in `navigation.md` is the part that must be right, and Navigation Compose is what implements it without being written. The five destinations are ordered **Диалоги, Записи, Команда, Аналитика, Ещё** — the same order on the phone's bottom bar and the tablet's navigation rail, by how often a shift touches each, not by the console rail's own order. |
 | HTTP | Ktor client (OkHttp engine) | Retrofit. Retrofit is excellent and Android-only; Ktor client is multiplatform, so choosing it now is the one place where keeping the KMP door open costs nothing at all. |
 | JSON | `kotlinx.serialization` | Moshi/Gson. Same reasoning: multiplatform, and it is Ktor's own default. |
 | Realtime | `com.microsoft.signalr:signalr`, Microsoft's official Java client | A hand-rolled SignalR implementation. The official client is JVM-only — see `adr/0178` for why that fact is the single hardest constraint on ever sharing this layer with iOS. |
 | Identity | AppAuth for Android (Authorization Code + PKCE) | Embedding a WebView login, which is what OAuth's own current best practice exists to stop. |
 | Local store | Room | SharedPreferences for anything structured, or a hand-rolled file cache. See "Offline" below for what is and is not cached. |
-| Background work | WorkManager | A foreground service holding a socket open. Android will not let that work, and pretending otherwise is `plan.md` §1's whole point. |
+| Background work | WorkManager | A foreground service holding a socket open. Android will not let that work, and pretending otherwise is the whole point of `plan.md`'s own "Push is the reason this app exists". |
 
 Nothing above is a library that replaces something hand-rolled cheaply; each replaces a piece of
 infrastructure this project has no reason to own.
@@ -114,6 +114,34 @@ control lives, not to invent a per-device variant of it.
 Reconnection uses the client's own backoff with full jitter, and a reconnect re-reads history from
 the last known `sequence` rather than trusting what was in memory when the socket dropped.
 
+## How an identifier is rendered
+
+Every id in this product is a GUID, and no screen ever prints one in full. The console's own
+convention, applied at a dozen call sites and asserted by its tests, is **the first eight characters
+in a monospace face** — `visitorId.slice(0, 8)`, `operatorId.slice(0, 8)`, `calendarId.slice(0, 8)`,
+`conversationId.slice(0, 8)`, `siteId.slice(0, 8)`, `customerId.slice(0, 8)` — which is eight hex
+characters, never a decimal counter and never a `#1234`-shaped reference. The app renders the same
+eight characters, in the same monospace face, for the same reason: an operator reads them aloud to a
+colleague or pastes them into a search, and two clients that truncate differently make that
+impossible.
+
+The one composite worth naming, because it is a single string with three optional parts:
+
+```
+{emojiCreature}{emojiFood} {visitorName?} {visitorId.slice(0, 8)}
+```
+
+— `visitorDisplayPrefix` in the console, and each part is genuinely absent rather than blank when
+unknown (a visitor predating the emoji column renders as the short code alone). The app builds the
+same string, and gives the emoji pair its own deliberately larger size the way `25-162` already does
+on the web.
+
+Two places where an id is what the wire carries and a name is what the screen needs — the pending
+booking queue (`PendingBooking` has `workerId`/`serviceId`/`calendarId` and no names) and the
+attachment upload grant (`attachmentUploadGrantedByOperatorId` with no join to a display name) —
+are recorded as gaps in [`scope-inventory.md`](scope-inventory.md) rather than papered over with a
+raw id in a sentence meant for a human.
+
 ## Offline
 
 **The app caches for responsiveness, never for correctness.** That is the same rule the backend
@@ -162,6 +190,7 @@ to a vertical slice.
 
 - **Whether iOS shares any of this Kotlin.** `adr/0178` states why that is not decidable yet and
   what would decide it.
-- **Push delivery.** `plan.md` §1. It is a backend change first and an Android change second.
+- **Push delivery.** `plan.md`'s own "Push is the reason this app exists" - the app's first dependency,
+  designed as its own backend item and not here.
 - **Play Store distribution mechanics** — signing, tracks, release cadence. Real work, not
   architecture, and nothing about it constrains the shape above.
