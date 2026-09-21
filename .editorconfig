@@ -1,0 +1,7 @@
+# `26-08`: ktlint's own `function-naming` rule expects lowerCamelCase, which is right for every
+# ordinary function and wrong for a `@Composable` one — Compose's own style guide requires
+# PascalCase there precisely because a composable reads as a UI element (`Column`, `Scaffold`),
+# not a computation, at every call site. This is ktlint's documented escape hatch for exactly that
+# case, not a project-specific suppression: https://pinterest.github.io/ktlint/rules/standard/#function-naming.
+[*.{kt,kts}]
+ktlint_function_naming_ignore_when_annotated_with = Composable

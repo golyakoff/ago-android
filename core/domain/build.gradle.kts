@@ -5,6 +5,7 @@
 // convention. See `ago-android/docs/architecture.md`, "Module layout".
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
 }
 
 kotlin {

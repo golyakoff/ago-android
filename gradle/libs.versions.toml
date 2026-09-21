@@ -32,6 +32,14 @@ junit = "4.13.2"
 androidxTestExtJunit = "1.2.1"
 espressoCore = "3.6.1"
 
+# `26-08`: the format gate. This is a build-time Gradle plugin wrapping the `ktlint` CLI, not a
+# hand-rolled formatter — the same "behind a well-known port, don't hand-roll it" reasoning as
+# every other row in `ago-android/docs/architecture.md`'s stack table. Deliberately not detekt
+# (`docs/backlog/26-08-*.md`'s own Scope: Android Lint plus `allWarningsAsErrors` already cover
+# this project's actual needs; detekt is a second suppression vocabulary for findings nobody has
+# had yet). 12.1.1 is the newest release compatible with the Gradle 8.9 wrapper `26-07` pinned.
+ktlintGradle = "12.1.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -56,3 +64,4 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
