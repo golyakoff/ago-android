@@ -79,3 +79,139 @@ jobs:
             **/build/test-results/
             **/build/reports/tests/
           if-no-files-found: warn
+
+  # `26-09`: the latest `main` reachable from a phone browser and installable, with no build
+  # machine and no GitHub login — the reason this job publishes a GitHub Release rather than only
+  # the workflow artifact below (`docs/backlog/26-09-*.md`'s own "Why a Release" section: an
+  # Actions artifact is a login-gated `.zip` a phone cannot install from; a Release asset has a
+  # direct public URL Android will offer to install). Same gate as `ago-console`'s own
+  # `publish-images` job, copied rather than re-derived: only a push to `main`, never a pull
+  # request, so a fork or a draft branch can never put an installable build where a tester might
+  # reach for it.
+  publish-apk:
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # `gh release create` against this repository's own GITHUB_TOKEN — no new
+      # secret, the same property `adr/0018` and `publish-images` already rely on for their own
+      # registries.
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # Short sha, not the full 40 hex: this is what `versionName` will show on the phone
+      # (Settings → О приложении, `26-17`) and what the release title/tag use, so it needs to be
+      # something read without a person truncating it by eye. Computed once, in one place, so the
+      # build step and the commit-check step below can never derive "short" two different ways.
+      - name: Compute version inputs
+        id: version
+        run: echo "short_sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      # Rebuilt here rather than passed down from `build-test`: that job already proved
+      # `assembleDebug` succeeds (`26-08`'s own gate), unversioned. Passing the APK between jobs
+      # would save a rebuild at the cost of an upload/download step and a second place the build
+      # inputs could drift from what `build-test` actually exercised — not a trade worth making at
+      # two jobs. `-PagoVersionName`/`-PagoVersionCode` are the Gradle properties
+      # `app/build.gradle.kts` reads (`adr/0051`'s rule ported to this artifact: the build is a
+      # function of the commit alone).
+      - name: Assemble debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            -PagoVersionName=${{ steps.version.outputs.short_sha }} \
+            -PagoVersionCode=${{ github.run_number }}
+
+      # `docs/backlog/26-09-*.md`'s own Scope: "a step that reads the commit back out of the built
+      # APK ... and fails if it does not match `github.sha`". This is `publish-images`'s "Check
+      # the image can name its own commit" step (ago-console), the same shape ported from a served
+      # `version.json` to `aapt2 dump badging`'s `versionName` field — a debug APK has no HTTP
+      # endpoint to ask, so the commit has to be read back out of the artifact itself. GitHub's
+      # `ubuntu-latest` image ships the Android SDK preinstalled — the same thing that already lets
+      # `build-test`'s `assembleDebug` run with no `setup-android` step — so this finds whichever
+      # build-tools version that image carries rather than pinning one nothing else in this
+      # repository depends on.
+      - name: Check the APK can name its own commit
+        run: |
+          set -euo pipefail
+          aapt2="$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)"
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          badging="$("$aapt2" dump badging "$apk")"
+          echo "$badging" | grep -E "versionCode|versionName"
+          echo "$badging" | grep -q "versionName='${{ steps.version.outputs.short_sha }}'"
+
+      # The login-gated fallback `docs/backlog/26-09-*.md`'s "Why a Release" section names for a
+      # reviewer who already has a GitHub session — the same role `0-04` gave the `.nupkg` upload
+      # it kept beside the real feed.
+      - name: Upload debug APK as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: debug-apk-${{ steps.version.outputs.short_sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # Written to a file rather than inlined into `gh release create --notes`: multi-paragraph
+      # Markdown with backticks survives a heredoc far more reliably than a quoted `--notes`
+      # argument. What it says is `docs/backlog/26-09-*.md`'s own Scope, verbatim in substance:
+      # debug-signed, no Play Store, no account, how to grant "install unknown apps", and the
+      # per-run debug keystore's real consequence — stated as the action a tester must take
+      # (uninstall first), not as a guess at Android's own error text.
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<EOF
+          This is a **debug-signed APK** — no Play Store, no Google account needed.
+
+          **To install:** open this release page on the phone and tap the \`.apk\` file below.
+          Whatever app opens it (the browser, or a file manager if it was downloaded first) will
+          ask permission to install unknown apps — allow that for it. Android blocks installs from
+          outside the Play Store by default, so this step is expected, not a warning sign.
+
+          **Uninstall any previous debug build of this app before installing this one.** Every CI
+          run generates its own, run-specific debug signing key — there is no shared signing key
+          for this build type (`26-09` in \`ago-root\`'s backlog says why: it is a deliberate,
+          temporary cost, not an oversight). Android will not let one app replace another that was
+          signed with a different key, so installing this APK over a build from an earlier run
+          will fail until the earlier one is removed from the phone first.
+
+          Built from commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`.
+          EOF
+
+      # `gh release create`, not `softprops/action-gh-release`: the CLI is preinstalled on
+      # `ubuntu-latest` and already authenticates with `GITHUB_TOKEN`, so this is one fewer
+      # third-party action in the supply chain for the same result — the same reasoning
+      # `publish-images` (ago-console) gives for `docker login` over `docker/login-action`.
+      # `--prerelease`: `docs/backlog/26-09-*.md` calls for a pre-release, not a release — this is
+      # a per-commit testing build, not a versioned product release. `--target` pins the release to
+      # this exact commit regardless of where `main` has moved by the time this step runs.
+      - name: Create GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="debug-${{ steps.version.outputs.short_sha }}"
+          url=$(gh release create "$tag" \
+            "app/build/outputs/apk/debug/app-debug.apk" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Debug build ${{ steps.version.outputs.short_sha }}" \
+            --notes-file release-notes.md \
+            --prerelease)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise what was published
+        run: |
+          {
+            echo "### Debug APK published"
+            echo
+            echo "Commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`"
+            echo
+            echo "Release: ${{ steps.release.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
