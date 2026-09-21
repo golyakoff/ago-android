@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        A minimal Material 3 window theme. Screen-level styling is Compose's job
+        (`ago-android/docs/architecture.md`); this exists only to give the Activity's window a
+        non-default background before Compose content is set.
+    -->
+    <style name="Theme.AgoChat" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

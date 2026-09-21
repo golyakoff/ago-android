@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AGO Chat</string>
+    <string name="placeholder_message">AGO Chat for Android — scaffolding only</string>
+</resources>

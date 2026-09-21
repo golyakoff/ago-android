@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Empty on purpose: this module declares no component, no permission. It exists because an
+    Android library module needs a manifest to build; `:core:network`'s own build.gradle.kts
+    explains why the module itself has nothing in it yet.
+-->
+<manifest />
