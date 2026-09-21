@@ -33,9 +33,9 @@ chores that follow are the ones that stayed caveats.
 
 ### The priority
 
-`Ago.Chat.*` contains no Firebase Cloud Messaging, no device-token table, no APNs, nothing. The
-console's alerting (`18-05`, `workspace/alerts.ts` + `useAlerts.ts`) is the browser `Notification`
-API, which requires the page to be open and the SignalR connection live.
+`Ago.Chat.*` contains no push integration of any kind — no device-token table, no sender, no APNs,
+nothing. The console's alerting (`18-05`, `workspace/alerts.ts` + `useAlerts.ts`) is the browser
+`Notification` API, which requires the page to be open and the SignalR connection live.
 
 Ported literally, that gives an Android app which notifies only while it is in the foreground with a
 live connection — **a worse notifier than the desktop console**, and the opposite of the one thing a
@@ -50,17 +50,31 @@ capability.
 
 **That capability was not designed here, and deliberately so — it now is, and is being built.**
 "The operator learns a visitor is waiting while the phone is in their pocket" was a backend change —
-a device-registration endpoint, an outbox consumer fanning out to FCM, and a per-operator delivery
-decision that reuses `alerts.ts`'s own rules rather than inventing a second set. It is designed in
+a device-registration endpoint, an outbox consumer fanning out to a push provider, and a per-operator
+delivery decision that reuses `alerts.ts`'s own rules rather than inventing a second set. It is
+designed in
 [`docs/architecture/push-notifications.md`](../../ago-root/docs/architecture/push-notifications.md)
 and [`adr/0179`](../../ago-root/docs/adr/0179-operator-push-is-a-worker-fan-out-to-a-device-row-and-the-loudness-decision-stays-on-the-client.md)
 (`26-01`), and split into three real `ago-chat` items the author has put into work: `26-03` (device
-registration, in progress), `26-04` (the FCM adapter — blocked on the author's own data-residency
-decision and a live reachability measurement, not on design), and `26-05` (the fan-out consumers).
+registration, in progress), `26-04` (the sender adapter), and `26-05` (the fan-out consumers).
 Nothing in this document constrains their shape beyond what the client side needs: a device token
 registered per signed-in operator per device (keyed by `operator + installation`, never by the token
 itself, so rotation needs no sweep job), a payload carrying enough to route a tap straight to a
 thread or a booking (`navigation.md`'s deep-link table), and revocation on sign-out.
+
+**The provider is RuStore Push, not Firebase Cloud Messaging**, decided on 2026-09-21 in
+[`adr/0180`](../../ago-root/docs/adr/0180-operator-push-goes-through-rustore-push-not-fcm.md), which
+partially supersedes `adr/0179`: `personal-data.md`'s data-residency default says a new destination
+should be in Russia, and RuStore is, so the question needs no legal escalation. `26-04`'s
+data-residency blocker is therefore closed — what still gates it is a live reachability measurement
+against `vkpns.rustore.ru`. Most of `adr/0179` stands; the client-side consequence for this document
+is two things. First, **there is no `google-services.json`**: the RuStore SDK
+(`ru.rustore.sdk:pushclient`) initialises from a project-ID string, so the app carries no credentials
+file. Second, **RuStore Push needs a distributor app on the device** — RuStore itself, or an
+undisclosed VK fallback — installed, signed in, and allowed to run in the background. That is a
+longer prerequisite list than FCM's Google Play Services and it is a real adoption question for an
+operator's own phone; `RuStorePushClient.checkPushAvailability()` is the documented check, and
+`26-18` measures what it returns on real devices rather than assuming the happy case.
 
 **The app is designed for the world where push exists.** The Notification settings screen shows the
 real thing — a channel per kind of event, each with its own switch, quiet hours, and the note that
