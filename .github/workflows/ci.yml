@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # `26-08`: the wrapper jar (`gradle/wrapper/gradle-wrapper.jar`) is a committed binary that
+      # every step below executes via `./gradlew` — this validates its checksum against Gradle's
+      # own published list before anything runs it, the same supply-chain care `ago-console`
+      # applies by pinning its Trivy image to a digest rather than a floating tag. Runs right after
+      # checkout, before `actions/setup-java` or any `./gradlew` invocation, which is the property
+      # the backlog item's own Done-when asks for.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      # Temurin because that is what `docs/architecture.md`'s stack table and this machine's own
+      # toolchain use; the major version (17) is pinned here rather than left as "latest", same as
+      # `gradle/libs.versions.toml`'s `jdk` entry pins it once for every module's own
+      # `jvmToolchain(...)` call. `cache: gradle` turns on the setup-java action's own wrapper
+      # around `actions/cache` for `~/.gradle/caches` and `~/.gradle/wrapper`, keyed on the wrapper
+      # properties and every `*.gradle*`/`libs.versions.toml` file - the same purpose
+      # `ago-console`'s explicit `actions/cache` step serves for its own Playwright browser.
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # The format gate, run before anything else builds - the same reason `ago-chat`'s and
+      # `ago-console`'s own CI put `dotnet format --verify-no-changes` / `npm run lint` ahead of
+      # their build step: a formatting-only branch should cost seconds, not a full compile.
+      # `ktlintCheck` is registered by the ktlint Gradle plugin this item adds (`gradle/libs.versions.toml`,
+      # `ktlintGradle`) in each of the three modules; invoked from the root it runs in all of them.
+      - name: Format check (ktlint)
+        run: ./gradlew ktlintCheck --no-daemon
+
+      # Android Lint ships with the Android Gradle Plugin already applied to `:app` and
+      # `:core:network` - no new dependency, unlike detekt. `docs/backlog/26-08-*.md`'s own Scope
+      # states why detekt is deliberately not here: Android Lint plus `26-07`'s
+      # `allWarningsAsErrors` already cover this project's actual needs, and detekt would only add
+      # a complexity-and-code-smell opinion nobody has asked for yet, plus a second suppression
+      # vocabulary to maintain (`ago-root/CLAUDE.md`'s rule that a new dependency must say what it
+      # replaces and why hand-rolling - or, here, not adding a tool at all - is worse).
+      - name: Android Lint
+        run: ./gradlew lint --no-daemon
+
+      # `:core:domain` (plain JVM unit tests), `:core:network` (no tests yet - `NO-SOURCE`, wired
+      # the moment `26-12`/`26-13` add its Ktor/SignalR contract tests) and `:app` (no tests yet -
+      # `26-20`'s own Compose UI tests) all register a `test` task; invoked from the root, Gradle
+      # runs it in every module that has one.
+      - name: Test
+        run: ./gradlew test --no-daemon
+
+      # A repository that compiles its libraries but cannot assemble an app is green about the
+      # wrong thing - this item's own Scope. `assembleDebug` only: no publishing, no signing
+      # (`26-09`), the app is built and thrown away.
+      - name: Assemble debug build
+        run: ./gradlew assembleDebug --no-daemon
+
+      # `if: always()` is what makes a red run diagnosable - `0-04` established this with `.trx` in
+      # the backend repositories, and `ago-console` keeps the same shape for its own UX-gate
+      # screenshots. Globs rather than one module's path: `:core:network` and `:app` have no test
+      # output today, but the pattern already covers them the day `26-12`/`26-20` add one, with
+      # nothing to remember to change here.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            **/build/test-results/
+            **/build/reports/tests/
+          if-no-files-found: warn

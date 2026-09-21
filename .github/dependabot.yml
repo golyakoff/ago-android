@@ -1,0 +1,29 @@
+# `26-08`. Schedule: weekly, Monday 06:00 UTC - the same day and hour `ago-console`'s and
+# `ago-chat`'s own dependabot.yml already use, so the project has one weekly rhythm rather than a
+# different one per repository or per ecosystem. Dependabot without CI to run against the bump PR
+# is worse than nothing (a stream of PRs nothing checks), which is why this file lands together
+# with ci.yml rather than as its own item - see this item's own Scope in ago-root.
+version: 2
+updates:
+  # Covers every module's build.gradle.kts and the version catalog
+  # (gradle/libs.versions.toml) - the Gradle plugin's own dependency graph, one entry regardless of
+  # module count, the same way the nuget/npm entries in the sibling repositories are one entry
+  # regardless of project count.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+
+  # An unpinned or stale Action is a supply-chain surface as real as a package - ci.yml's own
+  # actions/checkout, gradle/actions/wrapper-validation, actions/setup-java and
+  # actions/upload-artifact are all pinned to a major version tag today, not a commit SHA.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
