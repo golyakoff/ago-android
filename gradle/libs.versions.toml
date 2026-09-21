@@ -1,0 +1,58 @@
+# Version catalog — the single place a version is declared.
+#
+# Every module reads from here (`libs.foo`), never from a version string typed at the call site.
+# This is this repository's equivalent of the backend's `Directory.Packages.props`
+# (`ago-root/docs/backlog/26-07-*.md`, Scope).
+
+[versions]
+# Android / Kotlin toolchain. AGP 8.7's own compatibility table names Gradle 8.9, JDK 17 and
+# SDK Build Tools 34.0.0 as both its minimum AND its default — which is exactly what this
+# machine's Android SDK has installed (platforms;android-34, build-tools;34.0.0). AGP 9.x is
+# newer but its default/minimum build-tools is 36.0.0, which is not installed here and pulling
+# it in was not this item's call to make silently. Kotlin 2.0.21 is the last 2.0.x patch, the
+# generation AGP 8.7 actually shipped alongside and was tested against.
+agp = "8.7.3"
+kotlin = "2.0.21"
+# The JDK toolchain, pinned once here and read by every module's `jvmToolchain(...)` call rather
+# than re-typed per build file or left to whatever JDK happens to be on the machine running the
+# build (`26-07`'s own Scope: "a JDK toolchain pinned once").
+jdk = "17"
+
+# Compose BOM pins every androidx.compose.* artifact to one mutually-tested set. Picked from the
+# same generation as AGP 8.7 / Kotlin 2.0.21 rather than the newest BOM on Maven, for the same
+# reason as above: a newer BOM's minimum Kotlin/compileSdk requirement is not guaranteed to hold
+# against the toolchain actually pinned here, and this item does not need the newest anything.
+composeBom = "2024.10.01"
+
+coreKtx = "1.13.1"
+lifecycleRuntimeKtx = "2.8.6"
+activityCompose = "1.9.2"
+
+junit = "4.13.2"
+androidxTestExtJunit = "1.2.1"
+espressoCore = "3.6.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
