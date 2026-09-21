@@ -23,7 +23,8 @@ ago-android/
 - `:app` depends on both and is the only module where dependency injection is wired — the same
   "hosts reference everything and are the only place DI wiring lives" rule `ago-root`'s
   `CLAUDE.md` states for the backend, applied to the one module that is allowed to know about
-  Android.
+  Android. **Hilt** is the framework (the author's own decision, 2026-09-21) — wired in `26-12`,
+  the first item with anything to inject, not in the scaffolding item that precedes it.
 
 **The dependency direction is enforced by Gradle, not by discipline.** `:core:domain`'s build file
 declares no Android plugin, so a framework import does not compile — the same "make it impossible
