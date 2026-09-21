@@ -48,14 +48,19 @@ the console open on a desktop, and the phone becomes a second place to do the sa
 the place the work reaches them. The whole value of this stage is downstream of one backend
 capability.
 
-**That capability is not designed here, and deliberately so.** "The operator learns a visitor is
-waiting while the phone is in their pocket" is a backend change — a device-registration endpoint, an
-outbox consumer fanning out to FCM, and a per-operator delivery decision that reuses `alerts.ts`'s
-own rules rather than inventing a second set. It is its own backlog item, in `ago-chat`, being
-designed as its own piece of work. Nothing in this document constrains its shape beyond what the
-client side needs from it: a device token registered per signed-in operator per device, a payload
-carrying enough to route a tap straight to a thread or a booking (`navigation.md`'s deep-link table),
-and revocation on sign-out.
+**That capability was not designed here, and deliberately so — it now is, and is being built.**
+"The operator learns a visitor is waiting while the phone is in their pocket" was a backend change —
+a device-registration endpoint, an outbox consumer fanning out to FCM, and a per-operator delivery
+decision that reuses `alerts.ts`'s own rules rather than inventing a second set. It is designed in
+[`docs/architecture/push-notifications.md`](../../ago-root/docs/architecture/push-notifications.md)
+and [`adr/0179`](../../ago-root/docs/adr/0179-operator-push-is-a-worker-fan-out-to-a-device-row-and-the-loudness-decision-stays-on-the-client.md)
+(`26-01`), and split into three real `ago-chat` items the author has put into work: `26-03` (device
+registration, in progress), `26-04` (the FCM adapter — blocked on the author's own data-residency
+decision and a live reachability measurement, not on design), and `26-05` (the fan-out consumers).
+Nothing in this document constrains their shape beyond what the client side needs: a device token
+registered per signed-in operator per device (keyed by `operator + installation`, never by the token
+itself, so rotation needs no sweep job), a payload carrying enough to route a tap straight to a
+thread or a booking (`navigation.md`'s deep-link table), and revocation on sign-out.
 
 **The app is designed for the world where push exists.** The Notification settings screen shows the
 real thing — a channel per kind of event, each with its own switch, quiet hours, and the note that
@@ -89,17 +94,21 @@ The alternative — widening the API's audience validation to a list — is a ch
 `26-00`'s own Out-of-scope forbids, and is the worse shape anyway: the app should present a
 credential the API already knows how to accept, not ask the API to accept more kinds.
 
-### There is no OpenAPI description of the API, anywhere
+### There is no OpenAPI description of the API, and there will not be one
 
-No `AddOpenApi`, no `MapOpenApi`, no Swashbuckle, no NSwag — in `ago-chat`, `ago-platform` or
-`ago-calendar`. Both existing clients hand-write their wire types from `Ago.Chat.Contracts`
+No `AddOpenApi`, no `MapOpenApi`, no Swashbuckle, no NSwag — in `ago-chat` or `ago-calendar` (the
+only two hosts that serve a public contract at all; `ago-platform` ships no host of its own). Both
+existing clients hand-write their wire types from `Ago.Chat.Contracts`
 (`ago-console/src/realtime/protocol/types.ts`: "it exists so the rest of the console never guesses
 field names"; `ago-widget` does the same).
 
-This is load-bearing for the architecture decision (`adr/0178`): "share a *generated* API client
-between Android and iOS" is not an option that exists today — there is nothing to generate from, and
-creating it means changing three .NET hosts. The Android client will hand-write its wire types the
-same way both existing clients do, and for the same reason.
+This was load-bearing for the architecture decision (`adr/0178`) as an open question and is now
+closed as a real decision (`26-02`, not planned): the decisive finding is that OpenAPI would cover
+236 of 236 REST operations and 0 of 19 SignalR hub methods and 0 of 8 push events, while the
+conversation itself — join, history, send, receive, presence, team chat — is 100% hub, and this
+widget's own web sibling touches exactly six REST endpoints. A generated client would help the
+administrative surface and not the screen an operator actually works from. The Android client hand-
+writes its wire types the same way both existing clients do, and for the same reason, permanently.
 
 ## Order of work
 
