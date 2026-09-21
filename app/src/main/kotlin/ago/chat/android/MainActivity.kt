@@ -60,7 +60,7 @@ private fun PlaceholderScreen() {
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
+                TextX(
                     text = "AGO Chat",
                     style = MaterialTheme.typography.headlineMedium,
                 )
