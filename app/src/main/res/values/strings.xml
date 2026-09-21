@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        `26-10`: Russian as the default locale (`docs/backlog/26-10-*.md`'s own Scope) — no second
+        locale is authored here. `app_name` is the product's own brand name, kept identical in every
+        locale the same way `ago-console`/`ago-widget` never translate "AGO Chat" either.
+    -->
     <string name="app_name">AGO Chat</string>
-    <string name="placeholder_message">AGO Chat for Android — scaffolding only</string>
+    <string name="placeholder_message">AGO Chat для Android — пока только каркас</string>
+    <string name="placeholder_identifier_label">Идентификатор (пример)</string>
+    <string name="placeholder_visitor_with_pair_label">Посетитель с парой эмодзи и именем</string>
+    <string name="placeholder_visitor_without_pair_label">Посетитель до появления эмодзи-пары</string>
 </resources>

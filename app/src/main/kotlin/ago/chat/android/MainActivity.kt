@@ -1,6 +1,9 @@
 package ago.chat.android
 
-import ago.chat.android.core.domain.shortId
+import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.components.VisitorDisplayPrefix
+import ago.chat.android.ui.theme.AgoChatTheme
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -36,16 +40,17 @@ public class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-private fun AgoChatTheme(content: @Composable () -> Unit) {
-    MaterialTheme(content = content)
-}
-
 /**
- * The one placeholder screen this item's Done-when calls for. It also exercises the real
- * `:app` -> `:core:domain` dependency (`:app` depends on both core modules directly per
- * `ago-android/docs/architecture.md`) — `shortId` is called here so that boundary is compiled
- * and run, not just declared in Gradle.
+ * The one placeholder screen this item's Done-when calls for — now exercising `26-10`'s own three
+ * deliverables rather than `26-07`'s bare `shortId()` call: the token-driven `AgoChatTheme`,
+ * `IdentifierText` (never `.take(8)` at this call site), and `VisitorDisplayPrefix` in both its real
+ * shapes — a visitor with the emoji pair and a name, and the pre-emoji-column visitor with neither
+ * (`architecture.md`'s "How an identifier is rendered").
+ *
+ * `SAMPLE_VISITOR_ID` and the sample name/emoji below are demo data, not translatable UI text, so —
+ * unlike every label around them — they are not routed through `strings.xml`: the same category a
+ * demo GUID already was in `26-07`'s own scaffold (`shortId("3fa85f64-...")`), not a new exception
+ * invented here. Every actual label is `stringResource(...)`.
  */
 @Composable
 private fun PlaceholderScreen() {
@@ -61,22 +66,67 @@ private fun PlaceholderScreen() {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "AGO Chat",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineMedium,
                 )
                 Text(
-                    text = "sample-id " + shortId("3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+                    text = stringResource(R.string.placeholder_message),
                     style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+
+                Text(
+                    text = stringResource(R.string.placeholder_identifier_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                IdentifierText(id = SAMPLE_VISITOR_ID)
+
+                Text(
+                    text = stringResource(R.string.placeholder_visitor_with_pair_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                VisitorDisplayPrefix(
+                    emojiCreature = SAMPLE_EMOJI_CREATURE,
+                    emojiFood = SAMPLE_EMOJI_FOOD,
+                    visitorName = SAMPLE_VISITOR_NAME,
+                    visitorId = SAMPLE_VISITOR_ID,
+                )
+
+                Text(
+                    text = stringResource(R.string.placeholder_visitor_without_pair_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                VisitorDisplayPrefix(
+                    emojiCreature = null,
+                    emojiFood = null,
+                    visitorName = null,
+                    visitorId = SAMPLE_VISITOR_ID,
                 )
             }
         }
     }
 }
 
+private const val SAMPLE_VISITOR_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+private const val SAMPLE_EMOJI_CREATURE = "🦉" // owl
+private const val SAMPLE_EMOJI_FOOD = "🍓" // strawberry
+private const val SAMPLE_VISITOR_NAME = "Анна Иванова"
+
 @Preview(showBackground = true)
 @Composable
-private fun PlaceholderScreenPreview() {
-    AgoChatTheme {
+private fun PlaceholderScreenLightPreview() {
+    AgoChatTheme(darkTheme = false) {
+        PlaceholderScreen()
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun PlaceholderScreenDarkPreview() {
+    AgoChatTheme(darkTheme = true) {
         PlaceholderScreen()
     }
 }

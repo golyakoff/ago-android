@@ -115,6 +115,48 @@ control lives, not to invent a per-device variant of it.
 Reconnection uses the client's own backoff with full jitter, and a reconnect re-reads history from
 the last known `sequence` rather than trusting what was in memory when the socket dropped.
 
+## The design system: tokens, dynamic colour, and hardcoded-colour enforcement
+
+`26-10` transcribes `ago-console/src/design/tokens.css` — the console's own single source for colour,
+type and shape — into a Material 3 `ColorScheme` + `Typography` + `Shapes` set
+(`app/src/main/kotlin/ago/chat/android/ui/theme/`). This is deliberately not a second design system:
+`adr/0030` is the console's own decision about its closed palette, and the Android reading transcribes
+it rather than re-deciding it. Every value in `Color.kt` is either CARRIED OVER unchanged from a
+`tokens.css` custom property, or DERIVED from one by a rule stated next to it (Material 3 has more
+colour roles — the `surfaceContainer*` tonal-elevation family, `secondary`/`tertiary`, `inversePrimary`
+— than `tokens.css` has tokens for) — the same CARRIED OVER / DERIVED discipline `tokens.css`'s own
+header comment applies to itself. A handful of `tokens.css` tokens (`--ago-warning`,
+`--ago-brand-hover`, `--ago-live`) have no honest Material 3 `ColorScheme` slot at all and are kept as
+named constants for a future call site to read directly, rather than forced into a role that doesn't
+fit.
+
+**Android 12+ dynamic colour is not used — a decision, not an oversight.** `dynamicLightColorScheme()`/
+`dynamicDarkColorScheme()` (wallpaper-derived, Android 12+) are never called anywhere in this app;
+`AgoChatTheme` always uses the fixed, token-derived colour schemes, on every OS version. Reasoning: the
+console has no per-user, wallpaper-driven theming at all — its palette is a fixed brand identity, and
+`adr/0030` treats that as a deliberate, closed decision, not a gap. A B2B operator tool where the same
+person may work from the console on a desktop and this app on a phone benefits more from one
+consistent brand identity across both surfaces than from matching whatever wallpaper happens to be on
+an operator's phone that day — an operator recognising "this is AGO Chat" at a glance matters more here
+than the personalisation dynamic colour is designed for on a consumer app. If a future item finds a
+concrete reason dynamic colour should be offered as an opt-in (not a default), that is a new decision
+to make explicitly, not a reason to treat this one as unconsidered.
+
+**Enforcement of "no hardcoded colour at a call site" is a written convention, not a lint rule.**
+Checked before deciding: Android Lint's own built-in `HardcodedColor`-shaped checks target colour
+literals in XML resources, not `Color(0x...)`/`Color.Red`-shaped literals inside Compose Kotlin code,
+and neither the Android Gradle Plugin nor the Compose compiler ships a built-in Compose-lint check for
+this. Real third-party rule sets exist (`mrmans0n/compose-rules`, `slackhq/compose-lints`,
+`ReactiveCircus/compose-lint-rules`) but each is a new Gradle plugin dependency and a second
+suppression vocabulary — the identical reasoning `26-08` already gives for rejecting detekt in this
+repository ("Android Lint plus `allWarningsAsErrors` already cover this project's actual needs; detekt
+is a second suppression vocabulary for findings nobody has had yet"). Adding one for a single rule this
+early, with no findings yet to justify it, would repeat the thing `26-08` already declined. The
+convention instead: **a `Color`, a `TextStyle`, or a corner radius is read from `MaterialTheme`
+(`.colorScheme`, `.typography`, `.shapes`) or from a named constant in `ui/theme/`, never written as a
+literal at a screen's own call site.** If a real violation shows up in review, that is the moment to
+revisit whether a lint dependency has become worth its cost — not before.
+
 ## How an identifier is rendered
 
 Every id in this product is a GUID, and no screen ever prints one in full. The console's own
@@ -126,6 +168,13 @@ eight characters, in the same monospace face, for the same reason: an operator r
 colleague or pastes them into a search, and two clients that truncate differently make that
 impossible.
 
+`26-10` makes this concrete rather than aspirational: the truncation rule itself is `shortId`
+(`:core:domain`, `ago.chat.android.core.domain`) — a plain `String -> String` function with no Android
+dependency, because it is a rule the product owns rather than a detail of any one screen. `IdentifierText`
+(`:app`, `ui/components/`) is the one composable that calls it and renders the result in the product's
+monospace face; no screen calls `shortId`/`.take(8)` itself. The same split — logic in `:core:domain`,
+rendering in `:app` — applies to the composite below.
+
 The one composite worth naming, because it is a single string with three optional parts:
 
 ```
@@ -136,6 +185,14 @@ The one composite worth naming, because it is a single string with three optiona
 unknown (a visitor predating the emoji column renders as the short code alone). The app builds the
 same string, and gives the emoji pair its own deliberately larger size the way `25-162` already does
 on the web.
+
+`26-10`: `visitorDisplayPrefixParts`/`visitorDisplayPrefixText` (`:core:domain`) hold the logic —
+which parts are present, and the exact text-composition rule, matched against
+`ago-console/src/workspace/visitorEmoji.ts`'s own `visitorEmojiPrefix`/`visitorDisplayPrefix` (each
+present part supplies its own trailing space, none supplies a leading one, so a pair-less, name-less
+visitor renders the short id alone with no gap) — and `VisitorDisplayPrefix` (`:app`,
+`ui/components/`) is the composable that lays the parts out, sizing the emoji pair from
+`MaterialTheme.typography.titleLarge` and rendering the id through `IdentifierText`.
 
 Two places where an id is what the wire carries and a name is what the screen needs — the pending
 booking queue (`PendingBooking` has `workerId`/`serviceId`/`calendarId` and no names) and the
