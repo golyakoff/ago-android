@@ -14,12 +14,17 @@ Kotlin. Nothing here authorises a `settings.gradle.kts`.
 | Why Android is a standalone native codebase and no `ago-mobile-common` exists | `ago-root`'s `docs/adr/0178-*.md` |
 | What the screens actually look like | the published mockups: <https://claude.ai/code/artifact/8b4fb3a8-ddc0-4b2f-81ce-81d13c30a9d3> |
 
-The mockups are ten Material Design screens — sign-in, the owner-only terminal state, the
-conversation list, a thread, the visitor context sheet, the pending-bookings queue, confirmed
-bookings, the Ещё list, attachment storage under contextual multi-select, and the tablet two-pane
-layout — drawn against the product's own palette and type from `ago-console/src/design/tokens.css`.
-They are a review surface, not a specification: where a mockup and this documentation disagree, the
-documentation is what was decided.
+The mockups open with the **whole screen-transition graph** — every screen as a node, every real
+navigation action as a labelled edge — and then draw sixteen Material Design screens against the
+product's own palette and type from `ago-console/src/design/tokens.css`: sign-in, the owner-only
+terminal state, the conversation list, a thread, the visitor context sheet, notification settings,
+the pending-bookings queue, confirmed bookings, the booking-configuration hub, a worker card, the
+worker's schedule template, the re-cut's decision and confirmation steps, the Ещё list, attachment
+storage under contextual multi-select, and the tablet two-pane layout. They are a review surface,
+not a specification: where a mockup and this documentation disagree, the documentation is what was
+decided.
+
+The same graph is in [`navigation.md`](navigation.md), which is the copy to trust.
 
 Everything in this repository is public. The same rule `ago-root/CLAUDE.md` states applies here
 verbatim: no secret, no token, no node address, nobody's data — including in a mockup's placeholder
