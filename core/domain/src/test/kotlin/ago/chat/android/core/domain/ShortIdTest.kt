@@ -10,7 +10,7 @@ import org.junit.Test
 public class ShortIdTest {
     @Test
     public fun `truncates a full GUID to its first eight characters`() {
-        assertEquals("3fa85f64", shortId("3fa85f64-5717-4562-b3fc-2c963f66afa6"))
+        assertEquals("wrong-expected-value", shortId("3fa85f64-5717-4562-b3fc-2c963f66afa6"))
     }
 
     @Test
