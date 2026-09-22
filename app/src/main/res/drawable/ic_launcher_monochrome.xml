@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-34`: the monochrome layer for Android 13+ themed (Material You) icons - the same
+    Unbounded-Bold "A" outline as `ic_launcher_foreground.xml`, alone, with no background layer.
+    The system re-tints this shape to match the user's wallpaper-derived palette, so the fill
+    color itself is not meaningful (opaque black is the conventional placeholder, per Android
+    Studio's own generated monochrome templates) - only the shape's alpha coverage is used.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+</vector>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-34`: the adaptive-icon foreground layer - the brandbook mark's glyph, capital "A", set in
+    Unbounded Bold (weight 700), the brand's own open-source (OFL) Google Fonts display face.
+
+    The outline below is a real mechanical extraction, not a hand-drawn approximation:
+    `Unbounded-Bold.ttf` was downloaded from Google Fonts' own CDN (the exact static weight-700
+    instance `fonts.googleapis.com/css2?family=Unbounded:wght@700` resolves to:
+    fonts.gstatic.com/s/unbounded/v12/Yq6F-LOTXCb04q32xlpat-6uR42XTqtG6__2040.ttf), then the "A"
+    glyph's outline was pulled from its `glyf` table with
+    `fontTools.pens.svgPathPen.SVGPathPen` (Python, `fontTools` package) - see the commit report
+    for the extraction script and the side-by-side render against an independent FreeType-based
+    rendering of the same glyph, confirming it is the real letterform, right side up.
+
+    Placement: scaled and centered into the 66x66dp safe zone of this 108x108dp canvas (the safe
+    zone spans [21,87] on each axis; content outside it can be clipped by some launcher masks).
+    The brandbook's own reference proportion for the web tile (glyph ~60% of the tile's height)
+    is applied here to the *safe zone's* own height per this item's note, not the full 108dp:
+
+      target glyph height = 0.60 * 66dp = 39.6dp
+      glyph cap height in font units (unitsPerEm=1000) = 750 (bounding box y: 0..750)
+      scale = 39.6 / 750 = 0.0528
+      glyph bounding box: x: 1..956, y: 0..750 (font units) -> center (478.5, 375)
+      canvas center = (54, 54) (same point for the 108x108 canvas and the concentric safe zone)
+
+      for each font-unit point (fx, fy):
+        canvas x = 54 + (fx - 478.5) * 0.0528
+        canvas y = 54 - (fy - 375)   * 0.0528     // flip: font space is Y-up (baseline at 0,
+                                                    // ascender positive), vector space is Y-down
+
+      resulting scaled glyph size on the canvas: ~50.4dp wide x 39.6dp tall, comfortably inside
+      the 66x66dp safe zone on both axes.
+
+    The glyph has no curves in its own outline (a geometric/display face - this "A" is built
+    entirely from straight edges), so the transformed path below uses only M/L/Z.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+</vector>
