@@ -8,22 +8,17 @@ import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.thread.RoomComposerDraftStore
 import ago.chat.android.thread.ThreadViewModel
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -201,25 +196,4 @@ class BackContractDialogsTabTest {
             runBlocking { draftStore.read("c1") } == "Уже смотрю ваш заказ"
         }
     }
-}
-
-/**
- * `hiltViewModel()`'s own default scoping ties a `ThreadViewModel`'s lifetime to a `NavBackStackEntry`,
- * which calls `onCleared()` - and therefore cancels `viewModelScope` - when that entry is actually
- * cleared. A `ThreadViewModel` built directly (as every fake-backed instance in this file is) has no
- * such owner, so nothing ever cancels its `viewModelScope` on its own: `remember` alone forgets the old
- * *value* when the key changes, but calls no cleanup callback, unlike `DisposableEffect`. Without this
- * wrapper, an earlier open's `ThreadViewModel` - including its `init` block's own indefinite
- * `hubEvents.state.collect` and any in-flight `flushDraft()` write - keeps running for the rest of the
- * process, which is what raced this suite's own [AgoChatDatabase] being closed by `tearDown()` before
- * this fix (`java.lang.IllegalStateException: Cannot perform this operation because the connection
- * pool has been closed`, found running this exact test on `ago-test`).
- */
-@Composable
-private fun rememberDisposableThreadViewModel(factory: () -> ThreadViewModel): ThreadViewModel {
-    val viewModel = remember { factory() }
-    DisposableEffect(viewModel) {
-        onDispose { viewModel.viewModelScope.cancel() }
-    }
-    return viewModel
 }

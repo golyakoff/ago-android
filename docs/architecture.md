@@ -277,6 +277,37 @@ Matching `ago-root`'s `docs/conventions/testing.md` in shape rather than in tool
 A screen that compiles but has no test is not done — the same sentence `CLAUDE.md` already applies
 to a vertical slice.
 
+### Where `:app`'s Compose UI tests run (`26-20`)
+
+Two real options, priced against what this app actually has today (a handful of screens, no
+screenshot suite, `docs/backlog/26-20-*.md`'s own scope naming `ago-console`'s fifty-four-route
+`ux-gate` as the thing this is deliberately *not*):
+
+- **An emulator on the GitHub-hosted runner** (`reactivecircus/android-emulator-runner`) — real
+  `NavHost`, real system back dispatch, real `BackHandler`/`ModalBottomSheet` interaction, at the cost
+  of an emulator boot (a fixed few minutes CI pays on every push) and this action's own
+  well-documented history of flakiness on other projects.
+- **Robolectric on the JVM** — no emulator boot, runs inside the same `test` task `:core:domain`
+  already uses, but it is a *simulation* of the Android framework's own back-dispatch and window-focus
+  machinery, not the real thing — exactly the layer the back-button contract lives in.
+
+**Decision: the emulator.** The back-button contract (`26-16`) is a claim about how the *real*
+`OnBackPressedDispatcher`, `NavHost` and `ModalBottomSheet` behave together, and those tests already
+exist, already pass against a real device, and were independently re-verified against a real emulator
+before this item started (`26-20`'s own brief) — Robolectric would mean re-writing a proven suite
+against an approximation of the exact mechanism it is testing, to save a boot time this project can
+still afford at its current size. Revisit this the day the suite's own wall-clock cost, not its
+flakiness, becomes the argument against it.
+
+**What this still cannot catch.** A GitHub-hosted emulator is a real Android framework, but it is not
+a physical device: it proves nothing about a specific OEM's back-gesture customisation, a real
+touchscreen's input timing, low-memory process death under real device pressure, or anything that
+depends on real hardware sensors or a real cellular/Wi-Fi handoff. It also runs exactly one API level
+(34, this app's own `targetSdk`) on exactly one screen profile — a real fragmentation bug on a
+different OEM skin or a different screen density would pass this gate and still ship. Those gaps are
+`26-22`'s own by-hand verification to close, not something a green CI run may be read as already
+covering.
+
 ## What this document deliberately does not decide
 
 - **Whether iOS shares any of this Kotlin.** `adr/0178` states why that is not decidable yet and
