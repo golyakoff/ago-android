@@ -24,7 +24,9 @@ public sealed interface ProbeOutcome {
     public data object Refused : ProbeOutcome
 
     /** The question was not answered at all. Never either terminal arm. */
-    public data class Unanswered(val reason: ProbeFailure) : ProbeOutcome
+    public data class Unanswered(
+        val reason: ProbeFailure,
+    ) : ProbeOutcome
 }
 
 /** Why a probe could not answer. Rendered to the operator, so each case says something different. */
@@ -33,11 +35,17 @@ public sealed interface ProbeFailure {
      * A status the caller has no reading for — a `401` (the bearer token was rejected *after* the
      * client's own refresh-and-retry already had its turn), a `5xx`, anything else.
      */
-    public data class UnexpectedStatus(val status: Int) : ProbeFailure
+    public data class UnexpectedStatus(
+        val status: Int,
+    ) : ProbeFailure
 
     /** The request never reached a server, or its answer never came back. */
-    public data class Transport(val message: String) : ProbeFailure
+    public data class Transport(
+        val message: String,
+    ) : ProbeFailure
 
     /** A `2xx` whose body was not the shape this contract promises. */
-    public data class Malformed(val message: String) : ProbeFailure
+    public data class Malformed(
+        val message: String,
+    ) : ProbeFailure
 }

@@ -27,7 +27,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** A failure of the Keycloak round trip itself, as distinct from anything that happens after it. */
-public class SignInFailedException(message: String, cause: Throwable? = null) : Exception(message, cause)
+public class SignInFailedException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 /**
  * The app's OIDC session: Authorization Code + PKCE against the `ago-android` realm client `26-11`

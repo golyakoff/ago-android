@@ -183,6 +183,12 @@ public object AppModule {
      * `26-15`: `fallbackToDestructiveMigration()` — see [ago.chat.android.data.AgoChatDatabase]'s own
      * doc comment on `version = 2` for why a wipe-and-recreate is the honest choice here rather than a
      * hand-written `Migration`, and why that will not always be true.
+     *
+     * `25-214`: Room 2.8 deprecated the no-argument overload in favour of one that says out loud
+     * whether tables Room does not manage are dropped too. `true` is Room's own recommended value
+     * *and* behaviourally identical here: this file is created by Room, holds only the three
+     * entities [ago.chat.android.data.AgoChatDatabase] declares, and has no hand-made table for the
+     * `false` (legacy) behaviour to spare.
      */
     @Provides
     @Singleton
@@ -191,7 +197,7 @@ public object AppModule {
     ): AgoChatDatabase =
         Room
             .databaseBuilder(context, AgoChatDatabase::class.java, "ago-chat.db")
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
     @Provides

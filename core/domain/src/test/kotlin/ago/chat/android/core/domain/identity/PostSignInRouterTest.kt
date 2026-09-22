@@ -301,7 +301,9 @@ class PostSignInRouterTest {
         }
     }
 
-    private class RecordingActiveSite(initial: String? = null) : ActiveSiteSelection {
+    private class RecordingActiveSite(
+        initial: String? = null,
+    ) : ActiveSiteSelection {
         private var current: String? = initial
         val selections: MutableList<String?> = mutableListOf()
 

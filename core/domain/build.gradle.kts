@@ -9,7 +9,11 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(libs.versions.jdk.get().toInt())
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
     explicitApi()
     compilerOptions {
         allWarningsAsErrors.set(true)

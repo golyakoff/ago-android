@@ -15,14 +15,18 @@ public sealed interface SignInDestination {
      * will name; `null` only for the (impossible-by-construction, tolerated anyway) case of a seat
      * that resolved with no tenancy row behind it.
      */
-    public data class Operator(val activeSiteId: String?) : SignInDestination
+    public data class Operator(
+        val activeSiteId: String?,
+    ) : SignInDestination
 
     /**
      * More than one tenancy and none chosen yet. Nothing is probed in this state: with several
      * eligible rows and no `X-Ago-Active-Site` header, `ResolveOperatorIdentityHandler` resolves
      * *nothing* and `GET /api/v1/operators/me` answers `403` — see [PostSignInRouter].
      */
-    public data class ChooseSite(val tenancies: List<Tenancy>) : SignInDestination
+    public data class ChooseSite(
+        val tenancies: List<Tenancy>,
+    ) : SignInDestination
 
     /** No operator seat, and `GET /api/v1/owner/sites` accepted. `scope-inventory.md` §2. */
     public data object PlatformOwnerTerminal : SignInDestination
@@ -31,12 +35,17 @@ public sealed interface SignInDestination {
     public data object Registration : SignInDestination
 
     /** Nothing was established. Renders a retry, and is never either terminal arm. */
-    public data class Unavailable(val failure: RoutingFailure) : SignInDestination
+    public data class Unavailable(
+        val failure: RoutingFailure,
+    ) : SignInDestination
 }
 
 /** Which question went unanswered, so the retry screen can say something truer than "error". */
 public sealed interface RoutingFailure {
-    public data class ProbeDidNotAnswer(val step: RoutingStep, val reason: ProbeFailure) : RoutingFailure
+    public data class ProbeDidNotAnswer(
+        val step: RoutingStep,
+        val reason: ProbeFailure,
+    ) : RoutingFailure
 
     /**
      * `GET /api/v1/me/tenancies` listed at least one tenancy this identity may sign into, and

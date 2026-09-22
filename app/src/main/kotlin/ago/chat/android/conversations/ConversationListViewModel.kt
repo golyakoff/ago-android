@@ -129,13 +129,19 @@ public class ConversationListViewModel
                 when (val result = withContext(ioDispatcher) { api.fetchQueue() }) {
                     is QueueResult.Loaded -> {
                         lastQueue = result.queue
-                        val stillMine = result.queue.assignedToMe.map { it.conversationId }.toSet()
+                        val stillMine =
+                            result.queue.assignedToMe
+                                .map { it.conversationId }
+                                .toSet()
                         // `5-15`'s own reasoning, restated: a fresh snapshot already reflects every
                         // arrival the server knows about, so the local overlay retires for anything
                         // this snapshot actually re-read.
                         newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
                         unreadBumps = unreadBumps.filterKeys { it in stillMine }
-                        val stillWaiting = result.queue.waiting.map { it.conversationId }.toSet()
+                        val stillWaiting =
+                            result.queue.waiting
+                                .map { it.conversationId }
+                                .toSet()
                         claimErrors = claimErrors.filterKeys { it in stillWaiting }
                         claimingIds = claimingIds.intersect(stillWaiting)
                         render(stale = false)

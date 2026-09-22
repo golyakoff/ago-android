@@ -3,15 +3,20 @@
 // and the operator hub connection holder — the last of the three real callers this module was
 // scaffolded for.
 plugins {
+    // `25-214`: `org.jetbrains.kotlin.android` is deliberately absent — see `app/build.gradle.kts`
+    // for why (AGP 9's built-in Kotlin makes applying it a build failure).
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
 }
 
 android {
     namespace = "ago.chat.android.core.network"
-    compileSdk = 34
+
+    // `25-214`: kept identical to `:app`'s own `compileSdk` on purpose — two Android modules
+    // compiling against different platform jars is a difference that only ever surfaces as a
+    // confusing link error. See `app/build.gradle.kts` for why the number is 37.
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
@@ -24,7 +29,11 @@ android {
 }
 
 kotlin {
-    jvmToolchain(libs.versions.jdk.get().toInt())
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
     explicitApi()
     compilerOptions {
         allWarningsAsErrors.set(true)

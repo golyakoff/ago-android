@@ -32,7 +32,11 @@ public interface OperatorPermissionsApi {
  * ([ago.chat.android.core.domain.identity.ProbeOutcome]'s own doc comment) — a fetch that did not
  * answer is never folded into "holds nothing". */
 public sealed interface PermissionsFetch {
-    public data class Loaded(val granted: Set<String>) : PermissionsFetch
+    public data class Loaded(
+        val granted: Set<String>,
+    ) : PermissionsFetch
 
-    public data class Failed(val reason: ProbeFailure) : PermissionsFetch
+    public data class Failed(
+        val reason: ProbeFailure,
+    ) : PermissionsFetch
 }
