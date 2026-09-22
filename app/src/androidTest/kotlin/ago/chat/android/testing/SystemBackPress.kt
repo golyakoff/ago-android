@@ -26,7 +26,33 @@ import androidx.test.uiautomator.UiDevice
  * that needs to prove *that* fact (there is exactly one, `BackContractBottomBarTest
  * .clause3_backOnDialogiExitsTheApp`) cannot use this helper for its assertion and instead reads the
  * hosting `ActivityScenario`'s own lifecycle state after calling this function.
+ *
+ * `26-27`: fixing the focus race above traded away a synchronization guarantee nobody named at the
+ * time. `Espresso.pressBack()` is wired into Espresso's own `IdlingResource` machinery - it does not
+ * return to the caller until the app's main-thread work queue is genuinely idle, which is exactly why
+ * every back-contract test could get away with no explicit wait of its own before `26-25`.
+ * [UiDevice.pressBack] has no equivalent: it dispatches a system-level key event through UiAutomator
+ * and returns immediately, with no synchronization to Compose's or Espresso's idle state at all. That
+ * gap is real, not theoretical - it produced six live CI failures across four test files
+ * (`ago-android` PR #33, `instrumented-tests`, run `35729574271`), every one an assertion right after
+ * a `pressSystemBack()` call finding stale UI.
+ *
+ * The fix is *not* `composeTestRule.waitForIdle()` alone. Two of those six failures
+ * (`BackContractBottomBarTest.clause3_backOffAnotherTabLandsOnDialogi` and
+ * `.clause3_backNeverWalksThroughPreviouslyVisitedTabs`) already called it immediately after
+ * `pressSystemBack()` and still failed: Compose's `waitForIdle()` only inspects Compose's *own*
+ * current recomposition state, and has nothing to wait for if the system back event has not even been
+ * delivered to the app's dispatcher yet. The wait has to happen at the layer the system event actually
+ * flows through first - [UiDevice.waitForIdle], a UiAutomator API that blocks until the
+ * accessibility-event stream itself goes quiet. That is *why* the call below is a `UiDevice`-level
+ * wait rather than a `composeTestRule`-level one: it closes the dispatch race itself, not just the
+ * recomposition that follows it. A future reader tempted to "fix" a similar report by reaching back
+ * for `Espresso.pressBack()` would undo `26-25`'s real fix for `RootViewWithoutFocusException` - don't;
+ * the synchronization gap that reintroduces is exactly what this function's own wait exists to close
+ * without it.
  */
 fun pressSystemBack() {
-    UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    device.pressBack()
+    device.waitForIdle()
 }
