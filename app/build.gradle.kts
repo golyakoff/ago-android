@@ -16,6 +16,19 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+// `26-24`: the one version number in this project a person sets rather than a build derives.
+// Bumped by hand, in its own commit, whenever the author decides to cut a release — deliberately not
+// computed from a tag, a commit count, or anything else, because "which product version is this"
+// is a decision, not a fact about the repository. It is the bare `MAJOR.MINOR.PATCH`: the commit
+// this was built from is carried separately, as semver build metadata on `versionName` below.
+//
+// A plain `val`, not `const val`: a Gradle Kotlin DSL script's own top level is the body of the
+// generated script class, and `const` is only legal on a real top level or in an object — so
+// `const val` here is a script-compilation failure, not a style choice. `ci.yml`'s "Compute
+// version inputs" step reads this line's literal out of this file, so the declaration is kept on
+// one line with the value in double quotes.
+val agoReleaseVersion = "0.1.0"
+
 /**
  * `26-09`'s own `-PagoVersionName` shape, generalised: a Gradle property when one is passed,
  * otherwise the deployment this repository actually targets. Returns the value **already quoted**,
@@ -75,16 +88,28 @@ android {
         minSdk = 26
         targetSdk = 34
 
-        // `26-09`/`adr/0051`: the build is a function of the commit alone, so the commit is the
-        // only truthful name for it — the same rule that keeps a GHCR image tag honest in the
-        // backend and frontend repositories, ported here. CI passes `-PagoVersionName` (the short
-        // commit sha) and `-PagoVersionCode` (`github.run_number`, monotonic across the repo's
-        // whole history — a commit sha cannot serve as `versionCode` itself, since Android
-        // requires it to be an increasing integer). Left unset, a local `./gradlew assembleDebug`
-        // still works and says so rather than claiming a commit it was not built from — the same
-        // choice `GIT_COMMIT` defaults to `unknown` for in the three frontend Dockerfiles.
+        // `26-09`/`adr/0051` made every field here a function of the commit alone, on the grounds
+        // that nothing else about a build is guaranteed reproducible. `26-24` split that rule in
+        // two rather than dropping it, because a *product* version is a decision nobody can derive
+        // from a commit:
+        //
+        //   - `versionCode` stays exactly what it was — `github.run_number`, monotonic across the
+        //     repository's whole history, which is what Android requires this field to be (a commit
+        //     sha cannot serve as it, being neither an integer nor increasing). It remains the
+        //     "which CI run built this" provenance it has always been.
+        //   - `versionName` is now the hand-set `agoReleaseVersion` above, with the commit carried
+        //     *alongside* it as semver build metadata (`MAJOR.MINOR.PATCH+<short sha>`, the `+`
+        //     being the spec's own build-metadata separator) rather than standing in for it. So the
+        //     commit-provenance guarantee is unchanged in substance — the APK still names the exact
+        //     commit it was built from, and CI still reads it back out with `aapt2 dump badging` —
+        //     it just no longer monopolises the field.
+        //
+        // Left unset, a local `./gradlew assembleDebug` still works and still says so honestly:
+        // `0.1.0+dev` occupies the same build-metadata slot a real build puts its sha in, so it
+        // cannot be mistaken for, or matched as, a commit it was not built from — the same choice
+        // `GIT_COMMIT` defaults to `unknown` for in the three frontend Dockerfiles.
         versionCode = (project.findProperty("agoVersionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = (project.findProperty("agoVersionName") as String?) ?: "0.1.0-dev"
+        versionName = agoReleaseVersion + "+" + ((project.findProperty("agoVersionName") as String?) ?: "dev")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -155,6 +180,34 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+// `26-24`: the published release APK is named for the product, not for AGP's own default
+// `app-release.apk` — a file a tester downloads from a GitHub release page onto a phone should say
+// what it is. Bare semver, no `+<sha>` build metadata: the filename is what a person reads, while
+// the manifest's `versionName` inside is what proves which commit it came from (and `+` is not a
+// character worth putting in a filename that travels through browsers and file managers).
+//
+// This is the AGP 9 variant API (`androidComponents.onVariants`), not the `applicationVariants.all
+// { outputs.forEach { (it as BaseVariantOutputImpl).outputFileName = ... } }` shape most search
+// results still show. That one has not been deleted in 9.4.1 — it would still run — but AGP's own
+// `AbstractAppExtension.applicationVariants` getter reports itself deprecated the moment it is
+// touched, naming `AndroidComponentsExtension` (this block) as the replacement and classifying
+// itself as `LEGACY_VARIANT_API`. Writing the deprecated half of that pair into a new change, on a
+// repository that has already paid once for AGP removing a legacy surface out from under a plugin
+// (`gradle/libs.versions.toml`, `hilt`), would be choosing the thing with a removal date.
+// `VariantOutput.outputFileName` is a `Property<String>` in the current API, so it is `.set(...)`
+// rather than the legacy API's plain assignment.
+//
+// Scoped to `release` deliberately: `debug`'s output name is referenced by nothing here, but
+// `ci.yml`'s `build-test` job and every IDE run configuration assume AGP's default for it, and
+// nothing about this item asked for that to move.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("AGO_Chat_release_v$agoReleaseVersion.apk")
         }
     }
 }

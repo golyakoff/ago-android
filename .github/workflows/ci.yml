@@ -171,13 +171,33 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Short sha, not the full 40 hex: this is what `versionName` will show on the phone
-      # (Settings → О приложении, `26-17`) and what the release title/tag use, so it needs to be
-      # something read without a person truncating it by eye. Computed once, in one place, so the
-      # build step and the commit-check step below can never derive "short" two different ways.
+      # Three outputs, all computed here so no later step re-derives one its own way:
+      #
+      #   `short_sha` — not the full 40 hex, because this is the build-metadata half of what
+      #   `versionName` shows on the phone (Settings → О приложении, `26-17`) and what the release
+      #   title/tag use, so it needs to be read without a person truncating it by eye.
+      #
+      #   `release_version` — `26-24`'s hand-bumped semver, read straight out of
+      #   `app/build.gradle.kts` rather than repeated here: that file is the single place it is
+      #   declared, and a second copy in this workflow would be a second thing to remember to bump.
+      #   `test -n` is what turns a renamed or reformatted declaration into a loud failure here
+      #   instead of an empty string quietly producing `AGO_Chat_release_v.apk` further down.
+      #
+      #   `apk` — the release APK's real path, which `app/build.gradle.kts`'s own
+      #   `androidComponents.onVariants` block names for the product rather than leaving at AGP's
+      #   default `app-release.apk`. Derived once so the check, upload and release steps below all
+      #   read the same value and the path cannot drift between them as the version moves.
       - name: Compute version inputs
         id: version
-        run: echo "short_sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          release_version="$(sed -n 's/^val agoReleaseVersion = "\(.*\)"$/\1/p' app/build.gradle.kts | head -1)"
+          test -n "$release_version"
+          {
+            echo "short_sha=${GITHUB_SHA:0:7}"
+            echo "release_version=$release_version"
+            echo "apk=app/build/outputs/apk/release/AGO_Chat_release_v$release_version.apk"
+          } >> "$GITHUB_OUTPUT"
 
       # `25-215`: the keystore reaches the runner only as a base64 repository secret — decoded here
       # to `$RUNNER_TEMP`, a directory Actions creates per-job and outside the repository checkout,
@@ -197,8 +217,12 @@ jobs:
       # would save a rebuild at the cost of an upload/download step and a second place the build
       # inputs could drift from what `build-test` actually exercised — not a trade worth making at
       # two jobs. `-PagoVersionName`/`-PagoVersionCode` are the Gradle properties
-      # `app/build.gradle.kts` reads (`adr/0051`'s rule ported to this artifact: the build is a
-      # function of the commit alone). `25-215`: `assembleRelease`, not `assembleDebug` — a stable,
+      # `app/build.gradle.kts` reads. `-PagoVersionName` is still the bare short sha and nothing
+      # else: since `26-24` the build file composes `versionName` itself as
+      # `<hand-set semver>+<this property>`, so the commit provenance `adr/0051` asks for is
+      # supplied from here while the product version stays declared in one place, in the repository,
+      # rather than being passed in by whatever happens to invoke Gradle. `25-215`:
+      # `assembleRelease`, not `assembleDebug` — a stable,
       # persistent-key fingerprint is only useful on the build type RuStore and any future
       # distribution actually cares about — plus the four `agoSigning*` properties that make
       # `app/build.gradle.kts`'s `signingConfigs` guard apply the shared keystore instead of leaving
@@ -230,23 +254,34 @@ jobs:
       # `build-test`'s `assembleDebug` run with no `setup-android` step — so this finds whichever
       # build-tools version that image carries rather than pinning one nothing else in this
       # repository depends on.
+      #
+      # `26-24` did not weaken what this proves: the assertion is still that the APK's own manifest
+      # names the exact commit this job built it from. It matches a *substring* now only because
+      # `versionName` is `<semver>+<short sha>` rather than the short sha alone — the anchors are
+      # what keep that honest. `\+` pins the sha to the build-metadata slot (so a sha could never be
+      # matched out of the version number itself), and the closing `'` pins it to the end of the
+      # field (so a truncated or prefixed sha cannot pass). The unversioned local-build fallback,
+      # `<semver>+dev`, cannot match this by construction.
       - name: Check the APK can name its own commit
         run: |
           set -euo pipefail
           aapt2="$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)"
-          apk="app/build/outputs/apk/release/app-release.apk"
+          apk="${{ steps.version.outputs.apk }}"
           badging="$("$aapt2" dump badging "$apk")"
           echo "$badging" | grep -E "versionCode|versionName"
-          echo "$badging" | grep -q "versionName='${{ steps.version.outputs.short_sha }}'"
+          echo "$badging" | grep -qE "versionName='[^']*\+${{ steps.version.outputs.short_sha }}'"
 
       # The login-gated fallback `docs/backlog/26-09-*.md`'s "Why a Release" section names for a
       # reviewer who already has a GitHub session — the same role `0-04` gave the `.nupkg` upload
-      # it kept beside the real feed.
+      # it kept beside the real feed. The artifact's own *name* keeps naming the commit rather than
+      # the version: it identifies which CI run produced this zip, which is a different question
+      # from which product version is inside it, and several runs of one version would otherwise
+      # collide on a single name. The APK within it carries the product name (`26-24`).
       - name: Upload release APK as workflow artifact
         uses: actions/upload-artifact@v7
         with:
           name: release-apk-${{ steps.version.outputs.short_sha }}
-          path: app/build/outputs/apk/release/app-release.apk
+          path: ${{ steps.version.outputs.apk }}
           if-no-files-found: error
 
       # Written to a file rather than inlined into `gh release create --notes`: multi-paragraph
@@ -269,7 +304,7 @@ jobs:
           ask permission to install unknown apps — allow that for it. Android blocks installs from
           outside the Play Store by default, so this step is expected, not a warning sign.
 
-          Built from commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`.
+          Version \`${{ steps.version.outputs.release_version }}\`, built from commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.release_version }}+${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`.
           EOF
 
       # `gh release create`, not `softprops/action-gh-release`: the CLI is preinstalled on
@@ -279,6 +314,12 @@ jobs:
       # `--prerelease`: `docs/backlog/26-09-*.md` calls for a pre-release, not a release — this is
       # a per-commit testing build, not a versioned product release. `--target` pins the release to
       # this exact commit regardless of where `main` has moved by the time this step runs.
+      #
+      # `26-24` deliberately left the tag and title naming the commit rather than the semver. Every
+      # push to `main` publishes one of these, so many of them share a single `agoReleaseVersion`
+      # and a version-named tag would collide on the second push; and what a tag has to answer here
+      # is "which commit is this build", which the asset's own filename and the notes above now
+      # answer separately for "which product version".
       - name: Create GitHub release
         id: release
         env:
@@ -287,7 +328,7 @@ jobs:
           set -euo pipefail
           tag="release-${{ steps.version.outputs.short_sha }}"
           url=$(gh release create "$tag" \
-            "app/build/outputs/apk/release/app-release.apk" \
+            "${{ steps.version.outputs.apk }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
             --title "Release build ${{ steps.version.outputs.short_sha }}" \
@@ -300,7 +341,9 @@ jobs:
           {
             echo "### Release APK published"
             echo
-            echo "Commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`"
+            echo "Commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.release_version }}+${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`"
+            echo
+            echo "Asset: \`AGO_Chat_release_v${{ steps.version.outputs.release_version }}.apk\`"
             echo
             echo "Release: ${{ steps.release.outputs.url }}"
           } >> "$GITHUB_STEP_SUMMARY"
