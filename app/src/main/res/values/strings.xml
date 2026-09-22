@@ -103,4 +103,13 @@
         <item quantity="many">%d дней</item>
         <item quantity="other">%d дня</item>
     </plurals>
+
+    <!--
+        `26-15`: the thread screen - history, send, receive.
+    -->
+    <string name="thread_composer_placeholder">Напишите сообщение…</string>
+    <string name="thread_composer_send">Отправить</string>
+    <string name="thread_send_pending_retry">Сообщение не подтверждено. Повторить отправку?</string>
+    <string name="thread_join_failed_title">Не удалось открыть диалог</string>
+    <string name="thread_load_older_action">Загрузить более ранние сообщения</string>
 </resources>

@@ -7,9 +7,11 @@ import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
+import ago.chat.android.core.network.realtime.HistoryPage
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.SendMessageResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -370,5 +372,25 @@ class ConversationListViewModelTest {
         override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+
+        // `26-15`: this screen never joins/sends/pages history - it only ever reads [assignments]/
+        // [allMessages] above - so these four exist purely to satisfy the interface, the same "not this
+        // screen's concern" reasoning `ThreadViewModelTest`'s own fake states for its own unused members.
+        override suspend fun joinConversation(conversationId: String): HistoryPage = error("not used by this screen")
+
+        override fun leaveConversation() = error("not used by this screen")
+
+        override suspend fun loadOlderHistory(
+            conversationId: String,
+            beforeSequence: Long,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this screen")
+
+        override suspend fun sendMessage(
+            conversationId: String,
+            body: String,
+            clientMessageId: String,
+            attachmentId: String?,
+        ): SendMessageResult = error("not used by this screen")
     }
 }

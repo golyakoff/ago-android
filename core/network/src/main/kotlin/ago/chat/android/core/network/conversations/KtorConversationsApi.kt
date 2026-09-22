@@ -106,6 +106,9 @@ private data class ConversationSummaryWireDto(
     val emojiCreature: String? = null,
     val emojiFood: String? = null,
     val visitorName: String? = null,
+    // `26-15`: additive, `false` for a row that predates the field — `ConversationSummaryDto.cs`'s own
+    // remarks. [ConversationSummary]'s own doc comment says why this screen carries it now.
+    val hasAttachmentUploadGrant: Boolean = false,
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -124,6 +127,7 @@ private fun ConversationSummaryWireDto.toDomain() =
         visitorName = visitorName,
         createdAt = createdAt,
         operatorUnreadCount = operatorUnreadCount,
+        hasAttachmentUploadGrant = hasAttachmentUploadGrant,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =

@@ -91,6 +91,32 @@ class KtorConversationsApiTest {
         }
 
     @Test
+    fun `hasAttachmentUploadGrant maps through, and defaults false for a row that predates it`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "waiting": [],
+                          "assignedToMe": [
+                            {"conversationId":"c1","visitorId":"v1","createdAt":"2026-09-22T09:00:00Z","operatorUnreadCount":0,"hasAttachmentUploadGrant":true},
+                            {"conversationId":"c2","visitorId":"v2","createdAt":"2026-09-22T09:00:00Z","operatorUnreadCount":0}
+                          ]
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val loaded = api.fetchQueue() as QueueResult.Loaded
+
+            assertTrue(loaded.queue.assignedToMe.single { it.conversationId == "c1" }.hasAttachmentUploadGrant)
+            assertEquals(false, loaded.queue.assignedToMe.single { it.conversationId == "c2" }.hasAttachmentUploadGrant)
+        }
+
+    @Test
     fun `an unknown field on the wire does not break the read`() =
         runTest {
             val api =

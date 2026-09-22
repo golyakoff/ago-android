@@ -51,9 +51,12 @@ public class MessageSubscription {
     }
 
     /**
-     * Records `messages` — the initial page a fresh [join]'s own `JoinConversationAsync` call returned
-     * — as already delivered, without emitting them a second time: the caller already has them as that
-     * call's own return value. Advances the sequence tracker exactly as [accept] would.
+     * Records `messages` — a page the caller already has as some other call's own return value, and
+     * therefore never needs emitted through [messages] a second time. Two real callers: a fresh
+     * [join]'s own `JoinConversationAsync` page, and (`26-15`) `OperatorHubConnection.loadOlderHistory`'s
+     * own backward-keyset page. Advances the sequence tracker exactly as [accept] would — harmlessly a
+     * no-op for an older page's own (smaller) sequences, since [HubSequenceTracker.observe] only ever
+     * moves forward.
      */
     public fun markAlreadyDelivered(messages: List<MessageDto>) {
         synchronized(lock) {

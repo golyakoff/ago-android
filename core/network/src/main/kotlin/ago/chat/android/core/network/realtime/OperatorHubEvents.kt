@@ -52,4 +52,46 @@ public interface OperatorHubEvents {
      * own connections, so there is no "which conversation is open" question to answer before delivering
      * it, unlike [messages]. */
     public val assignments: SharedFlow<ConversationAssignedDto>
+
+    /**
+     * `26-15`: [OperatorHubConnection.joinConversation], restated on this interface for the identical
+     * testability reason every member above it already is — `ThreadViewModel` (`:app`) is the first
+     * caller that needs to *act* on the connection, not only observe it, and depending on this
+     * interface instead of the concrete class is what lets its own test substitute a fake with no
+     * hub connection at all.
+     */
+    public suspend fun joinConversation(conversationId: String): HistoryPage
+
+    /** [OperatorHubConnection.leaveConversation], restated. */
+    public fun leaveConversation()
+
+    /**
+     * `26-15`: the backward-keyset "load older messages" page — `ago-console`'s own `loadOlderHistory`,
+     * restated. Unlike [joinConversation] (always the newest page), this is `GetHistoryAsync` called
+     * directly with a real `beforeSequence` cursor: the strictly-older page whose own `nextBeforeSequence`
+     * is `null` once every message in this conversation has been walked (`ConversationReadStore.Sql`,
+     * `ago-chat`: `sequence < @BeforeSequence`, `order by sequence desc` — a page is exhausted exactly
+     * when it comes back shorter than [pageSize]).
+     */
+    public suspend fun loadOlderHistory(
+        conversationId: String,
+        beforeSequence: Long,
+        pageSize: Int,
+    ): HistoryPage
+
+    /**
+     * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity every time
+     * (`OperatorHub.cs`'s own comment on why a hub method's argument *count* is a wire contract this
+     * class must never shorten). The message this call sends is never appended to [messages] directly
+     * from its return value — the server's own local echo (`Clients.Caller.SendAsync("MessageReceived"
+     * , ...)`, `OperatorHub.SendAsync`) is what actually delivers it back over that flow, the identical
+     * "the push is the only path that renders a sent message" shape `ago-console`'s own `sendMessage`
+     * already relies on.
+     */
+    public suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+        clientMessageId: String,
+        attachmentId: String? = null,
+    ): SendMessageResult
 }

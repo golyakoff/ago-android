@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
@@ -15,6 +16,8 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.RoomConversationListCache
+import ago.chat.android.data.thread.ComposerDraftDao
+import ago.chat.android.data.thread.RoomComposerDraftStore
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.OidcConfig
@@ -161,12 +164,20 @@ public object AppModule {
      * exposing a less-visible type in its own signature — the same rule stated in full beside
      * [provideConversationListCache] below — so this provider is `internal` too, which costs nothing
      * since Hilt's generated component lives in this same module's own compilation.
+     *
+     * `26-15`: `fallbackToDestructiveMigration()` — see [ago.chat.android.data.AgoChatDatabase]'s own
+     * doc comment on `version = 2` for why a wipe-and-recreate is the honest choice here rather than a
+     * hand-written `Migration`, and why that will not always be true.
      */
     @Provides
     @Singleton
     internal fun provideAgoChatDatabase(
         @ApplicationContext context: Context,
-    ): AgoChatDatabase = Room.databaseBuilder(context, AgoChatDatabase::class.java, "ago-chat.db").build()
+    ): AgoChatDatabase =
+        Room
+            .databaseBuilder(context, AgoChatDatabase::class.java, "ago-chat.db")
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     internal fun provideConversationRowDao(database: AgoChatDatabase): ConversationRowDao = database.conversationRowDao()
@@ -177,4 +188,12 @@ public object AppModule {
     // narrower than what Hilt actually needs to see.
     @Provides
     internal fun provideConversationListCache(cache: RoomConversationListCache): ConversationListCache = cache
+
+    @Provides
+    internal fun provideComposerDraftDao(database: AgoChatDatabase): ComposerDraftDao = database.composerDraftDao()
+
+    // `26-15`: the identical `internal` reasoning [provideConversationListCache] above states, for the
+    // composer's own port.
+    @Provides
+    internal fun provideComposerDraftStore(store: RoomComposerDraftStore): ComposerDraftStore = store
 }

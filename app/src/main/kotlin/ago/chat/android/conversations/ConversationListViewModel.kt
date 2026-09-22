@@ -241,6 +241,7 @@ public class ConversationListViewModel
                 isNewlyAssigned = conversationId in newlyAssignedIds,
                 isClaiming = conversationId in claimingIds,
                 claimError = claimErrors[conversationId],
+                hasAttachmentUploadGrant = hasAttachmentUploadGrant,
             )
 
         /**
