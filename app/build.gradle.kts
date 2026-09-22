@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     // `25-214`: no `org.jetbrains.kotlin.android` here. AGP 9.0 compiles Kotlin itself ("built-in
     // Kotlin"), and applying the standalone plugin on top of it is a hard build failure, not a
@@ -26,6 +28,31 @@ fun agoProperty(
     val value = (project.findProperty(name) as String?) ?: default
     return "\"" + value + "\""
 }
+
+// `25-215`: the four `agoSigning*` values have two possible sources, never both read the same way.
+// A developer machine keeps them in `local.properties` — gitignored, per-machine, the same file
+// Android Studio itself writes into — because a store/key password has no business as a shell
+// history entry. CI has no such file (a runner is thrown away after the job), so it passes them as
+// `-P` Gradle properties sourced from `secrets.*` instead. `Properties().load(...)` against
+// `rootProject.file("local.properties")` is Gradle's own idiom for the first source; a fresh
+// checkout with neither source present must still build (AGP's own default debug signing,
+// `release` left genuinely unsigned), so this returns null rather than a default — unlike
+// `agoProperty` above, whose fields (API URLs, version name) always have a safe literal to fall
+// back to. A signing password does not have one.
+val agoLocalProperties = Properties()
+val agoLocalPropertiesFile = rootProject.file("local.properties")
+if (agoLocalPropertiesFile.exists()) {
+    agoLocalPropertiesFile.inputStream().use { agoLocalProperties.load(it) }
+}
+
+fun agoSigningProperty(name: String): String? = agoLocalProperties.getProperty(name) ?: (project.findProperty(name) as String?)
+
+// Read once, at configuration time, and used as the guard for the whole `signingConfigs`/
+// `buildTypes` wiring below: its presence is what distinguishes an environment that has the shared
+// keystore (local dev with `local.properties` populated, or CI with its two repository secrets)
+// from one that does not (a fresh clone, or a contributor's machine with no keystore yet), so the
+// unconfigured case gets today's behaviour unchanged rather than a build failure.
+val agoSigningKeystorePath = agoSigningProperty("agoSigningKeystorePath")
 
 android {
     namespace = "ago.chat.android"
@@ -80,9 +107,37 @@ android {
         buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.reserve-me.ru"))
     }
 
+    // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP
+    // default and a separately-keyed `release`. `signingConfigs` is only populated when
+    // `agoSigningKeystorePath` is actually present — the same guard is repeated on each build type
+    // below rather than assigning unconditionally, because `signingConfig = signingConfigs.getByName(...)`
+    // would fail to resolve on a fresh checkout where the block was never created. Left unconfigured,
+    // `debug` keeps AGP's own built-in debug-signing default (unchanged from today) and `release`
+    // stays genuinely unsigned (`isMinifyEnabled = false`, unchanged by `25-214`) rather than
+    // failing the whole build.
+    signingConfigs {
+        if (agoSigningKeystorePath != null) {
+            create("ago") {
+                storeFile = file(agoSigningKeystorePath)
+                storePassword = agoSigningProperty("agoSigningStorePassword")
+                // Not secret — the alias may be a plain literal in the build file or workflow.
+                keyAlias = agoSigningProperty("agoSigningKeyAlias") ?: "ago-android"
+                keyPassword = agoSigningProperty("agoSigningKeyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (agoSigningKeystorePath != null) {
+                signingConfig = signingConfigs.getByName("ago")
+            }
+        }
         release {
             isMinifyEnabled = false
+            if (agoSigningKeystorePath != null) {
+                signingConfig = signingConfigs.getByName("ago")
+            }
         }
     }
 
