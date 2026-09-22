@@ -53,8 +53,6 @@ fun agoSigningProperty(name: String): String? = agoLocalProperties.getProperty(n
 // from one that does not (a fresh clone, or a contributor's machine with no keystore yet), so the
 // unconfigured case gets today's behaviour unchanged rather than a build failure.
 val agoSigningKeystorePath = agoSigningProperty("agoSigningKeystorePath")
-val agoDiagExists = agoSigningKeystorePath?.let { file(it).exists() }
-println("DIAG path=[$agoSigningKeystorePath] exists=$agoDiagExists")
 
 android {
     namespace = "ago.chat.android"

@@ -200,9 +200,15 @@ jobs:
       # `app/build.gradle.kts` reads (`adr/0051`'s rule ported to this artifact: the build is a
       # function of the commit alone). `25-215`: `assembleRelease`, not `assembleDebug` — a stable,
       # persistent-key fingerprint is only useful on the build type RuStore and any future
-      # distribution actually cares about — plus the three `agoSigning*` properties that make
+      # distribution actually cares about — plus the four `agoSigning*` properties that make
       # `app/build.gradle.kts`'s `signingConfigs` guard apply the shared keystore instead of leaving
       # `release` genuinely unsigned. The alias is a plain literal, not a secret (`docs/backlog/25-215-*.md`).
+      # `agoSigningKeyPassword` reuses the identical store-password secret - the keystore was
+      # generated with one password serving both roles, and the first real run of this job found
+      # the cost of forgetting this line the hard way: with no key password supplied, AGP's
+      # `validateSigningRelease` reported "Keystore file not set for signing config ago" - a
+      # misleading message for what was actually a missing key password, confirmed by a temporary
+      # diagnostic println that proved the keystore file itself was present and readable.
       - name: Assemble release APK
         env:
           AGO_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
@@ -212,6 +218,7 @@ jobs:
             -PagoVersionCode=${{ github.run_number }} \
             -PagoSigningKeystorePath="$RUNNER_TEMP/ago-android-release.keystore" \
             -PagoSigningStorePassword="$AGO_SIGNING_STORE_PASSWORD" \
+            -PagoSigningKeyPassword="$AGO_SIGNING_STORE_PASSWORD" \
             -PagoSigningKeyAlias=ago-android
 
       # `docs/backlog/26-09-*.md`'s own Scope: "a step that reads the commit back out of the built
