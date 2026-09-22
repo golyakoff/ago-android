@@ -53,9 +53,11 @@
     <string name="registration_body">Регистрация магазина пока делается в веб-консоли. Когда магазин появится, войдите здесь ещё раз — приложение подхватит его само.</string>
     <string name="registration_open_console">Открыть веб-консоль</string>
 
-    <!-- `26-13`: a debug row proving the hub connection, not a designed status indicator - kept as a
-         small status line in `26-14`'s own app bar rather than a full designed indicator, which is
-         still a later item's job. -->
+    <!-- `26-32`: these were the words `HubConnectionDebugRow` printed on a line of its own, on two
+         screens. `HubConnectionDot` replaced that row with a dot in the app bar, and these strings
+         survive because the dot speaks them rather than drawing them - a coloured circle on its own
+         says nothing to a screen reader, and nothing at all to anyone who cannot separate this green
+         from this red. Composed as "<label>: <state>". -->
     <string name="hub_connection_label">Соединение</string>
     <string name="hub_connection_disconnected">Отключено</string>
     <string name="hub_connection_connecting">Подключение…</string>
@@ -63,6 +65,11 @@
     <string name="hub_connection_reconnecting">Переподключение…</string>
 
     <string name="action_sign_out">Выйти</string>
+    <!-- `26-32`: the conversation list's overflow (⋮) control. Its own string rather than a reuse of
+         `nav_more` ("Ещё", the bottom bar's fifth destination): the two happen to read the same today
+         and mean entirely different things, and sharing one row is how a later rewording of the
+         destination silently renames a menu button. -->
+    <string name="action_more_options">Ещё</string>
     <string name="action_dismiss">Скрыть</string>
     <!--
         `26-23`: the accessible name for a control that now draws a vector glyph instead of a literal

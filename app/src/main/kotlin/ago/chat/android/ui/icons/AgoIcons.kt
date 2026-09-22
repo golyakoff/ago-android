@@ -118,6 +118,24 @@ public object AgoIcons {
             { circle(centreX = 19f, centreY = 12f, radius = 1.6f) },
         )
 
+    /**
+     * `26-32` — the conversation list's overflow control. The mockup draws the header's overflow as a
+     * **vertical** ⋮ while its own `i-dots` sprite, reused for «Ещё» above, is horizontal. Rather than
+     * redraw one, this is that exact sprite transposed: the same three circles, the same radius, `cx`
+     * and `cy` swapped. Nothing here is a chosen number — every value is [More]'s, in the other axis.
+     *
+     * Deliberately not `Icons.Default.MoreVert`: `26-23` replaced this app's whole icon set with the
+     * mockup's own stroke-drawn family precisely so one Material default would not sit among them
+     * looking almost right.
+     */
+    public val MoreVertical: ImageVector =
+        strokeIcon(
+            "AgoMoreVertical",
+            { circle(centreX = 12f, centreY = 5f, radius = 1.6f) },
+            { circle(centreX = 12f, centreY = 12f, radius = 1.6f) },
+            { circle(centreX = 12f, centreY = 19f, radius = 1.6f) },
+        )
+
     /** `i-back` — the thread screen's app-bar back control, replacing `ThreadScreen`'s literal `"←"`. */
     public val Back: ImageVector =
         strokeIcon(

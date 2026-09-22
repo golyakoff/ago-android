@@ -2,7 +2,7 @@ package ago.chat.android.thread
 
 import ago.chat.android.R
 import ago.chat.android.core.network.realtime.MessageDto
-import ago.chat.android.ui.components.HubConnectionDebugRow
+import ago.chat.android.ui.components.HubConnectionDot
 import ago.chat.android.ui.components.VisitorDisplayPrefix
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
@@ -169,34 +169,42 @@ internal fun ThreadScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
-                Column {
-                    TopAppBar(
-                        navigationIcon = {
-                            // `26-23`: the mockup's `i-back`, a real vector - this used to be a
-                            // literal `Text("←")`, which is also what `AppShellScreen`'s retired
-                            // `BottomDestination.emoji()` cited as its own precedent. Both are gone.
-                            IconButton(onClick = onBack) {
-                                Icon(
-                                    imageVector = AgoIcons.Back,
-                                    contentDescription = stringResource(R.string.action_back),
-                                )
-                            }
-                        },
-                        title = {
-                            // Plain text, not a chip - see this file's own top-of-file doc comment.
-                            VisitorDisplayPrefix(
-                                emojiCreature = emojiCreature,
-                                emojiFood = emojiFood,
-                                visitorName = visitorName,
-                                visitorId = visitorId,
+                // `26-32`: no `Column` any more. This was an app bar with the retired
+                // `HubConnectionDebugRow` under it on a line of its own — the identical leftover the
+                // conversation list carried, and worse here, where every line taken from the app bar
+                // is a line taken from the conversation itself. The state moves into [actions] as a
+                // dot. Both screens put it in the same slot, for the reason `ConversationListScreen`'s
+                // own comment gives: this screen's title is a visitor identity of unbounded length
+                // that has to ellipsise, and a fixed-size indicator inside something that ellipsises
+                // is how it ends up clipped.
+                TopAppBar(
+                    navigationIcon = {
+                        // `26-23`: the mockup's `i-back`, a real vector - this used to be a
+                        // literal `Text("←")`, which is also what `AppShellScreen`'s retired
+                        // `BottomDestination.emoji()` cited as its own precedent. Both are gone.
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = AgoIcons.Back,
+                                contentDescription = stringResource(R.string.action_back),
                             )
-                        },
-                    )
-                    HubConnectionDebugRow(
-                        state = state.hubConnectionState,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
+                        }
+                    },
+                    title = {
+                        // Plain text, not a chip - see this file's own top-of-file doc comment.
+                        VisitorDisplayPrefix(
+                            emojiCreature = emojiCreature,
+                            emojiFood = emojiFood,
+                            visitorName = visitorName,
+                            visitorId = visitorId,
+                        )
+                    },
+                    actions = {
+                        HubConnectionDot(
+                            state = state.hubConnectionState,
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    },
+                )
             },
             bottomBar = {
                 Composer(
