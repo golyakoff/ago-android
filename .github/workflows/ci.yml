@@ -224,7 +224,7 @@ jobs:
       #   `app/build.gradle.kts` rather than repeated here: that file is the single place it is
       #   declared, and a second copy in this workflow would be a second thing to remember to bump.
       #   `test -n` is what turns a renamed or reformatted declaration into a loud failure here
-      #   instead of an empty string quietly producing `AGO_Chat_release_v.apk` further down.
+      #   instead of an empty string quietly producing `AGO_Chat_v.apk` further down.
       #
       #   `apk` — the release APK's real path, which `app/build.gradle.kts`'s own
       #   `androidComponents.onVariants` block names for the product rather than leaving at AGP's
@@ -245,7 +245,7 @@ jobs:
           {
             echo "short_sha=${GITHUB_SHA:0:7}"
             echo "release_version=$release_version"
-            echo "apk=app/build/outputs/apk/release/AGO_Chat_release_v$release_version.apk"
+            echo "apk=app/build/outputs/apk/release/AGO_Chat_v$release_version.apk"
             echo "tag=v$release_version"
           } >> "$GITHUB_OUTPUT"
 
@@ -451,7 +451,7 @@ jobs:
             echo
             echo "Commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.release_version }}+${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`"
             echo
-            echo "Asset: \`AGO_Chat_release_v${{ steps.version.outputs.release_version }}.apk\`"
+            echo "Asset: \`AGO_Chat_v${{ steps.version.outputs.release_version }}.apk\`"
             echo
             echo "Release: ${{ steps.release.outputs.url }}"
           } >> "$GITHUB_STEP_SUMMARY"
