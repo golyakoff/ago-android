@@ -14,11 +14,22 @@ package ago.chat.android.core.network.realtime
  * expected to grow this type with `body`/`authorKind`/`authorId`/`attachmentId`/etc. rather than
  * invent a second copy of it — nothing about `id`/`sequence`/`conversationId` changes shape when they
  * do, since the wire contract is additive by convention (`api-design.md`).
+ *
+ * `26-14`: [authorKind] is the first of that growth — `Ago.Chat.Contracts.MessageDto.AuthorKind`,
+ * `"Visitor"`/`"Operator"`/`"System"` on the wire. The list screen's own unread count has to exclude an
+ * operator's own echoed-back send, the identical filter `ago-console`'s `WorkspaceLayout.tsx` applies
+ * (`message.authorKind !== "Visitor"`) before counting a push as unread — without this field there is no
+ * way to tell "a visitor wrote" from "I just sent", and a badge that counted the operator's own messages
+ * would climb every time they answered. Defaulted to `""` (never a valid wire value) rather than made
+ * mandatory, so `26-13`'s own fixtures — none of which cared about authorship — keep compiling unchanged;
+ * `""` compares false against every real `AuthorKind`, so an un-set value is silently excluded from the
+ * unread count rather than silently included in it.
  */
 public data class MessageDto(
     val id: String,
     val sequence: Long,
     val conversationId: String? = null,
+    val authorKind: String = "",
 )
 
 /**

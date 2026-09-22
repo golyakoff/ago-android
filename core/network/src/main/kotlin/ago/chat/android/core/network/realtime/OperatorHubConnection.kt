@@ -84,7 +84,7 @@ public class OperatorHubConnection(
     private val accessTokens: AccessTokenProvider,
     private val activeSite: ActiveSiteSelection,
     private val backoff: HubReconnectBackoff = HubReconnectBackoff(),
-) {
+) : OperatorHubEvents {
     private val buildLock = Mutex()
     private val subscription = MessageSubscription()
     private val reconnectAttempt = AtomicInteger(0)
@@ -100,15 +100,26 @@ public class OperatorHubConnection(
     /** The one thing every screen — and every future feature module — ever observes about this
      * connection's own health. Never a `com.microsoft.signalr` type; see this class's own doc
      * comment for why. */
-    public val state: StateFlow<OperatorHubConnectionState> = mutableState.asStateFlow()
+    public override val state: StateFlow<OperatorHubConnectionState> = mutableState.asStateFlow()
 
     private val mutableMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 64)
 
     /** Every `MessageReceived` push this connection has decided is new and belongs to whichever
      * conversation is currently joined ([joinConversation]) — already ordered and deduplicated by
-     * [MessageSubscription]. `26-14`/`26-15` are the real listeners; this item's own tests are the
+     * [MessageSubscription]. `26-15` is the real listener; this item's own tests are the
      * only consumer so far. */
-    public val messages: SharedFlow<MessageDto> = mutableMessages.asSharedFlow()
+    public override val messages: SharedFlow<MessageDto> = mutableMessages.asSharedFlow()
+
+    private val mutableAllMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 64)
+
+    /** [OperatorHubEvents.allMessages] — see that property's own doc comment for why this is a second,
+     * undeduplicated flow rather than a widening of [messages]/[MessageSubscription]. */
+    public override val allMessages: SharedFlow<MessageDto> = mutableAllMessages.asSharedFlow()
+
+    private val mutableAssignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+
+    /** [OperatorHubEvents.assignments]. */
+    public override val assignments: SharedFlow<ConversationAssignedDto> = mutableAssignments.asSharedFlow()
 
     @Volatile
     private var connection: HubConnection? = null
@@ -207,6 +218,14 @@ public class OperatorHubConnection(
                 .build()
 
         hub.on(MESSAGE_RECEIVED_METHOD, { dto: MessageDto -> handleIncoming(dto) }, MessageDto::class.java)
+        // `26-14`: unlike `MESSAGE_RECEIVED_METHOD` above, this push needs no dedup/resume record at
+        // all — see [OperatorHubEvents.assignments]'s own doc comment — so it is emitted straight
+        // through with no [MessageSubscription] involvement.
+        hub.on(
+            CONVERSATION_ASSIGNED_METHOD,
+            { dto: ConversationAssignedDto -> mutableAssignments.tryEmit(dto) },
+            ConversationAssignedDto::class.java,
+        )
         hub.onClosed { onConnectionClosed(hub) }
 
         connection = hub
@@ -279,6 +298,9 @@ public class OperatorHubConnection(
 
     private fun handleIncoming(dto: MessageDto) {
         subscription.accept(dto)?.let { mutableMessages.tryEmit(it) }
+        // `26-14`: every push reaches [allMessages], regardless of what [subscription] is currently
+        // joined to or has already seen — see [OperatorHubEvents.allMessages]'s own doc comment.
+        mutableAllMessages.tryEmit(dto)
     }
 
     private fun newCallbackScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -286,5 +308,6 @@ public class OperatorHubConnection(
     private companion object {
         const val JOIN_CONVERSATION_METHOD = "JoinConversationAsync"
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
+        const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"
     }
 }

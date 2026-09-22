@@ -1,20 +1,30 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.conversations.ConversationListCache
+import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.network.auth.AccessTokenProvider
+import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.realtime.OperatorHubConnection
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.data.AgoChatDatabase
+import ago.chat.android.data.conversations.ConversationRowDao
+import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.signin.SignInSession
+import android.content.Context
+import androidx.room.Room
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
@@ -123,4 +133,48 @@ public object AppModule {
             accessTokens = accessTokens,
             activeSite = activeSite,
         )
+
+    /**
+     * `26-14`: [ConversationListViewModel][ago.chat.android.conversations.ConversationListViewModel]
+     * depends on the narrow [OperatorHubEvents] interface, not the concrete [OperatorHubConnection],
+     * precisely so a test can substitute a fake — see that interface's own doc comment. Hilt needs this
+     * one extra binding because a `@Provides` returning the concrete type does not by itself satisfy an
+     * injection point asking for the interface; the underlying instance is still the identical
+     * `@Singleton` `OperatorHubConnection` `provideOperatorHubConnection` above builds; this is a second
+     * *view* onto that one graph node, not a second connection.
+     */
+    @Provides
+    @Singleton
+    public fun provideOperatorHubEvents(connection: OperatorHubConnection): OperatorHubEvents = connection
+
+    @Provides
+    public fun provideConversationsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): ConversationsApi = KtorConversationsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-14`: Room's first database in this app — one `@Singleton` file for the process's whole life,
+     * the identical "one instance in the graph is what makes it true" reasoning [provideHttpClient] and
+     * [provideOperatorHubConnection] above already state for their own singletons.
+     * [ago.chat.android.data.AgoChatDatabase] is `internal`, and Kotlin forbids a `public` function from
+     * exposing a less-visible type in its own signature — the same rule stated in full beside
+     * [provideConversationListCache] below — so this provider is `internal` too, which costs nothing
+     * since Hilt's generated component lives in this same module's own compilation.
+     */
+    @Provides
+    @Singleton
+    internal fun provideAgoChatDatabase(
+        @ApplicationContext context: Context,
+    ): AgoChatDatabase = Room.databaseBuilder(context, AgoChatDatabase::class.java, "ago-chat.db").build()
+
+    @Provides
+    internal fun provideConversationRowDao(database: AgoChatDatabase): ConversationRowDao = database.conversationRowDao()
+
+    // `internal`, not `public`: the parameter type (`RoomConversationListCache`) is itself `internal`,
+    // and Kotlin forbids a `public` signature from exposing a less-visible type. Hilt's generated
+    // component code is part of this same Gradle module's own compilation, so `internal` here is no
+    // narrower than what Hilt actually needs to see.
+    @Provides
+    internal fun provideConversationListCache(cache: RoomConversationListCache): ConversationListCache = cache
 }

@@ -1,0 +1,59 @@
+package ago.chat.android.conversations
+
+/** «Мои» / «Ожидают» — `docs/backlog/26-14-*.md`'s own Scope: "one screen with a segmented control,
+ * not two screens", so this is a value the one screen renders differently, never a navigation
+ * destination. */
+public enum class ConversationListTab { Mine, Waiting }
+
+/**
+ * One row, as the screen renders it — [ago.chat.android.core.domain.conversations.ConversationSummary]
+ * plus the purely local, in-memory overlay a hub push or a claim attempt adds on top of it
+ * ([ConversationListViewModel]'s own doc comment explains why that overlay is never persisted).
+ */
+public data class ConversationRowUi(
+    public val conversationId: String,
+    public val visitorId: String,
+    public val emojiCreature: String?,
+    public val emojiFood: String?,
+    public val visitorName: String?,
+    public val createdAt: String,
+    public val unreadCount: Int,
+    /** Set the moment a `ConversationAssigned` push names this conversation, cleared the moment the
+     * operator opens it ([ConversationListViewModel.onRowOpened]) — `ConversationList.tsx`'s own
+     * `isNewlyAssigned`/`"New"` badge, ported. Never read by anything that decides whether to
+     * navigate — see `docs/navigation.md`: "a new assignment arriving never navigates". */
+    public val isNewlyAssigned: Boolean = false,
+    /** Only ever true for a `Waiting` row, and only while its own [ConversationsApi.claim] call is in
+     * flight — the same "hidden, not disabled... two operators clicking this within the same instant
+     * is the ordinary case" posture `ago-console`'s `ClaimConversationButton` already documents. */
+    public val isClaiming: Boolean = false,
+    /** The server's own refusal text, shown once and cleared only by
+     * [ConversationListViewModel.dismissClaimError] or by this conversation moving out of «Ожидают»
+     * entirely (a claim that then succeeded from elsewhere, or the visitor leaving) — never cleared by
+     * an automatic retry, because there never is one. */
+    public val claimError: String? = null,
+)
+
+/**
+ * `26-14`: everything [ConversationListScreen] renders. [isStale] and [hasData] are deliberately two
+ * different booleans rather than one three-valued enum, because they answer two different questions a
+ * `when` over one type would conflate: *is there anything to show* ([hasData]) and *is what is showing
+ * confirmed current* ([isStale]) — a cold start with a cache hit is `hasData = true, isStale = true`,
+ * which no single boolean could express without inventing a third state to stand for it.
+ */
+public data class ConversationListUiState(
+    public val selectedTab: ConversationListTab = ConversationListTab.Mine,
+    public val mine: List<ConversationRowUi> = emptyList(),
+    public val waiting: List<ConversationRowUi> = emptyList(),
+    /** `true` until this session's own [ConversationsApi.fetchQueue] has answered successfully at
+     * least once — a Room hit at screen start is real data, rendered immediately, and still marked
+     * this way until a live answer confirms it (`docs/backlog/26-14-*.md`: "stale until proven
+     * fresh"). A live hub push narrows one row's own freshness ([ConversationListViewModel]'s own
+     * per-row overlay) but never clears this flag on its own — only a full [QueueResult.Loaded] does,
+     * because only that answer actually re-read the *whole* list this flag describes. */
+    public val isStale: Boolean = true,
+    /** `false` only before either a cache read or a network answer has produced anything at all - the
+     * one moment a loading skeleton, rather than an empty-state message, is the honest thing to show. */
+    public val hasData: Boolean = false,
+    public val loadError: String? = null,
+)

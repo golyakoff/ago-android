@@ -1,12 +1,12 @@
 package ago.chat.android.signin
 
 import ago.chat.android.R
+import ago.chat.android.conversations.ConversationListRoute
 import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.ui.components.HubConnectionDebugRow
 import ago.chat.android.ui.components.IdentifierText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +83,25 @@ public fun SignInHost(
                         onSignOut = onSignOut,
                     )
 
-                is SignInUiState.SignedIn -> SignedInScreen(content, state.activeSiteId, hubConnectionState, onSignOut)
+                is SignInUiState.SignedIn ->
+                    // `26-14`: the placeholder this state used to render (`SignedInScreen`) is gone -
+                    // this is the real screen now. It draws its own `Scaffold`/`TopAppBar` rather than
+                    // reusing `content` (the `Modifier` every other, centred arm above shares), because
+                    // it is a full screen with its own segmented control and two lists, not one more
+                    // centred message.
+                    ConversationListRoute(
+                        activeSiteId = state.activeSiteId,
+                        hubConnectionState = hubConnectionState,
+                        onOpenConversation = {
+                            // `26-15`'s own destination. Nothing exists to navigate to yet - see
+                            // `docs/navigation.md`'s own "a new assignment arriving never navigates"
+                            // reasoning for why the absence of a destination here is not a regression:
+                            // this item's own Done-when never asked the thread to open, only that
+                            // opening a row clear its own badge (`ConversationListViewModel.onRowOpened`,
+                            // already called by `ConversationListRoute` before this lambda runs).
+                        },
+                        onSignOut = onSignOut,
+                    )
             }
         }
     }
@@ -268,36 +286,6 @@ private fun LinkOutScreen(
             Text(text = linkLabel)
         }
         TextButton(onClick = onSignOut) {
-            Text(text = stringResource(R.string.action_sign_out))
-        }
-    }
-}
-
-@Composable
-private fun SignedInScreen(
-    modifier: Modifier,
-    activeSiteId: String?,
-    hubConnectionState: OperatorHubConnectionState,
-    onSignOut: () -> Unit,
-) {
-    Centred(modifier) {
-        Text(text = stringResource(R.string.signed_in_title), style = MaterialTheme.typography.headlineSmall)
-        Text(
-            text = stringResource(R.string.signed_in_body),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
-        )
-        Text(text = stringResource(R.string.signed_in_active_site), style = MaterialTheme.typography.labelMedium)
-        if (activeSiteId == null) {
-            Text(text = stringResource(R.string.signed_in_no_active_site), style = MaterialTheme.typography.bodyMedium)
-        } else {
-            IdentifierText(id = activeSiteId, style = MaterialTheme.typography.bodyMedium)
-        }
-        // `26-13`'s own debug row - see that class's own doc comment for why this is the only screen
-        // it renders on (the only state where a hub connection is expected to exist at all).
-        HubConnectionDebugRow(state = hubConnectionState, modifier = Modifier.padding(top = 16.dp))
-        TextButton(onClick = onSignOut, modifier = Modifier.padding(top = 24.dp)) {
             Text(text = stringResource(R.string.action_sign_out))
         }
     }
