@@ -118,6 +118,10 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    // `26-13`: `ProcessLifecycleOwner`, the whole-app foreground signal
+    // `OperatorHubConnectionLifecycle` observes - see this catalog entry's own remarks for why an
+    // `Activity`'s own lifecycle is the wrong signal for this.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

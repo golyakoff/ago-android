@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.identity.KtorIdentityApi
+import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.OidcConfig
@@ -102,4 +103,24 @@ public object AppModule {
         identity: IdentityApi,
         activeSite: ActiveSiteSelection,
     ): PostSignInRouter = PostSignInRouter(identity, activeSite)
+
+    /**
+     * `26-13`: the app's one `/hubs/operator` connection. A `@Singleton` for the identical reason
+     * [provideHttpClient] above is one — "one connection per signed-in session" is true because there
+     * is exactly one instance in this graph, not by any screen's own discipline
+     * (`OperatorHubConnection`'s own doc comment). Built from `config.apiBaseUrl` the same way
+     * `provideIdentityApi` above derives its own base URL — one deployment, read once, here.
+     */
+    @Provides
+    @Singleton
+    public fun provideOperatorHubConnection(
+        accessTokens: AccessTokenProvider,
+        activeSite: ActiveSiteSelection,
+        config: OidcConfig,
+    ): OperatorHubConnection =
+        OperatorHubConnection(
+            hubUrl = "${config.apiBaseUrl}/hubs/operator",
+            accessTokens = accessTokens,
+            activeSite = activeSite,
+        )
 }
