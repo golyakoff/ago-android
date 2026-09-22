@@ -448,6 +448,8 @@ class ThreadViewModelTest {
             return if (sendResults.isNotEmpty()) sendResults.removeAt(0) else SendMessageResult.Sent(0)
         }
 
+        override suspend fun reconnectToActiveSite() = error("not used by this screen")
+
         private fun pageBefore(
             beforeSequence: Long?,
             pageSize: Int,

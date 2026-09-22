@@ -38,6 +38,11 @@ class BackContractMoreScreenTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-17`: the real `SettingsRoute` needs a Hilt component this suite deliberately has
+                // none of (this file's own doc comment) - a trivial marker stands in, the identical
+                // substitution `conversationsTab` above already makes for Диалоги's own Hilt-backed
+                // content. Clause 2 is about `MoreScreen`'s own back-stack, not about Settings' content.
+                settingsScreen = { _, _ -> Text("SETTINGS_MARKER") },
             )
         }
 
@@ -57,8 +62,16 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
     }
 
+    /**
+     * `26-16`'s own brief named this row's requirement before `26-17` existed to fulfil it: "never a
+     * dead tap, never hidden". `26-17` is the item that landed a real screen in its place — this test
+     * now proves the row opens *something real* (via the substituted marker, for the identical
+     * Hilt-avoidance reason the other two tests in this file use one) rather than merely a placeholder,
+     * without re-testing Settings' own content here (that belongs to a suite that can afford a Hilt
+     * component, or to `SettingsScreen`'s own stateless-composable tests).
+     */
     @Test
-    fun clause2_theSettingsRowOpensAPlaceholderRatherThanBeingHiddenPending2617() {
+    fun clause2_theSettingsRowOpensARealScreenRatherThanBeingHiddenOrDead() {
         composeTestRule.setContent {
             AppShellScreen(
                 permissions = OperatorPermissions.Known(emptySet()),
@@ -68,6 +81,7 @@ class BackContractMoreScreenTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                settingsScreen = { _, _ -> Text("SETTINGS_MARKER") },
             )
         }
 
@@ -75,9 +89,7 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Настройки").performClick()
         composeTestRule.waitForIdle()
 
-        // `26-16`'s own brief: the row exists and opens a placeholder, even though `26-17` has not
-        // landed - never a dead tap, never hidden.
-        composeTestRule.onNodeWithText("Экран настроек появится вместе со следующей версией.").assertExists()
+        composeTestRule.onNodeWithText("SETTINGS_MARKER").assertExists()
         assertFalse(composeTestRule.activity.isFinishing)
     }
 

@@ -136,7 +136,18 @@
     <string name="more_section_automation">Автоматизация</string>
     <string name="more_section_administration">Администрирование</string>
     <string name="more_settings_row">Настройки</string>
-    <string name="more_settings_placeholder_body">Экран настроек появится вместе со следующей версией.</string>
+
+    <!-- `26-17`: the Settings screen itself - Тема, Текущий сайт, О приложении, Выход
+         (`docs/backlog/26-17-*.md`). -->
+    <string name="settings_theme_section">Тема</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_site_section">Текущий сайт</string>
+    <string name="settings_site_switching">Переключаем…</string>
+    <string name="settings_about_section">О приложении</string>
+    <string name="settings_about_build_label">Сборка</string>
+    <string name="settings_about_version_label">Версия</string>
 
     <!-- `26-16`: the one-time "which permissions does this operator hold" read the whole bottom bar is
          computed from - see `AppShellViewModel`'s own doc comment for why "still loading" renders

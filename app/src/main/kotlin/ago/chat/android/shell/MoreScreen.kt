@@ -3,7 +3,6 @@ package ago.chat.android.shell
 import ago.chat.android.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -23,10 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
@@ -49,8 +45,9 @@ import androidx.compose.ui.unit.dp
  *
  * **Settings gets a stated exception to that same rule.** `docs/backlog/26-16-*.md`'s own brief:
  * "this item puts the row in Ещё, even if that row currently points nowhere (or a placeholder) since
- * `26-17` hasn't landed" — so [SETTINGS_ROW_ID] is drawn unconditionally, and opening it renders
- * [SettingsPlaceholderScreen] rather than being hidden pending `26-17`.
+ * `26-17` hasn't landed" — so [SETTINGS_ROW_ID] is drawn unconditionally. `26-17` is the item that
+ * lands: opening the row now renders the real [SettingsRoute] rather than the placeholder this file
+ * used to draw in its place.
  *
  * ## Back-button contract clause 2
  *
@@ -64,12 +61,12 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MoreScreen() {
+internal fun MoreScreen(settingsScreen: @Composable (onBack: () -> Unit) -> Unit) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = openRowId != null) { openRowId = null }
 
     when (openRowId) {
-        SETTINGS_ROW_ID -> SettingsPlaceholderScreen(onBack = { openRowId = null })
+        SETTINGS_ROW_ID -> settingsScreen { openRowId = null }
         else -> MoreListScreen(onRowClick = { rowId -> openRowId = rowId })
     }
 }
@@ -116,39 +113,6 @@ private fun MoreRowItem(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
     )
     HorizontalDivider()
-}
-
-/**
- * `26-17` owns the real Settings screen. This is the seam `26-16`'s own brief names explicitly: the
- * row exists now, and opening it renders this honest placeholder rather than either hiding the row
- * (the general rule) or guessing at `26-17`'s own design.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun SettingsPlaceholderScreen(onBack: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(text = stringResource(R.string.more_settings_row)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Text(text = "←", style = MaterialTheme.typography.headlineSmall)
-                        }
-                    },
-                )
-            },
-        ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = stringResource(R.string.more_settings_placeholder_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------------- row/section model

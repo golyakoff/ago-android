@@ -260,9 +260,36 @@ public class OperatorHubConnection(
         }
     }
 
+    /**
+     * `26-17`: [OperatorHubEvents.reconnectToActiveSite] — drops the current connection (exactly the
+     * way a deliberate [disconnect] does, so [onConnectionClosed] never starts a reconnect loop for a
+     * connection this call itself is retiring), discards whatever the joined-conversation subscription
+     * remembered (the conversation belonged to the site being left; a fresh connection to a different
+     * site has nothing to resume it against), and rebuilds — which reads [activeSite]'s current value
+     * fresh, the same "capture nothing, read at the point of use" discipline this class's own doc
+     * comment states for the bearer token.
+     */
+    public override suspend fun reconnectToActiveSite() {
+        disconnect()
+        subscription.leave()
+        discardConnection()
+        connect()
+    }
+
     // ------------------------------------------------------------------------------ internals
 
     private fun requireConnection(): HubConnection = connection ?: error("OperatorHubConnection: connect() has not been called yet.")
+
+    /**
+     * Drops the cached `HubConnection` so the next [ensureConnection] call builds a fresh one against
+     * whatever [activeSite] reports *then*, rather than reusing the site the old socket was opened
+     * against. Split out of [reconnectToActiveSite] as its own, plain (non-suspend) function so it is
+     * unit-testable with no coroutine and no socket at all — the same "safe to call directly" property
+     * [ensureConnection] itself already documents.
+     */
+    internal fun discardConnection() {
+        connection = null
+    }
 
     /**
      * Builds the underlying `HubConnection` on first use, never earlier — the identical "read the

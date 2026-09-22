@@ -1,0 +1,119 @@
+package ago.chat.android.shell
+
+import ago.chat.android.core.domain.identity.ActiveSiteSelection
+import ago.chat.android.core.domain.identity.IdentityApi
+import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.di.IoDispatcher
+import ago.chat.android.ui.theme.ThemeMode
+import ago.chat.android.ui.theme.ThemePreferences
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+/**
+ * `26-17`: the Settings screen's own state — three genuinely separate concerns sharing one view model
+ * because they share one screen, not because they share any data: [themeMode] (local, no network),
+ * [tenancies]/[currentSiteId] (a site switcher fed by the identical [IdentityApi] port
+ * [ago.chat.android.signin.SignInViewModel] already calls through
+ * [ago.chat.android.core.domain.identity.PostSignInRouter]), and О приложении/Выход, which need no
+ * state at all — this class's own report reads [BuildConfig][ago.chat.android.BuildConfig] directly and
+ * `SettingsRoute` forwards `onSignOut` straight through, unchanged, the same way every pre-session
+ * screen already does.
+ *
+ * ## The active-site switch's own two halves
+ *
+ * [switchSite] performs both, in order: [ActiveSiteSelection.select] first (the REST header's single
+ * source of truth, `ActiveSiteHeaderPlugin` reads it fresh on every request) and
+ * [OperatorHubEvents.reconnectToActiveSite] second (the hub connection's own query-string parameter,
+ * otherwise frozen at whatever site was active the first time the connection was ever built). Both are
+ * awaited before [siteSwitched] fires, so a caller that reacts to that event — `SettingsRoute`, which
+ * returns to Диалоги — only ever does so once both halves have actually moved, never while the hub is
+ * still mid-reconnect against the old site.
+ */
+@HiltViewModel
+public class SettingsViewModel
+    @Inject
+    constructor(
+        private val identity: IdentityApi,
+        private val activeSite: ActiveSiteSelection,
+        private val hubConnection: OperatorHubEvents,
+        private val themePreferences: ThemePreferences,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    ) : ViewModel() {
+        public val themeMode: StateFlow<ThemeMode> =
+            themePreferences.mode.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+
+        private val mutableTenancies = MutableStateFlow<TenancyListing>(TenancyListing.Known(emptyList()))
+        public val tenancies: StateFlow<TenancyListing> = mutableTenancies.asStateFlow()
+
+        private val mutableCurrentSiteId = MutableStateFlow(activeSite.currentSiteId())
+        public val currentSiteId: StateFlow<String?> = mutableCurrentSiteId.asStateFlow()
+
+        private val mutableSwitching = MutableStateFlow(false)
+
+        /** Whether [switchSite] is between its two writes and [siteSwitched] firing — `SettingsScreen`'s
+         * own cue to disable the switcher rather than let a second tap start a second reconnect. */
+        public val switching: StateFlow<Boolean> = mutableSwitching.asStateFlow()
+
+        /** A one-shot event, not a `StateFlow`: `SettingsRoute`'s own "return to Диалоги" is a
+         * navigation action, and a `StateFlow` re-delivering the same value to a screen recreated after
+         * a rotation would fire that navigation a second time for free — the identical reasoning
+         * [ago.chat.android.signin.SignInViewModel.authorizationRequests] already states for its own
+         * `Channel`. */
+        private val switchedEvents = Channel<String>(Channel.BUFFERED)
+
+        /** Carries the *new* site id — not merely a signal — so a collector never has to race this
+         * class's own [currentSiteId] to learn which site just became active. */
+        public val siteSwitched: Flow<String> = switchedEvents.receiveAsFlow()
+
+        init {
+            loadTenancies()
+        }
+
+        public fun setThemeMode(mode: ThemeMode) {
+            viewModelScope.launch { themePreferences.setMode(mode) }
+        }
+
+        private fun loadTenancies() {
+            viewModelScope.launch {
+                mutableTenancies.value = withContext(ioDispatcher) { identity.listMyTenancies() }
+            }
+        }
+
+        /**
+         * A no-op for the currently-active site (nothing to switch to) and while [switching] is already
+         * `true` (no second reconnect stacked on top of one already running) — both are UI-level
+         * guards `SettingsScreen` also expresses by disabling the row, restated here so this class's own
+         * contract does not depend on the screen actually doing so.
+         */
+        public fun switchSite(siteId: String) {
+            if (siteId == mutableCurrentSiteId.value || mutableSwitching.value) return
+
+            viewModelScope.launch {
+                mutableSwitching.value = true
+                try {
+                    withContext(ioDispatcher) {
+                        activeSite.select(siteId)
+                        hubConnection.reconnectToActiveSite()
+                    }
+                    mutableCurrentSiteId.value = siteId
+                    switchedEvents.send(siteId)
+                } finally {
+                    mutableSwitching.value = false
+                }
+            }
+        }
+    }

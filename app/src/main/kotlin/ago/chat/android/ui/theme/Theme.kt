@@ -127,10 +127,11 @@ private val AgoDarkColorScheme =
  * `dynamicDarkColorScheme` are never called anywhere in this module.
  *
  * `darkTheme` defaults to the OS setting (`isSystemInDarkTheme()`) — the "system" state of the
- * console's own three-state system/light/dark activation. The other two states (a manual override
- * persisted independent of the OS) are a future settings screen's own call to wire up, the same way
- * `useTheme`/`ThemeToggle` wire it for the console; this composable already accepts `darkTheme` as a
- * parameter so that screen only has to supply the value, not restructure this function.
+ * console's own three-state system/light/dark activation. `26-17` is the "future settings screen" this
+ * doc comment used to name as owing the other two states: [ago.chat.android.MainActivity] now resolves
+ * [ThemeMode] (read from [ThemePreferences], the settings screen's own store) into a `Boolean` before
+ * calling this function, exactly the way `useTheme`/`ThemeToggle` wire it for the console — this
+ * function itself needed no change at all, since it already accepted `darkTheme` as a plain parameter.
  */
 @Composable
 public fun AgoChatTheme(

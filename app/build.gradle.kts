@@ -137,6 +137,9 @@ dependencies {
     implementation(libs.appauth)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
+    // `26-17`: the Тема preference's own store — see `gradle/libs.versions.toml`'s own remarks on this
+    // row for why it, and not Room or plain `SharedPreferences`.
+    implementation(libs.androidx.datastore.preferences)
 
     // `26-14`: Room, the conversation list's stale-until-proven-fresh cache
     // (`docs/architecture.md` "Offline"). Lives here, not in a `:core:*` module, for the identical

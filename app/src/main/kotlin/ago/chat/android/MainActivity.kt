@@ -4,6 +4,8 @@ import ago.chat.android.session.OidcConfig
 import ago.chat.android.signin.SignInHost
 import ago.chat.android.signin.SignInViewModel
 import ago.chat.android.ui.theme.AgoChatTheme
+import ago.chat.android.ui.theme.ThemeMode
+import ago.chat.android.ui.theme.ThemePreferences
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -14,6 +16,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
@@ -48,6 +51,12 @@ public class MainActivity : ComponentActivity() {
     @Inject
     public lateinit var oidcConfig: OidcConfig
 
+    /** `26-17`: Тема's own single source of truth — see that interface's own doc comment. Field-injected
+     * alongside [oidcConfig] rather than read inside a view model, because applying it is purely a
+     * matter of which colour scheme `setContent` below builds, with no business logic in front of it. */
+    @Inject
+    public lateinit var themePreferences: ThemePreferences
+
     private lateinit var authorizationLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +77,21 @@ public class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            AgoChatTheme {
+            // `26-17`: read fresh, every recomposition - a `setMode` call from the Settings screen
+            // (a different `ViewModel`, a different part of the tree entirely) reaches this exact
+            // `collectAsState` because both sides ultimately share the one `DataStore` instance
+            // `di/AppModule` builds as a `@Singleton`, which is what makes "applied immediately, no
+            // restart" true with no event bus of any kind between the two screens.
+            val themeMode by themePreferences.mode.collectAsState(initial = ThemeMode.System)
+            val systemIsDark = isSystemInDarkTheme()
+            val darkTheme =
+                when (themeMode) {
+                    ThemeMode.System -> systemIsDark
+                    ThemeMode.Light -> false
+                    ThemeMode.Dark -> true
+                }
+
+            AgoChatTheme(darkTheme = darkTheme) {
                 val state by viewModel.state.collectAsState()
                 val hubConnectionState by viewModel.hubConnectionState.collectAsState()
                 SignInHost(
