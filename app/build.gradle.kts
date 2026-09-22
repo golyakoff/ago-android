@@ -207,7 +207,7 @@ android {
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         variant.outputs.forEach { output ->
-            output.outputFileName.set("AGO_Chat_release_v$agoReleaseVersion.apk")
+            output.outputFileName.set("AGO_Chat_v$agoReleaseVersion.apk")
         }
     }
 }
