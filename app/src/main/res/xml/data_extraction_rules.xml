@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-12`: nothing this app stores leaves the device.
+
+    `android:allowBackup="false"` (AndroidManifest.xml, since `26-07`) turns off Android's cloud
+    backup, but on Android 12 and above it does **not** cover device-to-device transfer, which is a
+    separate channel with its own opt-out — this file. That distinction stops being academic with
+    this item: `SessionStore` now holds an OIDC refresh token, and `docs/architecture.md` says in as
+    many words that the refresh token never leaves the device.
+
+    Both sections exclude every domain rather than naming the session file, so a later item that adds
+    a Room database (`26-14`'s cached conversation list) or a cache directory inherits the same
+    answer instead of having to remember to come back here.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

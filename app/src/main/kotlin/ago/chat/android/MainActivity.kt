@@ -1,132 +1,97 @@
 package ago.chat.android
 
-import ago.chat.android.ui.components.IdentifierText
-import ago.chat.android.ui.components.VisitorDisplayPrefix
+import ago.chat.android.session.OidcConfig
+import ago.chat.android.signin.SignInHost
+import ago.chat.android.signin.SignInViewModel
 import ago.chat.android.ui.theme.AgoChatTheme
-import android.content.res.Configuration
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
- * The only `Activity` in the app, and the only place Android framework and Compose UI meet
- * (`ago-android/docs/architecture.md`, "Module layout"). It exists to prove the shell — nothing
- * from `scope-inventory.md` is drawn here (`26-07`'s own Out of scope).
+ * The only `Activity` in the app (`docs/architecture.md`, "Module layout"), and now the first one
+ * with something real in it: `26-12`'s sign-in flow.
+ *
+ * Three Android-specific jobs live here and nowhere else, because each of them is something a
+ * `ViewModel` genuinely cannot do:
+ *
+ * 1. **Launching the Custom Tab.** AppAuth hands back an `Intent`; only an `Activity` can start it
+ *    for a result. The view model emits the intent and this collects it, so the decision to sign in
+ *    stays testable and only the launch is here.
+ * 2. **Receiving the redirect.** `ago-android://callback` is caught by AppAuth's own
+ *    `RedirectUriReceiverActivity` (declared in the library's manifest, with the scheme supplied by
+ *    `app/build.gradle.kts`'s `appAuthRedirectScheme` placeholder), which completes this
+ *    `ActivityResultLauncher`. There is no callback *screen* — `scope-inventory.md`'s own reading of
+ *    `/callback` as "a mechanism, not a screen" ports exactly.
+ * 3. **Leaving the app** for the web console, which is an `ACTION_VIEW` and therefore a `Context`.
  */
+@AndroidEntryPoint
 public class MainActivity : ComponentActivity() {
+    private val viewModel: SignInViewModel by viewModels()
+
+    /** Injected rather than read from `BuildConfig` here, so one module owns "which deployment". */
+    @Inject
+    public lateinit var oidcConfig: OidcConfig
+
+    private lateinit var authorizationLauncher: ActivityResultLauncher<Intent>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        authorizationLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                // `result.data` is null when the operator dismissed the Custom Tab. That is not a
+                // failure and the view model does not render it as one.
+                viewModel.onAuthorizationResult(result.data)
+            }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.authorizationRequests.collect { intent -> authorizationLauncher.launch(intent) }
+            }
+        }
+
         setContent {
             AgoChatTheme {
-                PlaceholderScreen()
-            }
-        }
-    }
-}
-
-/**
- * The one placeholder screen this item's Done-when calls for — now exercising `26-10`'s own three
- * deliverables rather than `26-07`'s bare `shortId()` call: the token-driven `AgoChatTheme`,
- * `IdentifierText` (never `.take(8)` at this call site), and `VisitorDisplayPrefix` in both its real
- * shapes — a visitor with the emoji pair and a name, and the pre-emoji-column visitor with neither
- * (`architecture.md`'s "How an identifier is rendered").
- *
- * `SAMPLE_VISITOR_ID` and the sample name/emoji below are demo data, not translatable UI text, so —
- * unlike every label around them — they are not routed through `strings.xml`: the same category a
- * demo GUID already was in `26-07`'s own scaffold (`shortId("3fa85f64-...")`), not a new exception
- * invented here. Every actual label is `stringResource(...)`.
- */
-@Composable
-private fun PlaceholderScreen() {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Scaffold { innerPadding ->
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-                Text(
-                    text = stringResource(R.string.placeholder_message),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-
-                Text(
-                    text = stringResource(R.string.placeholder_identifier_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 24.dp),
-                )
-                IdentifierText(id = SAMPLE_VISITOR_ID)
-
-                Text(
-                    text = stringResource(R.string.placeholder_visitor_with_pair_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 24.dp),
-                )
-                VisitorDisplayPrefix(
-                    emojiCreature = SAMPLE_EMOJI_CREATURE,
-                    emojiFood = SAMPLE_EMOJI_FOOD,
-                    visitorName = SAMPLE_VISITOR_NAME,
-                    visitorId = SAMPLE_VISITOR_ID,
-                )
-
-                Text(
-                    text = stringResource(R.string.placeholder_visitor_without_pair_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 24.dp),
-                )
-                VisitorDisplayPrefix(
-                    emojiCreature = null,
-                    emojiFood = null,
-                    visitorName = null,
-                    visitorId = SAMPLE_VISITOR_ID,
+                val state by viewModel.state.collectAsState()
+                SignInHost(
+                    state = state,
+                    consoleUrl = oidcConfig.consoleUrl,
+                    onSignIn = viewModel::beginSignIn,
+                    onChooseSite = viewModel::chooseSite,
+                    onRetry = viewModel::retry,
+                    onSignOut = viewModel::signOut,
+                    onOpenConsole = ::openInBrowser,
                 )
             }
         }
     }
-}
 
-private const val SAMPLE_VISITOR_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-private const val SAMPLE_EMOJI_CREATURE = "🦉" // owl
-private const val SAMPLE_EMOJI_FOOD = "🍓" // strawberry
-private const val SAMPLE_VISITOR_NAME = "Анна Иванова"
-
-@Preview(showBackground = true)
-@Composable
-private fun PlaceholderScreenLightPreview() {
-    AgoChatTheme(darkTheme = false) {
-        PlaceholderScreen()
-    }
-}
-
-@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun PlaceholderScreenDarkPreview() {
-    AgoChatTheme(darkTheme = true) {
-        PlaceholderScreen()
+    private fun openInBrowser(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (missing: ActivityNotFoundException) {
+            // A device with no browser at all, which is the only way this throws. Nothing useful to
+            // offer in its place, and crashing on a link is worse than the link doing nothing — the
+            // screen it sits on already says in words where the operator has to go. Swallowed here
+            // rather than logged, because this class's whole neighbourhood is under a "no logging"
+            // rule (`AgoAuthSession`) and one exception message is not worth carving one out for.
+        }
     }
 }

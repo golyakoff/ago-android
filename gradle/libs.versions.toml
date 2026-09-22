@@ -32,6 +32,38 @@ junit = "4.13.2"
 androidxTestExtJunit = "1.2.1"
 espressoCore = "3.6.1"
 
+# `26-12`: KSP is the annotation processor Hilt runs under (kapt is the alternative and is strictly
+# slower — Dagger/Hilt has supported KSP since 2.48 and recommends it). Its version is a *pair*:
+# `<kotlin version>-<ksp release>`, so this row is not independently bumpable — it moves when
+# `kotlin` above moves, which is exactly why it sits next to it.
+ksp = "2.0.21-1.0.28"
+
+# `26-12`: dependency injection. `docs/architecture.md`'s "Module layout" names Hilt as the author's
+# own 2026-09-21 decision, and `26-07` deferred wiring it for lack of anything to inject. 2.52 is the
+# release matching the Kotlin 2.0.x generation pinned above.
+hilt = "2.52"
+
+# `26-12`: the HTTP client, per `docs/architecture.md`'s stack table (Ktor over Retrofit, because it
+# is multiplatform and so keeps `adr/0178`'s KMP door open at no cost). 2.3.12 is the last 2.3.x and
+# the generation built against Kotlin 2.0.x; Ktor 3.x exists but changes API this repository has no
+# reason to chase on its first HTTP call.
+ktor = "2.3.12"
+kotlinxSerializationJson = "1.7.3"
+kotlinxCoroutines = "1.8.1"
+
+# `26-12`: AppAuth for Android — Authorization Code + PKCE in a Custom Tab, never an embedded
+# WebView (`docs/architecture.md`, Identity; `26-11` created the `ago-android` realm client it talks
+# to). 0.11.1 is the current release of the OpenID Foundation's own certified library.
+appauth = "0.11.1"
+
+# `26-12`: `EncryptedSharedPreferences` for the tokens. 1.1.0-alpha06 rather than the 1.0.0 "stable"
+# deliberately: 1.0.0's only key helper is `MasterKeys`, which is *deprecated*, and this project
+# builds with `allWarningsAsErrors` — a deprecated API is a build failure here, not a warning.
+# 1.1.0-alpha06 is the release that introduced the replacement (`MasterKey.Builder`) and is the one
+# Google's own current documentation samples.
+securityCrypto = "1.1.0-alpha06"
+
+
 # `26-08`: the format gate. This is a build-time Gradle plugin wrapping the `ktlint` CLI, not a
 # hand-rolled formatter — the same "behind a well-known port, don't hand-roll it" reasoning as
 # every other row in `ago-android/docs/architecture.md`'s stack table. Deliberately not detekt
@@ -52,6 +84,23 @@ androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
+
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+
+appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -64,4 +113,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }

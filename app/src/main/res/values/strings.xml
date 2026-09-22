@@ -6,8 +6,58 @@
         locale the same way `ago-console`/`ago-widget` never translate "AGO Chat" either.
     -->
     <string name="app_name">AGO Chat</string>
-    <string name="placeholder_message">AGO Chat для Android — пока только каркас</string>
-    <string name="placeholder_identifier_label">Идентификатор (пример)</string>
-    <string name="placeholder_visitor_with_pair_label">Посетитель с парой эмодзи и именем</string>
-    <string name="placeholder_visitor_without_pair_label">Посетитель до появления эмодзи-пары</string>
+
+    <!--
+        `26-12`: the launch screen. It **names no deployment** — no hostname, no environment name,
+        nothing under the button (`navigation.md`: an operator holding the app has no reason to think
+        about the web console at all, and the debugging need that line served is served better by the
+        build variant's own name in Settings → О приложении, which is `26-17`'s).
+    -->
+    <string name="sign_in_tagline">Отвечайте посетителям, где бы вы ни были</string>
+    <string name="sign_in_action">Войти</string>
+    <string name="sign_in_working">Выполняется вход…</string>
+
+    <!--
+        `11-17`, ported: the identity provider refusing and the call *after* a successful sign-in
+        failing are different problems with different fixes, so they are different messages. This one
+        is Keycloak's own round trip.
+    -->
+    <string name="sign_in_failed_title">Не удалось войти</string>
+    <string name="sign_in_failed_hint">Проверьте подключение и попробуйте ещё раз.</string>
+
+    <!-- …and this one is everything after it. The word «вход» deliberately does not appear. -->
+    <string name="routing_unavailable_title">Вход выполнен, но данные не загрузились</string>
+    <string name="routing_unavailable_tenancies">Не удалось получить список ваших магазинов.</string>
+    <string name="routing_unavailable_operator">Не удалось проверить, есть ли у вас рабочее место оператора.</string>
+    <string name="routing_unavailable_owner">Не удалось проверить права владельца платформы.</string>
+    <string name="routing_unavailable_contradiction">Сервер одновременно показывает ваш магазин и отказывает в доступе к нему. Это не похоже на правду, поэтому мы ничего не предполагаем.</string>
+    <string name="routing_unavailable_status">Код ответа: %1$d</string>
+    <string name="routing_unavailable_transport">Соединение: %1$s</string>
+    <string name="routing_unavailable_malformed">Ответ сервера: %1$s</string>
+    <string name="action_retry">Повторить</string>
+
+    <!-- `adr/0068`: one identity, several tenancies. Shown once, before the app proper opens. -->
+    <string name="site_picker_title">Выберите магазин</string>
+    <string name="site_picker_hint">У вас есть рабочее место в нескольких магазинах. Сменить выбор можно будет в настройках.</string>
+
+    <!--
+        `scope-inventory.md` §2: an owner-only identity must land somewhere honest rather than on the
+        site-registration form, whose button would make them an ordinary tenant with no way back.
+    -->
+    <string name="owner_terminal_title">Консоль владельца платформы — только в вебе</string>
+    <string name="owner_terminal_body">Экраны владельца платформы в приложение не переносились: там есть операции, которым не место на телефоне. Откройте веб-консоль.</string>
+    <string name="owner_terminal_open_console">Открыть веб-консоль</string>
+
+    <!-- The routing arm only. The registration form itself is a later item (`26-12`, Out of scope). -->
+    <string name="registration_title">У вас ещё нет магазина</string>
+    <string name="registration_body">Регистрация магазина пока делается в веб-консоли. Когда магазин появится, войдите здесь ещё раз — приложение подхватит его само.</string>
+    <string name="registration_open_console">Открыть веб-консоль</string>
+
+    <!-- `26-14` replaces this with the conversation list. -->
+    <string name="signed_in_title">Вход выполнен</string>
+    <string name="signed_in_body">Диалоги появятся здесь в следующей версии.</string>
+    <string name="signed_in_active_site">Текущий магазин</string>
+    <string name="signed_in_no_active_site">Магазин не выбран</string>
+
+    <string name="action_sign_out">Выйти</string>
 </resources>

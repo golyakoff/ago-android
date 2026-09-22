@@ -1,13 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        `26-12`: the app talks to `Ago.Chat.Api` and to the Keycloak realm, both over HTTPS. No
+        cleartext permission, no `usesCleartextTraffic` — API 28+ blocks cleartext by default and
+        nothing here needs it.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
+        android:name=".AgoChatApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:label="@string/app_name"
         android:theme="@style/Theme.AgoChat"
         android:supportsRtl="true">
 
         <!--
+            `android:allowBackup="false"` above is load-bearing for `26-12`, not only tidiness:
+            the session store holds a refresh token, and Android's own backup transport would
+            otherwise copy that file off the device. `android:dataExtractionRules` is the other
+            half of the same guarantee on Android 12+, where device-to-device transfer is a
+            separate channel `allowBackup` does not reach — see `res/xml/data_extraction_rules.xml`.
+
             No launcher icon set yet: the real one arrives with the mockups this item is
             deliberately not drawing from (`26-07`'s own Out of scope — "no screen from the
             inventory"). Android falls back to the system default without one.
@@ -21,6 +37,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            `26-12`: there is deliberately no redirect-receiver activity declared here. AppAuth's
+            own `net.openid.appauth.RedirectUriReceiverActivity` is declared in the library's
+            manifest and merged in, with its `android:scheme` supplied by the
+            `appAuthRedirectScheme` manifest placeholder in `app/build.gradle.kts` — which is where
+            `ago-android://callback` (the exact value `26-11` registered on the realm client) is
+            spelled once. Declaring a second receiver here would be a second place for that scheme
+            to be wrong.
+        -->
     </application>
 
 </manifest>

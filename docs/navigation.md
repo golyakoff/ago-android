@@ -281,19 +281,47 @@ ordinary tenant.
 
 ```mermaid
 flowchart TD
-    Token["Keycloak token in hand"] --> Me["GET /api/v1/operators/me"]
-    Me -->|200| Tenancies{"One tenancy, or several?"}
-    Tenancies -->|one| Work["Conversations"]
-    Tenancies -->|several| Pick["Choose a site"]
-    Pick --> Work
-    Me -->|403| Owner["GET /api/v1/owner/sites?limit=1"]
+    Token["Keycloak token in hand"] --> Ten["GET /api/v1/me/tenancies"]
+    Ten -->|"several"| Pick["Choose a site"]
+    Pick --> Me
+    Ten -->|"one - it becomes the active site"| Me["GET /api/v1/operators/me"]
+    Ten -->|"none"| Me
+    Ten -->|"anything else"| Fail["Signed in, nothing loaded - retry"]
+    Me -->|200| Work["Conversations"]
+    Me -->|"403, and no tenancy at all"| Owner["GET /api/v1/owner/sites?limit=1"]
+    Me -->|"403, but a tenancy was listed"| Fail
+    Me -->|anything else| Fail
     Owner -->|accepted| Stop["Platform-owner console is web-only"]
     Owner -->|refused| Reg["Register a site"]
-    Me -->|anything else| Fail["Could not sign in - retry"]
+    Owner -->|anything else| Fail
 ```
 
-Note the last arm: a `401`, a `5xx` or a network failure is **not** folded into either answer. That
-is the console's own `11-17` correction, and it ports unchanged.
+Note the `Fail` arms: a `401`, a `5xx` or a network failure is **not** folded into either answer.
+That is the console's own `11-17` correction, and it ports unchanged — extended here to the *owner*
+probe as well, which `CallbackPage` sends to `/onboarding` on a non-answer. The console's reason for
+that was that the server independently refused the submission; `12-05` withdrew that refusal
+(`adr/0063`'s amendment), so what is left is the inference `adr/0063` itself names as the defect
+class. The retry arm already exists and costs nothing to reuse.
+
+**The tenancy question is asked first, and that is a correction `26-12` made to this diagram rather
+than a restatement of it.** The earlier version asked it *after* a `200` from `operators/me`, which
+cannot work: `ResolveOperatorIdentityHandler` (`ago-chat`, `13-07`/`adr/0068`) resolves an identity
+with **more than one eligible tenancy and no `X-Ago-Active-Site` header to nothing at all** — picking
+one would be the cross-tenant misdirection that ADR exists to forbid — so `RequireOperatorIdentity`
+refuses and `GET /api/v1/operators/me` answers `403` for a two-shop operator on a fresh device. Down
+the old order, that `403` reaches the owner probe, is refused, and lands a working operator on the
+*site-registration* arm: `12-04`'s exact defect, produced by a different identity. `/me/tenancies` is
+gated by the weaker `RequireKeycloakIdentity` precisely so it can answer for an identity with zero
+tenancies *or* several, which is why asking it first is the order the server's own contract implies.
+`ago-console`'s `PermissionsProvider` already sequences its two calls this way and says why ("set
+before the next fetch is built"); it does **not** apply that ordering to `CallbackPage`'s routing,
+which looks like the same latent bug on the web, on a first sign-in before any active site is stored.
+
+One more arm the old diagram had no place for: a `403` from `operators/me` while `/me/tenancies` has
+just listed a tenancy this identity may sign into. The two reads contradict each other, so the app
+renders a retry rather than believing the refusal — offering the registration form there would invite
+an operator with a live seat to register a second shop, which is `12-04`'s defect class reached from
+the other direction.
 
 **The sign-in screen names no deployment.** An earlier draft printed the console's own hostname
 under the two buttons so a tester could tell which environment a build talked to. It is gone: an
