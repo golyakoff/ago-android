@@ -154,6 +154,18 @@ rxjava3 = "3.1.9"
 # SQLite-driver rewrite 2.7 introduced is opt-in.
 room = "2.8.5"
 
+# `26-17`: the Тема preference's own store. Not Room (`26-14`'s row above already states why Room's own
+# instrumented-test-only proof of real persistence is a genuine limitation, not a preference) and not
+# plain `SharedPreferences` (`docs/architecture.md`'s stack table names it as what Room replaces, and it
+# cannot be observed as a `Flow` without a hand-rolled `OnSharedPreferenceChangeListener` adapter, nor
+# proven to persist on a plain JVM `test` without Robolectric — `26-08` already declined that dependency).
+# `datastore-preferences` is the smallest library that gives an observable `Flow` for free (what makes
+# "applied immediately" trivial) *and* is provably testable on plain JVM with a real temp file and no
+# Android `Context` at all, since `PreferenceDataStoreFactory.create` only ever needs a `java.io.File` —
+# `DataStoreThemePreferencesTest` is that real, on-disk proof, not a fake standing in for one. 1.1.7 is
+# the newest stable release, contemporary with this catalog's other `25-214`-generation rows.
+datastore = "1.1.7"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -218,6 +230,10 @@ androidx-room-testing = { group = "androidx.room", name = "room-testing", versio
 
 appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
+# `26-17`: the Тема preference's store — see the `datastore` version row above for why this, and not
+# Room or plain `SharedPreferences`.
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

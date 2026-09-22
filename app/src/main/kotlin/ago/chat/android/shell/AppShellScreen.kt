@@ -19,7 +19,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -85,13 +88,21 @@ public fun AppShellRoute(
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
 
+    // `26-17`: the Settings screen's own site switcher writes a new site *through* `ActiveSiteSelection`
+    // (`di/AppModule`'s single source of truth) rather than through this value, so this local override
+    // is what keeps this call site's own `activeSiteId` in step with it, without this route needing a
+    // view model of its own to hold that value. Keyed on the real `activeSiteId` parameter so a genuine
+    // upstream change (a fresh sign-in choosing a different site) still wins over a stale local override.
+    var currentActiveSiteId by rememberSaveable(activeSiteId) { mutableStateOf(activeSiteId) }
+
     AppShellScreen(
         permissions = permissions,
         loadError = loadError,
-        activeSiteId = activeSiteId,
+        activeSiteId = currentActiveSiteId,
         hubConnectionState = hubConnectionState,
         onRetry = viewModel::retry,
         onSignOut = onSignOut,
+        onSiteSwitched = { newSiteId -> currentActiveSiteId = newSiteId },
     )
 }
 
@@ -119,8 +130,20 @@ internal fun AppShellScreen(
     hubConnectionState: OperatorHubConnectionState,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    onSiteSwitched: (String) -> Unit = {},
     conversationsTab: @Composable () -> Unit = {
         ConversationsTabHost(activeSiteId = activeSiteId, hubConnectionState = hubConnectionState, onSignOut = onSignOut)
+    },
+    // `26-17`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for the same
+    // reason - `BackContractMoreScreenTest` drives the real `NavHost`/`MoreScreen`/back-stack mechanics
+    // with no Hilt component in play, and the default below is the one place `SettingsRoute`'s own
+    // `hiltViewModel()` call would otherwise force one into existence. The two callbacks this slot is
+    // handed - `onBack` (closes the row, back to the Ещё list) and `onSiteSwitched` (see
+    // [AppShellContent]'s own doc comment) - are supplied at the call site inside [AppShellContent],
+    // not baked into this default, because the second one needs the `NavController` only that function
+    // owns.
+    settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit = { onBack, onSwitched ->
+        SettingsRoute(onBack = onBack, onSignOut = onSignOut, onSiteSwitched = onSwitched)
     },
 ) {
     when (permissions) {
@@ -135,14 +158,27 @@ internal fun AppShellScreen(
             AppShellContent(
                 permissions = permissions,
                 conversationsTab = conversationsTab,
+                settingsScreen = settingsScreen,
+                onSiteSwitched = onSiteSwitched,
             )
     }
 }
 
+/**
+ * `26-17`'s own addition to this function: the More tab's `settingsScreen` slot is wrapped here, not at
+ * [AppShellScreen]'s own default, so that a real site switch also does the one thing only this function
+ * can — turn "the switch finished" into "the bottom bar itself is now showing Диалоги", the identical
+ * `navController.navigate(...)` recipe this file's own bottom-bar `onClick` already uses, reused rather
+ * than re-invented. [onSiteSwitched] (the plain, `NavController`-free half) still bubbles further up, to
+ * [AppShellRoute]'s own local override - see that function's doc comment for why the site shown while
+ * *not* switching lives there rather than here.
+ */
 @Composable
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     conversationsTab: @Composable () -> Unit,
+    settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
+    onSiteSwitched: (String) -> Unit,
 ) {
     val navController = rememberNavController()
     val destinations = remember(permissions) { visibleBottomDestinations(permissions) }
@@ -179,7 +215,20 @@ private fun AppShellContent(
             composable(BottomDestination.Bookings.route()) { BookingsPlaceholderScreen() }
             composable(BottomDestination.Team.route()) { TeamPlaceholderScreen() }
             composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
-            composable(BottomDestination.More.route()) { MoreScreen() }
+            composable(BottomDestination.More.route()) {
+                MoreScreen(
+                    settingsScreen = { onBack ->
+                        settingsScreen(onBack) { newSiteId ->
+                            onSiteSwitched(newSiteId)
+                            navController.navigate(BottomDestination.Conversations.route()) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }

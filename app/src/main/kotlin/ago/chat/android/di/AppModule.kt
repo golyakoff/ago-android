@@ -22,9 +22,14 @@ import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
+import ago.chat.android.session.DataStoreThemePreferences
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.signin.SignInSession
+import ago.chat.android.ui.theme.ThemePreferences
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.room.Room
 import dagger.Module
 import dagger.Provides
@@ -34,6 +39,7 @@ import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import java.io.File
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -217,4 +223,26 @@ public object AppModule {
     // composer's own port.
     @Provides
     internal fun provideComposerDraftStore(store: RoomComposerDraftStore): ComposerDraftStore = store
+
+    /**
+     * `26-17`: the Тема preference's own file — see [ThemePreferences]'s own doc comment for why
+     * `androidx.datastore` rather than Room or plain `SharedPreferences`. `context.filesDir`, not
+     * `context.dataDir` or a raw path string: it is the one location every other on-device store in
+     * this app already resolves through a framework accessor rather than a hand-typed path
+     * (`SessionStore`'s own `EncryptedSharedPreferences.create`, `provideAgoChatDatabase`'s own
+     * `Room.databaseBuilder`), and it survives an app update but not an uninstall — the correct
+     * lifetime for a UI preference, the same lifetime `SessionStore`'s own file has.
+     */
+    @Provides
+    @Singleton
+    public fun provideThemeDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            produceFile = { File(context.filesDir, "theme.preferences_pb") },
+        )
+
+    @Provides
+    @Singleton
+    public fun provideThemePreferences(preferences: DataStoreThemePreferences): ThemePreferences = preferences
 }

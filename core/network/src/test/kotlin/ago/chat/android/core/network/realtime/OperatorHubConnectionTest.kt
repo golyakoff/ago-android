@@ -2,6 +2,7 @@ package ago.chat.android.core.network.realtime
 
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Test
 
@@ -46,5 +47,41 @@ class OperatorHubConnectionTest {
             )
 
         connection.ensureConnection()
+    }
+
+    /**
+     * `26-17`: the hub-side half of a site switch, proven at the same level as the two tests above —
+     * no server, no emulator, no real socket. [OperatorHubConnection.reconnectToActiveSite] itself is
+     * not called here (it calls `HubConnection.start()`, which is genuinely a network operation and
+     * cannot be run against a fake host — the same reason [ensureConnection] is the only thing this
+     * whole file can safely call). What is provably true without a socket is
+     * [OperatorHubConnection.discardConnection]'s own contract: after it runs, [ensureConnection]
+     * builds a *second* `HubConnection`, reading whatever [InMemoryActiveSite] reports at that later
+     * point — never the value it was constructed with.
+     */
+    @Test
+    fun `discarding the connection makes ensureConnection build a fresh HubConnection against the site active right now`() {
+        val activeSite = InMemoryActiveSite(siteId = "11111111-1111-1111-1111-111111111111")
+        val connection =
+            OperatorHubConnection(
+                hubUrl = "https://chat-api.reserve-me.ru/hubs/operator",
+                accessTokens = MutableAccessTokenProvider(token = "a-token"),
+                activeSite = activeSite,
+            )
+
+        val first = connection.ensureConnection()
+
+        // The switch: a different site is selected, then the connection is discarded - the exact
+        // two-step sequence `reconnectToActiveSite()` performs internally, minus the network-touching
+        // `connect()` call that must not run here.
+        activeSite.select("22222222-2222-2222-2222-222222222222")
+        connection.discardConnection()
+        val second = connection.ensureConnection()
+
+        assertNotSame(
+            "switching sites must rebuild the hub connection rather than keep the old site's socket",
+            first,
+            second,
+        )
     }
 }

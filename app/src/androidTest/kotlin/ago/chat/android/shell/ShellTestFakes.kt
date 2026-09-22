@@ -78,6 +78,8 @@ internal class FakeListHubEvents : OperatorHubEvents {
         clientMessageId: String,
         attachmentId: String?,
     ): SendMessageResult = error("not used by the list screen")
+
+    override suspend fun reconnectToActiveSite() = error("not used by the list screen")
 }
 
 /** The thread's own connection fake — a fixed history page, no live pushes, no real send. Enough to
@@ -111,6 +113,8 @@ internal class FakeThreadHubEvents(
         clientMessageId: String,
         attachmentId: String?,
     ): SendMessageResult = SendMessageResult.NotConnected
+
+    override suspend fun reconnectToActiveSite() = error("not used by the thread screen")
 }
 
 /**

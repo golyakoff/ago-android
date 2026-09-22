@@ -345,6 +345,62 @@ class ConversationListViewModelTest {
             assertEquals(fetchesWhileWaiting, api.fetchCalls)
         }
 
+    // ---------------------------------------------------------------------- 26-17: active site changes
+
+    @Test
+    fun `the first onActiveSiteChanged call never re-fetches - init's own first fetch already covers it`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            val fetchesAfterInit = api.fetchCalls
+
+            viewModel.onActiveSiteChanged("11111111-1111-1111-1111-111111111111")
+            advanceUntilIdle()
+
+            assertEquals(fetchesAfterInit, api.fetchCalls)
+        }
+
+    /**
+     * The exact case `ConversationListRoute`'s own `LaunchedEffect(activeSiteId)` produces on every
+     * remount whose `activeSiteId` value has not actually changed - `BackContractDialogsTabTest`'s
+     * "back from a thread does not re-fetch" is this same shape at the UI-test level. Proven here
+     * directly against the view model, with no Compose in play at all.
+     */
+    @Test
+    fun `being told the same site again is a no-op, not a re-fetch`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+
+            viewModel.onActiveSiteChanged("11111111-1111-1111-1111-111111111111")
+            advanceUntilIdle()
+            val fetchesAfterFirstTold = api.fetchCalls
+
+            viewModel.onActiveSiteChanged("11111111-1111-1111-1111-111111111111")
+            advanceUntilIdle()
+
+            assertEquals(fetchesAfterFirstTold, api.fetchCalls)
+        }
+
+    @Test
+    fun `a genuinely different site refreshes the queue`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+
+            viewModel.onActiveSiteChanged("11111111-1111-1111-1111-111111111111")
+            advanceUntilIdle()
+            val fetchesBeforeSwitch = api.fetchCalls
+
+            viewModel.onActiveSiteChanged("22222222-2222-2222-2222-222222222222")
+            advanceUntilIdle()
+
+            assertEquals(fetchesBeforeSwitch + 1, api.fetchCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -435,5 +491,7 @@ class ConversationListViewModelTest {
             clientMessageId: String,
             attachmentId: String?,
         ): SendMessageResult = error("not used by this screen")
+
+        override suspend fun reconnectToActiveSite() = error("not used by this screen")
     }
 }

@@ -1,0 +1,243 @@
+package ago.chat.android.shell
+
+import ago.chat.android.core.domain.identity.ActiveSiteSelection
+import ago.chat.android.core.domain.identity.IdentityApi
+import ago.chat.android.core.domain.identity.ProbeOutcome
+import ago.chat.android.core.domain.identity.Tenancy
+import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.network.realtime.ConversationAssignedDto
+import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.ui.theme.ThemeMode
+import ago.chat.android.ui.theme.ThemePreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * `26-17`: [SettingsViewModel]'s own three concerns, each proven with no Android, no network and no real
+ * hub connection — the identical `SignInViewModelTest`/`ConversationListViewModelTest` shape.
+ *
+ * The active-site switch is the one this file's own "fails-before" case is about:
+ * `switchSite writes the REST header AND reconnects the hub - not one or the other` fails against an
+ * implementation of [SettingsViewModel.switchSite] that only calls [ActiveSiteSelection.select] — the
+ * shape it would be easy to stop at, since the REST header alone is enough to make a manual smoke test
+ * of the switcher *look* like it worked — because it separately asserts on [FakeHubEvents.reconnectCalls].
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class SettingsViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val siteA = Tenancy("11111111-1111-1111-1111-111111111111", "Кофейня")
+    private val siteB = Tenancy("22222222-2222-2222-2222-222222222222", "Ярмарка")
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    // ------------------------------------------------------------------------------------- theme
+
+    @Test
+    fun `themeMode starts at whatever ThemePreferences already holds`() =
+        runTest(dispatcher) {
+            val preferences = FakeThemePreferences(ThemeMode.Dark)
+            val viewModel = viewModelWith(themePreferences = preferences)
+            advanceUntilIdle()
+
+            assertEquals(ThemeMode.Dark, viewModel.themeMode.value)
+        }
+
+    @Test
+    fun `setThemeMode writes through to ThemePreferences`() =
+        runTest(dispatcher) {
+            val preferences = FakeThemePreferences(ThemeMode.System)
+            val viewModel = viewModelWith(themePreferences = preferences)
+            advanceUntilIdle()
+
+            viewModel.setThemeMode(ThemeMode.Light)
+            advanceUntilIdle()
+
+            assertEquals(ThemeMode.Light, preferences.current.value)
+        }
+
+    // ------------------------------------------------------------------------------ site switching
+
+    @Test
+    fun `switchSite writes the REST header AND reconnects the hub - not one or the other`() =
+        runTest(dispatcher) {
+            val activeSite = InMemoryActiveSite(siteId = siteA.siteId)
+            val hubEvents = FakeHubEvents()
+            val viewModel =
+                viewModelWith(
+                    identity = FakeIdentityApi(TenancyListing.Known(listOf(siteA, siteB))),
+                    activeSite = activeSite,
+                    hubEvents = hubEvents,
+                )
+            advanceUntilIdle()
+
+            viewModel.switchSite(siteB.siteId)
+            advanceUntilIdle()
+
+            assertEquals("the REST header's own source of truth must move", siteB.siteId, activeSite.currentSiteId())
+            assertEquals("the hub connection must reconnect exactly once", 1, hubEvents.reconnectCalls)
+        }
+
+    @Test
+    fun `switchSite carries the new site id on siteSwitched, after both writes land`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeHubEvents()
+            val viewModel =
+                viewModelWith(
+                    identity = FakeIdentityApi(TenancyListing.Known(listOf(siteA, siteB))),
+                    activeSite = InMemoryActiveSite(siteId = siteA.siteId),
+                    hubEvents = hubEvents,
+                )
+            advanceUntilIdle()
+
+            var delivered: String? = null
+            val collecting = CoroutineScope(dispatcher).launch { viewModel.siteSwitched.collect { delivered = it } }
+
+            viewModel.switchSite(siteB.siteId)
+            advanceUntilIdle()
+
+            assertEquals(siteB.siteId, delivered)
+            assertEquals(siteB.siteId, viewModel.currentSiteId.value)
+            collecting.cancel()
+        }
+
+    @Test
+    fun `switching to the already-active site is a no-op`() =
+        runTest(dispatcher) {
+            val activeSite = InMemoryActiveSite(siteId = siteA.siteId)
+            val hubEvents = FakeHubEvents()
+            val viewModel =
+                viewModelWith(
+                    identity = FakeIdentityApi(TenancyListing.Known(listOf(siteA, siteB))),
+                    activeSite = activeSite,
+                    hubEvents = hubEvents,
+                )
+            advanceUntilIdle()
+
+            viewModel.switchSite(siteA.siteId)
+            advanceUntilIdle()
+
+            assertEquals(0, hubEvents.reconnectCalls)
+        }
+
+    @Test
+    fun `tenancies reflects whatever IdentityApi answers`() =
+        runTest(dispatcher) {
+            val viewModel = viewModelWith(identity = FakeIdentityApi(TenancyListing.Known(listOf(siteA, siteB))))
+            advanceUntilIdle()
+
+            assertEquals(TenancyListing.Known(listOf(siteA, siteB)), viewModel.tenancies.value)
+        }
+
+    @Test
+    fun `currentSiteId starts at whatever ActiveSiteSelection already reports`() =
+        runTest(dispatcher) {
+            val viewModel = viewModelWith(activeSite = InMemoryActiveSite(siteId = siteA.siteId))
+            advanceUntilIdle()
+
+            assertEquals(siteA.siteId, viewModel.currentSiteId.value)
+        }
+
+    // ------------------------------------------------------------------------------------- fakes
+
+    private fun viewModelWith(
+        identity: IdentityApi = FakeIdentityApi(TenancyListing.Known(emptyList())),
+        activeSite: ActiveSiteSelection = InMemoryActiveSite(),
+        hubEvents: OperatorHubEvents = FakeHubEvents(),
+        themePreferences: ThemePreferences = FakeThemePreferences(),
+    ): SettingsViewModel =
+        SettingsViewModel(
+            identity = identity,
+            activeSite = activeSite,
+            hubConnection = hubEvents,
+            themePreferences = themePreferences,
+            ioDispatcher = dispatcher,
+        )
+
+    private class InMemoryActiveSite(
+        private var siteId: String? = null,
+    ) : ActiveSiteSelection {
+        override fun currentSiteId(): String? = siteId
+
+        override fun select(siteId: String?) {
+            this.siteId = siteId
+        }
+    }
+
+    private class FakeIdentityApi(
+        private val tenancies: TenancyListing,
+    ) : IdentityApi {
+        override suspend fun listMyTenancies(): TenancyListing = tenancies
+
+        override suspend fun probeOperatorSeat(): ProbeOutcome = error("not used by this screen")
+
+        override suspend fun probeOwnerEligibility(): ProbeOutcome = error("not used by this screen")
+    }
+
+    private class FakeThemePreferences(
+        initial: ThemeMode = ThemeMode.System,
+    ) : ThemePreferences {
+        val current = MutableStateFlow(initial)
+        override val mode: Flow<ThemeMode> = current
+
+        override suspend fun setMode(mode: ThemeMode) {
+            current.value = mode
+        }
+    }
+
+    private class FakeHubEvents : OperatorHubEvents {
+        override val state = MutableStateFlow<OperatorHubConnectionState>(OperatorHubConnectionState.Connected)
+        override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
+        override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
+        override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 1)
+
+        var reconnectCalls: Int = 0
+            private set
+
+        override suspend fun joinConversation(conversationId: String): HistoryPage = error("not used by this screen")
+
+        override fun leaveConversation() = error("not used by this screen")
+
+        override suspend fun loadOlderHistory(
+            conversationId: String,
+            beforeSequence: Long,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this screen")
+
+        override suspend fun sendMessage(
+            conversationId: String,
+            body: String,
+            clientMessageId: String,
+            attachmentId: String?,
+        ): SendMessageResult = error("not used by this screen")
+
+        override suspend fun reconnectToActiveSite() {
+            reconnectCalls++
+        }
+    }
+}

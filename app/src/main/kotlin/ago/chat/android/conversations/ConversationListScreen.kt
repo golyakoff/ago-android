@@ -85,6 +85,11 @@ public fun ConversationListRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // `26-17`: told on every mount/remount, however often that turns out to be - see
+    // `ConversationListViewModel.onActiveSiteChanged`'s own doc comment for why the dedup that makes
+    // this safe lives on the view model instance rather than here.
+    LaunchedEffect(activeSiteId) { viewModel.onActiveSiteChanged(activeSiteId) }
+
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer =
             LifecycleEventObserver { _, event ->

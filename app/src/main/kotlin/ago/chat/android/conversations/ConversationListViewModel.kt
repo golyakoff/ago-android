@@ -68,6 +68,13 @@ public class ConversationListViewModel
 
         private var waitingPollJob: Job? = null
 
+        /** [onActiveSiteChanged]'s own memory of the last site it was told about — `null` is a real,
+         * distinct value ("no site known yet"), so [knownActiveSite] is not itself enough to tell
+         * "never called" from "called once with null"; [hasSeenActiveSite] is what actually gates the
+         * very first call from ever counting as a change. */
+        private var hasSeenActiveSite = false
+        private var knownActiveSite: String? = null
+
         init {
             viewModelScope.launch {
                 val cached = withContext(ioDispatcher) { cache.read() }
@@ -120,6 +127,27 @@ public class ConversationListViewModel
             if (conversationId !in newlyAssignedIds) return
             newlyAssignedIds = newlyAssignedIds - conversationId
             render(stale = mutableState.value.isStale)
+        }
+
+        /**
+         * `26-17`: told the active site on every composition of [ago.chat.android.conversations.ConversationListRoute]
+         * (mount, recomposition, and every remount `ConversationsTabHost`'s own list/thread toggle or a
+         * bottom-tab switch causes) — deliberately tolerant of being called far more often than the site
+         * actually changes, and deliberately keyed on **this instance's own memory** of the last value
+         * rather than on anything Compose remembers, because a plain `LaunchedEffect` re-fires on every
+         * fresh mount regardless of whether its key's *value* repeats. Without that instance-level
+         * memory, this would re-[refresh] on the identical round trip
+         * `ConversationListViewModelTest`'s own back-button-contract sibling proves must **not** re-fetch
+         * (`BackContractDialogsTabTest.clause1_backFromThreadReturnsToTheListWithoutRefetching`) —
+         * [hasSeenActiveSite]/[knownActiveSite] are what make this call a no-op on that exact path while
+         * still catching a genuine switch, which is the one thing `26-17`'s own Done-when needs from this
+         * class: "an operator... switches between them and the conversation list changes accordingly".
+         */
+        public fun onActiveSiteChanged(siteId: String?) {
+            val isRealChange = hasSeenActiveSite && siteId != knownActiveSite
+            hasSeenActiveSite = true
+            knownActiveSite = siteId
+            if (isRealChange) refresh()
         }
 
         /** The manual pull-to-refresh / retry action, and also this class's own first fetch. Never

@@ -94,4 +94,20 @@ public interface OperatorHubEvents {
         clientMessageId: String,
         attachmentId: String? = null,
     ): SendMessageResult
+
+    /**
+     * `26-17`: the hub-side half of a site switch. [OperatorHubConnection.ensureConnection] reads the
+     * active site only once, at first build, and caches the resulting `HubConnection` forever — so
+     * writing a new site through [ago.chat.android.core.domain.identity.ActiveSiteSelection.select]
+     * alone re-points the REST header (`ActiveSiteHeaderPlugin` reads that fresh on every request) but
+     * leaves the hub connected to whatever site it was first built against. A caller that lets an
+     * operator change site — `ago.chat.android.shell.SettingsViewModel` is the first — calls this
+     * *after* writing the new selection, so both halves of "which site every subsequent call acts in"
+     * move together, per this item's own Done-when.
+     *
+     * Declared here rather than only on the concrete class for the identical testability reason every
+     * other member of this interface already is: a view model that switches sites needs a fake it can
+     * assert against, not a real `HubConnection` attempting a real socket.
+     */
+    public suspend fun reconnectToActiveSite()
 }
