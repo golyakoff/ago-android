@@ -179,7 +179,12 @@ jobs:
   # request, so a fork or a draft branch can never put an installable build where a tester might
   # reach for it.
   publish-apk:
-    needs: build-test
+    # `26-26`: `instrumented-tests` used to have no downstream dependent at all, so a release could
+    # publish while the back-button contract (or any other UI test) was red, as long as `build-test`
+    # alone stayed green. Waiting on both means `publish-apk` starts only once whichever of the two
+    # is slower finishes, not just `build-test` — a slower release on every push, in exchange for a
+    # release that can never carry a known-broken navigation contract.
+    needs: [build-test, instrumented-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -187,7 +192,18 @@ jobs:
       # secret, the same property `adr/0018` and `publish-images` already rely on for their own
       # registries.
     steps:
+      # `26-26`: `actions/checkout@v7`'s own default (`fetch-depth: 1`, `fetch-tags: false`) fetches
+      # a single commit and no tags at all — confirmed against this job's real published releases
+      # (`git tag -l` inside a default checkout finds nothing, even the `release-*`/`debug-*` tags
+      # that already exist on this repository). The changelog below needs both: every earlier `v*`
+      # tag, to find the most recent one that is not the tag about to be (re)created, and full commit
+      # history back to it (or, on the very first release, back to the root commit). `fetch-depth: 0`
+      # is what the action's own docs describe as fetching "all history for all branches and tags" —
+      # one flag covers both needs, so `fetch-tags: true` (which only adds tags to an otherwise-shallow
+      # clone) is not needed on top of it.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: gradle/actions/wrapper-validation@v6
 
@@ -198,11 +214,11 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Three outputs, all computed here so no later step re-derives one its own way:
+      # Four outputs, all computed here so no later step re-derives one its own way:
       #
       #   `short_sha` — not the full 40 hex, because this is the build-metadata half of what
       #   `versionName` shows on the phone (Settings → О приложении, `26-17`) and what the release
-      #   title/tag use, so it needs to be read without a person truncating it by eye.
+      #   notes use, so it needs to be read without a person truncating it by eye.
       #
       #   `release_version` — `26-24`'s hand-bumped semver, read straight out of
       #   `app/build.gradle.kts` rather than repeated here: that file is the single place it is
@@ -214,6 +230,12 @@ jobs:
       #   `androidComponents.onVariants` block names for the product rather than leaving at AGP's
       #   default `app-release.apk`. Derived once so the check, upload and release steps below all
       #   read the same value and the path cannot drift between them as the version moves.
+      #
+      #   `tag` — `26-26`: the release tag/title now name the version (`v<semver>`) rather than the
+      #   commit, and three later steps (the changelog's own "which tag is this replacing" search,
+      #   the delete-existing-release check, and `gh release create` itself) all need the identical
+      #   string — computed once here for the same reason `apk` is, not because any one of those
+      #   steps needs it more than the others.
       - name: Compute version inputs
         id: version
         run: |
@@ -224,6 +246,7 @@ jobs:
             echo "short_sha=${GITHUB_SHA:0:7}"
             echo "release_version=$release_version"
             echo "apk=app/build/outputs/apk/release/AGO_Chat_release_v$release_version.apk"
+            echo "tag=v$release_version"
           } >> "$GITHUB_OUTPUT"
 
       # `25-215`: the keystore reaches the runner only as a base64 repository secret — decoded here
@@ -311,28 +334,82 @@ jobs:
           path: ${{ steps.version.outputs.apk }}
           if-no-files-found: error
 
+      # `26-26`: the changelog is cumulative across every rebuild of one hand-set version rather than
+      # resetting on each push under the same version — so the range runs from the most recent *other*
+      # `v*` tag to `HEAD`, never "since the last time this job ran". `--sort=-creatordate` orders
+      # existing version tags newest-first; the loop takes the first one that is not the tag this run
+      # is about to (re)create, so a same-version rebuild still diffs against the *previous distinct*
+      # version, not against the tag it is itself replacing a moment later. There is never more than
+      # one tag to skip, because `agoReleaseVersion` only ever moves forward by hand (`26-24`).
+      #
+      # The very first release under this scheme has no earlier `v*` tag at all — true of this
+      # repository today (`git tag -l 'v*'` finds nothing yet, only the `release-*`/`debug-*` tags
+      # this item retires) — so `range` falls back to plain `HEAD`, and `git log HEAD` means "every
+      # commit reachable from HEAD", i.e. this project's entire history to date. That is a deliberate
+      # choice, not an oversight: at 38 commits today it reads as a complete, reasonable "what's in
+      # this build" list rather than something that needs truncating.
+      #
+      # `--format=%s` takes only the subject line, on the same reasoning `docs/backlog/26-26-*.md`
+      # gives: this project's commits already write a real sentence as the subject (e.g. `feat(26-24):
+      # hand-set semver and a product-named release APK`), so a second "body" line would just repeat
+      # it. No merge commit can ever land in this range to produce a blank or malformed line —
+      # `docs/conventions/git-workflow.md`'s rebase-and-merge convention means `main` never gets one
+      # (verified against this repository's own history: `git log --merges` is empty over all 38
+      # commits), so there is no placeholder-subject case to guard against here.
+      - name: Build changelog
+        id: changelog
+        run: |
+          set -euo pipefail
+          previous_tag=""
+          for candidate in $(git tag -l 'v*' --sort=-creatordate); do
+            if [ "$candidate" != "${{ steps.version.outputs.tag }}" ]; then
+              previous_tag="$candidate"
+              break
+            fi
+          done
+          if [ -n "$previous_tag" ]; then
+            range="$previous_tag..HEAD"
+          else
+            range="HEAD"
+          fi
+          git log "$range" --format='- [x] %s' > changelog.md
+
       # Written to a file rather than inlined into `gh release create --notes`: multi-paragraph
       # Markdown with backticks survives a heredoc far more reliably than a quoted `--notes`
-      # argument. What it says is `docs/backlog/26-09-*.md`'s own Scope, verbatim in substance
-      # minus the one paragraph `25-215` retired: no Play Store, no account, how to grant "install
-      # unknown apps". `25-215` removed the "uninstall any previous build first" paragraph
-      # entirely rather than correcting its wording in place — every published build now shares
-      # the one persistent signing key `docs/architecture/secrets.md` records, so the moving-
-      # fingerprint problem that paragraph described (and told a tester how to work around) no
-      # longer exists to warn about.
+      # argument. `26-26` dropped the install-instructions paragraph `docs/backlog/26-09-*.md`
+      # originally asked for here — the author decided it no longer earns its place — and replaced
+      # it with the changelog built above; `$(cat changelog.md)` inside this same heredoc is what
+      # splices that file's checkbox lines in without a second file write.
       - name: Write release notes
         run: |
           cat > release-notes.md <<EOF
-          This is a **release-signed APK**, signed with this project's own persistent signing key —
-          no Play Store, no Google account needed.
+          ## Changelog
 
-          **To install:** open this release page on the phone and tap the \`.apk\` file below.
-          Whatever app opens it (the browser, or a file manager if it was downloaded first) will
-          ask permission to install unknown apps — allow that for it. Android blocks installs from
-          outside the Play Store by default, so this step is expected, not a warning sign.
+          $(cat changelog.md)
 
           Version \`${{ steps.version.outputs.release_version }}\`, built from commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.release_version }}+${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`.
           EOF
+
+      # `26-26`: `agoReleaseVersion` is a hand-bumped literal, not incremented on every push, so more
+      # than one push to `main` can carry the same version — and `gh release create` fails outright
+      # (HTTP 422, "Release.tag_name already exists") on a tag that already has a release, rather
+      # than updating it. Checking `gh release view`'s exit code — not its output, which would look
+      # the same for "no release" as for a release whose body happens to be short — is what tells a
+      # repeat push under an unbumped version apart from that version's first push. `--cleanup-tag`
+      # removes the underlying git tag along with the release object, so a repeat push always starts
+      # the create step below from a genuinely clean slate instead of layering a new release onto an
+      # old tag ref. Proven against a real (throwaway, since deleted) tag on this repository before
+      # this item was called done: create → second create fails with exactly that 422 → delete
+      # --cleanup-tag → view fails (tag gone) → create again succeeds with fresh content.
+      - name: Delete existing release for this version, if any
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag --repo "${{ github.repository }}"
+          fi
 
       # `gh release create`, not `softprops/action-gh-release`: the CLI is preinstalled on
       # `ubuntu-latest` and already authenticates with `GITHUB_TOKEN`, so this is one fewer
@@ -342,23 +419,27 @@ jobs:
       # a per-commit testing build, not a versioned product release. `--target` pins the release to
       # this exact commit regardless of where `main` has moved by the time this step runs.
       #
-      # `26-24` deliberately left the tag and title naming the commit rather than the semver. Every
-      # push to `main` publishes one of these, so many of them share a single `agoReleaseVersion`
-      # and a version-named tag would collide on the second push; and what a tag has to answer here
-      # is "which commit is this build", which the asset's own filename and the notes above now
-      # answer separately for "which product version".
+      # `26-26`: the tag and title now name the product version (`v<semver>` / `Release v<semver>`),
+      # not the commit — `26-24`'s own reasoning here used to be that a version-named tag would
+      # collide on a second push sharing the same hand-set version, which is exactly the case the
+      # delete-existing step above now handles by updating the release in place instead of failing.
+      # The commit is still fully traceable without a commit-named tag: `versionName` itself
+      # (`26-24`, untouched by this item) already carries `<semver>+<short sha>` inside the APK's own
+      # manifest, and the notes below repeat it — "which commit" was never this tag's only job, and
+      # naming it after the version instead is what makes the release page readable as "which product
+      # version is this" without decoding a sha first.
       - name: Create GitHub release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="release-${{ steps.version.outputs.short_sha }}"
+          tag="${{ steps.version.outputs.tag }}"
           url=$(gh release create "$tag" \
             "${{ steps.version.outputs.apk }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "Release build ${{ steps.version.outputs.short_sha }}" \
+            --title "Release v${{ steps.version.outputs.release_version }}" \
             --notes-file release-notes.md \
             --prerelease)
           echo "url=$url" >> "$GITHUB_OUTPUT"
