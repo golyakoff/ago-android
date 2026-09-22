@@ -29,7 +29,7 @@ lifecycleRuntimeKtx = "2.8.6"
 activityCompose = "1.9.2"
 
 junit = "4.13.2"
-androidxTestExtJunit = "1.2.1"
+androidxTestExtJunit = "1.3.0"
 espressoCore = "3.6.1"
 
 # `26-12`: KSP is the annotation processor Hilt runs under (kapt is the alternative and is strictly
