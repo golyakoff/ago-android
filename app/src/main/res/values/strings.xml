@@ -112,4 +112,35 @@
     <string name="thread_send_pending_retry">Сообщение не подтверждено. Повторить отправку?</string>
     <string name="thread_join_failed_title">Не удалось открыть диалог</string>
     <string name="thread_load_older_action">Загрузить более ранние сообщения</string>
+
+    <!--
+        `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
+        Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
+        thing on a different surface, not a second vocabulary for it.
+    -->
+    <string name="nav_conversations">Диалоги</string>
+    <string name="nav_bookings">Записи</string>
+    <string name="nav_team">Команда</string>
+    <string name="nav_analytics">Аналитика</string>
+    <string name="nav_more">Ещё</string>
+
+    <!-- `26-16`'s own Out of scope: these three destinations exist and are empty-but-honest; their
+         real content is a later wave. -->
+    <string name="bookings_placeholder_body">Экран записей появится в одной из следующих версий.</string>
+    <string name="team_placeholder_body">Командный чат появится в одной из следующих версий.</string>
+    <string name="analytics_placeholder_body">Аналитика появится в одной из следующих версий.</string>
+
+    <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
+         at least one real row (`navigation.md` §"The top-level shape"). -->
+    <string name="more_section_channels">Каналы</string>
+    <string name="more_section_automation">Автоматизация</string>
+    <string name="more_section_administration">Администрирование</string>
+    <string name="more_settings_row">Настройки</string>
+    <string name="more_settings_placeholder_body">Экран настроек появится вместе со следующей версией.</string>
+
+    <!-- `26-16`: the one-time "which permissions does this operator hold" read the whole bottom bar is
+         computed from - see `AppShellViewModel`'s own doc comment for why "still loading" renders
+         neither the bar nor a guess at it. -->
+    <string name="app_shell_permissions_loading">Загружаем права доступа…</string>
+    <string name="app_shell_permissions_load_failed_title">Не удалось загрузить права доступа</string>
 </resources>

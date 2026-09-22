@@ -1,14 +1,12 @@
 package ago.chat.android.signin
 
 import ago.chat.android.R
-import ago.chat.android.conversations.ConversationListRoute
-import ago.chat.android.conversations.ConversationListViewModel
 import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.thread.ThreadRoute
+import ago.chat.android.shell.AppShellRoute
 import ago.chat.android.ui.components.IdentifierText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,19 +26,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * `26-12`: every surface the pre-session flow can show, in one file because they are one flow and
@@ -96,11 +87,12 @@ public fun SignInHost(
                     // `26-14`: the placeholder this state used to render (`SignedInScreen`) is gone -
                     // this is the real screen now. It draws its own `Scaffold`/`TopAppBar` rather than
                     // reusing `content` (the `Modifier` every other, centred arm above shares), because
-                    // it is a full screen with its own segmented control and two lists, not one more
-                    // centred message.
+                    // it is a full screen with its own bottom navigation, not one more centred message.
                     //
-                    // `26-15`: opening a row now goes somewhere - [SignedInHost] below.
-                    SignedInHost(
+                    // `26-16`: this is `AppShellRoute` now, not the hand-rolled two-destination
+                    // placeholder `26-15` left here - see `ago.chat.android.shell.AppShellScreen`'s
+                    // own doc comment for the whole shape and the back-button contract it implements.
+                    AppShellRoute(
                         activeSiteId = state.activeSiteId,
                         hubConnectionState = hubConnectionState,
                         onSignOut = onSignOut,
@@ -109,83 +101,6 @@ public fun SignInHost(
         }
     }
 }
-
-/**
- * `26-15`: the list, and the one thread that can sit on top of it - a hand-rolled, two-destination
- * "back stack" rather than Navigation Compose. `SignInUiState`'s own doc comment states why that
- * library is not here yet: "arrives with `26-16`, which owns the bottom navigation and the
- * back-button contract... adding it here... would be a guess at that item's answer." A screen-level
- * `if` cannot make that guess wrong, because it decides nothing about the graph's eventual shape - it
- * only has to solve the one property this item's own Done-when needs now: back returns to the list
- * with its scroll position and its filters intact.
- *
- * [rememberSaveableStateHolder] is what makes that true despite the list composable being fully
- * removed from composition while the thread is open - the identical mechanism `NavHost` itself uses
- * internally for the same reason, not a workaround invented for this screen. Without it,
- * `ConversationListScreen`'s own `rememberLazyListState` would be disposed the moment `ThreadRoute`
- * replaces it in this `if`, and back would return to a list scrolled to the top. `listViewModel` is
- * hoisted here (not left to `ConversationListRoute`'s own default `hiltViewModel()`) for a second
- * reason beyond scroll: [ConversationListViewModel] is scoped to this screen's own lifetime either
- * way (Hilt's default view-model-store owner is the `Activity`, not this composable), so hoisting it
- * costs nothing and is what lets the thread branch below read the *same* already-fetched row
- * (`ConversationRowUi`) the list is showing - `ConversationSummaryDto`'s own doc comment on why the
- * thread screen is handed a row instead of re-fetching one.
- *
- * The filters (`ConversationListTab`) need no explicit handling at all: they live inside
- * [ConversationListViewModel]'s own state, which this `if` never tears down.
- */
-@Composable
-private fun SignedInHost(
-    activeSiteId: String?,
-    hubConnectionState: OperatorHubConnectionState,
-    onSignOut: () -> Unit,
-) {
-    val listViewModel: ConversationListViewModel = hiltViewModel()
-    val listState by listViewModel.state.collectAsStateWithLifecycle()
-    var openConversationId by rememberSaveable { mutableStateOf<String?>(null) }
-    val stateHolder = rememberSaveableStateHolder()
-
-    // No `BackHandler` here for "a thread is open" - `ThreadRoute` (`:app`'s own `thread` package)
-    // registers its own, wrapping the identical `onBack` this composable hands it below so the system
-    // back gesture and the app bar's back arrow both release the hub subscription and flush the
-    // draft the same way. This composable only ever has to know "the operator asked to leave".
-    val currentlyOpen = openConversationId
-    if (currentlyOpen == null) {
-        stateHolder.SaveableStateProvider(SAVEABLE_KEY_LIST) {
-            ConversationListRoute(
-                activeSiteId = activeSiteId,
-                hubConnectionState = hubConnectionState,
-                viewModel = listViewModel,
-                onOpenConversation = { conversationId -> openConversationId = conversationId },
-                onSignOut = onSignOut,
-            )
-        }
-    } else {
-        // The row the list already fetched - `null` only for the sliver of time after a process-death
-        // restore before the list's own Room-backed cold start re-populates it (near-instant,
-        // `ConversationListViewModel`'s own `init`). `ThreadRoute` itself needs none of these fields to
-        // join, page history or send - only to render the header and decide the attach control, both
-        // of which degrade to "not shown yet" rather than a crash while this is `null`.
-        val row = (listState.mine + listState.waiting).firstOrNull { it.conversationId == currentlyOpen }
-        stateHolder.SaveableStateProvider("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen") {
-            ThreadRoute(
-                conversationId = currentlyOpen,
-                visitorId = row?.visitorId ?: currentlyOpen,
-                emojiCreature = row?.emojiCreature,
-                emojiFood = row?.emojiFood,
-                visitorName = row?.visitorName,
-                hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant ?: false,
-                onBack = {
-                    stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
-                    openConversationId = null
-                },
-            )
-        }
-    }
-}
-
-private const val SAVEABLE_KEY_LIST = "conversation-list"
-private const val SAVEABLE_KEY_THREAD_PREFIX = "thread:"
 
 @Composable
 private fun WorkingScreen(modifier: Modifier) {

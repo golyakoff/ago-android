@@ -1,0 +1,119 @@
+package ago.chat.android.shell
+
+import ago.chat.android.core.domain.permissions.OperatorPermissions
+import ago.chat.android.core.domain.permissions.Permission
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import androidx.activity.ComponentActivity
+import androidx.compose.material3.Text
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.espresso.Espresso
+import androidx.test.espresso.NoActivityResumedException
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * `26-16`, back-button contract clause 3: "back on a bottom-bar destination other than Диалоги
+ * returns to Диалоги; back on Диалоги exits." Drives the real [AppShellScreen] — the real `NavHost`,
+ * the real bottom-navigation `NavigationBarItem`s — with [AppShellScreen]'s own `conversationsTab`
+ * slot substituted for a trivial marker `Text`, since this clause is about the navigation graph
+ * itself, not about Диалоги's own Hilt-backed content (that file's own doc comment on why the slot
+ * exists).
+ */
+@RunWith(AndroidJUnit4::class)
+class BackContractBottomBarTest {
+    @get:Rule
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+    private val allFiveVisible = OperatorPermissions.Known(setOf(Permission.CALENDAR_CONFIGURE))
+
+    @Test
+    fun clause3_backOffAnotherTabLandsOnDialogi() {
+        composeTestRule.setContent {
+            AppShellScreen(
+                permissions = allFiveVisible,
+                loadError = null,
+                activeSiteId = null,
+                hubConnectionState = OperatorHubConnectionState.Disconnected,
+                onRetry = {},
+                onSignOut = {},
+                conversationsTab = { Text("DIALOGI_MARKER") },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Команда").performClick()
+        composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
+
+        Espresso.pressBack()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
+        assertTrue("the Activity must still be alive - only the tab changed", !composeTestRule.activity.isFinishing)
+    }
+
+    @Test
+    fun clause3_backOnDialogiExitsTheApp() {
+        composeTestRule.setContent {
+            AppShellScreen(
+                permissions = allFiveVisible,
+                loadError = null,
+                activeSiteId = null,
+                hubConnectionState = OperatorHubConnectionState.Disconnected,
+                onRetry = {},
+                onSignOut = {},
+                conversationsTab = { Text("DIALOGI_MARKER") },
+            )
+        }
+        composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
+
+        // `Espresso.pressBack()` itself throws `NoActivityResumedException` when the press genuinely
+        // left no activity resumed — Espresso's own documented signal that back was *not* consumed by
+        // anything and the system's default behaviour (finishing the task) ran. That is the success
+        // case for this test, not a crash to propagate: the alternative (no exception) would mean some
+        // callback swallowed the press and the app is still sitting on screen, which is the real
+        // failure this test exists to catch.
+        try {
+            Espresso.pressBack()
+            fail("back on Диалоги must exit the app - no enabled callback should have consumed it")
+        } catch (expected: NoActivityResumedException) {
+            // Exactly the outcome clause 3 promises.
+        }
+    }
+
+    /** The other half of clause 3, restated for a second tab so the rule is proven to be general
+     * rather than special-cased for one destination: every non-Диалоги tab's own back stack is exactly
+     * one entry deep, so back from any of them lands on Диалоги, never on whichever tab was visited
+     * immediately before it. */
+    @Test
+    fun clause3_backNeverWalksThroughPreviouslyVisitedTabs() {
+        composeTestRule.setContent {
+            AppShellScreen(
+                permissions = allFiveVisible,
+                loadError = null,
+                activeSiteId = null,
+                hubConnectionState = OperatorHubConnectionState.Disconnected,
+                onRetry = {},
+                onSignOut = {},
+                conversationsTab = { Text("DIALOGI_MARKER") },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Записи").performClick()
+        composeTestRule.onNodeWithText("Команда").performClick()
+        composeTestRule.onNodeWithText("Аналитика").performClick()
+
+        Espresso.pressBack()
+        composeTestRule.waitForIdle()
+
+        // One back press from the third tab visited lands directly on Диалоги - not on Записи, not on
+        // Команда, whichever order they were visited in.
+        composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
+        assertEquals(false, composeTestRule.activity.isFinishing)
+    }
+}

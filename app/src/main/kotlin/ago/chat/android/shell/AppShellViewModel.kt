@@ -1,0 +1,95 @@
+package ago.chat.android.shell
+
+import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.permissions.OperatorPermissions
+import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.di.IoDispatcher
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+/**
+ * `26-16`: reads the signed-in operator's own [OperatorPermissions] once per session — the fact the
+ * whole bottom navigation bar is computed from (`ago.chat.android.core.domain.navigation.visibleBottomDestinations`).
+ *
+ * **Scoped to [AppShellRoute]'s own call site — the shell, not the Activity — which is exactly the
+ * "one call, once, when the operator screen actually mounts" scope `ago-console`'s own
+ * `PermissionsProvider` has** (mounted at its own shared layout route, not earlier). Hilt's default
+ * `ViewModelStoreOwner` for a plain `@Composable` is the nearest one up the tree - here, the `NavBackStackEntry`
+ * this view model's own call site sits on top of - so this fetch runs exactly once for as long as that
+ * entry survives (`AppShellScreen`'s own doc comment on why that entry, unlike every bottom-tab
+ * destination's, is never actually popped-and-recreated).
+ *
+ * ## The three states this class ever publishes, and what each one renders
+ *
+ * [OperatorPermissions.Unknown] is not a state to compute a navigation bar from — it is the
+ * state a caller uses to decide whether to compute one **at all**. [AppShellScreen] never calls
+ * `visibleBottomDestinations` while [permissions] is still [OperatorPermissions.Unknown]: it renders a
+ * full-screen loading state instead ([loadError] absent) or a retry screen ([loadError] present),
+ * exactly the same two-way split [ago.chat.android.signin.SignInUiState.Working]/
+ * [ago.chat.android.signin.SignInUiState.Unavailable] already draw for the sign-in probes. This is
+ * the answer to `docs/backlog/26-16-*.md`'s own Done-when box ("say explicitly in your report what
+ * you render during the 'not loaded yet' window"): **nothing that looks like a bottom bar at all**,
+ * because the alternative — drawing the safe four-destination floor and then possibly expanding to
+ * five once the answer resolves — is itself "a bar that then changes under the operator", which the
+ * Done-when box explicitly rules out even though the console's own `permissionsKnown` combinator
+ * accepts exactly that transient window for its own, desktop-sidebar equivalent.
+ */
+@HiltViewModel
+public class AppShellViewModel
+    @Inject
+    constructor(
+        private val api: OperatorPermissionsApi,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    ) : ViewModel() {
+        private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
+        public val permissions: StateFlow<OperatorPermissions> = mutablePermissions.asStateFlow()
+
+        private val mutableLoadError = MutableStateFlow<String?>(null)
+
+        /** `null` while loading or once [permissions] has resolved — set only while [permissions] is
+         * still [OperatorPermissions.Unknown] *and* the one fetch that could have resolved it failed. */
+        public val loadError: StateFlow<String?> = mutableLoadError.asStateFlow()
+
+        init {
+            load()
+        }
+
+        /** The retry screen's only control — re-asks the identical question, nothing else changes. */
+        public fun retry() {
+            mutableLoadError.value = null
+            load()
+        }
+
+        private fun load() {
+            viewModelScope.launch {
+                when (val fetch = withContext(ioDispatcher) { api.fetchMyPermissions() }) {
+                    is PermissionsFetch.Loaded -> {
+                        mutablePermissions.value = OperatorPermissions.Known(fetch.granted)
+                        mutableLoadError.value = null
+                    }
+
+                    is PermissionsFetch.Failed -> {
+                        // `permissions` stays `Unknown` - a failed read is not "holds nothing", and
+                        // must never compute the four-destination floor as though it had answered.
+                        mutableLoadError.value = describe(fetch.reason)
+                    }
+                }
+            }
+        }
+    }
+
+private fun describe(reason: ProbeFailure): String =
+    when (reason) {
+        is ProbeFailure.UnexpectedStatus -> "HTTP ${reason.status}"
+        is ProbeFailure.Transport -> reason.message
+        is ProbeFailure.Malformed -> reason.message
+    }

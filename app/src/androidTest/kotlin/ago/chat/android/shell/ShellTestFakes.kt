@@ -1,0 +1,121 @@
+package ago.chat.android.shell
+
+import ago.chat.android.core.domain.conversations.ClaimResult
+import ago.chat.android.core.domain.conversations.ConversationListCache
+import ago.chat.android.core.domain.conversations.ConversationQueue
+import ago.chat.android.core.domain.conversations.ConversationSummary
+import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.network.realtime.ConversationAssignedDto
+import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.SendMessageResult
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/**
+ * `26-16`: the back-button-contract UI tests' own fakes — the identical shapes
+ * `ConversationListViewModelTest`/`ThreadViewModelTest` already use as plain JVM unit tests, reused
+ * here so an instrumented Compose test can drive the *real* [ConversationsTabHost] with no Hilt
+ * component, no network and no real hub connection in play at all.
+ */
+internal class FakeConversationsApi(
+    var queueResult: QueueResult = QueueResult.Failed("not configured"),
+    var claimResult: (String) -> ClaimResult = { ClaimResult.Claimed },
+) : ConversationsApi {
+    var fetchCalls: Int = 0
+        private set
+    val claimCalls: MutableList<String> = mutableListOf()
+
+    override suspend fun fetchQueue(): QueueResult {
+        fetchCalls++
+        return queueResult
+    }
+
+    override suspend fun claim(conversationId: String): ClaimResult {
+        claimCalls.add(conversationId)
+        return claimResult(conversationId)
+    }
+}
+
+internal class FakeConversationListCache(
+    private var cached: ConversationQueue? = null,
+) : ConversationListCache {
+    override suspend fun read(): ConversationQueue? = cached
+
+    override suspend fun write(queue: ConversationQueue) {
+        cached = queue
+    }
+}
+
+internal class FakeListHubEvents : OperatorHubEvents {
+    override val state = MutableStateFlow<OperatorHubConnectionState>(OperatorHubConnectionState.Disconnected)
+    override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+    override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+    override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+
+    override suspend fun joinConversation(conversationId: String): HistoryPage = error("not used by the list screen")
+
+    override fun leaveConversation() = error("not used by the list screen")
+
+    override suspend fun loadOlderHistory(
+        conversationId: String,
+        beforeSequence: Long,
+        pageSize: Int,
+    ): HistoryPage = error("not used by the list screen")
+
+    override suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+        clientMessageId: String,
+        attachmentId: String?,
+    ): SendMessageResult = error("not used by the list screen")
+}
+
+/** The thread's own connection fake — a fixed history page, no live pushes, no real send. Enough to
+ * open a thread and leave it again, which is all clauses 1 and 6 need. */
+internal class FakeThreadHubEvents(
+    private val page: HistoryPage = HistoryPage(messages = emptyList(), nextBeforeSequence = null),
+) : OperatorHubEvents {
+    override val state = MutableStateFlow<OperatorHubConnectionState>(OperatorHubConnectionState.Connected)
+    override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+    override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+    override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+
+    var leaveCalls: Int = 0
+        private set
+
+    override suspend fun joinConversation(conversationId: String): HistoryPage = page
+
+    override fun leaveConversation() {
+        leaveCalls++
+    }
+
+    override suspend fun loadOlderHistory(
+        conversationId: String,
+        beforeSequence: Long,
+        pageSize: Int,
+    ): HistoryPage = HistoryPage()
+
+    override suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+        clientMessageId: String,
+        attachmentId: String?,
+    ): SendMessageResult = SendMessageResult.NotConnected
+}
+
+internal fun summary(
+    id: String,
+    visitorName: String? = null,
+) = ConversationSummary(
+    conversationId = id,
+    visitorId = "visitor-$id",
+    emojiCreature = "🦊",
+    emojiFood = "🍕",
+    visitorName = visitorName,
+    createdAt = "2026-09-22T09:00:00Z",
+    operatorUnreadCount = 0,
+)
