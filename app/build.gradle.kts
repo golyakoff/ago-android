@@ -278,6 +278,9 @@ dependencies {
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // `26-25`: `pressSystemBack()`'s own `UiDevice` call - see this catalog entry's own remarks for
+    // why it replaces `Espresso.pressBack()` in the back-contract suite.
+    androidTestImplementation(libs.androidx.uiautomator)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     // `26-14`: `Room.inMemoryDatabaseBuilder` for `RoomConversationListCacheTest` - real SQLite, which

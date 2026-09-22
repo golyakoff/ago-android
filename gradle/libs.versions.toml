@@ -47,6 +47,19 @@ junit = "4.13.2"
 androidxTestExtJunit = "1.3.0"
 espressoCore = "3.6.1"
 
+# `26-25`: `UiDevice`, used by the one shared `pressSystemBack()` helper
+# (`app/src/androidTest/.../testing/SystemBackPress.kt`) in place of `Espresso.pressBack()`.
+# `Espresso.pressBack()` requires the app window to hold input focus at the instant it runs and
+# throws `RootViewWithoutFocusException` when it does not - a race the headless, no-hardware-
+# acceleration CI emulator (`reactivecircus/android-emulator-runner`) intermittently loses, which is
+# what made `instrumented-tests` fail roughly every other run this session
+# (`ago-root/docs/backlog/26-25-*.md`). `UiDevice`'s back press runs at the system/UiAutomator level
+# and never touches Espresso's own window-focus requirement, so it does not race the thing that was
+# failing. 2.4.0 is the newest stable release (2.3.0 is the prior stable; nothing past 2.4.0 has left
+# alpha/beta/rc) and needs no version coupling with anything else in this catalog - it talks to the
+# device over UiAutomator, not through Espresso or Compose's own test machinery.
+uiautomator = "2.4.0"
+
 # `26-12`: KSP is the annotation processor Hilt and Room run under (kapt is the alternative and is
 # strictly slower — Dagger/Hilt has supported KSP since 2.48 and recommends it).
 #
@@ -238,6 +251,8 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+# `26-25`: see the `uiautomator` version row above for why this replaces `Espresso.pressBack()`.
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 

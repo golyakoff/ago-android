@@ -3,17 +3,16 @@ package ago.chat.android.shell
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.Espresso
-import androidx.test.espresso.NoActivityResumedException
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,7 +59,7 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("Команда").performClick()
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
 
-        Espresso.pressBack()
+        pressSystemBack()
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
@@ -82,17 +81,19 @@ class BackContractBottomBarTest {
         }
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
 
-        // `Espresso.pressBack()` itself throws `NoActivityResumedException` when the press genuinely
-        // left no activity resumed — Espresso's own documented signal that back was *not* consumed by
-        // anything and the system's default behaviour (finishing the task) ran. That is the success
-        // case for this test, not a crash to propagate: the alternative (no exception) would mean some
-        // callback swallowed the press and the app is still sitting on screen, which is the real
-        // failure this test exists to catch.
-        try {
-            Espresso.pressBack()
-            fail("back on Диалоги must exit the app - no enabled callback should have consumed it")
-        } catch (expected: NoActivityResumedException) {
-            // Exactly the outcome clause 3 promises.
+        // `Espresso.pressBack()` used to throw `NoActivityResumedException` here — Espresso's own
+        // documented signal that the press was *not* consumed by anything and the system's default
+        // behaviour (finishing the task) ran instead. `pressSystemBack()` (`26-25`) has no equivalent
+        // exception (`SystemBackPress.kt`'s own doc comment), so this proves the identical fact a
+        // different, equally real way: the hosting `ActivityScenario` — the same one
+        // `createAndroidComposeRule` drives this whole rule with — only ever reaches
+        // `Lifecycle.State.DESTROYED` once the Activity has genuinely finished. If some callback
+        // swallowed the press instead, the Activity stays `RESUMED` and never gets there, so
+        // `waitUntil` times out and fails the test below — the exact failure this test always existed
+        // to catch, just detected by polling a lifecycle state instead of catching an exception.
+        pressSystemBack()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.activityRule.scenario.state == Lifecycle.State.DESTROYED
         }
     }
 
@@ -118,7 +119,7 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("Команда").performClick()
         composeTestRule.onNodeWithText("Аналитика").performClick()
 
-        Espresso.pressBack()
+        pressSystemBack()
         composeTestRule.waitForIdle()
 
         // One back press from the third tab visited lands directly on Диалоги - not on Записи, not on
