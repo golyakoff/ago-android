@@ -7,10 +7,12 @@ import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
+import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.identity.KtorIdentityApi
+import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.data.AgoChatDatabase
@@ -116,6 +118,19 @@ public object AppModule {
         identity: IdentityApi,
         activeSite: ActiveSiteSelection,
     ): PostSignInRouter = PostSignInRouter(identity, activeSite)
+
+    /**
+     * `26-16`: [ago.chat.android.shell.AppShellViewModel]'s own port — a second adapter over the
+     * identical `GET /api/v1/operators/me` endpoint [provideIdentityApi]'s [KtorIdentityApi] already
+     * calls for its status alone. See [OperatorPermissionsApi]'s own doc comment for why this is a
+     * deliberate second call rather than a widened [IdentityApi], following `ago-console`'s own
+     * precedent for the identical endpoint.
+     */
+    @Provides
+    public fun provideOperatorPermissionsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): OperatorPermissionsApi = KtorOperatorPermissionsApi(client, config.apiBaseUrl)
 
     /**
      * `26-13`: the app's one `/hubs/operator` connection. A `@Singleton` for the identical reason

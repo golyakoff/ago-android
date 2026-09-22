@@ -49,6 +49,13 @@ hilt = "2.52"
 # built against a Compose/Kotlin generation this project has not moved to.
 hiltNavigationCompose = "1.2.0"
 
+# `26-16`: Navigation Compose, arriving with its first real consumer — the bottom navigation and the
+# back-button contract this item owns (`docs/architecture.md`/`SignInUiState`'s own doc comment: "arrives
+# with 26-16"). 2.8.3 is the release generation contemporary with `hiltNavigationCompose` 1.2.0 and this
+# project's own Compose BOM (`composeBom` above) — the same "picked from the same generation, not the
+# newest thing on Maven" reasoning every other row in this file already states for itself.
+navigationCompose = "2.8.3"
+
 # `26-12`: the HTTP client, per `docs/architecture.md`'s stack table (Ktor over Retrofit, because it
 # is multiplatform and so keeps `adr/0178`'s KMP door open at no cost). 2.3.12 is the last 2.3.x and
 # the generation built against Kotlin 2.0.x; Ktor 3.x exists but changes API this repository has no
@@ -128,6 +135,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }

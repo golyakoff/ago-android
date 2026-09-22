@@ -115,6 +115,9 @@ dependencies {
     // `26-14`: `hiltViewModel()` for `ConversationListRoute` - see this catalog entry's own remarks
     // for why it is needed before Navigation Compose itself is (`26-16`).
     implementation(libs.hilt.navigation.compose)
+    // `26-16`: the real navigation graph - the bottom bar's five destinations and the back-button
+    // contract (`docs/backlog/26-16-*.md`).
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.appauth)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
