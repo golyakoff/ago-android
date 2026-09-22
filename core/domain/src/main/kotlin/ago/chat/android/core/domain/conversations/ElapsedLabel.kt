@@ -16,11 +16,17 @@ import java.time.OffsetDateTime
  * `IClock`, read onto a client that has no such rule stated for it but no reason to be worse either.
  */
 public sealed interface ElapsedLabel {
-    public data class Minutes(val value: Long) : ElapsedLabel
+    public data class Minutes(
+        val value: Long,
+    ) : ElapsedLabel
 
-    public data class Hours(val value: Long) : ElapsedLabel
+    public data class Hours(
+        val value: Long,
+    ) : ElapsedLabel
 
-    public data class Days(val value: Long) : ElapsedLabel
+    public data class Days(
+        val value: Long,
+    ) : ElapsedLabel
 
     /** `createdAt` did not parse. Rendered as an honest "unknown" - `ConversationList.tsx`'s own
      * `queueStartUnknown`/`queueWaitingSinceUnknown` precedent - never as "0 minutes ago". */

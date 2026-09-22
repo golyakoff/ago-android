@@ -5,7 +5,7 @@ import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso
@@ -28,6 +28,16 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class BackContractBottomBarTest {
+    // `25-214`: `...junit4.v2.createAndroidComposeRule`, not the original in `...junit4`. The
+    // 2026.09.00 Compose BOM deprecates the latter, and this project builds with
+    // `allWarningsAsErrors`, so a deprecated API is a build failure here rather than a warning. The
+    // v2 factory returns the identical `AndroidComposeTestRule` type — the one real difference is
+    // that the test clock runs on a `StandardTestDispatcher` instead of an
+    // `UnconfinedTestDispatcher`, i.e. work launched inside composition is queued rather than run
+    // eagerly at the launch point. Every back-contract test in this source set was re-run on a
+    // device against the v2 rule and none needed explicit synchronisation added, because they all
+    // already assert through `composeTestRule`'s own idle-synchronising matchers rather than
+    // reading state straight after an event.
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 

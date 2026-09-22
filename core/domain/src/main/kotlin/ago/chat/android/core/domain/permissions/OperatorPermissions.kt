@@ -21,7 +21,9 @@ public sealed interface OperatorPermissions {
 
     /** The server's own answer, verbatim — every string in [granted] is a permission name from
      * `ago-chat`'s own vocabulary ([Permission]), never one this app invented. */
-    public data class Known(val granted: Set<String>) : OperatorPermissions
+    public data class Known(
+        val granted: Set<String>,
+    ) : OperatorPermissions
 }
 
 /** `true` only when [OperatorPermissions] is genuinely [OperatorPermissions.Known] to hold

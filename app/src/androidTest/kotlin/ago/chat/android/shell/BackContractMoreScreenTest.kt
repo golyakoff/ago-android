@@ -4,7 +4,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso
@@ -22,6 +22,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class BackContractMoreScreenTest {
+    // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer
+    // usable under `allWarningsAsErrors`, and what changes underneath.
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 

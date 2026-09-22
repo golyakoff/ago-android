@@ -323,7 +323,10 @@ public class ThreadViewModel
             hubEvents.leaveConversation()
         }
 
-        private data class FailedSend(val body: String, val clientMessageId: String)
+        private data class FailedSend(
+            val body: String,
+            val clientMessageId: String,
+        )
 
         private companion object {
             const val DRAFT_WRITE_DEBOUNCE_MILLIS = 400L

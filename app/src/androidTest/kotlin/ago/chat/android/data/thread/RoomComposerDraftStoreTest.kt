@@ -27,7 +27,8 @@ class RoomComposerDraftStoreTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         database =
-            Room.inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
+            Room
+                .inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
         store = RoomComposerDraftStore(database.composerDraftDao())
@@ -96,7 +97,8 @@ class RoomComposerDraftStoreTest {
         runTest {
             val context = ApplicationProvider.getApplicationContext<android.content.Context>()
             val fileBackedFirst =
-                Room.databaseBuilder(context, AgoChatDatabase::class.java, "composer-draft-test.db")
+                Room
+                    .databaseBuilder(context, AgoChatDatabase::class.java, "composer-draft-test.db")
                     .allowMainThreadQueries()
                     .build()
             try {
@@ -106,7 +108,8 @@ class RoomComposerDraftStoreTest {
             }
 
             val reopened =
-                Room.databaseBuilder(context, AgoChatDatabase::class.java, "composer-draft-test.db")
+                Room
+                    .databaseBuilder(context, AgoChatDatabase::class.java, "composer-draft-test.db")
                     .allowMainThreadQueries()
                     .build()
             try {

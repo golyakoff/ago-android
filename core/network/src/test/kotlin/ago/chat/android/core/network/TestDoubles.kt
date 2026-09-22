@@ -31,7 +31,9 @@ internal class MutableAccessTokenProvider(
 }
 
 /** An in-memory [ActiveSiteSelection], the same contract `:app`'s `SessionStore`-backed one has. */
-internal class InMemoryActiveSite(private var siteId: String? = null) : ActiveSiteSelection {
+internal class InMemoryActiveSite(
+    private var siteId: String? = null,
+) : ActiveSiteSelection {
     override fun currentSiteId(): String? = siteId
 
     override fun select(siteId: String?) {

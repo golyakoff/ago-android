@@ -32,12 +32,16 @@ public interface ConversationsApi {
 
 /** What answering "what's waiting, what's mine" came back with. */
 public sealed interface QueueResult {
-    public data class Loaded(val queue: ConversationQueue) : QueueResult
+    public data class Loaded(
+        val queue: ConversationQueue,
+    ) : QueueResult
 
     /** The call did not answer — a bad status, a dropped connection, or a `2xx` with the wrong shape.
      * One arm rather than three: unlike [ago.chat.android.core.domain.identity.ProbeOutcome], nothing
      * here is a policy decision to read differently by cause, so there is no reason to split it further. */
-    public data class Failed(val message: String) : QueueResult
+    public data class Failed(
+        val message: String,
+    ) : QueueResult
 }
 
 /** What claiming one waiting conversation came back with. */
@@ -54,5 +58,7 @@ public sealed interface ClaimResult {
      * identical choice for the identical reason (that component's own doc comment: "the loser of a race
      * is told plainly, inline").
      */
-    public data class Refused(val detail: String) : ClaimResult
+    public data class Refused(
+        val detail: String,
+    ) : ClaimResult
 }

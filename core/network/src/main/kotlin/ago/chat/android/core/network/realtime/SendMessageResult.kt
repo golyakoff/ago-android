@@ -18,7 +18,9 @@ public sealed interface SendMessageResult {
     /** The server accepted it. [sequence] is `SendMessageAsync`'s own return value — not itself used
      * to render the message (the local echo pushed back over [OperatorHubEvents.messages] is), only
      * to confirm the pending send resolved. */
-    public data class Sent(val sequence: Long) : SendMessageResult
+    public data class Sent(
+        val sequence: Long,
+    ) : SendMessageResult
 
     /** Nothing was sent — the connection was not `Connected` at the moment of the call. Safe to retry
      * once [OperatorHubEvents.state] reports `Connected` again, with a fresh `clientMessageId`. */
@@ -27,10 +29,14 @@ public sealed interface SendMessageResult {
     /** An invoke was genuinely in flight when the connection dropped, so whether the server received
      * it is unknown — it may have, and simply lost the response. Safe to retry, but **only** with the
      * exact same `clientMessageId` the failed attempt used ([SendMessageResult]'s own doc comment). */
-    public data class OutcomeUnknown(val cause: Throwable) : SendMessageResult
+    public data class OutcomeUnknown(
+        val cause: Throwable,
+    ) : SendMessageResult
 
     /** The connection was healthy and the server definitively refused the send (a `HubException` —
      * a real business-level rejection, not a transport ambiguity). Retrying automatically would be
      * wrong: nothing about the connection changed, so a fresh attempt would fail the identical way. */
-    public data class Refused(val message: String) : SendMessageResult
+    public data class Refused(
+        val message: String,
+    ) : SendMessageResult
 }
