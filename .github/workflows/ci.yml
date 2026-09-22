@@ -18,7 +18,7 @@ jobs:
       # checkout, before `actions/setup-java` or any `./gradlew` invocation, which is the property
       # the backlog item's own Done-when asks for.
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+        uses: gradle/actions/wrapper-validation@v6
 
       # Temurin because that is what `docs/architecture.md`'s stack table and this machine's own
       # toolchain use; the major version (17) is pinned here rather than left as "latest", same as
@@ -99,7 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/wrapper-validation@v6
 
       - name: Set up JDK
         uses: actions/setup-java@v6
