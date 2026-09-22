@@ -112,9 +112,20 @@ dependencies {
     // hand-rolled Android Keystore envelope encryption over plain SharedPreferences.
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    // `26-14`: `hiltViewModel()` for `ConversationListRoute` - see this catalog entry's own remarks
+    // for why it is needed before Navigation Compose itself is (`26-16`).
+    implementation(libs.hilt.navigation.compose)
     implementation(libs.appauth)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
+
+    // `26-14`: Room, the conversation list's stale-until-proven-fresh cache
+    // (`docs/architecture.md` "Offline"). Lives here, not in a `:core:*` module, for the identical
+    // "a concrete Android technology is wired in :app, behind a :core:domain port" reason
+    // `SessionStore`/`AgoActiveSite` already establish for `EncryptedSharedPreferences`.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -122,6 +133,9 @@ dependencies {
     // `OperatorHubConnectionLifecycle` observes - see this catalog entry's own remarks for why an
     // `Activity`'s own lifecycle is the wrong signal for this.
     implementation(libs.androidx.lifecycle.process)
+    // `26-14`: `LocalLifecycleOwner`/`collectAsStateWithLifecycle` - see this catalog entry's own
+    // remarks for why the older copy in `androidx.compose.ui:ui` is not used instead.
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -136,6 +150,10 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    // `26-14`: `Room.inMemoryDatabaseBuilder` for `RoomConversationListCacheTest` - real SQLite, which
+    // only an instrumented test can provide without Robolectric (this catalog entry's own remarks).
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

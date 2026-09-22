@@ -42,6 +42,12 @@ ksp = "2.0.21-1.0.28"
 # own 2026-09-21 decision, and `26-07` deferred wiring it for lack of anything to inject. 2.52 is the
 # release matching the Kotlin 2.0.x generation pinned above.
 hilt = "2.52"
+# `26-14`: `hiltViewModel()` inside a plain `@Composable` — `ConversationListRoute`'s own way of
+# obtaining `ConversationListViewModel` with no Navigation Compose graph yet to hang a destination off
+# (`docs/architecture.md`: Navigation Compose itself arrives with `26-16`). 1.2.0 is the release
+# generation that targets this project's own Compose BOM (`composeBom` above) rather than a newer one
+# built against a Compose/Kotlin generation this project has not moved to.
+hiltNavigationCompose = "1.2.0"
 
 # `26-12`: the HTTP client, per `docs/architecture.md`'s stack table (Ktor over Retrofit, because it
 # is multiplatform and so keeps `adr/0178`'s KMP door open at no cost). 2.3.12 is the last 2.3.x and
@@ -84,6 +90,15 @@ ktlintGradle = "12.1.1"
 signalr = "9.0.5"
 rxjava3 = "3.1.9"
 
+# `26-14`: Room, arriving with its first real consumer (the conversation list's stale-until-proven-fresh
+# cache, `docs/architecture.md` "Offline"). 2.6.1 is the newest release still on the Room 2.6 line rather
+# than the newest release on Maven overall - 2.7 rewrote Room's own KMP story around a new SQLite driver
+# artifact and raises assumptions about the Kotlin/KSP generation in play; this project is deliberately
+# pinned to the Kotlin 2.0.21 / KSP 2.0.21-1.0.28 generation (see `kotlin`/`ksp` above), and 2.6.1 is the
+# last release built and tested against that generation rather than the one after it, the same
+# "picked from the same generation, not the newest thing on Maven" reasoning `composeBom` above states.
+room = "2.6.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -95,6 +110,12 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 # firing on the way out must not read as "the app left the foreground". Same version generation as
 # `lifecycleRuntimeKtx` above.
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleRuntimeKtx" }
+# `26-14`: the Compose-aware half of the same `lifecycleRuntimeKtx` generation —
+# `androidx.lifecycle.compose.LocalLifecycleOwner` (the non-deprecated home for it, unlike the older
+# copy in `androidx.compose.ui:ui`, which this project's `allWarningsAsErrors` would turn into a build
+# failure) and `collectAsStateWithLifecycle()`, which `ConversationListRoute` uses so its own
+# `StateFlow` collection pauses outside `RESUMED` rather than running while backgrounded.
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -106,6 +127,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
@@ -125,6 +147,18 @@ kotlinx-coroutines-rx3 = { group = "org.jetbrains.kotlinx", name = "kotlinx-coro
 
 signalr = { group = "com.microsoft.signalr", name = "signalr", version.ref = "signalr" }
 rxjava3 = { group = "io.reactivex.rxjava3", name = "rxjava", version.ref = "rxjava3" }
+
+# `26-14`: Room. `-ktx` for `suspend`-function DAOs (this project's own coroutines-everywhere
+# convention); `-compiler` runs through KSP, the same choice `26-12` already made for Hilt and for the
+# identical reason (Dagger/Room both support it, and it is the faster of the two annotation-processing
+# paths). `-testing` backs the one instrumented test this item's own cache needs — Room's in-memory
+# database is real SQLite, which the plain JVM `test` source set cannot provide without Robolectric, a
+# dependency `26-08` already declined to add for a different reason (a second suppression vocabulary);
+# an `androidTest` against the emulator is what this project already has instead.
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 
 appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }

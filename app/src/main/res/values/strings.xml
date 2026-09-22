@@ -53,14 +53,9 @@
     <string name="registration_body">Регистрация магазина пока делается в веб-консоли. Когда магазин появится, войдите здесь ещё раз — приложение подхватит его само.</string>
     <string name="registration_open_console">Открыть веб-консоль</string>
 
-    <!-- `26-14` replaces this with the conversation list. -->
-    <string name="signed_in_title">Вход выполнен</string>
-    <string name="signed_in_body">Диалоги появятся здесь в следующей версии.</string>
-    <string name="signed_in_active_site">Текущий магазин</string>
-    <string name="signed_in_no_active_site">Магазин не выбран</string>
-
-    <!-- `26-13`: a debug row proving the hub connection, not a designed status indicator - `26-14`+
-         replace this with a real one. -->
+    <!-- `26-13`: a debug row proving the hub connection, not a designed status indicator - kept as a
+         small status line in `26-14`'s own app bar rather than a full designed indicator, which is
+         still a later item's job. -->
     <string name="hub_connection_label">Соединение</string>
     <string name="hub_connection_disconnected">Отключено</string>
     <string name="hub_connection_connecting">Подключение…</string>
@@ -68,4 +63,44 @@
     <string name="hub_connection_reconnecting">Переподключение…</string>
 
     <string name="action_sign_out">Выйти</string>
+    <string name="action_dismiss">Скрыть</string>
+
+    <!--
+        `26-14`: the conversation list - the first real screen. "Мои"/"Ожидают" are the segmented
+        control's own labels, verbatim from `docs/backlog/26-14-*.md`'s own Scope - shorter than the
+        console's full rail headings ("Назначено мне"/"Ожидание") because a phone's segmented control
+        has far less width than a desktop sidebar.
+    -->
+    <string name="conversation_list_title">Диалоги</string>
+    <string name="conversation_list_tab_mine">Мои</string>
+    <string name="conversation_list_tab_waiting">Ожидают</string>
+    <string name="conversation_list_stale_banner">Данные могут быть устаревшими</string>
+    <string name="conversation_list_refresh_action">Обновить</string>
+    <string name="conversation_list_mine_empty">Пока ничего не назначено. Новые диалоги появляются здесь автоматически.</string>
+    <string name="conversation_list_waiting_empty">Никто не ждёт.</string>
+    <string name="conversation_list_new_badge">Новое</string>
+    <string name="conversation_list_claim_action">Забрать</string>
+    <string name="conversation_list_claiming_label">Забираем…</string>
+    <string name="conversation_list_opened_prefix">Открыт</string>
+    <string name="conversation_list_waiting_since_prefix">Ждёт</string>
+    <string name="conversation_list_elapsed_unknown">время неизвестно</string>
+
+    <plurals name="conversation_list_elapsed_minutes">
+        <item quantity="one">%d минуту</item>
+        <item quantity="few">%d минуты</item>
+        <item quantity="many">%d минут</item>
+        <item quantity="other">%d минуты</item>
+    </plurals>
+    <plurals name="conversation_list_elapsed_hours">
+        <item quantity="one">%d час</item>
+        <item quantity="few">%d часа</item>
+        <item quantity="many">%d часов</item>
+        <item quantity="other">%d часа</item>
+    </plurals>
+    <plurals name="conversation_list_elapsed_days">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дня</item>
+    </plurals>
 </resources>
