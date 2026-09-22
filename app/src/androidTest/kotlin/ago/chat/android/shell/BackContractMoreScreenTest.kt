@@ -2,7 +2,7 @@ package ago.chat.android.shell
 
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.testing.pressSystemBack
+import ago.chat.android.testing.triggerBackPress
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -53,7 +53,7 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Настройки").performClick()
         composeTestRule.waitForIdle()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         // Back landed on the Ещё list - its own row is showing again - not on Команда, the tab that
@@ -113,7 +113,7 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Ещё").performClick()
         composeTestRule.onNodeWithText("Настройки").assertExists()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()

@@ -1,6 +1,6 @@
 package ago.chat.android.ui.components
 
-import ago.chat.android.testing.pressSystemBack
+import ago.chat.android.testing.pressBackOnFocusedWindow
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
@@ -31,6 +31,16 @@ import org.junit.runner.RunWith
  * for every time one is built: Material3's [ModalBottomSheet] consumes system back for its own
  * dismissal before whatever `BackHandler` the hosting screen itself registers — proven here inside a
  * real `NavHost`-free host, the same integration a real future sheet will sit inside.
+ *
+ * `26-36`: this is the one back-contract file that still presses back through a real system key event
+ * ([ago.chat.android.testing.pressBackOnFocusedWindow]), not through the Activity's own
+ * `onBackPressedDispatcher` the other four files use. [ModalBottomSheet] renders through a genuine
+ * platform `Dialog` with its own, separate `OnBackPressedDispatcher` (`SystemBackPress.kt`'s own doc
+ * comment has the decompiled proof), so a call against the Activity's dispatcher never reaches the
+ * sheet's dismissal at all - confirmed by actually running it, which found a real, different failure
+ * (the whole Activity finished on the very first back press). What this test needs to prove - which
+ * window a back signal reaches first when a real Dialog is on top - is a window-focus question, not
+ * "this app's own `BackHandler` logic", so it is answered with a real signal on purpose.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @RunWith(AndroidJUnit4::class)
@@ -70,15 +80,25 @@ class BackContractSheetDismissTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertExists()
 
-        pressSystemBack()
+        pressBackOnFocusedWindow()
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertDoesNotExist()
         composeTestRule.onNodeWithText("SCREEN_MARKER").assertExists()
         assertFalse("back must be consumed by the sheet's own dismissal, never reach the screen underneath it", leftScreen)
 
+        // The dialog's own window closing and the Activity's own window regaining input focus is a
+        // real OS-level transition `waitForIdle()` above does not cover - it only settles Compose's
+        // own recomposition, not native window focus. Found by actually running this test repeatedly:
+        // without this wait, the second `pressBackOnFocusedWindow()` below intermittently fired before
+        // focus had returned to the Activity's window and was delivered nowhere, the same class of
+        // window-focus race `26-25`'s own `RootViewWithoutFocusException` was about, just relocated
+        // rather than eliminated by pressing a real key. This polls a real, already-triggered
+        // transition (the dialog is already closing) rather than an event that might never arrive.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { composeTestRule.activity.hasWindowFocus() }
+
         // A second back press, with the sheet already gone, is free to reach the screen's own handler.
-        pressSystemBack()
+        pressBackOnFocusedWindow()
         composeTestRule.waitForIdle()
         assertTrue("once the sheet is gone, the next back press is the screen's own to answer", leftScreen)
     }

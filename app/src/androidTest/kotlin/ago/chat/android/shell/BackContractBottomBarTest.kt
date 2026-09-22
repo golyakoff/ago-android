@@ -3,7 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.testing.pressSystemBack
+import ago.chat.android.testing.triggerBackPress
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -59,7 +59,7 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("Команда").performClick()
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
@@ -83,15 +83,19 @@ class BackContractBottomBarTest {
 
         // `Espresso.pressBack()` used to throw `NoActivityResumedException` here — Espresso's own
         // documented signal that the press was *not* consumed by anything and the system's default
-        // behaviour (finishing the task) ran instead. `pressSystemBack()` (`26-25`) has no equivalent
-        // exception (`SystemBackPress.kt`'s own doc comment), so this proves the identical fact a
-        // different, equally real way: the hosting `ActivityScenario` — the same one
-        // `createAndroidComposeRule` drives this whole rule with — only ever reaches
-        // `Lifecycle.State.DESTROYED` once the Activity has genuinely finished. If some callback
-        // swallowed the press instead, the Activity stays `RESUMED` and never gets there, so
-        // `waitUntil` times out and fails the test below — the exact failure this test always existed
-        // to catch, just detected by polling a lifecycle state instead of catching an exception.
-        pressSystemBack()
+        // behaviour (finishing the task) ran instead. `triggerBackPress()` (`26-36`) drives
+        // `onBackPressedDispatcher.onBackPressed()` directly, which has no equivalent exception
+        // (`SystemBackPress.kt`'s own doc comment), so this proves the identical fact a different,
+        // equally real way: the hosting `ActivityScenario` — the same one `createAndroidComposeRule`
+        // drives this whole rule with — only ever reaches `Lifecycle.State.DESTROYED` once the
+        // Activity has genuinely finished. If some callback swallowed the press instead, the Activity
+        // stays `RESUMED` and never gets there, so `waitUntil` times out and fails the test below —
+        // the exact failure this test always existed to catch, just detected by polling a lifecycle
+        // state instead of catching an exception. The wait itself is real: `onBackPressed()` returning
+        // does not mean the Activity has finished destroying yet, since `finish()` still hops through
+        // the main looper to tear the Activity down - this polls that real, already-triggered
+        // transition, not an external event that might never arrive.
+        triggerBackPress(composeTestRule)
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             composeTestRule.activityRule.scenario.state == Lifecycle.State.DESTROYED
         }
@@ -119,7 +123,7 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("Команда").performClick()
         composeTestRule.onNodeWithText("Аналитика").performClick()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         // One back press from the third tab visited lands directly on Диалоги - not on Записи, not on

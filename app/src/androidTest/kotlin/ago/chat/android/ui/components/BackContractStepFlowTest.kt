@@ -1,6 +1,6 @@
 package ago.chat.android.ui.components
 
-import ago.chat.android.testing.pressSystemBack
+import ago.chat.android.testing.triggerBackPress
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -52,17 +52,17 @@ class BackContractStepFlowTest {
         composeTestRule.onNodeWithText("STEP_1").performClick()
         composeTestRule.onNodeWithText("STEP_2").assertExists()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("STEP_1").assertExists()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("STEP_0").assertExists()
 
         // One more back, from the first step - `StepFlowBackHandler` is disabled here, so this press
         // is not consumed by the flow at all and reaches the host's own handler instead.
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         assertTrue("back on the first step must propagate to the host screen's own back handling", leftFlow)

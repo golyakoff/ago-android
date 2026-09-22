@@ -6,7 +6,7 @@ import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.thread.RoomComposerDraftStore
-import ago.chat.android.testing.pressSystemBack
+import ago.chat.android.testing.triggerBackPress
 import ago.chat.android.thread.ThreadViewModel
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -103,7 +103,7 @@ class BackContractDialogsTabTest {
         composeTestRule.onNodeWithText("Иван").performClick()
         composeTestRule.waitForIdle()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Иван").assertExists()
@@ -157,7 +157,7 @@ class BackContractDialogsTabTest {
         composeTestRule.onNodeWithText("Напишите сообщение…").performTextInput("Уже смотрю ваш заказ")
         composeTestRule.waitForIdle()
 
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
 
         // `flushDraft()`'s own write runs on `viewModelScope` - fire-and-forget from this test's own
@@ -188,7 +188,7 @@ class BackContractDialogsTabTest {
         // (`java.lang.IllegalStateException: ... connection pool has been closed`, found running this
         // exact test on `ago-test`). Closing the thread here, inside the test itself, is what makes
         // this test's own database lifecycle actually contain everything that touches it.
-        pressSystemBack()
+        triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()
         // The same "wait for the real write, not just for Compose to settle" reasoning as above -
         // this closing flush must also be allowed to land before `tearDown()` closes the database.
