@@ -1,0 +1,89 @@
+package ago.chat.android.ui.components
+
+import ago.chat.android.core.domain.visitorEmojiPair
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/**
+ * `26-23`: the visitor's emoji identity as the approved mockup composes it — the creature centred in a
+ * circular brand tint, the food emoji floating over the circle's bottom-right edge with **no background
+ * of its own**. The mockup's own CSS carries the reason this is a separate composable rather than a
+ * tweak to [VisitorDisplayPrefix]: "`25-207`: badge composition, not a side-by-side pair - the creature
+ * alone, centered, larger than the old squeezed-pair glyph". [VisitorDisplayPrefix] still draws that
+ * old inline pair, and is still correct where it is used — the thread screen's app-bar title, which has
+ * no avatar circle at all — so it is deliberately left untouched here.
+ *
+ * **Absence is absence, never a blank circle.** The presence rule is not restated here: it is
+ * [visitorEmojiPair] (`:core:domain`), the same function [VisitorDisplayPrefix] routes through, which
+ * treats a half-present pair exactly like a missing one ("never half a badge", that function's own doc
+ * comment). When it answers `null` — a visitor predating the emoji-pair column — this composable draws
+ * *nothing at all*, rather than an empty tinted circle. An empty circle would be the "leading-space
+ * artifact"/"blank placeholder" that `visitorDisplayPrefixText`'s own doc comment rejects for the text
+ * form, drawn in pixels instead of characters; the row simply starts at its text, the way the console's
+ * own pair-less row renders "the short code alone".
+ *
+ * Every dimension below is the mockup's own `.av`/`.av-food` rule, transcribed rather than chosen —
+ * which is why they are named constants with the CSS beside them, not literals inline.
+ */
+@Composable
+public fun VisitorAvatar(
+    emojiCreature: String?,
+    emojiFood: String?,
+    modifier: Modifier = Modifier,
+) {
+    val pair = visitorEmojiPair(emojiCreature, emojiFood) ?: return
+
+    Box(modifier = modifier.size(AvatarDiameter)) {
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = pair.creature,
+                style = TextStyle(fontSize = CreatureFontSize, lineHeight = CreatureFontSize, textAlign = TextAlign.Center),
+            )
+        }
+        // `right:-4px; bottom:-4px` — anchored to the corner and then pushed *past* it, so the badge
+        // overhangs the circle's edge rather than sitting inscribed inside it. The parent `Box` does
+        // not clip, which is what lets the overhang actually draw.
+        Text(
+            text = pair.food,
+            style = TextStyle(fontSize = FoodFontSize, lineHeight = FoodFontSize),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = FoodBadgeOverhang, y = FoodBadgeOverhang),
+        )
+    }
+}
+
+// `.av{width:40px; height:40px; border-radius:50%; background:var(--brand-tint)}`
+private val AvatarDiameter = 40.dp
+
+// `.av.pair{font-size:28px; line-height:1}` — the mockup's own comment records 28px as the author's
+// "explicit final size, settled live after two earlier percentage-based passes", so it is not rounded
+// to the nearest `MaterialTheme.typography` role the way ordinary prose sizes in this app are.
+private val CreatureFontSize = 28.sp
+
+// `.av-food{font-size:16px; line-height:1}`
+private val FoodFontSize = 16.sp
+
+// `.av-food{right:-4px; bottom:-4px}`
+private val FoodBadgeOverhang = 4.dp

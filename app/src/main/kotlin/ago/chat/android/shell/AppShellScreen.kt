@@ -5,15 +5,18 @@ import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -188,6 +192,23 @@ private fun AppShellContent(
     Scaffold(
         bottomBar = {
             NavigationBar {
+                // `26-23`: the mockup's `.bnav div.on .ind{background:var(--brand-tint)}` with
+                // `.bnav div.on{color:var(--brand-deep)}` content — which is *not* what Material 3
+                // gives by default. `NavigationBarTokens` sets `ItemActiveIndicatorColor` to
+                // `SecondaryContainer` and `ItemActiveIconColor`/`ItemActiveLabelTextColor` to
+                // `OnSecondaryContainer` (verified against the resolved `material3` artifact, not
+                // assumed), and in this app's scheme those roles are the lavender pair, not the brand
+                // one. So the three selected-state roles are supplied through the defaults API rather
+                // than left to the default — the indicator itself (its pill shape, size, animation and
+                // ripple) is still entirely Material 3's, never reimplemented here. Unselected content
+                // is left alone: Material 3's own `onSurfaceVariant` already *is* the mockup's
+                // `.bnav div{color:var(--ink-soft)}`.
+                val itemColors =
+                    NavigationBarItemDefaults.colors(
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
                 destinations.forEach { destination ->
                     val route = destination.route()
                     NavigationBarItem(
@@ -199,8 +220,17 @@ private fun AppShellContent(
                                 restoreState = true
                             }
                         },
-                        icon = { Text(text = destination.emoji(), style = MaterialTheme.typography.titleMedium) },
+                        icon = {
+                            Icon(
+                                imageVector = destination.icon(),
+                                // The tab's own visible label, reused rather than duplicated as a
+                                // second string: an icon and a label that name the same destination
+                                // differently is a translation bug waiting to happen.
+                                contentDescription = stringResource(destination.labelRes()),
+                            )
+                        },
                         label = { Text(text = stringResource(destination.labelRes())) },
+                        colors = itemColors,
                     )
                 }
             }
@@ -255,16 +285,21 @@ internal fun BottomDestination.labelRes(): Int =
         BottomDestination.More -> R.string.nav_more
     }
 
-/** A plain emoji glyph, matching this app's own established convention of drawing a small, fixed
- * symbol as plain text rather than pulling in an icon font/library for one bar
- * (`ago.chat.android.thread.ThreadScreen`'s own back arrow, `"←"`, is the precedent). */
-internal fun BottomDestination.emoji(): String =
+/**
+ * `26-23`: the real vector glyph for each destination, from [AgoIcons] — which is the mockup's own
+ * `<symbol>` sprite, transcribed. This replaces `emoji()`, which returned a plain-text emoji per
+ * destination and whose own doc comment cited `ThreadScreen`'s `"←"` as the precedent for "this app's
+ * established convention": both were the same gap, and `26-23` closed both, so there is no such
+ * convention left to appeal to. Kept here, alongside [route] and [labelRes], for the identical reason
+ * those two are — an `ImageVector` is a UI detail the `:core:domain` enum has no business knowing.
+ */
+internal fun BottomDestination.icon(): ImageVector =
     when (this) {
-        BottomDestination.Conversations -> "💬"
-        BottomDestination.Bookings -> "📅"
-        BottomDestination.Team -> "👥"
-        BottomDestination.Analytics -> "📊"
-        BottomDestination.More -> "☰"
+        BottomDestination.Conversations -> AgoIcons.Chat
+        BottomDestination.Bookings -> AgoIcons.Bookings
+        BottomDestination.Team -> AgoIcons.Team
+        BottomDestination.Analytics -> AgoIcons.Analytics
+        BottomDestination.More -> AgoIcons.More
     }
 
 @Composable
