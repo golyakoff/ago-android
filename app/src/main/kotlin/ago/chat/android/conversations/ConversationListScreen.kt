@@ -6,10 +6,8 @@ import ago.chat.android.core.domain.conversations.elapsedSince
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.HubConnectionDot
-import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.icons.AgoIcons
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -336,54 +333,40 @@ private fun MineRow(
     now: OffsetDateTime,
     onClick: () -> Unit,
 ) {
-    ConversationRow(
-        row = row,
-        now = now,
-        elapsedPrefixRes = R.string.conversation_list_opened_prefix,
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        if (row.unreadCount > 0) {
-            UnreadBadge(count = row.unreadCount, modifier = Modifier.padding(start = 8.dp))
-        }
-    }
+    // `26-30`: the unread badge used to be this row's own `trailing` slot - the row's far trailing
+    // edge, opposite the name. It now sits beside the name instead (`ConversationRowIdentityLine`'s own
+    // doc comment), so «Мои» has nothing left to pass here; «Ожидают» still does, for its claim button.
+    ConversationRow(row = row, now = now, modifier = Modifier.clickable(onClick = onClick))
 }
 
 /**
- * `26-23`: the mockup's `.row` — avatar, then a `.rmain` column of `.rtop` (name + code, with the
- * elapsed time trailing) and `.rmeta` (the status pills), then whatever the tab puts at the trailing
- * edge. «Мои» and «Ожидают» share this because their rows are the same object drawn the same way; the
- * only genuine difference is that trailing slot (an unread badge on one, a claim button on the other),
- * which is why it is a parameter rather than two near-copies of a layout.
+ * `26-30`: the mockup's `.row` — avatar, then a `.rmain` column of `.rtop` (name, unread badge, and the
+ * bold creation-time, all trailing-aligned as a unit), `.rmid` (the snippet and its own lighter
+ * last-message time, when there is a snippet at all) and `.rmeta` (the status pills), then whatever the
+ * tab puts at the trailing edge outside this column entirely. «Мои» and «Ожидают» share this because
+ * their rows are the same object drawn the same way; the only genuine difference is that outer trailing
+ * slot (a claim button on «Ожидают», nothing on «Мои» — the unread badge moved inside `.rtop` itself,
+ * see [ConversationRowIdentityLine]), which is why it stays a parameter rather than two near-copies of
+ * a layout.
  *
- * **What the mockup draws that this does not, and why that is the honest outcome rather than a
- * shortfall.** Three of the mockup's own row elements have no field behind them in
- * [ConversationRowUi]/[ago.chat.android.core.domain.conversations.ConversationSummary], and this item
- * is presentation-only — it may not invent data:
- *
- * - `.rsnip`, the last-message snippet. Nothing on the queue row carries message text; the wire DTO
- *   does not send it. Omitted entirely rather than filled with a placeholder.
- * - `.rmeta`'s channel/tag pills ("Telegram", "Оплата", "Запись", "VK"). There is no channel and no
- *   tag on a conversation today — incoming-channel expansion is `Ago.Chat`'s Stage 14, not built.
- *   The one pill drawn here is the one with a real field behind it, [ConversationRowUi.isNewlyAssigned].
- * - `.rname`'s `.ename` ("Лиса · Апельсин") — a *name derived from the emoji pair* for a visitor who
- *   has no real name. `visitorDisplayPrefixParts` has no such derivation and neither does the console
- *   it mirrors, so a nameless visitor renders as "the short code alone", which is that function's own
- *   documented rule.
- *
- * All three are recorded in this item's report as gaps worth their own future items.
+ * **What the mockup draws that this still does not, and why that remains the honest outcome rather than
+ * a shortfall.** `.rmeta`'s channel/tag pills ("Telegram", "Оплата", "Запись", "VK") have no field
+ * behind them on [ConversationRowUi] — there is no channel and no tag on a conversation today,
+ * incoming-channel expansion is `Ago.Chat`'s Stage 14, not built. The one pill drawn here is the one
+ * with a real field behind it, [ConversationRowUi.isNewlyAssigned]. Recorded in this item's report as a
+ * gap worth its own future item, same as `26-23`'s report recorded this row's now-closed gaps.
  */
 @Composable
 private fun ConversationRow(
     row: ConversationRowUi,
     now: OffsetDateTime,
-    @StringRes elapsedPrefixRes: Int,
     modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        // `.row{align-items:flex-start}` - a two-line row's avatar and badge sit level with the name,
-        // not floated to the vertical middle of the block.
+        // `.row{align-items:flex-start}` - a multi-line row's avatar sits level with the name, not
+        // floated to the vertical middle of the block.
         verticalAlignment = Alignment.Top,
     ) {
         // `.row{gap:13px}` carried as the avatar's own trailing padding rather than as the `Row`'s
@@ -395,7 +378,13 @@ private fun ConversationRow(
             modifier = Modifier.padding(end = RowGap),
         )
         Column(modifier = Modifier.weight(1f)) {
-            ConversationRowIdentityLine(row = row, now = now, elapsedPrefixRes = elapsedPrefixRes)
+            ConversationRowIdentityLine(row = row, now = now)
+            // `.rmid` - only when there is a snippet to show at all; never an empty line, and
+            // therefore never an orphaned timestamp either (`ConversationRowSnippetLine`'s own doc
+            // comment on why this reads `lastMessagePreview` alone, not `lastMessageAt`).
+            row.lastMessagePreview?.let { preview ->
+                ConversationRowSnippetLine(preview = preview, lastMessageAt = row.lastMessageAt, now = now)
+            }
             if (row.isNewlyAssigned) {
                 // `.rmeta{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap}` - a plain `Row`
                 // rather than `FlowRow`, because exactly one pill can be drawn today and an
@@ -411,62 +400,113 @@ private fun ConversationRow(
 }
 
 /**
- * The mockup's `.rtop` — `.rname` (the visitor's name, then the short code, ellipsised together as one
- * flexible unit) with `.rtime` pinned at the trailing edge.
+ * `26-30`: the mockup's `.rtop` — `display:flex; align-items:baseline; gap:8px` over exactly three
+ * possible children in this order: `.rname` (flex:1, ellipsised), `.badge` (flex:0 0 auto, only when
+ * [ConversationRowUi.unreadCount] is positive) and `.rtime-strong` (flex:0 0 auto, always). Read
+ * left-to-right off the regenerated mockup Artifact's own "СТАЛО" row (`26-23`'s reference link,
+ * confirmed against this item's own before/after image): the badge moved here from the row's far
+ * trailing edge, and the two former roles of that edge — a badge, and the elapsed time — traded places,
+ * which is why [UnreadBadge] now renders inside this `Row` rather than as [ConversationRow]'s own
+ * `trailing` slot.
  *
- * The emoji pair is deliberately *not* drawn here: [VisitorAvatar] at the row's leading edge now
- * carries it. Rather than teach [ago.chat.android.ui.components.VisitorDisplayPrefix] to suppress its
- * own emoji half, this reads the same `:core:domain` function that composable reads —
+ * `.rname`'s text is [ago.chat.android.core.domain.VisitorDisplayPrefixParts.displayName] — the
+ * visitor's real name, or, since `26-30`, the emoji pair's own localized fallback label ("Лиса ·
+ * Апельсин") when there is no real name — never the short code, which this row no longer draws at all
+ * (a nameless, pair-less visitor — a row predating the emoji-pair backfill — renders no name text on
+ * this line at all, the one case `displayName` returns `null` for; every real visitor today has a pair,
+ * so this is not a case any current row hits).
+ *
+ * The emoji pair itself is deliberately *not* drawn here: [VisitorAvatar] at the row's leading edge
+ * already carries it. Rather than teach [ago.chat.android.ui.components.VisitorDisplayPrefix] to
+ * suppress its own emoji half, this reads the same `:core:domain` function that composable reads —
  * [visitorDisplayPrefixParts], which already separates "the pair" from "the name" from "the id" — so
  * the rule about which parts are present is stated exactly once, in the one module that owns it, and
- * only the *layout* differs. Suppressing it via a flag on `VisitorDisplayPrefix` would not have been
- * enough anyway: this line needs ellipsising and a weighted name, which that composable's fixed `Row`
- * does not express, and which the thread screen's app-bar title must not have.
+ * only the *layout* differs.
+ *
+ * `.rtime-strong{font-size:13px; font-weight:700; color:var(--ink)}` — bold and full-strength ink,
+ * unlike the snippet line's own `.rtime` (`ConversationRowSnippetLine`): the mockup's own comment on
+ * this class says why — "this instant is a fact about the whole dialog", the author's own framing for
+ * why it gets the name line's own weight rather than a quieter one.
  */
 @Composable
 private fun ConversationRowIdentityLine(
     row: ConversationRowUi,
     now: OffsetDateTime,
-    @StringRes elapsedPrefixRes: Int,
 ) {
     val parts = visitorDisplayPrefixParts(row.emojiCreature, row.emojiFood, row.visitorName, row.visitorId)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(RtopGap),
     ) {
-        Row(modifier = Modifier.weight(1f, fill = false), verticalAlignment = Alignment.CenterVertically) {
-            parts.visitorName?.let { name ->
-                Text(
-                    text = name,
-                    // `.rname{font-size:14.5px; font-weight:700}` - `titleMedium` is this app's own
-                    // 15sp token-backed role, the nearest the scale has; only the weight is lifted,
-                    // rather than an untraceable 14.5sp literal being introduced for one line.
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).padding(end = 4.dp),
-                )
-            }
-            // `.rname .code{font-size:13px; color:var(--ink-soft)}` - the monospace face is
-            // `IdentifierText`'s own, never restated at this call site.
-            IdentifierText(
-                id = parts.visitorId,
-                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+        parts.displayName?.let { name ->
+            Text(
+                text = name,
+                // `.rname{font-size:14.5px; font-weight:700}` - `titleMedium` is this app's own
+                // 15sp token-backed role, the nearest the scale has; only the weight is lifted,
+                // rather than an untraceable 14.5sp literal being introduced for one line.
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         }
+        if (row.unreadCount > 0) {
+            UnreadBadge(count = row.unreadCount)
+        }
         Text(
-            text = elapsedText(row.createdAt, now, elapsedPrefixRes),
-            // `.rtime{font-size:11.5px; color:var(--ink-faint); flex:0 0 auto}`. `--ink-faint` has no
-            // Material 3 `ColorScheme` slot of its own - the scheme's one "quieter than body text"
-            // role is `onSurfaceVariant`, which `Theme.kt` already maps to `--ink-soft` - so this is
-            // one token-step brighter than the mockup. Flagged in this item's report rather than
-            // fixed by inventing a colour here.
-            style = MaterialTheme.typography.labelMedium,
+            text = shortElapsedText(row.createdAt, now),
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * `26-30`: the mockup's `.rmid` — `.rsnip` (flex:1, ellipsised, `13px`/`--ink-soft`) beside `.rtime`
+ * (flex:0 0 auto, regular weight, `11.5px`/`--ink-faint`), `gap:8px`, drawn only by
+ * [ConversationRow] when [ConversationRowUi.lastMessagePreview] is present at all.
+ *
+ * [lastMessageAt] is read independently of whether it is present — `26-29`'s own contract allows a
+ * populated [lastMessageAt] beside a `null` preview (a system message, or one with no safe-to-preview
+ * content), and that case draws no time either: this whole line already did not exist for that row (the
+ * caller's own `lastMessagePreview?.let` gate), so there is no orphaned timestamp to worry about here.
+ * The `null`-time branch below exists only for the narrower, largely theoretical case of a preview with
+ * no timestamp at all, which the backend does not currently produce.
+ *
+ * Regular weight throughout, unlike the name line's own bold `.rtime-strong`
+ * ([ConversationRowIdentityLine]) — the mockup's own comment on `.rmid`: "both parts describe the same
+ * event (the last words, and when they were said), so they read as one whole, not a heading with an
+ * afterthought."
+ */
+@Composable
+private fun ConversationRowSnippetLine(
+    preview: String,
+    lastMessageAt: String?,
+    now: OffsetDateTime,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = SnippetTopGap),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(RtopGap),
+    ) {
+        Text(
+            text = preview,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            modifier = Modifier.padding(start = 8.dp),
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        lastMessageAt?.let { at ->
+            Text(
+                text = shortElapsedText(at, now),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -574,11 +614,7 @@ private fun WaitingRow(
     onDismissError: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        ConversationRow(
-            row = row,
-            now = now,
-            elapsedPrefixRes = R.string.conversation_list_waiting_since_prefix,
-        ) {
+        ConversationRow(row = row, now = now) {
             Button(onClick = onClaim, enabled = !row.isClaiming, modifier = Modifier.padding(start = 8.dp)) {
                 Text(
                     text =
@@ -619,34 +655,36 @@ private fun EmptyBody(text: String) {
     }
 }
 
+/**
+ * `26-30`: the one shared elapsed-time formatter for this whole screen — the name line's own
+ * age-since-creation and the snippet line's own last-message time both call this, and nothing else on
+ * this screen formats an elapsed duration. Renders the mockup's own short form — «4 ч», «20 мин», «2 д»
+ * — with no «Открыт»/«Ждёт» prefix of any kind: the two tabs no longer differ in how they render this
+ * value at all, which is why `elapsedPrefixRes`/`R.string.conversation_list_opened_prefix`/
+ * `R.string.conversation_list_waiting_since_prefix` are gone entirely rather than merely unused.
+ *
+ * Genuinely prefix-free, not just a shorter prefix: Russian's short time units («ч», «мин», «д») do not
+ * inflect by count the way the full words «час»/«часа»/«часов» do, so this reads a plain formatted
+ * string resource rather than [androidx.compose.ui.res.pluralStringResource] — there is no plural rule
+ * left to apply once the unit itself stopped needing one.
+ */
 @Composable
-private fun elapsedText(
-    createdAt: String,
+private fun shortElapsedText(
+    timestamp: String,
     now: OffsetDateTime,
-    @StringRes prefixRes: Int,
-): String {
-    val prefix = stringResource(prefixRes)
-    val label =
-        when (val elapsed = elapsedSince(createdAt, now)) {
-            is ElapsedLabel.Minutes -> {
-                val count = elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
-                pluralStringResource(R.plurals.conversation_list_elapsed_minutes, count, count)
-            }
+): String =
+    when (val elapsed = elapsedSince(timestamp, now)) {
+        is ElapsedLabel.Minutes ->
+            stringResource(R.string.conversation_list_elapsed_minutes_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
 
-            is ElapsedLabel.Hours -> {
-                val count = elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
-                pluralStringResource(R.plurals.conversation_list_elapsed_hours, count, count)
-            }
+        is ElapsedLabel.Hours ->
+            stringResource(R.string.conversation_list_elapsed_hours_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
 
-            is ElapsedLabel.Days -> {
-                val count = elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
-                pluralStringResource(R.plurals.conversation_list_elapsed_days, count, count)
-            }
+        is ElapsedLabel.Days ->
+            stringResource(R.string.conversation_list_elapsed_days_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
 
-            ElapsedLabel.Unknown -> stringResource(R.string.conversation_list_elapsed_unknown)
-        }
-    return "$prefix $label"
-}
+        ElapsedLabel.Unknown -> stringResource(R.string.conversation_list_elapsed_unknown)
+    }
 
 private const val ELAPSED_TICK_MILLIS = 30_000L
 
@@ -655,6 +693,12 @@ private const val ELAPSED_TICK_MILLIS = 30_000L
 //
 // `.row{gap:13px}`
 private val RowGap = 13.dp
+
+// `.rtop{gap:8px}`, also `.rmid{gap:8px}` - the same 8dp gap, named once for both lines.
+private val RtopGap = 8.dp
+
+// `.rmid{margin-top:1px}`
+private val SnippetTopGap = 1.dp
 
 // `.rmeta{margin-top:6px}`
 private val PillRowTopGap = 6.dp

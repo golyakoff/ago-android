@@ -227,6 +227,18 @@ visitor renders the short id alone with no gap) — and `VisitorDisplayPrefix` (
 `ui/components/`) is the composable that lays the parts out, sizing the emoji pair from
 `MaterialTheme.typography.titleLarge` and rendering the id through `IdentifierText`.
 
+`26-30`: `VisitorDisplayPrefixParts` grew a fourth field, `displayName` — the visitor's own real name
+when there is one, else the emoji pair's own localized fallback label ("Лиса · Апельсин", from
+`VisitorEmojiNames.kt`, a byte-for-byte port of `ago-console/src/i18n/visitorEmojiNames.ts`'s table
+over `Ago.Chat.Domain.VisitorEmojiDictionary`), else `null`. `visitorName` itself is unchanged — the
+real name only, still what `visitorDisplayPrefixText` reads — so `displayName` is additive, not a
+replacement. Both real call sites (`VisitorDisplayPrefix` for the thread screen's app-bar title, and
+the conversation-list row's own identity line) read `displayName`, which is what gives the thread
+screen the identical fallback with no derivation of its own. The conversation-list row goes one step
+further and drops the short code from that line entirely — every real visitor has a name or a pair by
+now, so the code was carrying no load there; the thread screen still renders it via `IdentifierText`,
+since an operator dictating or matching an id still needs it.
+
 Two places where an id is what the wire carries and a name is what the screen needs — the pending
 booking queue (`PendingBooking` has `workerId`/`serviceId`/`calendarId` and no names) and the
 attachment upload grant (`attachmentUploadGrantedByOperatorId` with no join to a display name) —

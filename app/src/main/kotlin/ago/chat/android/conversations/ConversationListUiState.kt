@@ -37,6 +37,14 @@ public data class ConversationRowUi(
      * than a second network call (that field's own doc comment). Not read by anything on this screen
      * itself. */
     public val hasAttachmentUploadGrant: Boolean = false,
+    /** `26-30`: carried through unchanged from [ago.chat.android.core.domain.conversations.ConversationSummary] -
+     * the row's own snippet line. `null` means "no snippet line at all", never an empty one - that
+     * field's own doc comment. */
+    public val lastMessagePreview: String? = null,
+    /** `26-30`: the snippet line's own timestamp, rendered beside [lastMessagePreview] in the identical
+     * short elapsed format the name line's [createdAt] already uses. Read only when [lastMessagePreview]
+     * is non-null - never a lone timestamp with nothing to attach to. */
+    public val lastMessageAt: String? = null,
 )
 
 /**

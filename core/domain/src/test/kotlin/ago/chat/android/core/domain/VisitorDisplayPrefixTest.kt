@@ -66,4 +66,43 @@ public class VisitorDisplayPrefixTest {
         assertNull(visitorEmojiPair("", "🍓"))
         assertNull(visitorEmojiPair("🦉", ""))
     }
+
+    // ------------------------------------------------------------------------------------ `26-30`
+
+    @Test
+    public fun `displayName is the emoji pair's localized fallback label when no name is known`() {
+        val parts = visitorDisplayPrefixParts("🦊", "🍊", null, visitorId)
+        assertEquals("Лиса · Апельсин", parts.displayName)
+    }
+
+    @Test
+    public fun `displayName is the real name, not the fallback, when a name is known`() {
+        val parts = visitorDisplayPrefixParts("🦊", "🍊", "Иван Иванов", visitorId)
+        assertEquals("Иван Иванов", parts.displayName)
+    }
+
+    @Test
+    public fun `displayName is null when there is neither a name nor a pair`() {
+        val parts = visitorDisplayPrefixParts(null, null, null, visitorId)
+        assertNull(parts.displayName)
+    }
+
+    @Test
+    public fun `visitorName itself stays the real name only, provably unaffected by the fallback`() {
+        val named = visitorDisplayPrefixParts("🦊", "🍊", "Иван Иванов", visitorId)
+        assertEquals("Иван Иванов", named.visitorName)
+
+        val nameless = visitorDisplayPrefixParts("🦊", "🍊", null, visitorId)
+        assertNull("visitorName - unlike displayName - never carries the fallback label", nameless.visitorName)
+    }
+
+    @Test
+    public fun `visitorFallbackLabel renders creature then food, localized and joined by a middle dot`() {
+        assertEquals("Сова · Клубника", visitorFallbackLabel(VisitorEmojiPair("🦉", "🍓")))
+    }
+
+    @Test
+    public fun `visitorFallbackLabel is null, never a lone dot, when there is no pair`() {
+        assertNull(visitorFallbackLabel(null))
+    }
 }

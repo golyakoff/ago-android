@@ -34,10 +34,20 @@ public fun visitorEmojiPair(
  * in `:app`), which a plain string could not carry. `visitorId` is kept full length here; it is
  * truncated only at the point of use (`shortId`, `visitorDisplayPrefixText` below, or `IdentifierText`
  * in `:app`), so this type never duplicates the truncation rule those already own.
+ *
+ * `26-30`: [displayName] joins [visitorName] rather than replacing it — [visitorName] stays the
+ * visitor's own *real* name (or `null`), exactly as before, so [visitorDisplayPrefixText] and its own
+ * pre-existing tests are provably unchanged; [displayName] is the new "what a screen should actually
+ * show" value — [visitorName] when there is one, else the emoji pair's own localized fallback label
+ * ("Лиса · Апельсин"), else `null`. Both of this item's two real call sites — the conversation-list
+ * row's identity line, and the thread screen's app-bar title (`ui.components.VisitorDisplayPrefix`) —
+ * read [displayName], never [visitorName] directly, which is what gives the thread screen the same
+ * fallback with no separate derivation of its own.
  */
 public data class VisitorDisplayPrefixParts(
     public val emoji: VisitorEmojiPair?,
     public val visitorName: String?,
+    public val displayName: String?,
     public val visitorId: String,
 )
 
@@ -52,12 +62,27 @@ public fun visitorDisplayPrefixParts(
     emojiFood: String?,
     visitorName: String?,
     visitorId: String,
-): VisitorDisplayPrefixParts =
-    VisitorDisplayPrefixParts(
-        emoji = visitorEmojiPair(emojiCreature, emojiFood),
-        visitorName = visitorName?.trim()?.takeIf { it.isNotEmpty() },
+): VisitorDisplayPrefixParts {
+    val emoji = visitorEmojiPair(emojiCreature, emojiFood)
+    val name = visitorName?.trim()?.takeIf { it.isNotEmpty() }
+    return VisitorDisplayPrefixParts(
+        emoji = emoji,
+        visitorName = name,
+        displayName = name ?: visitorFallbackLabel(emoji),
         visitorId = visitorId,
     )
+}
+
+/**
+ * `26-30`: the console's own `visitorFallbackLabel` (`ago-console/src/workspace/visitorEmoji.ts`),
+ * ported — "Лиса · Апельсин" for a known pair, `null` (never `""`, never a lone `·`) when there is no
+ * pair to derive one from at all. [visitorDisplayPrefixParts] is the only caller; kept as its own
+ * top-level function rather than inlined there because [VisitorDisplayPrefixTest] exercises it
+ * directly, the same "prove the composition rule, not just its one caller" reasoning that function's
+ * own test file already applies to [visitorEmojiPair].
+ */
+public fun visitorFallbackLabel(emoji: VisitorEmojiPair?): String? =
+    emoji?.let { "${localizedEmojiName(it.creature)} · ${localizedEmojiName(it.food)}" }
 
 /**
  * The plain-text form of the composite — for the two cases that need one string rather than a styled

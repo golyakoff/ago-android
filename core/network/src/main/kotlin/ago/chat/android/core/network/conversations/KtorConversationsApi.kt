@@ -109,6 +109,11 @@ private data class ConversationSummaryWireDto(
     // `26-15`: additive, `false` for a row that predates the field — `ConversationSummaryDto.cs`'s own
     // remarks. [ConversationSummary]'s own doc comment says why this screen carries it now.
     val hasAttachmentUploadGrant: Boolean = false,
+    // `26-29`/`26-30`: additive the identical way — `null` for a row that predates the pair, or for a
+    // conversation with no messages at all. [ConversationSummary]'s own doc comment carries the full
+    // "both null together" rule; this class only mirrors the wire shape.
+    val lastMessagePreview: String? = null,
+    val lastMessageAt: String? = null,
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -128,6 +133,8 @@ private fun ConversationSummaryWireDto.toDomain() =
         createdAt = createdAt,
         operatorUnreadCount = operatorUnreadCount,
         hasAttachmentUploadGrant = hasAttachmentUploadGrant,
+        lastMessagePreview = lastMessagePreview,
+        lastMessageAt = lastMessageAt,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =
