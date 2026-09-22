@@ -59,5 +59,13 @@
     <string name="signed_in_active_site">Текущий магазин</string>
     <string name="signed_in_no_active_site">Магазин не выбран</string>
 
+    <!-- `26-13`: a debug row proving the hub connection, not a designed status indicator - `26-14`+
+         replace this with a real one. -->
+    <string name="hub_connection_label">Соединение</string>
+    <string name="hub_connection_disconnected">Отключено</string>
+    <string name="hub_connection_connecting">Подключение…</string>
+    <string name="hub_connection_connected">Подключено</string>
+    <string name="hub_connection_reconnecting">Переподключение…</string>
+
     <string name="action_sign_out">Выйти</string>
 </resources>

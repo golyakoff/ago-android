@@ -3,6 +3,8 @@ package ago.chat.android.signin
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.identity.SignInDestination
+import ago.chat.android.core.network.realtime.OperatorHubConnection
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.session.SignInFailedException
 import android.content.Intent
@@ -40,10 +42,20 @@ public class SignInViewModel
         private val session: SignInSession,
         private val router: PostSignInRouter,
         private val activeSite: ActiveSiteSelection,
+        hubConnection: OperatorHubConnection,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<SignInUiState>(SignInUiState.Starting)
         public val state: StateFlow<SignInUiState> = mutableState.asStateFlow()
+
+        /**
+         * `26-13`'s own "a minimal connection-state surface" — a plain relay onto the app's one
+         * `OperatorHubConnection.state`, threaded down to [SignedInScreen]'s debug row
+         * (`HubConnectionDebugRow`). This view model neither connects nor disconnects it —
+         * `OperatorHubConnectionLifecycle` does that, tied to the process foreground rather than to
+         * whichever screen happens to be visible.
+         */
+        public val hubConnectionState: StateFlow<OperatorHubConnectionState> = hubConnection.state
 
         /**
          * Authorization `Intent`s for the Activity to launch. A `Channel` rather than a `StateFlow`

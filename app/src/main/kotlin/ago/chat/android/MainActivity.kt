@@ -70,8 +70,10 @@ public class MainActivity : ComponentActivity() {
         setContent {
             AgoChatTheme {
                 val state by viewModel.state.collectAsState()
+                val hubConnectionState by viewModel.hubConnectionState.collectAsState()
                 SignInHost(
                     state = state,
+                    hubConnectionState = hubConnectionState,
                     consoleUrl = oidcConfig.consoleUrl,
                     onSignIn = viewModel::beginSignIn,
                     onChooseSite = viewModel::chooseSite,

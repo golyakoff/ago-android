@@ -9,6 +9,8 @@ import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.network.auth.AccessTokenProvider
+import ago.chat.android.core.network.realtime.OperatorHubConnection
 import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -205,6 +207,15 @@ class SignInViewModelTest {
             session = session,
             router = PostSignInRouter(api, activeSite),
             activeSite = activeSite,
+            // `26-13`: this view model's own `hubConnectionState` is a plain relay onto this
+            // connection's `state` - nothing here ever calls `connect()`, so a real instance over a
+            // fake, unreachable host is simpler than a second port just for this constructor slot.
+            hubConnection =
+                OperatorHubConnection(
+                    hubUrl = "https://example.invalid/hubs/operator",
+                    accessTokens = FakeAccessTokenProvider(),
+                    activeSite = activeSite,
+                ),
             ioDispatcher = dispatcher,
         )
 
@@ -257,5 +268,12 @@ class SignInViewModelTest {
         override fun select(siteId: String?) {
             current = siteId
         }
+    }
+
+    /** Never asked for a token in this suite - nothing here calls `OperatorHubConnection.connect()`. */
+    private class FakeAccessTokenProvider : AccessTokenProvider {
+        override suspend fun currentAccessToken(): String? = null
+
+        override suspend fun refreshAccessToken(): String? = null
     }
 }

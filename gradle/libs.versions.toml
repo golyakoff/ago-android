@@ -72,9 +72,29 @@ securityCrypto = "1.1.0-alpha06"
 # had yet). 12.1.1 is the newest release compatible with the Gradle 8.9 wrapper `26-07` pinned.
 ktlintGradle = "12.1.1"
 
+# `26-13`: Microsoft's official Java SignalR client (`docs/architecture.md`'s stack table;
+# `adr/0178` — chosen despite being JVM-only, a closed decision, not reopened here). 9.0.5 is a
+# current stable release on Maven Central; it targets a Java 8 bytecode level, well under this
+# project's `minSdk = 26` floor. It depends on RxJava 3.0.11 transitively for its own
+# `Single`/`Completable`-shaped async surface (`start()`, `stop()`, `invoke()`,
+# `withAccessTokenProvider`) — this catalog pins a current, binary-compatible 3.x patch explicitly
+# below rather than leaving the version an unstated transitive detail, since `:core:network` code
+# calls these RxJava types directly at the one seam where this client's async shape meets Kotlin
+# coroutines.
+signalr = "9.0.5"
+rxjava3 = "3.1.9"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+# `26-13`: `ProcessLifecycleOwner` - the single, whole-app foreground/background signal
+# `OperatorHubConnectionLifecycle` binds `connect()`/`disconnect()` to (`docs/architecture.md`
+# §Realtime: "Lifecycle tied to the app being in the foreground"), rather than each `Activity`'s own
+# `onStart`/`onStop`, which this app has exactly one of today but which would still be the wrong
+# signal even with several: a rotation tears an `Activity` down and rebuilds it, and its `onStop`
+# firing on the way out must not read as "the app left the foreground". Same version generation as
+# `lifecycleRuntimeKtx` above.
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -97,6 +117,14 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+# `26-13`: the one, already-reviewed bridge between a `suspend` function and the `Single`/`Completable`
+# shape `com.microsoft.signalr`'s own client exposes - `rxSingle`/`.await()` below, standing in for a
+# hand-rolled `suspendCancellableCoroutine` wrapper around each Rx type this client returns. Same
+# version generation as the rest of this project's coroutines.
+kotlinx-coroutines-rx3 = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-rx3", version.ref = "kotlinxCoroutines" }
+
+signalr = { group = "com.microsoft.signalr", name = "signalr", version.ref = "signalr" }
+rxjava3 = { group = "io.reactivex.rxjava3", name = "rxjava", version.ref = "rxjava3" }
 
 appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }

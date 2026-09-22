@@ -5,6 +5,8 @@ import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.ui.components.HubConnectionDebugRow
 import ago.chat.android.ui.components.IdentifierText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 public fun SignInHost(
     state: SignInUiState,
+    hubConnectionState: OperatorHubConnectionState,
     consoleUrl: String,
     onSignIn: () -> Unit,
     onChooseSite: (String) -> Unit,
@@ -80,7 +83,7 @@ public fun SignInHost(
                         onSignOut = onSignOut,
                     )
 
-                is SignInUiState.SignedIn -> SignedInScreen(content, state.activeSiteId, onSignOut)
+                is SignInUiState.SignedIn -> SignedInScreen(content, state.activeSiteId, hubConnectionState, onSignOut)
             }
         }
     }
@@ -274,6 +277,7 @@ private fun LinkOutScreen(
 private fun SignedInScreen(
     modifier: Modifier,
     activeSiteId: String?,
+    hubConnectionState: OperatorHubConnectionState,
     onSignOut: () -> Unit,
 ) {
     Centred(modifier) {
@@ -290,6 +294,9 @@ private fun SignedInScreen(
         } else {
             IdentifierText(id = activeSiteId, style = MaterialTheme.typography.bodyMedium)
         }
+        // `26-13`'s own debug row - see that class's own doc comment for why this is the only screen
+        // it renders on (the only state where a hub connection is expected to exist at all).
+        HubConnectionDebugRow(state = hubConnectionState, modifier = Modifier.padding(top = 16.dp))
         TextButton(onClick = onSignOut, modifier = Modifier.padding(top = 24.dp)) {
             Text(text = stringResource(R.string.action_sign_out))
         }
@@ -341,6 +348,7 @@ private fun detailOf(failure: RoutingFailure): String? =
 private fun LaunchScreenPreview() {
     SignInHost(
         state = SignInUiState.SignedOut,
+        hubConnectionState = OperatorHubConnectionState.Disconnected,
         consoleUrl = "",
         onSignIn = {},
         onChooseSite = {},
@@ -361,6 +369,7 @@ private fun SitePickerPreview() {
                     Tenancy("22222222-2222-2222-2222-222222222222", "Ярмарка"),
                 ),
             ),
+        hubConnectionState = OperatorHubConnectionState.Disconnected,
         consoleUrl = "",
         onSignIn = {},
         onChooseSite = {},

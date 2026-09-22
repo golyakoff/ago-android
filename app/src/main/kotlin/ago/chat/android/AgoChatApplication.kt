@@ -1,7 +1,9 @@
 package ago.chat.android
 
+import ago.chat.android.realtime.OperatorHubConnectionLifecycle
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 /**
  * `26-12`: the app's `Application` class exists for one reason — `@HiltAndroidApp`, which generates
@@ -15,6 +17,19 @@ import dagger.hilt.android.HiltAndroidApp
  * in the core modules — would make both of them unusable without Hilt, which is exactly the coupling
  * `adr/0178`'s "converting to a KMP `commonMain` source set is a build-file change" depends on not
  * existing.
+ *
+ * `26-13`: also where [OperatorHubConnectionLifecycle] is started — once, for the process's whole
+ * life, never per-screen (that class's own doc comment says why). A `@HiltAndroidApp` `Application`
+ * supports field injection the same way an `@AndroidEntryPoint` `Activity` does, injected before this
+ * `onCreate` body runs.
  */
 @HiltAndroidApp
-public class AgoChatApplication : Application()
+public class AgoChatApplication : Application() {
+    @Inject
+    public lateinit var hubConnectionLifecycle: OperatorHubConnectionLifecycle
+
+    override fun onCreate() {
+        super.onCreate()
+        hubConnectionLifecycle.start()
+    }
+}

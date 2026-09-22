@@ -1,6 +1,7 @@
 // `26-12` is the first real caller `26-07` was waiting for: the Ktor client, the bearer-token
-// attachment and the `X-Ago-Active-Site` plugin all live here now. The SignalR client is still
-// absent and still waits for `26-13` — same rule, one item later.
+// attachment and the `X-Ago-Active-Site` plugin all live here now. `26-13` adds the SignalR client
+// and the operator hub connection holder — the last of the three real callers this module was
+// scaffolded for.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -44,6 +45,16 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
+
+    // `26-13`: the operator hub connection. `signalr` is Microsoft's own Java client (`adr/0178`);
+    // `rxjava3` is on the compile classpath explicitly because this module's own code names its
+    // `Single`/`Completable` types directly, not only because `signalr` pulls it in transitively;
+    // `kotlinx-coroutines-rx3` is the one bridge between that shape and this project's own
+    // `suspend`-everywhere convention (`AccessTokenProvider`'s own doc comment).
+    implementation(libs.signalr)
+    implementation(libs.rxjava3)
+    implementation(libs.kotlinx.coroutines.rx3)
 
     testImplementation(libs.junit)
     testImplementation(libs.ktor.client.mock)
