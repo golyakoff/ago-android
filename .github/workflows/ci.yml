@@ -123,16 +123,23 @@ jobs:
       # emulation even with KVM enabled). `disable-animations: true` - listed explicitly rather than
       # left to the action's own identical default - is what keeps a flaky `IdlingResource` timeout
       # from ever being about a transition animation rather than this app's own logic.
-      # `26-35`: the five `BackContract*Test` files are excluded here, not deleted. Two consecutive
+      # `26-35` excluded the five `BackContract*Test` files here (not deleted) after two consecutive
       # real CI runs of the identical commit (`26-33`, only its base moved between them) disagreed -
       # one passed clean, the next failed 7 of these same tests, every failure a
       # `ComposeTimeoutException` that exhausted its *entire* 12-second poll budget rather than
-      # narrowly missing it. That shape is consistent with the system back-key event occasionally
-      # never reaching the app's accessibility-event stream at all on this runner's emulator, which
-      # no length of polling closes, because there is nothing eventually true to wait for in that
-      # run. Per the author's own decided fallback: these files keep running, just not as a gate on
-      # every push - the managing session runs them locally against a real emulator before trusting
-      # a change that touches this area (`docs/backlog/26-35-*.md`).
+      # narrowly missing it. That shape was the system back-key event occasionally never reaching the
+      # app's accessibility-event stream at all on this runner's emulator - `UiDevice.pressBack()`
+      # dispatching a real system input event through UiAutomator's accessibility pipeline, exactly
+      # what a headless CI emulator is least reliable at. `26-36` removed that pipeline from four of
+      # the five files - back-press there is now driven straight through the Activity's own
+      # `onBackPressedDispatcher`, in-process and synchronous, with nothing left for emulator flakiness
+      # to touch. `BackContractSheetDismissTest` alone still presses a real key
+      # (`SystemBackPress.kt`'s own `pressBackOnFocusedWindow`, via `Instrumentation.sendKeyDownUpSync`,
+      # never `UiAutomator`) because it proves which *window* - the Activity's or a Material3
+      # `ModalBottomSheet`'s own platform `Dialog` - a back signal reaches first, which the Activity's
+      # dispatcher alone cannot answer (`docs/backlog/26-36-*.md`). That's a narrower, real signal on
+      # a single key event, not the accessibility-pipeline dependency that was actually unreliable, so
+      # the exclusion comes off and all five files run in the normal gate again.
       - name: Run navigation-contract Compose UI tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -141,9 +148,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: >-
-            ./gradlew connectedDebugAndroidTest --no-daemon
-            -Pandroid.testInstrumentationRunnerArguments.notClass=ago.chat.android.shell.BackContractBottomBarTest,ago.chat.android.shell.BackContractDialogsTabTest,ago.chat.android.shell.BackContractMoreScreenTest,ago.chat.android.ui.components.BackContractSheetDismissTest,ago.chat.android.ui.components.BackContractStepFlowTest
+          script: ./gradlew connectedDebugAndroidTest --no-daemon
 
       # `26-25`: this step already existed (`26-20`) but had a bare, fixed artifact name -
       # `actions/upload-artifact@v4+` refuses to create a second artifact with a name that already
