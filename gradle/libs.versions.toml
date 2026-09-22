@@ -12,7 +12,7 @@
 # it in was not this item's call to make silently. Kotlin 2.0.21 is the last 2.0.x patch, the
 # generation AGP 8.7 actually shipped alongside and was tested against.
 agp = "8.7.3"
-kotlin = "2.0.21"
+kotlin = "2.4.20"
 # The JDK toolchain, pinned once here and read by every module's `jvmToolchain(...)` call rather
 # than re-typed per build file or left to whatever JDK happens to be on the machine running the
 # build (`26-07`'s own Scope: "a JDK toolchain pinned once").
