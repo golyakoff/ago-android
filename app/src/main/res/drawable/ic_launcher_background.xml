@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-34`: the adaptive-icon background layer. Full-bleed 108x108dp fill, no corner rounding -
+    the brandbook's own 34px web tile uses `border-radius: 9px`, but that is a web-only detail
+    that must NOT be baked in here: the *launcher* masks this layer into a circle, squircle,
+    rounded-square or teardrop depending on the OEM, and a radius baked into the background would
+    fight whatever shape the launcher applies on top of it
+    (docs/backlog/26-34-the-app-has-no-launcher-icon.md).
+
+    Gradient: the brandbook's own `linear-gradient(140deg, #4C8DFF, #9D6BFF)` (the same blue/violet
+    swatch pair as the landing page), converted from the CSS angle to this vector's
+    startX/Y-endX/Y coordinates:
+
+      CSS gradient angle convention: 0deg = "to top", increasing clockwise. In a y-down coordinate
+      system (this canvas's own, same as SVG/Android vector space) that makes the direction unit
+      vector `(sin(theta), -cos(theta))`.
+
+      theta = 140deg -> sin(140deg) = 0.642788, cos(140deg) = -0.766044
+      direction = (0.642788, -(-0.766044)) = (0.642788, 0.766044)   // right-and-down, leaning
+                                                                      // down (140 is 40deg short
+                                                                      // of straight-down/180deg,
+                                                                      // 50deg past right/90deg)
+
+      Half-length of the gradient line on a WxH box (the same corner-covering formula the CSS
+      gradient spec itself uses), W = H = 108:
+        half_length = (108*|sin140deg| + 108*|cos140deg|) / 2
+                    = (108*0.642788 + 108*0.766044) / 2
+                    = 152.154 / 2 = 76.077
+
+      center = (54, 54) (the 108x108 box's own center)
+      start (0%, blue)   = center - half_length*direction = (54 - 48.901, 54 - 58.278)
+                          = (5.099, -4.278)
+      end   (100%, violet) = center + half_length*direction = (54 + 48.901, 54 + 58.278)
+                          = (102.901, 112.278)
+
+      The endpoints fall slightly outside the 0..108 box on purpose: this is the same formula CSS
+      itself uses to guarantee the box's actual corners land ON the gradient line's segment
+      (visible only at the exact 45deg-multiple angles do start/end coincide with box corners),
+      not an approximation. Blue sits at the start (upper-left-ish, since the direction points
+      down-and-right), violet at the end (lower-right-ish) - confirmed against the rendered
+      drawable, see the commit report.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0H108V108H0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="5.099"
+                android:startY="-4.278"
+                android:endX="102.901"
+                android:endY="112.278"
+                android:startColor="#4C8DFF"
+                android:endColor="#9D6BFF" />
+        </aapt:attr>
+    </path>
+</vector>

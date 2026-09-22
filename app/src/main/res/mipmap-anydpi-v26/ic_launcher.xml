@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-34`: `minSdk = 26` is exactly the API level adaptive icons shipped in, so this
+    `mipmap-anydpi-v26` entry is the only launcher icon resource this app needs - no legacy
+    pre-adaptive PNG fallback across density buckets.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>
