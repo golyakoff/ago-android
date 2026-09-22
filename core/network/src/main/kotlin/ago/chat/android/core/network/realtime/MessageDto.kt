@@ -24,12 +24,27 @@ package ago.chat.android.core.network.realtime
  * mandatory, so `26-13`'s own fixtures — none of which cared about authorship — keep compiling unchanged;
  * `""` compares false against every real `AuthorKind`, so an un-set value is silently excluded from the
  * unread count rather than silently included in it.
+ *
+ * `26-15`: the thread screen's own growth, the second this type's doc comment above already predicted.
+ * [body]/[createdAt] are what the screen actually renders; [attachmentId] rides along even though
+ * attachments are this item's own Out of scope, because a message sent with one before this item
+ * existed must not silently lose the field on the next fetch. [clientMessageId] is `5-07`'s retry-dedup
+ * id, `Ago.Chat.Contracts.MessageDto.ClientMessageId` — `ThreadViewModel` reads it back only on its
+ * *own* echoed send (to confirm a pending send actually landed), never to decide whether to render an
+ * incoming message, which is [id]'s job. Every new field defaults to a value that is never a genuine
+ * wire value (`""` for the two strings, `null` for the two nullable ids) for the identical reason
+ * [authorKind] already does: `26-13`'s own fixtures, none of which set any of these, keep compiling
+ * unchanged.
  */
 public data class MessageDto(
     val id: String,
     val sequence: Long,
     val conversationId: String? = null,
     val authorKind: String = "",
+    val body: String = "",
+    val createdAt: String = "",
+    val attachmentId: String? = null,
+    val clientMessageId: String? = null,
 )
 
 /**

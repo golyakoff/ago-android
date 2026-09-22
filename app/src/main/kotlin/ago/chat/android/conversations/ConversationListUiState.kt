@@ -32,6 +32,11 @@ public data class ConversationRowUi(
      * entirely (a claim that then succeeded from elsewhere, or the visitor leaving) — never cleared by
      * an automatic retry, because there never is one. */
     public val claimError: String? = null,
+    /** `26-15`: carried through unchanged from [ago.chat.android.core.domain.conversations.ConversationSummary] -
+     * the thread screen's own attach-control gate, read from the row the list already fetched rather
+     * than a second network call (that field's own doc comment). Not read by anything on this screen
+     * itself. */
+    public val hasAttachmentUploadGrant: Boolean = false,
 )
 
 /**

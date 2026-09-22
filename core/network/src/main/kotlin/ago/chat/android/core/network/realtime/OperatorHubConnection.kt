@@ -5,6 +5,7 @@ import ago.chat.android.core.network.auth.AccessTokenProvider
 import com.microsoft.signalr.HubConnection
 import com.microsoft.signalr.HubConnectionBuilder
 import com.microsoft.signalr.HubConnectionState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,14 +71,15 @@ import java.util.concurrent.atomic.AtomicInteger
  *    the dedup/ordering half of that guarantee actually lives, kept dependency-free so it is testable
  *    with no hub connection at all.
  *
- * `JoinConversationAsync` is the one hub method this class calls — an existing method, called with
- * its existing two-argument arity (`conversationId`, `lastKnownSequence`) on every call, never fewer:
- * `docs/architecture/realtime.md`'s "a hub method's parameter count is a contract" rule, which this
- * class never has occasion to violate because it invents no new argument for it.
+ * `JoinConversationAsync` was, in `26-13`, the one hub method this class called — with its existing
+ * two-argument arity (`conversationId`, `lastKnownSequence`) on every call, never fewer:
+ * `docs/architecture/realtime.md`'s "a hub method's parameter count is a contract" rule. `26-15` adds
+ * two more real callers of that same rule, never violating it: [loadOlderHistory] always sends
+ * `GetHistoryAsync`'s full three arguments, and [sendMessage] always sends `SendMessageAsync`'s full
+ * four — see each method's own doc comment.
  *
- * What this class deliberately does **not** do, because `26-13`'s own Out of scope says so:
- * `SendMessageAsync` (no send path — this item proves the transport receives, not that an operator
- * can compose), `SetAwayAsync`/presence, and the team chat's own hub traffic.
+ * What this class deliberately still does **not** do: `SetAwayAsync`/presence and the team chat's own
+ * hub traffic — no backlog item has reached either yet.
  */
 public class OperatorHubConnection(
     private val hubUrl: String,
@@ -170,7 +172,7 @@ public class OperatorHubConnection(
      * directly, so those messages are recorded as already delivered ([MessageSubscription.markAlreadyDelivered])
      * rather than re-emitted through [messages] a second time.
      */
-    public suspend fun joinConversation(conversationId: String): HistoryPage {
+    public override suspend fun joinConversation(conversationId: String): HistoryPage {
         subscription.join(conversationId)
         val page =
             requireConnection()
@@ -182,8 +184,72 @@ public class OperatorHubConnection(
 
     /** Stops routing pushes to [messages] and stops a later reconnect from re-joining a conversation
      * nobody is looking at any more — `ago-console`'s own `leaveConversation`, restated. */
-    public fun leaveConversation() {
+    public override fun leaveConversation() {
         subscription.leave()
+    }
+
+    /**
+     * `26-15`: `GetHistoryAsync`, called directly rather than through [joinConversation] — the
+     * "load older messages" page a thread screen asks for as the operator scrolls up, never the
+     * fresh/resume page [joinConversation] and reconnect already own. The result is recorded through
+     * the identical [MessageSubscription.markAlreadyDelivered] path — mirroring `ago-console`'s own
+     * `loadOlderHistory`, which feeds every fetched id through `seenMessageIds.markSeen` too — so a
+     * message a live push later redelivers (a fan-out race landing after this page did) is still
+     * caught, and so [MessageSubscription]'s sequence tracker only ever advances, never regresses:
+     * [HubSequenceTracker.observe] already ignores an older sequence, so replaying history here can
+     * never move "resume from" backwards.
+     */
+    public override suspend fun loadOlderHistory(
+        conversationId: String,
+        beforeSequence: Long,
+        pageSize: Int,
+    ): HistoryPage {
+        val page =
+            requireConnection()
+                .invoke(HistoryPage::class.java, GET_HISTORY_METHOD, conversationId, beforeSequence, pageSize)
+                .await()
+        subscription.markAlreadyDelivered(page.messages)
+        return page
+    }
+
+    /**
+     * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity
+     * (`conversationId`, `body`, `attachmentId`, `clientMessageId`) every time — never fewer, per that
+     * method's own comment on why appending is safe for a caller like this one but omitting a
+     * trailing argument is not once a method has more than this class ever sends.
+     *
+     * Mirrors `ago-console`'s own `sendMessage`/`OperatorConnection.sendMessage` exactly:
+     * not-yet-connected and dropped-mid-invoke are told apart by whether the connection is still
+     * `CONNECTED` *after* the failure, because only that distinguishes "nothing was sent" (safe to
+     * retry with a fresh id) from "an invoke was genuinely in flight" (safe to retry only with the
+     * same one) — [SendMessageResult]'s own doc comment states which is which.
+     */
+    public override suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+        clientMessageId: String,
+        attachmentId: String?,
+    ): SendMessageResult {
+        val hub = connection
+        if (hub == null || hub.connectionState != HubConnectionState.CONNECTED) {
+            return SendMessageResult.NotConnected
+        }
+
+        return try {
+            val sequence =
+                hub
+                    .invoke(Integer::class.java, SEND_MESSAGE_METHOD, conversationId, body, attachmentId, clientMessageId)
+                    .await()
+            SendMessageResult.Sent(sequence.toLong())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            if (hub.connectionState != HubConnectionState.CONNECTED) {
+                SendMessageResult.OutcomeUnknown(failure)
+            } else {
+                SendMessageResult.Refused(failure.message ?: (failure::class.simpleName ?: "send failed"))
+            }
+        }
     }
 
     // ------------------------------------------------------------------------------ internals
@@ -307,6 +373,8 @@ public class OperatorHubConnection(
 
     private companion object {
         const val JOIN_CONVERSATION_METHOD = "JoinConversationAsync"
+        const val GET_HISTORY_METHOD = "GetHistoryAsync"
+        const val SEND_MESSAGE_METHOD = "SendMessageAsync"
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
         const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"
     }
