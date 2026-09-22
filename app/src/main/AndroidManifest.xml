@@ -39,14 +39,24 @@
         </activity>
 
         <!--
-            `26-12`: there is deliberately no redirect-receiver activity declared here. AppAuth's
-            own `net.openid.appauth.RedirectUriReceiverActivity` is declared in the library's
-            manifest and merged in, with its `android:scheme` supplied by the
-            `appAuthRedirectScheme` manifest placeholder in `app/build.gradle.kts` — which is where
-            `ago-android://callback` (the exact value `26-11` registered on the realm client) is
-            spelled once. Declaring a second receiver here would be a second place for that scheme
-            to be wrong.
+            `25-213`: the intent-filter and its `android:scheme` are still spelled exactly once, in
+            AppAuth's own library manifest via the `appAuthRedirectScheme` placeholder in
+            `app/build.gradle.kts` — this declaration adds no data or intent-filter of its own, so
+            that stays true. What it adds is the one attribute the library's own declaration leaves
+            unset: a theme. `net.openid.appauth.AuthorizationManagementActivity` (the other AppAuth
+            activity, launched first) ships its own `Theme.AppCompat.Translucent.NoTitleBar` in the
+            library manifest and never crashed; `RedirectUriReceiverActivity` — launched second, when
+            the browser redirects back — declares no theme at all, so it inherited this
+            application's own `Theme.AgoChat`, which descends `android:Theme.Material.Light`, not
+            `Theme.AppCompat`. `AppCompatActivity.onCreate` (both AppAuth activities extend it)
+            requires the latter unconditionally — confirmed live, on a real phone: every sign-in
+            crashed on the redirect back from Keycloak with `IllegalStateException: You need to use
+            a Theme.AppCompat theme (or descendant) with this activity`, the exact wording thrown at
+            `AppCompatDelegateImpl.createSubDecor`.
         -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:theme="@style/Theme.AppCompat.Translucent.NoTitleBar" />
     </application>
 
 </manifest>
