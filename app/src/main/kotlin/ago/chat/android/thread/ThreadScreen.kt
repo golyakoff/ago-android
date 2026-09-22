@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.ui.components.HubConnectionDebugRow
 import ago.chat.android.ui.components.VisitorDisplayPrefix
+import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -168,8 +172,14 @@ internal fun ThreadScreen(
                 Column {
                     TopAppBar(
                         navigationIcon = {
+                            // `26-23`: the mockup's `i-back`, a real vector - this used to be a
+                            // literal `Text("←")`, which is also what `AppShellScreen`'s retired
+                            // `BottomDestination.emoji()` cited as its own precedent. Both are gone.
                             IconButton(onClick = onBack) {
-                                Text(text = "←", style = MaterialTheme.typography.headlineSmall)
+                                Icon(
+                                    imageVector = AgoIcons.Back,
+                                    contentDescription = stringResource(R.string.action_back),
+                                )
                             }
                         },
                         title = {
@@ -342,6 +352,33 @@ private fun MessageList(
     }
 }
 
+/**
+ * `26-23`: the mockup's `.bub`, which this used to miss in three separate ways rather than one.
+ *
+ * **Shape.** `.bub{border-radius:16px}` with `.bub.in{border-bottom-left-radius:5px}` /
+ * `.bub.out{border-bottom-right-radius:5px}` — a tail on the corner nearest its author, the ordinary
+ * chat convention. The old symmetric `RoundedCornerShape(14.dp)` gave both directions the same
+ * outline, so the only thing distinguishing them was which side of the screen they sat on.
+ *
+ * **Fill.** `.bub.out{background:var(--brand); color:#fff}` — *solid* brand with white text, which is
+ * `primary`/`onPrimary`. The old `primaryContainer` is the brand *tint*, a pale lavender-blue; against
+ * the visitor's own `surfaceVariant` the two read as near-identical washes rather than as "mine" and
+ * "theirs". `.bub.in{background:var(--sunken); color:var(--ink)}` maps to `surfaceVariant` (which
+ * `Theme.kt` binds to `--ago-surface-sunken`, confirmed rather than assumed) — but with `onSurface`
+ * text, *not* the `onSurfaceVariant` that `Surface` would otherwise infer from the container, because
+ * the mockup asks for `--ink` here and `Theme.kt` maps `--ink-soft`, not `--ink`, to
+ * `onSurfaceVariant`.
+ *
+ * **The timestamp.** `.bub .t{opacity:.72}` — an alpha over *whatever the bubble's own text colour is*,
+ * which is why it now reads [LocalContentColor] rather than naming `onSurfaceVariant` outright. The
+ * old fixed colour was a real defect the moment the outgoing bubble became solid brand: a dark grey
+ * timestamp on a saturated brand fill is close to unreadable.
+ *
+ * `.bub{max-width:76%}` is expressed as a weighted pair — a gutter that takes the remaining 24% and a
+ * bubble that may take *up to* the other 76% (`fill = false`) — because Compose has no percentage
+ * `max-width` modifier, and `fillMaxWidth(0.76f)` would make every bubble exactly that wide rather
+ * than at most.
+ */
 @Composable
 private fun MessageBubble(message: MessageDto) {
     val isOperator = message.authorKind == "Operator"
@@ -349,9 +386,14 @@ private fun MessageBubble(message: MessageDto) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = if (isOperator) Arrangement.End else Arrangement.Start,
     ) {
+        if (isOperator) {
+            Spacer(modifier = Modifier.weight(BUBBLE_GUTTER_WEIGHT))
+        }
         Surface(
-            color = if (isOperator) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.weight(BUBBLE_MAX_WIDTH_WEIGHT, fill = false),
+            color = if (isOperator) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (isOperator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            shape = bubbleShape(isOperator = isOperator),
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(text = message.body, style = MaterialTheme.typography.bodyMedium)
@@ -359,14 +401,33 @@ private fun MessageBubble(message: MessageDto) {
                     Text(
                         text = time,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = LocalContentColor.current.copy(alpha = BUBBLE_TIMESTAMP_ALPHA),
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
             }
         }
+        if (!isOperator) {
+            Spacer(modifier = Modifier.weight(BUBBLE_GUTTER_WEIGHT))
+        }
     }
 }
+
+/** `.bub{border-radius:16px}` with the one tail corner at 5px — bottom-start for the visitor's
+ * bubbles, bottom-end for the operator's. */
+private fun bubbleShape(isOperator: Boolean): RoundedCornerShape =
+    RoundedCornerShape(
+        topStart = BUBBLE_CORNER,
+        topEnd = BUBBLE_CORNER,
+        bottomEnd = if (isOperator) BUBBLE_TAIL_CORNER else BUBBLE_CORNER,
+        bottomStart = if (isOperator) BUBBLE_CORNER else BUBBLE_TAIL_CORNER,
+    )
+
+private val BUBBLE_CORNER = 16.dp
+private val BUBBLE_TAIL_CORNER = 5.dp
+private const val BUBBLE_MAX_WIDTH_WEIGHT = 0.76f
+private const val BUBBLE_GUTTER_WEIGHT = 1f - BUBBLE_MAX_WIDTH_WEIGHT
+private const val BUBBLE_TIMESTAMP_ALPHA = 0.72f
 
 /** `null` for anything that fails to parse - the same "never invented, rendered honestly" posture
  * `ago.chat.android.core.domain.conversations.elapsedSince` already takes for a malformed `createdAt`,
@@ -392,8 +453,13 @@ private fun Composer(
             if (hasAttachmentUploadGrant) {
                 // A real, visible control - not disabled - whose tap does nothing yet. See this file's
                 // own top-of-file doc comment on why that stub is the honest shape for this item.
+                // `26-23` swapped its literal `"📎"` for the mockup's own `i-clip` vector; what the
+                // control *does* is untouched, and still deliberately nothing.
                 IconButton(onClick = { }) {
-                    Text(text = "📎", style = MaterialTheme.typography.titleLarge)
+                    Icon(
+                        imageVector = AgoIcons.Clip,
+                        contentDescription = stringResource(R.string.thread_composer_attach),
+                    )
                 }
             }
             TextField(
@@ -404,8 +470,18 @@ private fun Composer(
                 maxLines = 5,
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = onSend, enabled = draft.isNotBlank() && !sending) {
-                Text(text = stringResource(R.string.thread_composer_send))
+            // `26-23`: the mockup's `.iconbtn.tinted` - a circular brand-filled button carrying the
+            // `i-send` paper plane, not a text-labelled `Button`. `FilledIconButton`'s own defaults
+            // already *are* that description (`primary` container, `onPrimary` content, circular), so
+            // nothing about the shape is restated here. `thread_composer_send` survives as the
+            // control's accessible name rather than being deleted with the visible label: a send
+            // button that a screen reader announces as "button" and nothing else is worse than the
+            // text one it replaces.
+            FilledIconButton(onClick = onSend, enabled = draft.isNotBlank() && !sending) {
+                Icon(
+                    imageVector = AgoIcons.Send,
+                    contentDescription = stringResource(R.string.thread_composer_send),
+                )
             }
         }
     }

@@ -64,6 +64,12 @@
 
     <string name="action_sign_out">Выйти</string>
     <string name="action_dismiss">Скрыть</string>
+    <!--
+        `26-23`: the accessible name for a control that now draws a vector glyph instead of a literal
+        "←"/"📎" character. A text button carried its own label for a screen reader for free; an icon
+        button does not, so the label has to exist somewhere - and a `contentDescription` is where.
+    -->
+    <string name="action_back">Назад</string>
 
     <!--
         `26-14`: the conversation list - the first real screen. "Мои"/"Ожидают" are the segmented
@@ -108,7 +114,12 @@
         `26-15`: the thread screen - history, send, receive.
     -->
     <string name="thread_composer_placeholder">Напишите сообщение…</string>
+    <!--
+        `26-23`: still the send control's own name, now read out rather than drawn - the button shows
+        the mockup's paper-plane vector and carries this as its `contentDescription`.
+    -->
     <string name="thread_composer_send">Отправить</string>
+    <string name="thread_composer_attach">Прикрепить файл</string>
     <string name="thread_send_pending_retry">Сообщение не подтверждено. Повторить отправку?</string>
     <string name="thread_join_failed_title">Не удалось открыть диалог</string>
     <string name="thread_load_older_action">Загрузить более ранние сообщения</string>
