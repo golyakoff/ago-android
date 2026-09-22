@@ -1,5 +1,6 @@
 package ago.chat.android.ui.components
 
+import ago.chat.android.testing.BACK_CONTRACT_WAIT_TIMEOUT_MS
 import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -13,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -71,7 +73,12 @@ class BackContractSheetDismissTest {
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertExists()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("SHEET_CONTENT").fetchSemanticsNodes().isEmpty() &&
+                composeTestRule.onAllNodesWithText("SCREEN_MARKER").fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertDoesNotExist()
         composeTestRule.onNodeWithText("SCREEN_MARKER").assertExists()
@@ -79,7 +86,9 @@ class BackContractSheetDismissTest {
 
         // A second back press, with the sheet already gone, is free to reach the screen's own handler.
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `leftScreen` is a plain callback flag, not something visible in the semantics tree - `waitUntil`
+        // polls it directly instead of a synthetic node lookup.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) { leftScreen }
         assertTrue("once the sheet is gone, the next back press is the screen's own to answer", leftScreen)
     }
 }

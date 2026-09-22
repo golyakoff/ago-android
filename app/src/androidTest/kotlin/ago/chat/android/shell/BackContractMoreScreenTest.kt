@@ -2,10 +2,12 @@ package ago.chat.android.shell
 
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.testing.BACK_CONTRACT_WAIT_TIMEOUT_MS
 import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -54,7 +56,12 @@ class BackContractMoreScreenTest {
         composeTestRule.waitForIdle()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("Настройки").fetchSemanticsNodes().isNotEmpty() &&
+                composeTestRule.onAllNodesWithText("DIALOGI_MARKER").fetchSemanticsNodes().isEmpty()
+        }
 
         // Back landed on the Ещё list - its own row is showing again - not on Команда, the tab that
         // was current immediately before Ещё.
@@ -114,7 +121,11 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Настройки").assertExists()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("DIALOGI_MARKER").fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
     }

@@ -3,10 +3,12 @@ package ago.chat.android.shell
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.testing.BACK_CONTRACT_WAIT_TIMEOUT_MS
 import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
@@ -60,7 +62,13 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: a polling wait for the specific expected condition, not a blocking "nothing is
+        // currently churning" signal that already proved insufficient here (this file's own doc
+        // comment on `SystemBackPress.kt`). The `assertExists()` below is now a formality - it will
+        // already be true - but stays as the assertion that gives a readable failure message.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("DIALOGI_MARKER").fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
         assertTrue("the Activity must still be alive - only the tab changed", !composeTestRule.activity.isFinishing)
@@ -92,7 +100,11 @@ class BackContractBottomBarTest {
         // `waitUntil` times out and fails the test below — the exact failure this test always existed
         // to catch, just detected by polling a lifecycle state instead of catching an exception.
         pressSystemBack()
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        // `26-33`: this was already the textbook-correct polling pattern - and it still timed out on
+        // real CI at a 5-second budget (`ago-android` PR #34, run `35734381435`). Raised to the same
+        // `BACK_CONTRACT_WAIT_TIMEOUT_MS` every other call site now uses, for consistency and because a
+        // full `ActivityScenario` lifecycle transition is a slower thing than a Compose recomposition.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
             composeTestRule.activityRule.scenario.state == Lifecycle.State.DESTROYED
         }
     }
@@ -120,7 +132,11 @@ class BackContractBottomBarTest {
         composeTestRule.onNodeWithText("Аналитика").performClick()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("DIALOGI_MARKER").fetchSemanticsNodes().isNotEmpty()
+        }
 
         // One back press from the third tab visited lands directly on Диалоги - not on Записи, not on
         // Команда, whichever order they were visited in.

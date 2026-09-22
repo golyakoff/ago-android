@@ -1,5 +1,6 @@
 package ago.chat.android.ui.components
 
+import ago.chat.android.testing.BACK_CONTRACT_WAIT_TIMEOUT_MS
 import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -7,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -53,17 +55,25 @@ class BackContractStepFlowTest {
         composeTestRule.onNodeWithText("STEP_2").assertExists()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("STEP_1").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("STEP_1").assertExists()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("STEP_0").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("STEP_0").assertExists()
 
         // One more back, from the first step - `StepFlowBackHandler` is disabled here, so this press
         // is not consumed by the flow at all and reaches the host's own handler instead.
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `leftFlow` is a plain callback flag, not something visible in the semantics tree - `waitUntil`
+        // polls it directly instead of a synthetic node lookup.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) { leftFlow }
 
         assertTrue("back on the first step must propagate to the host screen's own back handling", leftFlow)
     }

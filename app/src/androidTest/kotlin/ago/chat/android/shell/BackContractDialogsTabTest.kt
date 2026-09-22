@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.testing.BACK_CONTRACT_WAIT_TIMEOUT_MS
 import ago.chat.android.testing.pressSystemBack
 import ago.chat.android.thread.ThreadViewModel
 import androidx.activity.ComponentActivity
@@ -104,7 +105,11 @@ class BackContractDialogsTabTest {
         composeTestRule.waitForIdle()
 
         pressSystemBack()
-        composeTestRule.waitForIdle()
+        // `26-33`: poll for the specific expected condition rather than a blocking idle signal - see
+        // `SystemBackPress.kt`'s own doc comment.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
+            composeTestRule.onAllNodesWithText("Иван").fetchSemanticsNodes().isNotEmpty()
+        }
 
         composeTestRule.onNodeWithText("Иван").assertExists()
         assertEquals(
@@ -167,14 +172,16 @@ class BackContractDialogsTabTest {
         // actually landed yet. Polling the store directly - the real source of truth clause 6 is about
         // - is what makes the next step deterministic instead of racing this test's own `tearDown()`
         // against a write that has not committed yet.
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        // `26-33`: timeout raised to `BACK_CONTRACT_WAIT_TIMEOUT_MS`, for consistency with every other
+        // wait in the post-`pressSystemBack()` verification chain - see `SystemBackPress.kt`.
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
             runBlocking { draftStore.read("c1") } == "Уже смотрю ваш заказ"
         }
 
         // Re-open the identical conversation and read the draft back through the real screen, exactly
         // as a fresh `ThreadViewModel.open("c1")` does in production.
         composeTestRule.onNodeWithText("Мария").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
             composeTestRule.onAllNodesWithText("Уже смотрю ваш заказ").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("Уже смотрю ваш заказ").assertExists()
@@ -192,7 +199,7 @@ class BackContractDialogsTabTest {
         composeTestRule.waitForIdle()
         // The same "wait for the real write, not just for Compose to settle" reasoning as above -
         // this closing flush must also be allowed to land before `tearDown()` closes the database.
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        composeTestRule.waitUntil(timeoutMillis = BACK_CONTRACT_WAIT_TIMEOUT_MS) {
             runBlocking { draftStore.read("c1") } == "Уже смотрю ваш заказ"
         }
     }
