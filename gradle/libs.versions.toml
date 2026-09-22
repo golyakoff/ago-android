@@ -11,7 +11,7 @@
 # newer but its default/minimum build-tools is 36.0.0, which is not installed here and pulling
 # it in was not this item's call to make silently. Kotlin 2.0.21 is the last 2.0.x patch, the
 # generation AGP 8.7 actually shipped alongside and was tested against.
-agp = "8.7.3"
+agp = "9.4.1"
 kotlin = "2.0.21"
 # The JDK toolchain, pinned once here and read by every module's `jvmToolchain(...)` call rather
 # than re-typed per build file or left to whatever JDK happens to be on the machine running the
