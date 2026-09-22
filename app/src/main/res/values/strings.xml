@@ -94,28 +94,17 @@
     <string name="conversation_list_new_badge">Новое</string>
     <string name="conversation_list_claim_action">Забрать</string>
     <string name="conversation_list_claiming_label">Забираем…</string>
-    <string name="conversation_list_opened_prefix">Открыт</string>
-    <string name="conversation_list_waiting_since_prefix">Ждёт</string>
     <string name="conversation_list_elapsed_unknown">время неизвестно</string>
 
-    <plurals name="conversation_list_elapsed_minutes">
-        <item quantity="one">%d минуту</item>
-        <item quantity="few">%d минуты</item>
-        <item quantity="many">%d минут</item>
-        <item quantity="other">%d минуты</item>
-    </plurals>
-    <plurals name="conversation_list_elapsed_hours">
-        <item quantity="one">%d час</item>
-        <item quantity="few">%d часа</item>
-        <item quantity="many">%d часов</item>
-        <item quantity="other">%d часа</item>
-    </plurals>
-    <plurals name="conversation_list_elapsed_days">
-        <item quantity="one">%d день</item>
-        <item quantity="few">%d дня</item>
-        <item quantity="many">%d дней</item>
-        <item quantity="other">%d дня</item>
-    </plurals>
+    <!--
+        `26-30`: the mockup's own short form - «4 ч» / «20 мин» / «2 д», no «Открыт»/«Ждёт» prefix of
+        any kind. Plain formatted strings, not `<plurals>`: unlike the full words these replaced
+        («час»/«часа»/«часов»), a short unit abbreviation does not inflect by count in Russian - «1 мин»
+        and «20 мин» use the identical word, so there is no plural rule left to express.
+    -->
+    <string name="conversation_list_elapsed_minutes_short">%d мин</string>
+    <string name="conversation_list_elapsed_hours_short">%d ч</string>
+    <string name="conversation_list_elapsed_days_short">%d д</string>
 
     <!--
         `26-15`: the thread screen - history, send, receive.

@@ -22,6 +22,16 @@ package ago.chat.android.core.domain.conversations
  * `ConversationPage`"), the already-fetched queue row is where that fact comes from. There is no
  * dedicated per-conversation fetch for it - the thread screen is handed the row the list already has,
  * never a second network round trip for one boolean.
+ *
+ * `26-30`: [lastMessagePreview]/[lastMessageAt] join the same additive way - `26-29`'s pair on
+ * `Ago.Chat.Contracts.ConversationSummaryDto`, carried through unparsed for the identical reason
+ * [createdAt] already is (a raw ISO-8601 string needs a `now` to render, which belongs to the screen's
+ * own ticker, not to this entity). **Both null together means this conversation has no messages at
+ * all** - that DTO's own doc comment, restated here rather than re-derived, since this type is the one
+ * place `:app` reads it from. [lastMessagePreview] can also be null while [lastMessageAt] is not (a
+ * system message, or one with no safe-to-preview content) - the row renders no snippet line at all in
+ * that case, never an orphaned timestamp (`ConversationListScreen`'s own doc comment on
+ * `ConversationRowSnippetLine`).
  */
 public data class ConversationSummary(
     public val conversationId: String,
@@ -32,6 +42,8 @@ public data class ConversationSummary(
     public val createdAt: String,
     public val operatorUnreadCount: Int,
     public val hasAttachmentUploadGrant: Boolean = false,
+    public val lastMessagePreview: String? = null,
+    public val lastMessageAt: String? = null,
 )
 
 /**

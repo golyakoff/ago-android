@@ -215,6 +215,76 @@ class ConversationListViewModelTest {
             )
         }
 
+    // ---------------------------------------------------------------------------- `26-30`: snippet
+
+    @Test
+    fun `lastMessagePreview and lastMessageAt carry through to the row unchanged`() =
+        runTest(dispatcher) {
+            val summaryWithSnippet =
+                waiting("c1").copy(lastMessagePreview = "how can I help?", lastMessageAt = "2026-09-22T09:05:00Z")
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(summaryWithSnippet))))
+            val viewModel = viewModelWith(api = api)
+
+            advanceUntilIdle()
+
+            val row =
+                viewModel.state.value.mine
+                    .single()
+            assertEquals("how can I help?", row.lastMessagePreview)
+            assertEquals("2026-09-22T09:05:00Z", row.lastMessageAt)
+        }
+
+    @Test
+    fun `the operator's own message still refreshes the row's snippet, live`() =
+        runTest(dispatcher) {
+            // `26-30`: found live on a real device - an operator sent a reply, returned to the list, and
+            // read their own words from before the send. `onMessage` used to return immediately for any
+            // non-`Visitor` author, which correctly kept an operator's own echoed send out of the unread
+            // count but wrongly also kept it from ever refreshing the snippet, since `26-29`'s own field
+            // is "the latest message", not "the latest visitor message".
+            val hubEvents = FakeOperatorHubEvents()
+            val api =
+                FakeConversationsApi(
+                    queueResult =
+                        QueueResult.Loaded(
+                            queueOf(mine = listOf(waiting("c1").copy(lastMessagePreview = "before the send"))),
+                        ),
+                )
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+
+            // The server's own snapshot changes between the send and the next fetch - exactly what a
+            // real `refresh()` round trip would see, not a client-side patch of the old snippet.
+            api.queueResult =
+                QueueResult.Loaded(
+                    queueOf(mine = listOf(waiting("c1").copy(lastMessagePreview = "after the send"))),
+                )
+            hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Operator"))
+            advanceUntilIdle()
+
+            assertEquals(
+                "after the send",
+                viewModel.state.value.mine
+                    .single()
+                    .lastMessagePreview,
+            )
+        }
+
+    @Test
+    fun `a row with no messages carries no snippet at all, not an empty placeholder`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1")))))
+            val viewModel = viewModelWith(api = api)
+
+            advanceUntilIdle()
+
+            val row =
+                viewModel.state.value.mine
+                    .single()
+            assertNull(row.lastMessagePreview)
+            assertNull(row.lastMessageAt)
+        }
+
     // -------------------------------------------------------------------------------------- claim
 
     @Test

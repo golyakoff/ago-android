@@ -242,13 +242,25 @@ public class ConversationListViewModel
 
         private fun onMessage(message: MessageDto) {
             val conversationId = message.conversationId ?: return
-            if (message.authorKind != VISITOR_AUTHOR_KIND) return
 
             val isAssignedToMe = lastQueue?.assignedToMe?.any { it.conversationId == conversationId } ?: false
             if (!isAssignedToMe) return
 
-            unreadBumps = unreadBumps + (conversationId to ((unreadBumps[conversationId] ?: 0) + 1))
-            render(stale = mutableState.value.isStale)
+            // `26-30`: found live, after this item's own row rebuild shipped a snippet line that never
+            // updated - an operator sent a reply, returned to the list, and read their own words from
+            // before the send. The bug was here: this function used to return immediately for anything
+            // that was not `VISITOR_AUTHOR_KIND`, which is correct for the unread bump below (an
+            // operator's own echoed-back send must never count as unread, `MessageDto.authorKind`'s own
+            // doc comment) but wrong for the row's snippet, which has to move for *any* new message -
+            // the operator's own included, exactly the way `26-29`'s backend field is defined
+            // ("the latest message", not "the latest visitor message"). `refresh()` is this class's own
+            // established answer for "something changed, re-ask for the truth" (`onAssigned`'s identical
+            // call, right above) rather than hand-rolling a client-side patch of `lastQueue` that would
+            // have to duplicate `26-29`'s own truncation/null-for-attachment rules to stay correct.
+            if (message.authorKind == VISITOR_AUTHOR_KIND) {
+                unreadBumps = unreadBumps + (conversationId to ((unreadBumps[conversationId] ?: 0) + 1))
+            }
+            refresh()
         }
 
         private fun render(stale: Boolean) {
@@ -276,6 +288,8 @@ public class ConversationListViewModel
                 isClaiming = conversationId in claimingIds,
                 claimError = claimErrors[conversationId],
                 hasAttachmentUploadGrant = hasAttachmentUploadGrant,
+                lastMessagePreview = lastMessagePreview,
+                lastMessageAt = lastMessageAt,
             )
 
         /**

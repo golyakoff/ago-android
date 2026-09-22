@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
  * `VisitorDisplayPrefixTest`, `:core:domain`); this composable only decides how to lay the present
  * parts out — the emoji pair at its own, deliberately larger size, the same treatment `25-207`/`25-162`
  * already give it on the web (`VisitorAvatar.tsx`, `visitorNameSuffix`).
+ *
+ * `26-30`: renders [ago.chat.android.core.domain.VisitorDisplayPrefixParts.displayName], not
+ * `.visitorName` — a nameless visitor with a known emoji pair now reads as "Лиса · Апельсин" here too,
+ * the same fallback the conversation-list row's identity line gained, for free, because both read the
+ * identical `:core:domain` field rather than each deriving it separately.
  */
 @Composable
 public fun VisitorDisplayPrefix(
@@ -47,7 +52,7 @@ public fun VisitorDisplayPrefix(
                 modifier = Modifier.padding(end = 4.dp),
             )
         }
-        parts.visitorName?.let { name ->
+        parts.displayName?.let { name ->
             Text(
                 text = name,
                 style = baseStyle.copy(fontFamily = AgoFontSans),
