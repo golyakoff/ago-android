@@ -1,5 +1,6 @@
 package ago.chat.android.ui.components
 
+import ago.chat.android.testing.pressSystemBack
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
@@ -15,7 +16,6 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,7 +70,7 @@ class BackContractSheetDismissTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertExists()
 
-        Espresso.pressBack()
+        pressSystemBack()
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("SHEET_CONTENT").assertDoesNotExist()
@@ -78,7 +78,7 @@ class BackContractSheetDismissTest {
         assertFalse("back must be consumed by the sheet's own dismissal, never reach the screen underneath it", leftScreen)
 
         // A second back press, with the sheet already gone, is free to reach the screen's own handler.
-        Espresso.pressBack()
+        pressSystemBack()
         composeTestRule.waitForIdle()
         assertTrue("once the sheet is gone, the next back press is the screen's own to answer", leftScreen)
     }

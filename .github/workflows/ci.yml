@@ -133,11 +133,21 @@ jobs:
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --no-daemon
 
+      # `26-25`: this step already existed (`26-20`) but had a bare, fixed artifact name -
+      # `actions/upload-artifact@v4+` refuses to create a second artifact with a name that already
+      # exists *within the same run*, and this exact job has been re-run by hand
+      # (`gh run rerun --failed`) at least three times this session chasing the flake `26-25` fixes -
+      # every one of those reruns would have failed this upload step on the second attempt, for a
+      # reason with nothing to do with the tests themselves. `run_id`-`run_attempt` is unique per
+      # attempt of a run, unlike `github.sha` (identical across every rerun of the same push) - it is
+      # what makes a failing run's own report recoverable no matter how many times it gets re-run,
+      # which is the whole reason this item's own `docs/backlog/26-25-*.md` names this upload as a
+      # Done-when in the first place.
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: instrumented-test-reports
+          name: instrumented-test-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
