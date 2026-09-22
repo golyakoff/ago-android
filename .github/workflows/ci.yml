@@ -80,6 +80,69 @@ jobs:
             **/build/reports/tests/
           if-no-files-found: warn
 
+  # `26-20`: the navigation contract's own Compose UI tests — `26-16`'s back-button-contract suite
+  # (`BackContract*Test`, `:app/src/androidTest/.../shell` and `.../ui/components`) plus this item's
+  # own `AssignmentNeverNavigatesTest` — running against a real, rendered emulator rather than
+  # Robolectric's approximation of one (`docs/architecture.md` §Testing has the full reasoning and
+  # what an emulator still cannot catch). A separate job, not a step added to `build-test` above: an
+  # emulator boot is a fixed few minutes no source change ever shrinks, and `0-04`'s own gate in
+  # `ago-root` (`docs/backlog/0-04-*.md`) is "the slow part goes in its own job rather than lengthening
+  # every push" - this job has no `needs:` on `build-test`, so both run concurrently and a push's
+  # critical path is whichever one is slower, not their sum.
+  instrumented-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # `reactivecircus/android-emulator-runner`'s own documented recipe for GitHub-hosted `ubuntu-latest`
+      # runners: `/dev/kvm` exists on the image but is not always group-writable by the runner user out
+      # of the box, so this udev rule is what actually turns on the hardware acceleration the brief's
+      # own "`ubuntu-latest` has supported KVM since 2023" claim depends on - without it the emulator
+      # still boots, only through slow software (TCG) emulation, which is the single most common cause
+      # of this action timing out in other projects' CI.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # API 34 matches `app/build.gradle.kts`'s own `targetSdk` - the platform behaviour this app is
+      # actually written against - rather than `compileSdk` (37, a ceiling on what the code may *name*,
+      # not a claim about which OS version it runs well on). `google_apis`/`x86_64`: the `default`
+      # target has no x86_64 system image for API levels this recent, and x86_64 is what actually gets
+      # hardware acceleration from the KVM step above (`arch`'s own default, `x86`, would run under
+      # emulation even with KVM enabled). `disable-animations: true` - listed explicitly rather than
+      # left to the action's own identical default - is what keeps a flaky `IdlingResource` timeout
+      # from ever being about a transition animation rather than this app's own logic.
+      - name: Run navigation-contract Compose UI tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: ./gradlew connectedDebugAndroidTest --no-daemon
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: instrumented-test-reports
+          path: |
+            app/build/outputs/androidTest-results/
+            app/build/reports/androidTests/
+          if-no-files-found: warn
+
   # `26-09`: the latest `main` reachable from a phone browser and installable, with no build
   # machine and no GitHub login — the reason this job publishes a GitHub Release rather than only
   # the workflow artifact below (`docs/backlog/26-09-*.md`'s own "Why a Release" section: an

@@ -12,6 +12,12 @@ import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.thread.ThreadViewModel
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -105,6 +111,32 @@ internal class FakeThreadHubEvents(
         clientMessageId: String,
         attachmentId: String?,
     ): SendMessageResult = SendMessageResult.NotConnected
+}
+
+/**
+ * `hiltViewModel()`'s own default scoping ties a `ThreadViewModel`'s lifetime to a `NavBackStackEntry`,
+ * which calls `onCleared()` - and therefore cancels `viewModelScope` - when that entry is actually
+ * cleared. A `ThreadViewModel` built directly (as every fake-backed instance any back-contract test
+ * constructs is) has no such owner, so nothing ever cancels its `viewModelScope` on its own: `remember`
+ * alone forgets the old *value* when the key changes, but calls no cleanup callback, unlike
+ * `DisposableEffect`. Without this wrapper, an earlier open's `ThreadViewModel` - including its `init`
+ * block's own indefinite `hubEvents.state.collect` and any in-flight `flushDraft()` write - keeps
+ * running for the rest of the process, which is what raced `BackContractDialogsTabTest`'s own
+ * in-memory database being closed by its `tearDown()` before this fix
+ * (`java.lang.IllegalStateException: Cannot perform this operation because the connection pool has
+ * been closed`, found running that exact test on `ago-test`). Shared here, rather than duplicated per
+ * file, because every back-contract test that constructs its own `ThreadViewModel` needs the identical
+ * wrapper - also passing a Lint `ViewModelConstructorInComposable` warning that direct construction
+ * inside a `@Composable () -> ThreadViewModel` factory lambda would otherwise trip, since the
+ * construction here happens inside a plain (non-composable) `factory` lambda instead.
+ */
+@Composable
+internal fun rememberDisposableThreadViewModel(factory: () -> ThreadViewModel): ThreadViewModel {
+    val viewModel = remember { factory() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.viewModelScope.cancel() }
+    }
+    return viewModel
 }
 
 internal fun summary(
