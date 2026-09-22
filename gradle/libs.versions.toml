@@ -22,7 +22,7 @@ jdk = "17"
 # same generation as AGP 8.7 / Kotlin 2.0.21 rather than the newest BOM on Maven, for the same
 # reason as above: a newer BOM's minimum Kotlin/compileSdk requirement is not guaranteed to hold
 # against the toolchain actually pinned here, and this item does not need the newest anything.
-composeBom = "2024.10.01"
+composeBom = "2026.09.00"
 
 coreKtx = "1.13.1"
 lifecycleRuntimeKtx = "2.8.6"
