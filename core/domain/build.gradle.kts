@@ -17,5 +17,10 @@ kotlin {
 }
 
 dependencies {
+    // `26-12`: nothing on the main classpath. `suspend` needs no dependency — it is a stdlib-level
+    // language feature — so the ports in `identity/` stay a module with literally no third-party
+    // code behind them, which is the property `docs/architecture.md` names for this module.
+    // `kotlinx-coroutines-test` is test-only, for `runTest` around those suspending ports.
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

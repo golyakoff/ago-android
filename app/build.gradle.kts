@@ -2,7 +2,25 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // `26-12`: Hilt runs through KSP rather than kapt — Dagger has supported it since 2.48 and it
+    // is the faster of the two. The Hilt Gradle plugin is what rewrites the `Application` class's
+    // bytecode so `@HiltAndroidApp` does not need a generated base class typed out by hand.
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
+}
+
+/**
+ * `26-09`'s own `-PagoVersionName` shape, generalised: a Gradle property when one is passed,
+ * otherwise the deployment this repository actually targets. Returns the value **already quoted**,
+ * because `buildConfigField("String", ...)` takes a Java source literal rather than a value.
+ */
+fun agoProperty(
+    name: String,
+    default: String,
+): String {
+    val value = (project.findProperty(name) as String?) ?: default
+    return "\"" + value + "\""
 }
 
 android {
@@ -30,6 +48,24 @@ android {
         versionName = (project.findProperty("agoVersionName") as String?) ?: "0.1.0-dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // `26-12`: AppAuth's own `RedirectUriReceiverActivity` is declared in the library's manifest
+        // with a placeholder-valued `android:scheme`, so the scheme is supplied here
+        // rather than by this app declaring a second receiver activity of its own. It must match the
+        // redirect URI `26-11` registered on the `ago-android` Keycloak client exactly.
+        manifestPlaceholders["appAuthRedirectScheme"] = "ago-android"
+
+        // `26-12`: the deployment this build talks to. Public DNS names, not secrets — the same two
+        // hostnames `ago-console` ships in its own runtime config, and the OIDC client id is public
+        // by design (`api-design.md`). They are `BuildConfig` fields rather than Kotlin constants so
+        // a future build variant (`26-17`'s "О приложении" reads the variant's own name) can point a
+        // build at a different deployment without a source change, and overridable by a Gradle
+        // property the same way `26-09` already overrides the version fields.
+        buildConfigField("String", "AGO_API_BASE_URL", agoProperty("agoApiBaseUrl", "https://chat-api.reserve-me.ru"))
+        buildConfigField("String", "AGO_KEYCLOAK_ISSUER", agoProperty("agoKeycloakIssuer", "https://auth.reserve-me.ru/realms/ago-chat"))
+        buildConfigField("String", "AGO_OIDC_CLIENT_ID", agoProperty("agoOidcClientId", "ago-android"))
+        buildConfigField("String", "AGO_OIDC_REDIRECT_URI", agoProperty("agoOidcRedirectUri", "ago-android://callback"))
+        buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.reserve-me.ru"))
     }
 
     buildTypes {
@@ -45,6 +81,8 @@ android {
 
     buildFeatures {
         compose = true
+        // Off by default since AGP 8; the five fields above need it.
+        buildConfig = true
     }
 
     packaging {
@@ -63,9 +101,20 @@ kotlin {
 
 dependencies {
     // The only module allowed to see :core:network directly — :app wires the two library
-    // modules together and is the only place DI will be wired later (26-12).
+    // modules together and is the only place DI is wired (`26-12`, `docs/architecture.md`).
     implementation(project(":core:network"))
     implementation(project(":core:domain"))
+
+    // `26-12`: dependency injection, identity, and the encrypted token store. Each replaces
+    // infrastructure this project has no reason to own: Hilt replaces a hand-rolled service
+    // locator; AppAuth replaces hand-rolled Authorization Code + PKCE (the exact security-sensitive
+    // plumbing `ago-console` already reaches for `oidc-client-ts` over); `security-crypto` replaces
+    // hand-rolled Android Keystore envelope encryption over plain SharedPreferences.
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.appauth)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -77,6 +126,7 @@ dependencies {
     implementation(libs.androidx.material3)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-12`: the pre-Android-12 half of `data_extraction_rules.xml`.
+
+    `android:allowBackup="false"` already disables backup outright on API 26–30, so strictly
+    speaking this file changes no behaviour there. It exists because the platform's own convention
+    (and Android Lint's `DataExtractionRules` check) is that an app declaring
+    `android:dataExtractionRules` for API 31+ declares the matching `android:fullBackupContent` for
+    the versions that predate it — and because "the refresh token never leaves the device"
+    (`docs/architecture.md`) is a claim worth holding in both mechanisms rather than in one plus an
+    argument about why the other is redundant.
+-->
+<full-backup-content>
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+</full-backup-content>

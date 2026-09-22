@@ -77,6 +77,25 @@ written knowing it.
 Tokens are held in `EncryptedSharedPreferences`; the refresh token never leaves the device and never
 appears in a log.
 
+`26-12` made all of that concrete. AppAuth drives Authorization Code + PKCE in a Custom Tab against
+the `ago-android` client `26-11` added to the realm, with the realm's endpoints **discovered** from
+the issuer rather than typed out; `SessionStore` (`:app`, `session/`) is the one
+`EncryptedSharedPreferences` file, holding AppAuth's serialised `AuthState` and the active site
+together so that one `clear()` at sign-out leaves nothing behind. "Never leaves the device" needs two
+manifest facts, not one: `android:allowBackup="false"` turns off cloud backup, and
+`android:dataExtractionRules` (`res/xml/data_extraction_rules.xml`) turns off Android 12+'s separate
+device-to-device transfer channel, which `allowBackup` does not reach. "Never appears in a log" is a
+property of what is *absent*: no `Logging` plugin is installed on the Ktor client at any level in any
+build type (`ago-console`'s `5-14` is the precedent — a transport logging its own negotiated URL at
+Information level was printing a live operator JWT), and the classes that hold tokens contain no
+logging statement at all.
+
+The token-freshness rule is implemented as a Ktor client plugin (`BearerToken`, `:core:network`) that
+asks an `AccessTokenProvider` **inside the send pipeline, per attempt** — not Ktor's own
+`Auth`/`bearer` provider, which caches the token it loaded until a `401` and so is the very shape
+`5-16` names. The same plugin forces one renewal and one retry on a `401`, setting the header on the
+retried request rather than reusing the one the server just rejected.
+
 ## Tenancy
 
 One identity can hold operator seats at several sites (`adr/0068`). The console solves this with a
@@ -89,6 +108,20 @@ Not threaded through call signatures, and not duplicated per API module — the 
 explain why the header is a UX convenience rather than a security boundary (it can only ever
 *narrow* what a request resolves to server-side, never widen it), and a native client inherits that
 property unchanged. A stale read costs one `403` and a retry, never a cross-tenant leak.
+
+`26-12` built it: `ActiveSiteHeader` (`:core:network`, `tenancy/`) attaches `X-Ago-Active-Site` to
+every request the app's one `HttpClient` makes, reading `ActiveSiteSelection` — a port declared in
+`:core:domain`, because "which shop am I working in" is a product fact rather than a detail of one
+transport (`26-13`'s hub carries the same value as a query-string parameter off the same source), and
+implemented once in `:app` over `SessionStore`. Read fresh per request, for the same reason the
+bearer token is: the site picker writes it after the client is built, and `26-17`'s switcher changes
+it again mid-session.
+
+**One ordering the tenancy mechanism turns on, found by reading the server rather than assumed.**
+`GET /api/v1/me/tenancies` must be answered *before* `GET /api/v1/operators/me` is sent, because
+`ResolveOperatorIdentityHandler` resolves an identity with several eligible tenancies and no header
+to nothing at all — so `operators/me` answers `403` for a multi-tenancy operator until the header
+exists. `navigation.md`'s sign-in section has the full reasoning and the corrected diagram.
 
 ## Realtime
 
