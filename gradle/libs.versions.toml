@@ -24,7 +24,7 @@ jdk = "17"
 # against the toolchain actually pinned here, and this item does not need the newest anything.
 composeBom = "2024.10.01"
 
-coreKtx = "1.13.1"
+coreKtx = "1.19.0"
 lifecycleRuntimeKtx = "2.8.6"
 activityCompose = "1.9.2"
 
