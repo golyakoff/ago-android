@@ -29,13 +29,19 @@ public sealed interface SignInUiState {
     public data object Working : SignInUiState
 
     /** The identity provider itself refused, or could not be reached. */
-    public data class SignInFailed(val detail: String) : SignInUiState
+    public data class SignInFailed(
+        val detail: String,
+    ) : SignInUiState
 
     /** Several tenancies and no choice yet (`adr/0068`). */
-    public data class ChooseSite(val tenancies: List<Tenancy>) : SignInUiState
+    public data class ChooseSite(
+        val tenancies: List<Tenancy>,
+    ) : SignInUiState
 
     /** Signed in, and nothing after that answered. Renders a retry and never a destination. */
-    public data class Unavailable(val failure: RoutingFailure) : SignInUiState
+    public data class Unavailable(
+        val failure: RoutingFailure,
+    ) : SignInUiState
 
     /** An owner-only identity. An honest dead end with a link out (`scope-inventory.md` §2). */
     public data object PlatformOwnerTerminal : SignInUiState
@@ -44,5 +50,7 @@ public sealed interface SignInUiState {
     public data object Registration : SignInUiState
 
     /** The placeholder surface this item ends at. `26-14` replaces it with the conversation list. */
-    public data class SignedIn(val activeSiteId: String?) : SignInUiState
+    public data class SignedIn(
+        val activeSiteId: String?,
+    ) : SignInUiState
 }

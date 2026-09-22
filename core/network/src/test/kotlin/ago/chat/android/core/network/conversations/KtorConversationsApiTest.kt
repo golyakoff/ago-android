@@ -112,8 +112,17 @@ class KtorConversationsApiTest {
 
             val loaded = api.fetchQueue() as QueueResult.Loaded
 
-            assertTrue(loaded.queue.assignedToMe.single { it.conversationId == "c1" }.hasAttachmentUploadGrant)
-            assertEquals(false, loaded.queue.assignedToMe.single { it.conversationId == "c2" }.hasAttachmentUploadGrant)
+            assertTrue(
+                loaded.queue.assignedToMe
+                    .single { it.conversationId == "c1" }
+                    .hasAttachmentUploadGrant,
+            )
+            assertEquals(
+                false,
+                loaded.queue.assignedToMe
+                    .single { it.conversationId == "c2" }
+                    .hasAttachmentUploadGrant,
+            )
         }
 
     @Test

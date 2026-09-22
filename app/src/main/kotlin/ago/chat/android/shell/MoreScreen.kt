@@ -153,7 +153,9 @@ internal fun SettingsPlaceholderScreen(onBack: () -> Unit) {
 
 // ---------------------------------------------------------------------------------- row/section model
 
-internal enum class MoreSectionId(val labelRes: Int) {
+internal enum class MoreSectionId(
+    val labelRes: Int,
+) {
     Channels(R.string.more_section_channels),
     Automation(R.string.more_section_automation),
     Administration(R.string.more_section_administration),

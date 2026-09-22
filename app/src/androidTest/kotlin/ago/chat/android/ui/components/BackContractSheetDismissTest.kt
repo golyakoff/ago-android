@@ -11,7 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -35,6 +35,8 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalMaterial3Api::class)
 @RunWith(AndroidJUnit4::class)
 class BackContractSheetDismissTest {
+    // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer
+    // usable under `allWarningsAsErrors`, and what changes underneath.
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -54,7 +56,12 @@ class BackContractSheetDismissTest {
 
             if (sheetOpen) {
                 ModalBottomSheet(onDismissRequest = { sheetOpen = false }) {
-                    Text(text = "SHEET_CONTENT", modifier = androidx.compose.ui.Modifier.padding(24.dp))
+                    Text(
+                        text = "SHEET_CONTENT",
+                        modifier =
+                            androidx.compose.ui.Modifier
+                                .padding(24.dp),
+                    )
                 }
             }
         }

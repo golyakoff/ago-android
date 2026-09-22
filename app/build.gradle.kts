@@ -1,6 +1,10 @@
 plugins {
+    // `25-214`: no `org.jetbrains.kotlin.android` here. AGP 9.0 compiles Kotlin itself ("built-in
+    // Kotlin"), and applying the standalone plugin on top of it is a hard build failure, not a
+    // warning: "The 'org.jetbrains.kotlin.android' plugin is no longer required for Kotlin support
+    // since AGP 9.0". The `kotlin { }` block below is now AGP's own extension rather than the
+    // Kotlin Gradle plugin's, which is why it keeps working unchanged.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     // `26-12`: Hilt runs through KSP rather than kapt — Dagger has supported it since 2.48 and it
     // is the faster of the two. The Hilt Gradle plugin is what rewrites the `Application` class's
@@ -25,7 +29,15 @@ fun agoProperty(
 
 android {
     namespace = "ago.chat.android"
-    compileSdk = 34
+
+    // `25-214`: 37 is not a free choice — it is the floor `androidx.core:core-ktx` 1.19.0 and the
+    // 2026.09.00 Compose BOM compile against, and simultaneously the ceiling AGP 9.4 supports, so
+    // it moves in lockstep with `agp`/the Gradle wrapper rather than on its own (see
+    // `gradle/libs.versions.toml`'s own `agp` remarks). `targetSdk` deliberately does NOT follow:
+    // `compileSdk` only says which APIs this code may *name*, while `targetSdk` opts the running
+    // app into a platform generation's behaviour changes, which is a product decision with real
+    // runtime consequences and no bearing on the dependency wall this item exists to clear.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "ago.chat.android"
@@ -93,7 +105,11 @@ android {
 }
 
 kotlin {
-    jvmToolchain(libs.versions.jdk.get().toInt())
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
     compilerOptions {
         allWarningsAsErrors.set(true)
     }

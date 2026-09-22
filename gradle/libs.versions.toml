@@ -5,26 +5,41 @@
 # (`ago-root/docs/backlog/26-07-*.md`, Scope).
 
 [versions]
-# Android / Kotlin toolchain. AGP 8.7's own compatibility table names Gradle 8.9, JDK 17 and
-# SDK Build Tools 34.0.0 as both its minimum AND its default — which is exactly what this
-# machine's Android SDK has installed (platforms;android-34, build-tools;34.0.0). AGP 9.x is
-# newer but its default/minimum build-tools is 36.0.0, which is not installed here and pulling
-# it in was not this item's call to make silently. Kotlin 2.0.21 is the last 2.0.x patch, the
-# generation AGP 8.7 actually shipped alongside and was tested against.
-agp = "8.7.3"
-kotlin = "2.0.21"
+# Android / Kotlin toolchain — `25-214`, a *coordinated* bump, because these rows are not
+# independently bumpable and Dependabot files them as if they were. Two couplings, stated here so
+# the next per-dependency PR that hits one is recognised on sight rather than re-diagnosed from a
+# CI log (`ago-root/docs/backlog/25-214-*.md`):
+#
+#   AGP -> Gradle wrapper -> compileSdk. AGP 9.4's own compatibility table names Gradle 9.6.0 as
+#   both its minimum and its default, JDK 17, SDK Build Tools 36.0.0, and API 37 as the highest
+#   compileSdk it supports. `gradle/wrapper/gradle-wrapper.properties` therefore moves with this
+#   row (9.7.1, the current stable 9.x, not the bare 9.6.0 minimum), and `compileSdk` in
+#   `app/build.gradle.kts` and `core/network/build.gradle.kts` moves with it too — androidx's own
+#   current releases (`coreKtx`, `composeBom` below) refuse to link against anything lower.
+#
+#   Kotlin -> KSP. See the `ksp` row below: the shape of that coupling changed with KSP 2.3.
+#
+# 9.4.1 is the newest stable AGP on Google's Maven (9.5.x is alpha-only), 2.4.20 the newest stable
+# Kotlin — the same "newest stable of the generation, not a preview" rule every other row here
+# states for itself.
+agp = "9.4.1"
+kotlin = "2.4.20"
 # The JDK toolchain, pinned once here and read by every module's `jvmToolchain(...)` call rather
 # than re-typed per build file or left to whatever JDK happens to be on the machine running the
 # build (`26-07`'s own Scope: "a JDK toolchain pinned once").
 jdk = "17"
 
-# Compose BOM pins every androidx.compose.* artifact to one mutually-tested set. Picked from the
-# same generation as AGP 8.7 / Kotlin 2.0.21 rather than the newest BOM on Maven, for the same
-# reason as above: a newer BOM's minimum Kotlin/compileSdk requirement is not guaranteed to hold
-# against the toolchain actually pinned here, and this item does not need the newest anything.
-composeBom = "2024.10.01"
+# Compose BOM pins every androidx.compose.* artifact to one mutually-tested set. The 2024.10.01
+# entry this replaces warned that "a newer BOM's minimum Kotlin/compileSdk requirement is not
+# guaranteed to hold against the toolchain actually pinned here" — `25-214` is that caveat coming
+# true and being paid off rather than worked around: 2026.09.00 pulls
+# `androidx.compose.ui:ui-android` 1.12.x, which needs AGP >= 9.1.0 and `compileSdk` >= 37, which
+# is exactly the triangle the `agp` row above now moves as one piece.
+composeBom = "2026.09.00"
 
-coreKtx = "1.13.1"
+# Same wall as the Compose BOM: `core-ktx` 1.19.0 is compiled against `compileSdk` 37 and refuses
+# to link under AGP 8.x. It is in this bump for that reason, not because it was due.
+coreKtx = "1.19.0"
 lifecycleRuntimeKtx = "2.8.6"
 activityCompose = "1.9.2"
 
@@ -32,28 +47,47 @@ junit = "4.13.2"
 androidxTestExtJunit = "1.3.0"
 espressoCore = "3.6.1"
 
-# `26-12`: KSP is the annotation processor Hilt runs under (kapt is the alternative and is strictly
-# slower — Dagger/Hilt has supported KSP since 2.48 and recommends it). Its version is a *pair*:
-# `<kotlin version>-<ksp release>`, so this row is not independently bumpable — it moves when
-# `kotlin` above moves, which is exactly why it sits next to it.
-ksp = "2.0.21-1.0.28"
+# `26-12`: KSP is the annotation processor Hilt and Room run under (kapt is the alternative and is
+# strictly slower — Dagger/Hilt has supported KSP since 2.48 and recommends it).
+#
+# `25-214`: this row's coupling to `kotlin` above changed shape, and that is worth stating because
+# the old shape is what a stale memory will reach for. Through KSP 1.x/2.0.x the version string was
+# a *pair* — `<kotlin version>-<ksp release>`, e.g. the `2.0.21-1.0.28` this replaces — so bumping
+# `kotlin` alone left `ksp` pointing at a coordinate that does not exist and the build failed with
+# `Plugin [id: 'com.google.devtools.ksp', version: '...'] was not found`. From KSP 2.3.0 onward
+# (the last paired release published is `2.2.21-2.0.5`) KSP2 versions independently, plain
+# semver — so this row no longer has to be retyped every time `kotlin` moves. It is still not
+# *unrelated* to it: KSP still runs inside the Kotlin compiler, so a KSP release predating a Kotlin
+# release is the thing to suspect first if annotation processing breaks after a `kotlin` bump.
+# 2.3.12 is the newest KSP release.
+ksp = "2.3.12"
 
 # `26-12`: dependency injection. `docs/architecture.md`'s "Module layout" names Hilt as the author's
-# own 2026-09-21 decision, and `26-07` deferred wiring it for lack of anything to inject. 2.52 is the
-# release matching the Kotlin 2.0.x generation pinned above.
-hilt = "2.52"
+# own 2026-09-21 decision, and `26-07` deferred wiring it for lack of anything to inject.
+#
+# `25-214`: this row is a third member of the `agp` coupling above, discovered the hard way rather
+# than predicted — Hilt's *Gradle plugin* reads AGP's legacy `BaseExtension`, which AGP 9 no longer
+# creates, so 2.52 fails at configuration time with "Android BaseExtension not found" the moment
+# `agp` crosses 8.x. Hilt added AGP 9 support in 2.59; 2.60.1 is the newest release and the one
+# taken, since the intermediate 2.59.x had its own AGP 9 follow-up fixes.
+hilt = "2.60.1"
 # `26-14`: `hiltViewModel()` inside a plain `@Composable` — `ConversationListRoute`'s own way of
 # obtaining `ConversationListViewModel` with no Navigation Compose graph yet to hang a destination off
-# (`docs/architecture.md`: Navigation Compose itself arrives with `26-16`). 1.2.0 is the release
-# generation that targets this project's own Compose BOM (`composeBom` above) rather than a newer one
-# built against a Compose/Kotlin generation this project has not moved to.
+# (`docs/architecture.md`: Navigation Compose itself arrives with `26-16`). 1.2.0 was picked as the
+# release generation targeting this project's own Compose BOM.
+#
+# `25-214` moved `composeBom` well past that generation and deliberately left this row where it is:
+# unlike `hilt` and `room` above, nothing here *breaks* — it compiles, and `26-16`'s own instrumented
+# navigation tests pass on a device against the new BOM. A bump for its own sake is a separate
+# promise from clearing the AGP wall, so it is not in this item. The sentence above is kept, with
+# this correction attached, rather than rewritten to pretend the generations still line up.
 hiltNavigationCompose = "1.2.0"
 
 # `26-16`: Navigation Compose, arriving with its first real consumer — the bottom navigation and the
 # back-button contract this item owns (`docs/architecture.md`/`SignInUiState`'s own doc comment: "arrives
-# with 26-16"). 2.8.3 is the release generation contemporary with `hiltNavigationCompose` 1.2.0 and this
-# project's own Compose BOM (`composeBom` above) — the same "picked from the same generation, not the
-# newest thing on Maven" reasoning every other row in this file already states for itself.
+# with 26-16"). 2.8.3 is the release generation contemporary with `hiltNavigationCompose` 1.2.0 — and,
+# at the time it was chosen, with this project's own Compose BOM. `25-214` moved the BOM and left this
+# row alone for the same reason it left `hiltNavigationCompose` alone; see that row.
 navigationCompose = "2.8.3"
 
 # `26-12`: the HTTP client, per `docs/architecture.md`'s stack table (Ktor over Retrofit, because it
@@ -82,8 +116,17 @@ securityCrypto = "1.1.0-alpha06"
 # every other row in `ago-android/docs/architecture.md`'s stack table. Deliberately not detekt
 # (`docs/backlog/26-08-*.md`'s own Scope: Android Lint plus `allWarningsAsErrors` already cover
 # this project's actual needs; detekt is a second suppression vocabulary for findings nobody has
-# had yet). 12.1.1 is the newest release compatible with the Gradle 8.9 wrapper `26-07` pinned.
-ktlintGradle = "12.1.1"
+# had yet).
+#
+# `25-214`: a fourth member of the `agp` coupling, and the nastiest, because it failed *green*.
+# 12.1.1 discovers the Kotlin source sets it lints by reacting to the `org.jetbrains.kotlin.android`
+# plugin — which AGP 9's built-in Kotlin makes it illegal to apply. With that plugin gone, 12.1.1
+# registered no `runKtlintCheckOverMainSourceSet`/`...TestSourceSet` task in `:app` or
+# `:core:network` at all: `./gradlew ktlintCheck` still passed, having checked nothing but the two
+# `.gradle.kts` files. 14.2.0 is the newest release and knows about AGP's built-in Kotlin; the
+# source-set tasks are back in all three modules, which is the property to re-check by name (not by
+# exit code) if this row ever moves again.
+ktlintGradle = "14.2.0"
 
 # `26-13`: Microsoft's official Java SignalR client (`docs/architecture.md`'s stack table;
 # `adr/0178` — chosen despite being JVM-only, a closed decision, not reopened here). 9.0.5 is a
@@ -98,13 +141,18 @@ signalr = "9.0.5"
 rxjava3 = "3.1.9"
 
 # `26-14`: Room, arriving with its first real consumer (the conversation list's stale-until-proven-fresh
-# cache, `docs/architecture.md` "Offline"). 2.6.1 is the newest release still on the Room 2.6 line rather
-# than the newest release on Maven overall - 2.7 rewrote Room's own KMP story around a new SQLite driver
-# artifact and raises assumptions about the Kotlin/KSP generation in play; this project is deliberately
-# pinned to the Kotlin 2.0.21 / KSP 2.0.21-1.0.28 generation (see `kotlin`/`ksp` above), and 2.6.1 is the
-# last release built and tested against that generation rather than the one after it, the same
-# "picked from the same generation, not the newest thing on Maven" reasoning `composeBom` above states.
-room = "2.6.1"
+# cache, `docs/architecture.md` "Offline").
+#
+# `25-214`: 2.6.1 was pinned here precisely *because* it was "the last release built and tested
+# against" the Kotlin 2.0.21 / KSP 2.0.21-1.0.28 generation — so when that generation moved, this row
+# had to move with it. Room's annotation processor is the KSP processor, and 2.6.1 predates KSP2
+# entirely: under KSP 2.3.x it dies in `kspDebugKotlin` with
+# `java.lang.IllegalStateException: unexpected jvm signature V`, which is a processor-internals
+# failure, not anything wrong with this project's own `@Dao`s. 2.8.5 is the newest release and the
+# first line with real KSP2 support. Nothing in this project's Room usage changed: the
+# `RoomDatabase`/`@Dao`/`Room.databaseBuilder` surface 2.6 exposed is unchanged, and the
+# SQLite-driver rewrite 2.7 introduced is opt-in.
+room = "2.8.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

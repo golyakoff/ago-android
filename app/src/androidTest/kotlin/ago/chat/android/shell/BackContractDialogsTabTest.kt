@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,6 +43,8 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class BackContractDialogsTabTest {
+    // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer
+    // usable under `allWarningsAsErrors`, and what changes underneath.
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -52,7 +54,8 @@ class BackContractDialogsTabTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         database =
-            Room.inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
+            Room
+                .inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
     }

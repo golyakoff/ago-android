@@ -238,7 +238,15 @@ public class OperatorHubConnection(
         return try {
             val sequence =
                 hub
-                    .invoke(Integer::class.java, SEND_MESSAGE_METHOD, conversationId, body, attachmentId, clientMessageId)
+                    // `Int::class.javaObjectType`, not `Integer::class.java` and not
+                    // `Int::class.java`: SignalR's `invoke` deserialises into the `Class` handed to
+                    // it, so it needs the *boxed* `java.lang.Integer` (`Int::class.java` is the
+                    // primitive `int.class`, which a generic deserialiser cannot instantiate).
+                    // Naming `Integer` directly is what Kotlin 2.4 started warning about ("This
+                    // class is not recommended for use in Kotlin"), and `allWarningsAsErrors`
+                    // makes that a build failure here; `javaObjectType` is the same class object
+                    // typed as `Class<Int>`, so the call's type argument is a Kotlin type.
+                    .invoke(Int::class.javaObjectType, SEND_MESSAGE_METHOD, conversationId, body, attachmentId, clientMessageId)
                     .await()
             SendMessageResult.Sent(sequence.toLong())
         } catch (cancellation: CancellationException) {

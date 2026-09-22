@@ -31,7 +31,8 @@ class RoomConversationListCacheTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         database =
-            Room.inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
+            Room
+                .inMemoryDatabaseBuilder(context, AgoChatDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
         cache = RoomConversationListCache(database.conversationRowDao())

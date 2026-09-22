@@ -15,9 +15,13 @@ public data class Tenancy(
 
 /** The answer to `GET /api/v1/me/tenancies`, with the same three-valued discipline as [ProbeOutcome]. */
 public sealed interface TenancyListing {
-    public data class Known(val tenancies: List<Tenancy>) : TenancyListing
+    public data class Known(
+        val tenancies: List<Tenancy>,
+    ) : TenancyListing
 
-    public data class Unanswered(val reason: ProbeFailure) : TenancyListing
+    public data class Unanswered(
+        val reason: ProbeFailure,
+    ) : TenancyListing
 }
 
 /**

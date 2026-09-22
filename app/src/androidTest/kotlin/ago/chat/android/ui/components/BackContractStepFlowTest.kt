@@ -5,7 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso
@@ -25,6 +25,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class BackContractStepFlowTest {
+    // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer
+    // usable under `allWarningsAsErrors`, and what changes underneath.
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 

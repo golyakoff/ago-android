@@ -58,7 +58,11 @@ class ThreadViewModelTest {
 
             assertFalse(viewModel.state.value.joining)
             assertFalse("only 3 messages exist - nothing more to page into", viewModel.state.value.canLoadOlder)
-            assertEquals(listOf(1L, 2L, 3L), viewModel.state.value.messages.map { it.sequence })
+            assertEquals(
+                listOf(1L, 2L, 3L),
+                viewModel.state.value.messages
+                    .map { it.sequence },
+            )
         }
 
     // ---------------------------------------------------------------------------- keyset boundary
@@ -74,7 +78,11 @@ class ThreadViewModelTest {
             viewModel.open("c1")
             advanceUntilIdle()
             assertTrue(viewModel.state.value.canLoadOlder)
-            assertEquals((102L..151L).toList(), viewModel.state.value.messages.map { it.sequence })
+            assertEquals(
+                (102L..151L).toList(),
+                viewModel.state.value.messages
+                    .map { it.sequence },
+            )
 
             viewModel.loadOlder()
             advanceUntilIdle()
@@ -83,7 +91,9 @@ class ThreadViewModelTest {
             viewModel.loadOlder()
             advanceUntilIdle()
 
-            val sequences = viewModel.state.value.messages.map { it.sequence }
+            val sequences =
+                viewModel.state.value.messages
+                    .map { it.sequence }
             assertEquals("every message from 1 to 151, no gap and no duplicate", (1L..151L).toList(), sequences)
             assertFalse("the cursor is genuinely exhausted", viewModel.state.value.canLoadOlder)
 
@@ -98,8 +108,16 @@ class ThreadViewModelTest {
 
             // The boundary message itself - the smallest sequence of one page and the exact cursor for
             // the next - appears exactly once, never on both sides of the cut.
-            assertEquals(1, viewModel.state.value.messages.count { it.sequence == 102L })
-            assertEquals(1, viewModel.state.value.messages.count { it.sequence == 52L })
+            assertEquals(
+                1,
+                viewModel.state.value.messages
+                    .count { it.sequence == 102L },
+            )
+            assertEquals(
+                1,
+                viewModel.state.value.messages
+                    .count { it.sequence == 52L },
+            )
         }
 
     @Test
@@ -124,7 +142,11 @@ class ThreadViewModelTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.state.value.canLoadOlder)
-            assertEquals((1L..100L).toList(), viewModel.state.value.messages.map { it.sequence })
+            assertEquals(
+                (1L..100L).toList(),
+                viewModel.state.value.messages
+                    .map { it.sequence },
+            )
             assertEquals(listOf(51L, 1L), hub.loadOlderCursors)
         }
 
@@ -172,7 +194,11 @@ class ThreadViewModelTest {
             hub.messages.tryEmit(redelivered)
             advanceUntilIdle()
 
-            assertEquals(1, viewModel.state.value.messages.count { it.id == "dup" })
+            assertEquals(
+                1,
+                viewModel.state.value.messages
+                    .count { it.id == "dup" },
+            )
             assertEquals(3, viewModel.state.value.messages.size)
         }
 

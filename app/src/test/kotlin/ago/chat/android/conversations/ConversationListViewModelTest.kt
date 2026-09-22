@@ -81,7 +81,11 @@ class ConversationListViewModelTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.state.value.isStale)
-            assertEquals(listOf("fresh-row"), viewModel.state.value.mine.map { it.conversationId })
+            assertEquals(
+                listOf("fresh-row"),
+                viewModel.state.value.mine
+                    .map { it.conversationId },
+            )
         }
 
     @Test
@@ -94,7 +98,11 @@ class ConversationListViewModelTest {
             advanceUntilIdle()
 
             assertTrue("the cache is not thrown away on a failed fetch", viewModel.state.value.hasData)
-            assertEquals(listOf("cached-row"), viewModel.state.value.mine.map { it.conversationId })
+            assertEquals(
+                listOf("cached-row"),
+                viewModel.state.value.mine
+                    .map { it.conversationId },
+            )
             assertTrue("still marked stale - the fetch never actually confirmed it", viewModel.state.value.isStale)
             assertEquals("no network", viewModel.state.value.loadError)
         }
@@ -126,7 +134,9 @@ class ConversationListViewModelTest {
             hubEvents.assignments.tryEmit(ConversationAssignedDto("new-conv", "op-1", "2026-09-22T10:00:00Z"))
             advanceUntilIdle()
 
-            val row = viewModel.state.value.mine.single { it.conversationId == "new-conv" }
+            val row =
+                viewModel.state.value.mine
+                    .single { it.conversationId == "new-conv" }
             assertTrue("the row carries the New badge", row.isNewlyAssigned)
             assertTrue(
                 "the push triggered a re-fetch, the same way the console re-fetches on assignment",
@@ -147,11 +157,19 @@ class ConversationListViewModelTest {
             advanceUntilIdle()
             hubEvents.assignments.tryEmit(ConversationAssignedDto("c1", "op-1", "2026-09-22T10:00:00Z"))
             advanceUntilIdle()
-            assertTrue(viewModel.state.value.mine.single().isNewlyAssigned)
+            assertTrue(
+                viewModel.state.value.mine
+                    .single()
+                    .isNewlyAssigned,
+            )
 
             viewModel.onRowOpened("c1")
 
-            assertFalse(viewModel.state.value.mine.single().isNewlyAssigned)
+            assertFalse(
+                viewModel.state.value.mine
+                    .single()
+                    .isNewlyAssigned,
+            )
         }
 
     // ------------------------------------------------------------------------------- unread counts
@@ -170,7 +188,12 @@ class ConversationListViewModelTest {
             hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Visitor"))
             advanceUntilIdle()
 
-            assertEquals(3, viewModel.state.value.mine.single().unreadCount)
+            assertEquals(
+                3,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
         }
 
     @Test
@@ -184,7 +207,12 @@ class ConversationListViewModelTest {
             hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Operator"))
             advanceUntilIdle()
 
-            assertEquals(0, viewModel.state.value.mine.single().unreadCount)
+            assertEquals(
+                0,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
         }
 
     // -------------------------------------------------------------------------------------- claim
@@ -206,8 +234,15 @@ class ConversationListViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("c1"), api.claimCalls)
-            assertTrue(viewModel.state.value.waiting.isEmpty())
-            assertEquals(listOf("c1"), viewModel.state.value.mine.map { it.conversationId })
+            assertTrue(
+                viewModel.state.value.waiting
+                    .isEmpty(),
+            )
+            assertEquals(
+                listOf("c1"),
+                viewModel.state.value.mine
+                    .map { it.conversationId },
+            )
         }
 
     @Test
@@ -225,11 +260,15 @@ class ConversationListViewModelTest {
             advanceUntilIdle()
 
             assertEquals("exactly one attempt was made", listOf("c1"), api.claimCalls)
-            val row = viewModel.state.value.waiting.single()
+            val row =
+                viewModel.state.value.waiting
+                    .single()
             assertEquals("Этот диалог уже забрал другой оператор.", row.claimError)
             assertFalse(
                 "the row is not silently moved on a refusal",
-                row.conversationId in viewModel.state.value.mine.map { it.conversationId },
+                row.conversationId in
+                    viewModel.state.value.mine
+                        .map { it.conversationId },
             )
 
             // Time passes. Nothing retries it on its own.
@@ -252,7 +291,11 @@ class ConversationListViewModelTest {
 
             viewModel.dismissClaimError("c1")
 
-            assertNull(viewModel.state.value.waiting.single().claimError)
+            assertNull(
+                viewModel.state.value.waiting
+                    .single()
+                    .claimError,
+            )
             assertEquals(1, api.claimCalls.size)
         }
 

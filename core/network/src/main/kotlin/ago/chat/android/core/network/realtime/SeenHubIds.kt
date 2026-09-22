@@ -15,7 +15,9 @@ package ago.chat.android.core.network.realtime
  * and from a resume/join call running on a caller's coroutine — two real callers, not a
  * defensive habit.
  */
-public class SeenHubIds(private val capacity: Int = 500) {
+public class SeenHubIds(
+    private val capacity: Int = 500,
+) {
     private val seen = LinkedHashSet<String>()
 
     /** Returns true the first time an id is seen, false on every repeat. */
