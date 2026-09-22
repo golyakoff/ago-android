@@ -11,9 +11,12 @@ import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.realtime.OperatorHubConnection
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -71,6 +74,33 @@ class SignInViewModelTest {
             advanceUntilIdle()
 
             assertEquals(SignInUiState.SignedIn(shop.siteId), viewModel.state.value)
+        }
+
+    @Test
+    fun `landing signed in also attempts to connect the hub - a real device found this missing`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted))
+
+            // Collected from the start, not read once at the end: `hubConnectionState` is a
+            // `StateFlow`, and a late collector would only ever see wherever it landed - the whole
+            // point here is to prove `Connecting` was ever reached at all, on the way to a
+            // `Disconnected` this invalid host inevitably ends at.
+            val observedStates = mutableListOf<OperatorHubConnectionState>()
+            val collector = launch { viewModel.hubConnectionState.toList(observedStates) }
+
+            advanceUntilIdle()
+            collector.cancel()
+
+            assertEquals(SignInUiState.SignedIn(shop.siteId), viewModel.state.value)
+            // `OperatorHubConnectionLifecycle`'s own foreground-only binding left a real gap a unit
+            // test cannot see (it needs a real Custom Tab round trip on a real device) - this
+            // assertion is the one thing a unit test *can* prove: that reaching `SignedIn` genuinely
+            // attempted a connection, rather than only rendering a screen that assumes one exists.
+            assertTrue(
+                "signing in must attempt to connect the hub, not only route to the signed-in screen",
+                observedStates.contains(OperatorHubConnectionState.Connecting),
+            )
         }
 
     @Test
@@ -207,9 +237,12 @@ class SignInViewModelTest {
             session = session,
             router = PostSignInRouter(api, activeSite),
             activeSite = activeSite,
-            // `26-13`: this view model's own `hubConnectionState` is a plain relay onto this
-            // connection's `state` - nothing here ever calls `connect()`, so a real instance over a
-            // fake, unreachable host is simpler than a second port just for this constructor slot.
+            // `26-13`/`26-17`'s own connect-on-sign-in fix: `routeNow()` now really does call
+            // `connect()` on this instance. A real `OperatorHubConnection` over a deliberately
+            // unreachable host (`example.invalid`, RFC 2606) is still simpler than a second port just
+            // for this constructor slot - the connect attempt fails fast and is swallowed
+            // (`routeNow`'s own `runCatching`), landing on `Disconnected` exactly as a real device's
+            // own failed attempt would.
             hubConnection =
                 OperatorHubConnection(
                     hubUrl = "https://example.invalid/hubs/operator",
@@ -270,7 +303,8 @@ class SignInViewModelTest {
         }
     }
 
-    /** Never asked for a token in this suite - nothing here calls `OperatorHubConnection.connect()`. */
+    /** `connect()` is now really called (see `viewModelWith`'s own comment) but never reaches this
+     * far - `hub.start()` fails resolving `example.invalid` before ever asking for a token. */
     private class FakeAccessTokenProvider : AccessTokenProvider {
         override suspend fun currentAccessToken(): String? = null
 

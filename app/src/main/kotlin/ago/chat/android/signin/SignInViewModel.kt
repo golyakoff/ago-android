@@ -42,7 +42,7 @@ public class SignInViewModel
         private val session: SignInSession,
         private val router: PostSignInRouter,
         private val activeSite: ActiveSiteSelection,
-        hubConnection: OperatorHubConnection,
+        private val hubConnection: OperatorHubConnection,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<SignInUiState>(SignInUiState.Starting)
@@ -51,9 +51,11 @@ public class SignInViewModel
         /**
          * `26-13`'s own "a minimal connection-state surface" — a plain relay onto the app's one
          * `OperatorHubConnection.state`, threaded down to [SignedInScreen]'s debug row
-         * (`HubConnectionDebugRow`). This view model neither connects nor disconnects it —
-         * `OperatorHubConnectionLifecycle` does that, tied to the process foreground rather than to
-         * whichever screen happens to be visible.
+         * (`HubConnectionDebugRow`). Disconnecting stays `OperatorHubConnectionLifecycle`'s own job,
+         * tied to the process foreground rather than to whichever screen happens to be visible — this
+         * class's own [routeNow] additionally *connects* it the moment sign-in resolves to
+         * `Operator`, a real-device gap `OperatorHubConnectionLifecycle`'s own foreground-only wiring
+         * left open (see that function's doc comment).
          */
         public val hubConnectionState: StateFlow<OperatorHubConnectionState> = hubConnection.state
 
@@ -139,9 +141,31 @@ public class SignInViewModel
             }
         }
 
+        /**
+         * A real device found what no unit test could: `OperatorHubConnectionLifecycle`'s own
+         * process-foreground binding assumes finishing the Custom Tab OAuth round trip produces a
+         * fresh `ProcessLifecycleOwner.onStart` - the natural place `connect()` would otherwise fire
+         * from. On at least one real device it does not happen reliably, so an operator who just
+         * signed in landed on the conversation list with the hub never connected at all, surviving a
+         * retry and a sign-out/sign-in cycle identically, since neither produces that transition
+         * either. [OperatorHubConnection.connect] is documented idempotent (a no-op once already
+         * connecting/connected), so calling it here as well - the moment routing actually resolves to
+         * [SignInDestination.Operator] - costs nothing on the path that already worked and fixes the
+         * path that did not. Launched rather than awaited, on its own `viewModelScope` child, and
+         * with its own `catch`: a transient network failure here must never fail *sign-in* itself, or
+         * surface as an uncaught exception on a fire-and-forget best-effort attempt
+         * (`hub.start().await()` can throw). The hub's own `state` flow, already surfaced to the UI,
+         * is where a failed connect belongs - `OperatorHubConnectionLifecycle`'s own foreground-driven
+         * retry, or an operator backgrounding and reopening the app, is what tries again.
+         */
         private suspend fun routeNow(): SignInUiState =
             when (val destination = withContext(ioDispatcher) { router.route() }) {
-                is SignInDestination.Operator -> SignInUiState.SignedIn(destination.activeSiteId)
+                is SignInDestination.Operator -> {
+                    viewModelScope.launch(ioDispatcher) {
+                        runCatching { hubConnection.connect() }
+                    }
+                    SignInUiState.SignedIn(destination.activeSiteId)
+                }
                 is SignInDestination.ChooseSite -> SignInUiState.ChooseSite(destination.tenancies)
                 SignInDestination.PlatformOwnerTerminal -> SignInUiState.PlatformOwnerTerminal
                 SignInDestination.Registration -> SignInUiState.Registration
