@@ -8,8 +8,13 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -190,6 +195,35 @@ private fun AppShellContent(
     val currentRoute = backStackEntry?.destination?.route
 
     Scaffold(
+        // `26-28`: **this `Scaffold` owns the bottom edge and the horizontal edges; every destination
+        // inside its `NavHost` owns the top edge.** Stated here because it is the only place that can
+        // see both halves, and because the next screen added to that graph inherits the answer
+        // silently.
+        //
+        // What went wrong without it. `MainActivity` calls `enableEdgeToEdge()`, so the window's
+        // insets have to be applied exactly once by somebody. Material 3's `Scaffold` *reports* insets
+        // through its `PaddingValues` but never *consumes* them, and every destination below draws its
+        // own `Scaffold` + `TopAppBar` — and a `TopAppBar` applies `TopAppBarDefaults.windowInsets`
+        // (system bars, top) of its own. So the status-bar height was applied twice: once as this
+        // `Scaffold`'s content padding, once again inside each destination's own bar. The result was a
+        // full status-bar height of blank surface above every screen in the shell — Диалоги, the
+        // thread, Ещё, Настройки and the three placeholders alike.
+        //
+        // Two halves to the fix, and they are not the same mechanism:
+        //
+        // - **Top: not reported at all.** Dropping `WindowInsetsSides.Top` here makes the top padding
+        //   zero, so each destination's own `TopAppBar` draws *into* the status bar with its own
+        //   container colour behind it — which is what an edge-to-edge app is for and what the mockup
+        //   shows. Padding the `NavHost` down instead would leave a band of this `Scaffold`'s
+        //   background above every app bar, i.e. the same blank strip in a different colour.
+        // - **Bottom and sides: reported, then consumed.** This `Scaffold` really does own the bottom
+        //   edge — it is the one with the `NavigationBar` — so it keeps reporting that padding, and
+        //   `consumeWindowInsets` below tells everything inside the `NavHost` that it has already been
+        //   applied. Without that second call the *navigation*-bar inset double-counts exactly the way
+        //   the status bar did, because a destination's own `Scaffold` would still add its own bottom
+        //   inset on top of the space this one already reserved.
+        contentWindowInsets =
+            WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
         bottomBar = {
             NavigationBar {
                 // `26-23`: the mockup's `.bnav div.on .ind{background:var(--brand-tint)}` with
@@ -239,7 +273,11 @@ private fun AppShellContent(
         NavHost(
             navController = navController,
             startDestination = BottomDestination.Conversations.route(),
-            modifier = Modifier.padding(padding),
+            // `26-28`: `padding` then `consumeWindowInsets(padding)` — see this `Scaffold`'s own
+            // `contentWindowInsets` comment above for which edge each call is answering. The order
+            // matters only in that both are needed: `padding` reserves the space, `consumeWindowInsets`
+            // is what stops a destination's own `Scaffold` from reserving it a second time.
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
             composable(BottomDestination.Bookings.route()) { BookingsPlaceholderScreen() }
