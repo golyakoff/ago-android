@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
@@ -9,6 +10,7 @@ import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
+import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.identity.KtorIdentityApi
@@ -86,6 +88,7 @@ public object AppModule {
             redirectUri = BuildConfig.AGO_OIDC_REDIRECT_URI,
             apiBaseUrl = BuildConfig.AGO_API_BASE_URL,
             consoleUrl = BuildConfig.AGO_CONSOLE_URL,
+            calendarApiBaseUrl = BuildConfig.AGO_CALENDAR_API_BASE_URL,
         )
 
     @Provides
@@ -176,6 +179,19 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversationsApi = KtorConversationsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is
+     * `null` — because the "not configured" case is answered *inside* the adapter
+     * ([KtorBookingsApi]'s own doc comment), the same shape `ago-console`'s `requireBaseUrl()` already
+     * establishes: a nullable base URL is a fact the adapter's first line checks, not a reason for this
+     * module to hand out a nullable [BookingsApi] Hilt would have to be taught to inject.
+     */
+    @Provides
+    public fun provideBookingsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): BookingsApi = KtorBookingsApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-14`: Room's first database in this app — one `@Singleton` file for the process's whole life,

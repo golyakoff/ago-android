@@ -61,6 +61,21 @@ fun agoProperty(
     return "\"" + value + "\""
 }
 
+/**
+ * `26-48`: [agoProperty]'s own shape, except a caller with nothing configured gets a Kotlin `null`
+ * rather than a default literal. Every other `BuildConfig` field above always has a real deployment to
+ * fall back to; `AGO_CALENDAR_API_BASE_URL` does not, because AGO Calendar is a second product a given
+ * deployment may genuinely not run yet — `ago-console`'s own `config.calendarApiBaseUrl` is `string |
+ * null` for the identical reason (`calendarApi.ts`'s own doc comment). A build that wants the value set
+ * passes `-PagoCalendarApiBaseUrl=<url>` (or the same key in `local.properties`, read through Gradle's
+ * `-P`/`gradle.properties` mechanism like every other `agoProperty` above) — nothing here invents a
+ * hostname when it is absent.
+ */
+fun agoOptionalProperty(name: String): String {
+    val value = project.findProperty(name) as String?
+    return if (value != null) "\"$value\"" else "null"
+}
+
 // `25-215`: the four `agoSigning*` values have two possible sources, never both read the same way.
 // A developer machine keeps them in `local.properties` — gitignored, per-machine, the same file
 // Android Studio itself writes into — because a store/key password has no business as a shell
@@ -150,6 +165,10 @@ android {
         buildConfigField("String", "AGO_OIDC_CLIENT_ID", agoProperty("agoOidcClientId", "ago-android"))
         buildConfigField("String", "AGO_OIDC_REDIRECT_URI", agoProperty("agoOidcRedirectUri", "ago-android://callback"))
         buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.reserve-me.ru"))
+
+        // `26-48`: a *second*, nullable deployment target — see [agoOptionalProperty]'s own doc comment
+        // for why this one field breaks the "always a default" pattern every field above it follows.
+        buildConfigField("String", "AGO_CALENDAR_API_BASE_URL", agoOptionalProperty("agoCalendarApiBaseUrl"))
     }
 
     // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP

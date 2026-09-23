@@ -147,10 +147,8 @@
     <string name="nav_analytics">Аналитика</string>
     <string name="nav_more">Ещё</string>
 
-    <!-- `26-16`'s own Out of scope: these two destinations are still empty-but-honest; their real
-         content is a later wave. Команда's own placeholder is gone - `26-54` replaced it with the real
-         team room. -->
-    <string name="bookings_placeholder_body">Экран записей появится в одной из следующих версий.</string>
+    <!-- `26-16`'s own Out of scope: Аналитика is still empty-but-honest; its real content is a later
+         wave. Записи (`26-48`) and Команда (`26-54`) both stopped being one of these. -->
     <string name="analytics_placeholder_body">Аналитика появится в одной из следующих версий.</string>
 
     <!--
@@ -167,6 +165,28 @@
     <string name="team_chat_admin_badge">Владелец</string>
     <string name="team_chat_unnamed_author">Коллега</string>
     <string name="team_chat_removed_placeholder">Сообщение удалено</string>
+
+    <!--
+        `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Утверждены» and
+        «Клиенты» too, but only this segment has a screen behind it (this file's own
+        `BookingsScreen`/`bookings_tab_pending` doc comment - the identical "a row exists only for a
+        screen that exists" rule `more_settings_row` above already follows).
+    -->
+    <string name="bookings_tab_pending">Ожидают</string>
+    <string name="bookings_queue_empty">Ничего не ожидает.</string>
+    <!-- `ago-console`'s own `calendarNotConfigured`, verbatim - the identical fact about the identical
+         backend, worded once rather than twice. -->
+    <string name="bookings_not_configured">Бэкенд календаря пока не настроен для этого окружения, поэтому этот экран здесь недоступен.</string>
+    <string name="bookings_load_failed_transport">Не удалось связаться с AGO Calendar. Проверьте подключение и попробуйте ещё раз.</string>
+    <string name="bookings_load_failed_unexpected">Не удалось загрузить очередь записей. Попробуйте ещё раз.</string>
+    <!-- The mockup's own wording, verbatim (`docs/backlog/26-48-*.md`'s own Scope item 4). -->
+    <string name="bookings_confirms_in_hours">Подтвердится через %d ч</string>
+    <string name="bookings_deadline_unknown">срок неизвестен</string>
+    <string name="bookings_duration_minutes">%d мин</string>
+    <string name="bookings_card_service_label">Услуга</string>
+    <string name="bookings_card_when_label">Когда</string>
+    <string name="bookings_card_worker_label">Мастер</string>
+    <string name="bookings_card_calendar_label">Календарь</string>
 
     <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
          at least one real row (`navigation.md` §"The top-level shape"). -->
