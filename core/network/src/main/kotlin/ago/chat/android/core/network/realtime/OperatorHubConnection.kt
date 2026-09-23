@@ -123,6 +123,11 @@ public class OperatorHubConnection(
     /** [OperatorHubEvents.assignments]. */
     public override val assignments: SharedFlow<ConversationAssignedDto> = mutableAssignments.asSharedFlow()
 
+    private val mutableMessageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
+
+    /** [OperatorHubEvents.messageDelivered]. */
+    public override val messageDelivered: SharedFlow<MessageDeliveredDto> = mutableMessageDelivered.asSharedFlow()
+
     @Volatile
     private var connection: HubConnection? = null
 
@@ -327,6 +332,13 @@ public class OperatorHubConnection(
             { dto: ConversationAssignedDto -> mutableAssignments.tryEmit(dto) },
             ConversationAssignedDto::class.java,
         )
+        // `26-42`: the identical "no dedup/resume record needed" shape `CONVERSATION_ASSIGNED_METHOD`
+        // above already is — see [OperatorHubEvents.messageDelivered]'s own doc comment.
+        hub.on(
+            MESSAGE_DELIVERED_METHOD,
+            { dto: MessageDeliveredDto -> mutableMessageDelivered.tryEmit(dto) },
+            MessageDeliveredDto::class.java,
+        )
         hub.onClosed { onConnectionClosed(hub) }
 
         connection = hub
@@ -412,5 +424,6 @@ public class OperatorHubConnection(
         const val SEND_MESSAGE_METHOD = "SendMessageAsync"
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
         const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"
+        const val MESSAGE_DELIVERED_METHOD = "MessageDelivered"
     }
 }

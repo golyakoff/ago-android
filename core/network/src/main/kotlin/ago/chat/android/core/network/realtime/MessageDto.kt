@@ -35,6 +35,16 @@ package ago.chat.android.core.network.realtime
  * wire value (`""` for the two strings, `null` for the two nullable ids) for the identical reason
  * [authorKind] already does: `26-13`'s own fixtures, none of which set any of these, keep compiling
  * unchanged.
+ *
+ * `26-42`: [deliveredAt] joins the same additive way — `Ago.Chat.Contracts.MessageDto.DeliveredAt`,
+ * already on the wire (that DTO's own remarks: "additive, appended last"), and the client-side field
+ * this whole item exists to add — this type never declared it before, which is why the second delivery
+ * tick had nothing to read. `null` until `Message.DeliveredAt` is set server-side, which only ever
+ * happens for an operator's own message (`Ago.Chat.Domain.Message.DeliveredAt`'s own remarks: it
+ * refuses a non-operator message outright) — a visitor's or system message's [deliveredAt] is `null`
+ * forever, never a value to render a tick from. Also arrives live, on the message already on screen,
+ * via the `MessageDelivered` push ([MessageDeliveredDto], [OperatorHubEvents.messageDelivered]) —
+ * [ThreadViewModel] is what merges that push into the entry already held here, not a second fetch.
  */
 public data class MessageDto(
     val id: String,
@@ -45,6 +55,7 @@ public data class MessageDto(
     val createdAt: String = "",
     val attachmentId: String? = null,
     val clientMessageId: String? = null,
+    val deliveredAt: String? = null,
 )
 
 /**

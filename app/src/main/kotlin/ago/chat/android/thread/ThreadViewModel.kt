@@ -1,6 +1,7 @@
 package ago.chat.android.thread
 
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
@@ -77,6 +78,7 @@ public class ThreadViewModel
         private var failedSend: FailedSend? = null
         private var draftWriteJob: Job? = null
         private var messagesJob: Job? = null
+        private var deliveryJob: Job? = null
 
         /** The conversation this instance is currently open on - `null` before the first [open].
          * `ago-console`'s own `joinedConversationId` ref, restated: the guard that stops a
@@ -116,6 +118,15 @@ public class ThreadViewModel
             messagesJob =
                 viewModelScope.launch {
                     hubEvents.messages.collect { message -> mergeAndRender(listOf(message)) }
+                }
+
+            // `26-42`: the live half of the second delivery tick - unscoped on the wire
+            // ([OperatorHubEvents.messageDelivered]'s own doc comment), so [applyDelivery] is what
+            // filters to the conversation actually open before touching [byId].
+            deliveryJob?.cancel()
+            deliveryJob =
+                viewModelScope.launch {
+                    hubEvents.messageDelivered.collect { delivered -> applyDelivery(delivered) }
                 }
 
             viewModelScope.launch {
@@ -165,6 +176,8 @@ public class ThreadViewModel
             flushDraft()
             messagesJob?.cancel()
             messagesJob = null
+            deliveryJob?.cancel()
+            deliveryJob = null
             hubEvents.leaveConversation()
             openConversationId = null
         }
@@ -310,6 +323,25 @@ public class ThreadViewModel
         }
 
         /**
+         * `26-42`: one `MessageDelivered` push, applied to the matching entry already in [byId] - never
+         * a second fetch, and never a message this class does not already hold (a push for a message
+         * this instance has not seen - a different conversation's fan-out, or a race with the initial
+         * join page - is silently ignored rather than synthesising a bubble from three fields).
+         *
+         * **Idempotent by construction, not by accident.** [existing]'s own [MessageDto.deliveredAt]
+         * being non-null already is the one guard this needs: at-least-once delivery is assumed
+         * everywhere (`CLAUDE.md` rule 5), so a repeated push for a message already marked delivered
+         * returns before [mergeAndRender] runs at all - never a third tick (there is no third state to
+         * reach), and never a redundant [state] emission for a change that already happened.
+         */
+        private fun applyDelivery(delivered: MessageDeliveredDto) {
+            if (openConversationId != delivered.conversationId) return
+            val existing = byId[delivered.messageId] ?: return
+            if (existing.deliveredAt != null) return
+            mergeAndRender(listOf(existing.copy(deliveredAt = delivered.deliveredAt)))
+        }
+
+        /**
          * A backstop, not the primary path - [close] (called from [ThreadRoute]'s own `onBack`, the
          * real "the operator left this thread" signal) is what ordinarily releases the hub's
          * subscription. This only matters for a teardown that skips `onBack` entirely - the Activity
@@ -320,6 +352,7 @@ public class ThreadViewModel
          */
         override fun onCleared() {
             messagesJob?.cancel()
+            deliveryJob?.cancel()
             hubEvents.leaveConversation()
         }
 

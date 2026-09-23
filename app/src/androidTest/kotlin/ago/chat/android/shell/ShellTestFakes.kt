@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -61,6 +62,7 @@ internal class FakeListHubEvents : OperatorHubEvents {
     override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
     override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
     override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+    override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
 
     override suspend fun joinConversation(conversationId: String): HistoryPage = error("not used by the list screen")
 
@@ -91,6 +93,7 @@ internal class FakeThreadHubEvents(
     override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
     override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
     override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+    override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
 
     var leaveCalls: Int = 0
         private set

@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -541,6 +542,7 @@ class ConversationListViewModelTest {
         override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+        override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
 
         // `26-15`: this screen never joins/sends/pages history - it only ever reads [assignments]/
         // [allMessages] above - so these four exist purely to satisfy the interface, the same "not this
