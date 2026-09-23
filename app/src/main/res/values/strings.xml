@@ -12,8 +12,14 @@
         nothing under the button (`navigation.md`: an operator holding the app has no reason to think
         about the web console at all, and the debugging need that line served is served better by the
         build variant's own name in Settings → О приложении, which is `26-17`'s).
+
+        `26-45`: `sign_in_wordmark` is deliberately its own string, not `app_name`. `app_name` is the
+        brand name *and* the launcher label — anyone renaming one must not silently reword the other —
+        while this is a shorter display string the mockup draws at wordmark size. The two happen to
+        share a prefix; that is the whole reason they must stay separate resources.
     -->
-    <string name="sign_in_tagline">Отвечайте посетителям, где бы вы ни были</string>
+    <string name="sign_in_wordmark">AGO</string>
+    <string name="sign_in_tagline">Чат и записи для вашего сайта</string>
     <string name="sign_in_action">Войти</string>
     <string name="sign_in_working">Выполняется вход…</string>
 

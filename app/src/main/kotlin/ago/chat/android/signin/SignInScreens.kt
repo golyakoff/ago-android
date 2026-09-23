@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -59,7 +61,11 @@ public fun SignInHost(
             val content = Modifier.fillMaxSize().padding(padding).padding(24.dp)
             when (state) {
                 SignInUiState.Starting, SignInUiState.Working -> WorkingScreen(content)
-                SignInUiState.SignedOut -> LaunchScreen(content, onSignIn)
+                // `26-45`: the mockup's own gutter is 28dp, not the 24dp every other arm above shares -
+                // this replaces `content` only for this one branch rather than widening it for all six
+                // arms that are still centred messages, not the mockup's left-aligned block.
+                SignInUiState.SignedOut ->
+                    LaunchScreen(Modifier.fillMaxSize().padding(padding).padding(horizontal = 28.dp), onSignIn)
                 is SignInUiState.SignInFailed -> SignInFailedScreen(content, state.detail, onSignIn)
                 is SignInUiState.ChooseSite -> SitePickerScreen(content, state.tenancies, onChooseSite, onSignOut)
                 is SignInUiState.Unavailable -> UnavailableScreen(content, state.failure, onRetry, onSignOut)
@@ -128,15 +134,39 @@ private fun LaunchScreen(
     modifier: Modifier,
     onSignIn: () -> Unit,
 ) {
-    Centred(modifier) {
-        Text(text = stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
+    // `26-45`: the one arm in this file that is not a short centred message, so it does not reach for
+    // `Centred` - the mockup's `.signin` is a left-aligned block, vertically centred in its own gutter
+    // (`padding:0 28px`), which `Centred`'s `horizontalAlignment = Alignment.CenterHorizontally` cannot
+    // express without either widening that shared helper for one caller or adding a flag it would carry
+    // forever. A plain `Column` here says exactly what this screen does and nothing more.
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start,
+    ) {
+        // `sign_in_wordmark` ("AGO") is a display string, not `app_name` ("AGO Chat", the launcher
+        // label) - see that string's own doc comment in `strings.xml` for why the two must never merge.
+        Text(
+            text = stringResource(R.string.sign_in_wordmark),
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Text(
             text = stringResource(R.string.sign_in_tagline),
             style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp, bottom = 32.dp),
         )
-        Button(onClick = onSignIn) {
+        Button(
+            onClick = onSignIn,
+            modifier = Modifier.fillMaxWidth().height(38.dp),
+            // The mockup's `.btn{border-radius:19px}` at `height:38px` is a stadium, not a Material 3
+            // shape-scale radius - `AgoShapes` tops out at 16dp (`Shape.kt`) and `AgoPillShape` exists
+            // but is deliberately scoped to badges only ("a pill-shaped button at this size reads as a
+            // tag, not a control" - `Shape.kt`'s own comment on it), so reusing it here would be the
+            // exact drift that restriction exists to prevent. `percent = 50` is the same construction,
+            // applied where a full-width, fixed-height button actually calls for it.
+            shape = RoundedCornerShape(percent = 50),
+        ) {
             Text(text = stringResource(R.string.sign_in_action))
         }
     }
