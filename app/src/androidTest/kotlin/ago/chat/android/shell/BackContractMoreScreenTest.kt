@@ -131,10 +131,14 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Ещё").performClick()
 
         composeTestRule.onNodeWithText("Настройки").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Автоматизация").assertExists()
+        // `SectionLabel` uppercases its own text at render time (its own doc comment: "Uppercase is
+        // applied here, not in strings.xml") - these two are section headings, so they need
+        // `ignoreCase = true` against the resource's own sentence-case source string. The four row
+        // labels below are plain `Text`, not `SectionLabel`, and match verbatim.
+        composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Готовые ответы").assertExists()
         composeTestRule.onNodeWithText("Автоответ вне смены").assertExists()
-        composeTestRule.onNodeWithText("Администрирование").assertExists()
+        composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()
         composeTestRule.onNodeWithText("Тариф и оплата").assertExists()
     }
