@@ -31,6 +31,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -50,9 +51,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -187,13 +191,24 @@ internal fun ConversationListScreen(
             },
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                // `26-39`: `.seg{margin:4px 16px 12px}` - an asymmetric margin, not the uniform
+                // `16.dp` this used to carry on all four sides; named beside the CSS it comes from
+                // the same way this file's other row metrics already are (below, `26-23`'s own block).
+                SingleChoiceSegmentedButtonRow(
+                    modifier =
+                        Modifier.fillMaxWidth().padding(
+                            start = SegmentedRowHorizontalPadding,
+                            end = SegmentedRowHorizontalPadding,
+                            top = SegmentedRowTopPadding,
+                            bottom = SegmentedRowBottomPadding,
+                        ),
+                ) {
                     ConversationListTab.entries.forEachIndexed { index, tab ->
                         SegmentedButton(
                             selected = state.selectedTab == tab,
                             onClick = { onTabSelected(tab) },
                             shape = SegmentedButtonDefaults.itemShape(index, ConversationListTab.entries.size),
-                            label = { Text(text = labelFor(tab)) },
+                            label = { Text(text = segmentedTabLabel(tab = tab, count = segmentedCountFor(tab, state))) },
                         )
                     }
                 }
@@ -272,6 +287,69 @@ private fun labelFor(tab: ConversationListTab): String =
     when (tab) {
         ConversationListTab.Mine -> stringResource(R.string.conversation_list_tab_mine)
         ConversationListTab.Waiting -> stringResource(R.string.conversation_list_tab_waiting)
+    }
+
+/**
+ * `26-39`: the mockup's own `<div class="on">Мои <span class="ct">3</span></div>` — a label followed,
+ * in the same run of text, by a differently-styled count. That is inline text with one styled span, not
+ * two independent blocks with a gap between them, which is why this builds one [AnnotatedString] rather
+ * than reaching for a `Row` of two `Text`s the way [ConversationRowIdentityLine] does for its own three
+ * *independent* pieces (name, badge, time) — the first use of [AnnotatedString] in this file, and the
+ * right one, because the mockup itself nests the span inside the label's own text node.
+ *
+ * `count == null` (before [ConversationListUiState.hasData]) renders the bare label with no trailing
+ * span at all — Scope item 2's own rule: no digit is drawn for a tab whose true count is not yet known.
+ */
+@Composable
+private fun segmentedTabLabel(
+    tab: ConversationListTab,
+    count: Int?,
+): AnnotatedString =
+    buildAnnotatedString {
+        append(labelFor(tab))
+        if (count != null) {
+            append(" ")
+            withStyle(segmentedCountStyle()) {
+                append(count.toString())
+            }
+        }
+    }
+
+/**
+ * `.seg .ct{font-size:11.5px; font-weight:700; opacity:.85; font-variant-numeric:tabular-nums}` -
+ * `labelMedium` is this app's 12sp token-backed role, the nearest the scale has to `11.5px`; only the
+ * weight, color and numeric variant are lifted onto it, the same rule [ConversationRowIdentityLine]
+ * already states for `.rname`'s own `14.5px`. The `.85` opacity reads over [LocalContentColor] rather
+ * than a flat token, the same pattern `ThreadScreen`'s `MessageBubble` already uses for its own bubble
+ * timestamp's `opacity:.72` - an alpha over whatever this label's own text color already is, not a
+ * second, independent color decision.
+ */
+@Composable
+private fun segmentedCountStyle() =
+    MaterialTheme.typography.labelMedium
+        .copy(
+            fontWeight = FontWeight.Bold,
+            color = LocalContentColor.current.copy(alpha = SEGMENTED_COUNT_ALPHA),
+            fontFeatureSettings = "tnum",
+        ).toSpanStyle()
+
+/**
+ * `26-39`'s own Scope item 2: the two counts are already in hand as the lengths of the two lists this
+ * screen renders from ([ConversationListUiState.mine]/[ConversationListUiState.waiting]) - nothing
+ * fetched, nothing computed in the view model. `null` before [ConversationListUiState.hasData] is the
+ * "not yet known" case [segmentedTabLabel] renders as no count at all, never an invented `0`.
+ */
+private fun segmentedCountFor(
+    tab: ConversationListTab,
+    state: ConversationListUiState,
+): Int? =
+    if (!state.hasData) {
+        null
+    } else {
+        when (tab) {
+            ConversationListTab.Mine -> state.mine.size
+            ConversationListTab.Waiting -> state.waiting.size
+        }
     }
 
 @Composable
@@ -709,3 +787,12 @@ private val PillLetterSpacing = 0.42.sp
 
 // `.badge{min-width:20px; height:20px}`
 private val BadgeMinSize = 20.dp
+
+// `26-39`: `.seg{margin:4px 16px 12px}` - the segmented control's own asymmetric margin.
+private val SegmentedRowTopPadding = 4.dp
+private val SegmentedRowHorizontalPadding = 16.dp
+private val SegmentedRowBottomPadding = 12.dp
+
+// `.seg .ct{opacity:.85}` - see `segmentedCountStyle`'s own doc comment for why this is an alpha over
+// `LocalContentColor` rather than a flat color token.
+private const val SEGMENTED_COUNT_ALPHA = 0.85f
