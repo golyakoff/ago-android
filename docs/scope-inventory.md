@@ -94,12 +94,22 @@ honest answer is what these rows are doing.
 
 | Route | Gate | Disposition | Notes |
 |---|---|---|---|
-| `/analytics/me` | none (any real operator) | **as-is** | Ungated on purpose — a grant here would be something a tenant could withhold from its own staff. It is also the one analytics screen that genuinely belongs on a phone, and it is in Phase 1 for that reason. |
-| `/analytics/site` | `site:configure` | **redesign** | A date-range form plus several tables of three numbers. On Android: a date-range chip row, then stacked stat cards, then one horizontally-scrollable table per breakdown. |
-| `/analytics/conversion` | `site:configure` | **redesign** | Same shape as above. |
-| `/analytics/tags` | `site:configure` | **redesign** | Same shape as above. |
-| `/analytics/booking-flow` | `site:configure` | **redesign** | Same shape as above. |
-| `/calendar/phone-reveals` | `calendar:configure` | **as-is** | The reveal audit trail — one row per reveal, never a per-operator count, which is a deliberate restraint rather than an omission. Lives under Analytics in the nav while keeping its `/calendar/` address, as in the console. |
+All six port. `26-58` (`ago-root`) settled the question this table used to leave open — §2's exclusion
+is for the five *platform-owner* screens, and these are the **tenant's own** numbers about the
+tenant's own business. The four `site:configure` reports and the reveal trail reach the phone as
+**five destinations behind one overflow (`⋮`) off Аналитика**, each its own item below, exactly as the
+approved mockup's own graph draws them (`MyNumbers -- "⋮ · site:configure" --> SiteStats` and four
+siblings). `26-70` builds the overflow itself along with its first destination, because an overflow
+with nothing behind it is the dead-menu shape `26-40` already refused for the thread's own `⋮`.
+
+| Route | Gate | Disposition | Item | Notes |
+|---|---|---|---|---|
+| `/analytics/me` | none (any real operator) | **as-is** | `26-57` | Ungated on purpose — a grant here would be something a tenant could withhold from its own staff. It is also the one analytics screen that genuinely belongs on a phone, and it is in Phase 1 for that reason. |
+| `/analytics/site` | `site:configure` | **redesign** | `26-70` (with the overflow) | A date-range form plus five tables. On Android: a date-range control, the `overall` bucket as stat cards with its previous-window comparison, then one horizontally-scrollable table each for channel, operator, referrer and campaign. The operator × load-bucket cross-tab is not ported. |
+| `/analytics/conversion` | `site:configure` | **redesign** | `26-71` | Five counts including `unsetCount` and a nullable rate as stat cards, `byOperator` as one table, the three client-side date presets as a chip row. The "not a verified sale" caveat stays a visible callout, never a footnote. |
+| `/analytics/tags` | `site:configure` | **redesign** | `26-72` | Coverage (tagged of total, plus percentage) as stat cards above `byTag` as one table, and the "rows do not sum to the total" note wherever those rows render. Same three presets. |
+| `/analytics/booking-flow` | `site:configure` | **redesign** | `26-73` | **Not the same shape as the three above**: the response has no dimension to break down by, so it is two stat cards and the caveat — no table, and no presets, because the console's own screen has none. Its invalid-range code is `ModuleFlow.InvalidRange`, not `Analytics.InvalidRange`. |
+| `/calendar/phone-reveals` | `calendar:configure` | **as-is** | `26-74` | The reveal audit trail — one row per reveal, never a per-operator count, which is a deliberate restraint rather than an omission. Lives under Analytics in the nav while keeping its `/calendar/` address, as in the console, and its own `calendar:configure` gate — so an operator can hold this overflow entry and none of the other four. Keyset-paged, on the calendar API `26-48` introduced. |
 
 ## 6. Команда — team (2 routes)
 
