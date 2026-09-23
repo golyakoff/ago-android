@@ -663,17 +663,6 @@ private fun ComposerField(
         // `align-items:center`, which [Alignment.CenterStart] below gives for free without an invented
         // vertical padding of its own.
         Box(modifier = Modifier.padding(horizontal = ComposerFieldHorizontalPadding), contentAlignment = Alignment.CenterStart) {
-            if (draft.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.thread_composer_placeholder),
-                    style = textStyle,
-                    // `.field{color:var(--ink-faint)}` for the mockup's own placeholder text - this app's
-                    // `ColorScheme` has no role wired to `--ink-faint` (`Theme.kt`'s own DERIVED/CARRIED
-                    // OVER accounting), so `onSurfaceVariant` (`--ink-soft`, one step darker) is the
-                    // nearest already-public role rather than a new one added for this single call site.
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             BasicTextField(
                 value = draft,
                 onValueChange = onDraftChanged,
@@ -681,6 +670,27 @@ private fun ComposerField(
                 textStyle = textStyle,
                 maxLines = COMPOSER_MAX_LINES,
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                // The placeholder as `BasicTextField`'s own `decorationBox`, not a sibling `Text` beside
+                // it: a sibling draws to the same pixels but leaves two unrelated semantics nodes behind,
+                // which is exactly what broke `BackContractDialogsTabTest.clause6` on real CI - `onNodeWithText`
+                // found the plain placeholder node instead of the one carrying `RequestFocus`/`SetText`.
+                // `decorationBox` renders inside the field's own node, so the placeholder and the editable
+                // text share the one semantics identity a screen reader and a Compose test both expect.
+                decorationBox = { innerTextField ->
+                    if (draft.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.thread_composer_placeholder),
+                            style = textStyle,
+                            // `.field{color:var(--ink-faint)}` for the mockup's own placeholder text -
+                            // this app's `ColorScheme` has no role wired to `--ink-faint` (`Theme.kt`'s
+                            // own DERIVED/CARRIED OVER accounting), so `onSurfaceVariant` (`--ink-soft`,
+                            // one step darker) is the nearest already-public role rather than a new one
+                            // added for this single call site.
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    innerTextField()
+                },
             )
         }
     }
