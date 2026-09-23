@@ -6,6 +6,13 @@ import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -187,5 +194,90 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithContentDescription("Назад").performClick()
 
         assertEquals(1, backCalls)
+    }
+
+    /**
+     * `26-66`: both choice groups are `selectable(role = Role.RadioButton)` rows now, not bare
+     * `selectable` nodes — without the role the merged node carries a selected state and nothing
+     * telling a screen reader what kind of control it is.
+     */
+    @Test
+    fun eachThemeRowIsARadioButtonWithTheRightSelectionState() {
+        composeTestRule.setContent {
+            SettingsScreen(
+                themeMode = ThemeMode.Dark,
+                onThemeModeSelected = {},
+                tenancies = TenancyListing.Known(emptyList()),
+                currentSiteId = null,
+                switching = false,
+                onSwitchSite = {},
+                onSignOut = {},
+                onBack = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Системная").assert(hasRadioButtonRole).assertIsNotSelected()
+        composeTestRule.onNodeWithText("Светлая").assert(hasRadioButtonRole).assertIsNotSelected()
+        composeTestRule.onNodeWithText("Тёмная").assert(hasRadioButtonRole).assertIsSelected()
+    }
+
+    /**
+     * The site group, same shape: role, selection, and — while a switch is in flight — the disabled
+     * announcement `26-66` says should fall out of `selectable(enabled = …)` once the role is set.
+     */
+    @Test
+    fun eachSiteRowIsARadioButtonWithTheRightSelectionAndDisabledState() {
+        composeTestRule.setContent {
+            SettingsScreen(
+                themeMode = ThemeMode.System,
+                onThemeModeSelected = {},
+                tenancies = TenancyListing.Known(listOf(siteA, siteB)),
+                currentSiteId = siteA.siteId,
+                switching = true,
+                onSwitchSite = {},
+                onSignOut = {},
+                onBack = {},
+            )
+        }
+
+        composeTestRule
+            .onNodeWithText(siteA.siteName)
+            .assert(hasRadioButtonRole)
+            .assertIsSelected()
+            .assertIsNotEnabled()
+        composeTestRule
+            .onNodeWithText(siteB.siteName)
+            .assert(hasRadioButtonRole)
+            .assertIsNotSelected()
+            .assertIsNotEnabled()
+    }
+
+    /**
+     * `26-66` scope item 3: the site's short identifier — eight monospace hex characters meant to be
+     * read with the eyes, per `IdentifierText`'s own doc comment — must not be announced as part of the
+     * row's name. `clearAndSetSemantics {}` on that `Text` is what this asserts: with it excluded, the
+     * id is simply not in the semantics tree to be found by its text.
+     */
+    @Test
+    fun theSiteIdentifierIsNotPartOfTheRowsAnnouncedName() {
+        composeTestRule.setContent {
+            SettingsScreen(
+                themeMode = ThemeMode.System,
+                onThemeModeSelected = {},
+                tenancies = TenancyListing.Known(listOf(siteA, siteB)),
+                currentSiteId = siteA.siteId,
+                switching = false,
+                onSwitchSite = {},
+                onSignOut = {},
+                onBack = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText(siteA.siteId.take(8)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(siteB.siteId.take(8)).assertDoesNotExist()
+    }
+
+    private companion object {
+        val hasRadioButtonRole: SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
     }
 }
