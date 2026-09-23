@@ -47,7 +47,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -488,6 +491,21 @@ private fun MessageList(
  * `max-width` modifier, and `fillMaxWidth(0.76f)` would make every bubble exactly that wide rather
  * than at most.
  *
+ * **The accessible name (`26-65`).** Everything above is visual — side, fill, shape — and none of it
+ * reaches a screen reader; before this, the `Column` below contributed two unlabelled `Text` nodes
+ * (body, then a bare `HH:mm`) with no signal at all of who sent either one. The fix is the identical
+ * shape `26-64` already applies to a conversation-list row: `Modifier.semantics(mergeDescendants =
+ * true) { contentDescription = … }` on the bubble [Surface] itself, with an explicit
+ * [messageBubbleContentDescription] that *overrides* whatever the merge would otherwise concatenate
+ * from the children, rather than adding to it — the same override `ConversationRow`'s own doc comment
+ * relies on, and the reason a visitor's or system bubble reading this description aloud never also
+ * speaks the delivery tick glyph appended to the operator's own `.t` line: that glyph lives only in the
+ * child `Text`'s own text, which this explicit override replaces rather than reads. `isOperator` above
+ * stays a two-way visual split on purpose (`26-23`'s shape is out of scope here); the *spoken* author is
+ * a genuine three-way [MessageAuthorKind], because a system notice folded into "the visitor" would be
+ * announced as if the customer wrote it (`docs/backlog/26-65-*.md`'s own Scope item 2, and `26-42`'s own
+ * Out of scope, which already flagged the third kind as real).
+ *
  * **The delivery tick.** `26-42`: one tick once the server has an operator's message, two once
  * [MessageDto.deliveredAt] is set — this mockup screen's own caption states plainly what the second one
  * means and what it does not: "Порядок — это назначаемый сервером `sequence`, никогда не часы, а
@@ -504,6 +522,7 @@ private fun MessageList(
 @Composable
 private fun MessageBubble(message: MessageDto) {
     val isOperator = message.authorKind == "Operator"
+    val description = messageBubbleContentDescription(message)
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = if (isOperator) Arrangement.End else Arrangement.Start,
@@ -512,7 +531,11 @@ private fun MessageBubble(message: MessageDto) {
             Spacer(modifier = Modifier.weight(BUBBLE_GUTTER_WEIGHT))
         }
         Surface(
-            modifier = Modifier.weight(BUBBLE_MAX_WIDTH_WEIGHT, fill = false),
+            modifier =
+                Modifier
+                    .weight(BUBBLE_MAX_WIDTH_WEIGHT, fill = false)
+                    .testTag(messageBubbleContentTestTag(message.id))
+                    .semantics(mergeDescendants = true) { contentDescription = description },
             color = if (isOperator) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (isOperator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             shape = bubbleShape(isOperator = isOperator),
@@ -534,6 +557,57 @@ private fun MessageBubble(message: MessageDto) {
         }
     }
 }
+
+/**
+ * `26-65`: [MessageDto.authorKind]'s three wire values (`"Operator"` / `"Visitor"` / `"System"`,
+ * `MessageDto.kt`'s own doc comment), named for the *spoken* description below — a genuine three-way
+ * split, unlike [MessageBubble]'s own `isOperator`, which deliberately keeps folding the visitor and
+ * the system together for the *visual* treatment (`26-23`'s shape is out of scope here). An unset or
+ * unrecognised value (`""`, the DTO's own default) falls to [Visitor] — the identical fallback
+ * `isOperator`'s `== "Operator"` comparison already gives visually, kept rather than invented anew.
+ */
+private enum class MessageAuthorKind { Operator, Visitor, System }
+
+private fun messageAuthorKind(authorKind: String): MessageAuthorKind =
+    when (authorKind) {
+        "Operator" -> MessageAuthorKind.Operator
+        "System" -> MessageAuthorKind.System
+        else -> MessageAuthorKind.Visitor
+    }
+
+/**
+ * `26-65`: the bubble's one spoken sentence — author, then body, then time, the order
+ * `docs/backlog/26-65-*.md`'s own Scope item 1 states — assembled with [listOfNotNull] and
+ * [joinToString], the identical shape `ConversationListScreen`'s own `conversationRowContentDescription`
+ * already uses for a row's spoken form. The author words are `ago-console`'s own `Thread.tsx`
+ * `authorLabel` mapping, named the same way on this second surface rather than invented afresh
+ * (`R.string.message_bubble_author_operator`/`_visitor`/`_system` — "Оператор"/"Посетитель"/"Система").
+ * A blank [MessageDto.body] (an attachment-only message, `MessageDto.kt`'s own `attachmentId`) is
+ * dropped from the sentence rather than read as an empty clause, the same "an absent part supplies no
+ * trace" rule the row's own description already follows.
+ *
+ * The time never reads as bare `HH:mm` digits with nothing marking what they are — `message_bubble_time`
+ * ("в %1$s") frames it explicitly as a time-of-day, the same move the row's own elapsed clauses make for
+ * a number that would otherwise be ambiguous out of visual context. [clockTimeOrNull]'s own null case
+ * (an unparseable `createdAt`) drops the time clause entirely rather than speaking a made-up one — no
+ * change to that function's own "never invented, rendered honestly" posture.
+ */
+@Composable
+private fun messageBubbleContentDescription(message: MessageDto): String {
+    val authorClause =
+        when (messageAuthorKind(message.authorKind)) {
+            MessageAuthorKind.Operator -> stringResource(R.string.message_bubble_author_operator)
+            MessageAuthorKind.Visitor -> stringResource(R.string.message_bubble_author_visitor)
+            MessageAuthorKind.System -> stringResource(R.string.message_bubble_author_system)
+        }
+    val timeClause = clockTimeOrNull(message.createdAt)?.let { time -> stringResource(R.string.message_bubble_time, time) }
+    return listOfNotNull(authorClause, message.body.takeIf { it.isNotBlank() }, timeClause).joinToString(separator = ". ")
+}
+
+/** `26-65`: this bubble's own hook for `MessageBubbleSemanticsTest` — a `testTag` keyed by
+ * [MessageDto.id] rather than a query built on the (Russian, wording-sensitive) `contentDescription`
+ * itself, the identical reasoning `CONVERSATION_ROW_CONTENT_TEST_TAG`'s own doc comment gives. */
+internal fun messageBubbleContentTestTag(messageId: String): String = "messageBubbleContent:$messageId"
 
 /** `26-42`: one tick ("✓") — the server has the message — until [deliveredAt] is set, then two
  * ("✓✓") — the visitor's own widget acknowledged it. Never a third state: there is no read receipt in

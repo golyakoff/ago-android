@@ -186,6 +186,23 @@
     <string name="thread_load_older_action">Загрузить более ранние сообщения</string>
 
     <!--
+        `26-65`: a bubble's spoken author name, `MessageDto.authorKind`'s three wire values named for a
+        screen reader rather than compared against the literal string in the UI (`ThreadScreen.kt`'s own
+        `messageAuthorKind`). Matches `ago-console`'s own `Thread.tsx` `authorLabel` wording exactly
+        (`threadAuthorOperator`/`threadAuthorVisitor`/`threadAuthorSystem`, `ago-console/src/i18n/ru.ts`)
+        — the same author, named the same way on a second surface, not a second vocabulary for it
+        (`strings.xml`'s own precedent for the bottom-navigation names a few lines below).
+    -->
+    <string name="message_bubble_author_operator">Оператор</string>
+    <string name="message_bubble_author_visitor">Посетитель</string>
+    <string name="message_bubble_author_system">Система</string>
+    <!--
+        `26-65`: the bubble's spoken time — framed as a time-of-day rather than read as bare `HH:mm`
+        digits with nothing marking what they are, the second half of this item's own Scope item 3.
+    -->
+    <string name="message_bubble_time">в %1$s</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.
