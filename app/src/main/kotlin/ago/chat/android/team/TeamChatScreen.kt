@@ -1,8 +1,9 @@
 package ago.chat.android.team
 
 import ago.chat.android.R
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.TeamMessageDto
-import ago.chat.android.ui.components.HubConnectionDot
+import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,6 +92,11 @@ internal enum class TeamTab {
 @Composable
 public fun TeamRoute(
     canManageOperators: Boolean,
+    hubConnectionState: OperatorHubConnectionState,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
     chatViewModel: TeamChatViewModel = hiltViewModel(),
     peopleContent: @Composable () -> Unit = { PeopleRoute() },
 ) {
@@ -109,6 +115,11 @@ public fun TeamRoute(
         onRetrySend = chatViewModel::retrySend,
         onDismissSendRefusal = chatViewModel::dismissSendRefusal,
         peopleContent = peopleContent,
+        hubConnectionState = hubConnectionState,
+        operatorDisplayName = operatorDisplayName,
+        operatorEmail = operatorEmail,
+        onOpenSettings = onOpenSettings,
+        onSignOut = onSignOut,
     )
 }
 
@@ -121,8 +132,16 @@ public fun TeamRoute(
  *
  * The composer (`TeamComposer`) is Общение's own `bottomBar`, drawn only while that segment is
  * selected — Люди is read-only end to end (`docs/backlog/26-55-*.md`'s own Out of scope), so it has
- * nothing to compose into. [HubConnectionDot] is likewise Общение-only: the hub connection state
- * describes the chat room, not the plain-REST roster read beside it.
+ * nothing to compose into.
+ *
+ * `26-77`: [AccountAvatarAction] is drawn unconditionally, unlike the bare `HubConnectionDot` it
+ * replaces here (which was Общение-only, per this doc comment's own previous wording: "the hub
+ * connection state describes the chat room, not the plain-REST roster read beside it"). Showing the
+ * presence dot on Люди too is a deliberate widening of what it means, settled by this item: it now
+ * reads as *this operator's own* connectivity rather than as a fact scoped to one segment, and
+ * [chatState]'s hub connection genuinely stays live regardless of [selectedTab] (`TeamRoute`'s own doc
+ * comment on why [TeamChatViewModel] is never obtained conditionally), so this is a true fact on both
+ * segments, not a stale one borrowed from the other.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,6 +157,11 @@ internal fun TeamScreen(
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
     peopleContent: @Composable () -> Unit,
+    hubConnectionState: OperatorHubConnectionState = chatState.hubConnectionState,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     val showChat = !canManageOperators || selectedTab == TeamTab.Communication
 
@@ -147,9 +171,14 @@ internal fun TeamScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.nav_team)) },
                     actions = {
-                        if (showChat) {
-                            HubConnectionDot(state = chatState.hubConnectionState, modifier = Modifier.padding(end = 16.dp))
-                        }
+                        AccountAvatarAction(
+                            displayName = operatorDisplayName,
+                            email = operatorEmail,
+                            hubConnectionState = hubConnectionState,
+                            onOpenSettings = onOpenSettings,
+                            onSignOut = onSignOut,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
                     },
                 )
             },

@@ -5,13 +5,12 @@ import ago.chat.android.core.domain.conversations.ElapsedLabel
 import ago.chat.android.core.domain.conversations.elapsedSince
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.ui.components.HubConnectionDot
+import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.shortElapsedText
-import ago.chat.android.ui.icons.AgoIcons
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,12 +29,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -50,9 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -107,6 +99,9 @@ public fun ConversationListRoute(
     hubConnectionState: OperatorHubConnectionState,
     onOpenConversation: (String) -> Unit,
     onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -152,6 +147,9 @@ public fun ConversationListRoute(
             onOpenConversation(conversationId)
         },
         onSignOut = onSignOut,
+        operatorDisplayName = operatorDisplayName,
+        operatorEmail = operatorEmail,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -171,6 +169,9 @@ internal fun ConversationListScreen(
     onDismissClaimError: (String) -> Unit,
     onOpenConversation: (String) -> Unit,
     onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
@@ -183,7 +184,8 @@ internal fun ConversationListScreen(
             // `26-32`: one row of chrome, which is what the mockup draws. This used to be a `Column`
             // of two — the app bar, and under it a full-width row carrying the active site's short
             // code and the words «Соединение: Подключено». Both halves of that second row are gone:
-            // the connection state is now the dot in [actions] (see `HubConnectionDot`), and the site
+            // the connection state now lives in `actions` (`26-77`: inside `AccountAvatarAction`'s own
+            // presence dot, née a bare `HubConnectionDot`), and the site
             // code is not shown at all, because `26-17`'s Settings screen shows and switches the
             // active site properly and this line was the leftover of the days before it did. The
             // author, who reads this screen daily, did not recognise that code as a site id — which is
@@ -192,16 +194,17 @@ internal fun ConversationListScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.conversation_list_title)) },
                     actions = {
-                        // The dot lives in `actions`, not beside the title, on purpose — and the
-                        // thread screen puts it in the same slot for the same reason. A title slot has
-                        // to ellipsise (the thread's title is a visitor identity of unbounded length),
-                        // and a fixed-size indicator inside something that ellipsises is how it ends
-                        // up clipped on the one device nobody tested on.
-                        HubConnectionDot(
-                            state = hubConnectionState,
+                        // `26-77`: the avatar replaces the old dot+kebab pair
+                        // (`docs/backlog/26-77-*.md`'s own Found table) - a Type-A header's rightmost
+                        // element, per that item's own Scope item 1.
+                        AccountAvatarAction(
+                            displayName = operatorDisplayName,
+                            email = operatorEmail,
+                            hubConnectionState = hubConnectionState,
+                            onOpenSettings = onOpenSettings,
+                            onSignOut = onSignOut,
                             modifier = Modifier.padding(end = 4.dp),
                         )
-                        ConversationListOverflowMenu(onSignOut = onSignOut)
                     },
                 )
             },
@@ -256,45 +259,6 @@ internal fun ConversationListScreen(
                         )
                 }
             }
-        }
-    }
-}
-
-/**
- * `26-32`: the mockup's `⋮`, and «Выйти» inside it rather than standing on the app bar as its own
- * text button.
- *
- * Sign-out was the most visually prominent control on the busiest screen in the app, which is the
- * wrong end of the scale for something an operator does once a week and never by accident. The
- * mockup puts an overflow here and nothing else; this menu therefore has exactly one item today, and
- * that is the point — it is the place the *next* screen-level action goes without the app bar growing
- * another button.
- *
- * `expanded` is a plain `remember`, not `rememberSaveable`: an open menu that survives a rotation is
- * not a property anybody wants, and Material 3's own `DropdownMenu` samples do the same.
- */
-@Composable
-private fun ConversationListOverflowMenu(onSignOut: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                imageVector = AgoIcons.MoreVertical,
-                contentDescription = stringResource(R.string.action_more_options),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(text = stringResource(R.string.action_sign_out)) },
-                onClick = {
-                    // Closed before the callback, not after: `onSignOut` tears this whole composition
-                    // down, and a `setExpanded` landing on a composable that no longer exists is the
-                    // ordinary way this shape produces a leak warning.
-                    expanded = false
-                    onSignOut()
-                },
-            )
         }
     }
 }

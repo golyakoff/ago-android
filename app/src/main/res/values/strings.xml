@@ -71,11 +71,10 @@
     <string name="hub_connection_reconnecting">Переподключение…</string>
 
     <string name="action_sign_out">Выйти</string>
-    <!-- `26-32`: the conversation list's overflow (⋮) control. Its own string rather than a reuse of
-         `nav_more` ("Ещё", the bottom bar's fifth destination): the two happen to read the same today
-         and mean entirely different things, and sharing one row is how a later rewording of the
-         destination silently renames a menu button. -->
-    <string name="action_more_options">Ещё</string>
+    <!-- `26-32`'s own `action_more_options` (the conversation list's overflow ⋮ control) retired at
+         `26-77`, along with `ConversationListOverflowMenu` itself - the account menu's own accessible
+         name is `account_menu_open_action` now, shared across every screen rather than one string per
+         screen's own overflow control. -->
     <string name="action_dismiss">Скрыть</string>
     <!--
         `26-23`: the accessible name for a control that now draws a vector glyph instead of a literal
@@ -378,7 +377,36 @@
     <string name="more_section_channels">Каналы</string>
     <string name="more_section_automation">Автоматизация</string>
     <string name="more_section_administration">Администрирование</string>
+    <!-- `26-77`: no longer an Ещё row of its own - Настройки moved into the account menu, and this
+         word is now shared between that menu item ([ago.chat.android.ui.components.AccountAvatarAction])
+         and the Settings screen's own app-bar title ([ago.chat.android.shell.SettingsScreen]), which
+         already read this exact resource before this item existed. Kept under its original name rather
+         than renamed, since renaming a string two other call sites already share for the identical word
+         would be churn with no reader benefit. -->
     <string name="more_settings_row">Настройки</string>
+
+    <!-- `26-77`: Ещё's own two new sections, real rows at last (`buildMoreRows()`'s own doc comment) -
+         each opens `PlaceholderDestinationScreen` until the screen behind it exists. Автоматизация's
+         two labels are the mockup's own already-drawn names for named-but-unbuilt features;
+         Администрирование has no prior mockup content, so these two are this item's own placeholder
+         guess, left for review to correct (`docs/backlog/26-77-*.md`'s own Scope item 4). -->
+    <string name="more_automation_quick_replies_row">Готовые ответы</string>
+    <string name="more_automation_after_hours_row">Автоответ вне смены</string>
+    <string name="more_administration_operators_row">Операторы и роли</string>
+    <string name="more_administration_billing_row">Тариф и оплата</string>
+    <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
+         retired `analytics_placeholder_body`, worded generically now that more than one destination
+         needs it. -->
+    <string name="more_placeholder_body">Появится в одной из следующих версий.</string>
+
+    <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
+         button's own accessible name, and the two honest fallbacks for an identity with no name on
+         file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity
+         provider was never asked to guarantee one). Neither fallback is blank, per this item's own
+         Scope: "empty/unset name falls back to something honest". -->
+    <string name="account_menu_open_action">Меню аккаунта</string>
+    <string name="account_menu_unknown_name">Оператор</string>
+    <string name="account_menu_fallback_initial">?</string>
 
     <!-- `26-17`: the Settings screen itself - Тема, Текущий сайт, О приложении, Выход
          (`docs/backlog/26-17-*.md`). -->

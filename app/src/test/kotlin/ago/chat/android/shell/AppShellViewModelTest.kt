@@ -4,6 +4,8 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.session.OperatorIdentity
+import ago.chat.android.session.OperatorIdentityProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -97,7 +99,42 @@ class AppShellViewModelTest {
             assertNull(viewModel.loadError.value)
         }
 
-    private fun viewModelWith(api: OperatorPermissionsApi): AppShellViewModel = AppShellViewModel(api = api, ioDispatcher = dispatcher)
+    @Test
+    fun `identity starts null and resolves to whatever the identity provider answers`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    identityProvider =
+                        FakeOperatorIdentityProvider(
+                            OperatorIdentity(displayName = "Андрей Голяков", email = "a@example.com"),
+                        ),
+                )
+
+            assertNull(viewModel.identity.value)
+
+            advanceUntilIdle()
+
+            assertEquals(OperatorIdentity(displayName = "Андрей Голяков", email = "a@example.com"), viewModel.identity.value)
+        }
+
+    /** `26-77`: [ago.chat.android.session.OperatorIdentityProvider.currentIdentity] can genuinely
+     * answer `null` (no ID token claims at all) - proven distinctly from "not read yet" above, since
+     * both render as `null` here but must never be conflated by a future reader of this class. */
+    @Test
+    fun `identity stays null when the provider itself has nothing to say`() =
+        runTest(dispatcher) {
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true), identityProvider = FakeOperatorIdentityProvider(null))
+
+            advanceUntilIdle()
+
+            assertNull(viewModel.identity.value)
+        }
+
+    private fun viewModelWith(
+        api: OperatorPermissionsApi,
+        identityProvider: OperatorIdentityProvider = FakeOperatorIdentityProvider(null),
+    ): AppShellViewModel = AppShellViewModel(api = api, identityProvider = identityProvider, ioDispatcher = dispatcher)
 
     private class FakeOperatorPermissionsApi(
         var result: PermissionsFetch = PermissionsFetch.Loaded(emptySet()),
@@ -107,5 +144,11 @@ class AppShellViewModelTest {
             if (hang) kotlinx.coroutines.awaitCancellation()
             return result
         }
+    }
+
+    private class FakeOperatorIdentityProvider(
+        private val identity: OperatorIdentity?,
+    ) : OperatorIdentityProvider {
+        override suspend fun currentIdentity(): OperatorIdentity? = identity
     }
 }

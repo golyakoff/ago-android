@@ -77,8 +77,12 @@ public fun HubConnectionDot(
 /** The size the retired `HubConnectionDebugRow` already drew, carried over rather than re-chosen. */
 private val DotSize = 8.dp
 
+// `26-77`: `internal` rather than `private` - [ago.chat.android.ui.components.AccountAvatarAction]'s
+// own presence dot reads both of these directly, so the account menu's dot and this file's own dot
+// can never silently drift onto two different colour/wording rules for the identical
+// [OperatorHubConnectionState].
 @Composable
-private fun colorFor(state: OperatorHubConnectionState): Color =
+internal fun colorFor(state: OperatorHubConnectionState): Color =
     when (state) {
         OperatorHubConnectionState.Connected -> AgoLive
         OperatorHubConnectionState.Connecting, OperatorHubConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary
@@ -86,7 +90,7 @@ private fun colorFor(state: OperatorHubConnectionState): Color =
     }
 
 @Composable
-private fun labelFor(state: OperatorHubConnectionState): String =
+internal fun labelFor(state: OperatorHubConnectionState): String =
     when (state) {
         OperatorHubConnectionState.Disconnected -> stringResource(R.string.hub_connection_disconnected)
         OperatorHubConnectionState.Connecting -> stringResource(R.string.hub_connection_connecting)
