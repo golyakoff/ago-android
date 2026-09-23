@@ -16,18 +16,37 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// `26-24`: the one version number in this project a person sets rather than a build derives.
-// Bumped by hand, in its own commit, whenever the author decides to cut a release — deliberately not
-// computed from a tag, a commit count, or anything else, because "which product version is this"
-// is a decision, not a fact about the repository. It is the bare `MAJOR.MINOR.PATCH`: the commit
-// this was built from is carried separately, as semver build metadata on `versionName` below.
+// `26-24`/`26-38`: `MAJOR` alone is the one version component a person still sets rather than a
+// build deriving — deliberately not computed from anything, because "is this still a 0.x product or
+// has it become a 1.0 one" is the author's own call, in the semver sense of "I am promising something
+// different now", not a fact about commit history. Bumped by hand, in its own commit, only when the
+// author actually decides that.
 //
 // A plain `val`, not `const val`: a Gradle Kotlin DSL script's own top level is the body of the
 // generated script class, and `const` is only legal on a real top level or in an object — so
 // `const val` here is a script-compilation failure, not a style choice. `ci.yml`'s "Compute
 // version inputs" step reads this line's literal out of this file, so the declaration is kept on
 // one line with the value in double quotes.
-val agoReleaseVersion = "0.1.0"
+val agoMajorVersion = "0"
+
+// `26-38`: `MINOR` and `PATCH` are both facts about the repository, not decisions — semver's own
+// definition of the two ("MINOR: added functionality in a backward-compatible manner", "PATCH:
+// backward-compatible bug fixes") is answerable from the commits themselves, via the `feat`/`fix`
+// prefix this project's own commit convention already carries on every change. `ci.yml`'s "Compute
+// version inputs" step finds the highest existing `v<major>.*.*` tag, looks at every commit since it
+// (the identical range the changelog step below builds from), and bumps MINOR - resetting PATCH to
+// zero - the moment any of them is a real `feat`, otherwise bumps PATCH alone. A release that mixes
+// features and fixes together is a minor release, the standard reading: a fix riding along with a
+// feature is still part of "added functionality", not a fix-only release.
+//
+// The full `MAJOR.MINOR.PATCH` arrives as `-PagoReleaseVersion`, so the APK's own filename and
+// `versionName` below name the exact version the release job is about to tag and publish - the two
+// must never disagree, since `ci.yml`'s own "Check the APK can name its own commit" step and the
+// tag-vs-filename convention both assume they don't. Left unset, a local, unversioned build still
+// works and still says so honestly: `<major>.0.0+dev` cannot be mistaken for a real, CI-computed
+// version - MINOR/PATCH have no meaningful "current" value outside of CI's own tag-history read, so
+// zero is a placeholder here, not a guess at what the next real release will be.
+val agoReleaseVersion = (project.findProperty("agoReleaseVersion") as String?) ?: "$agoMajorVersion.0.0"
 
 /**
  * `26-09`'s own `-PagoVersionName` shape, generalised: a Gradle property when one is passed,
@@ -97,12 +116,13 @@ android {
         //     repository's whole history, which is what Android requires this field to be (a commit
         //     sha cannot serve as it, being neither an integer nor increasing). It remains the
         //     "which CI run built this" provenance it has always been.
-        //   - `versionName` is now the hand-set `agoReleaseVersion` above, with the commit carried
-        //     *alongside* it as semver build metadata (`MAJOR.MINOR.PATCH+<short sha>`, the `+`
-        //     being the spec's own build-metadata separator) rather than standing in for it. So the
-        //     commit-provenance guarantee is unchanged in substance — the APK still names the exact
-        //     commit it was built from, and CI still reads it back out with `aapt2 dump badging` —
-        //     it just no longer monopolises the field.
+        //   - `versionName` is now `agoReleaseVersion` above (`26-38`: hand-set base, auto-computed
+        //     patch), with the commit carried *alongside* it as semver build metadata
+        //     (`MAJOR.MINOR.PATCH+<short sha>`, the `+` being the spec's own build-metadata
+        //     separator) rather than standing in for it. So the commit-provenance guarantee is
+        //     unchanged in substance — the APK still names the exact commit it was built from, and
+        //     CI still reads it back out with `aapt2 dump badging` — it just no longer monopolises
+        //     the field.
         //
         // Left unset, a local `./gradlew assembleDebug` still works and still says so honestly:
         // `0.1.0+dev` occupies the same build-metadata slot a real build puts its sha in, so it

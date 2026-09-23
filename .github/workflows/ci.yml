@@ -187,6 +187,16 @@ jobs:
     needs: [build-test, instrumented-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # `26-38`: two pushes close enough together would otherwise both read the same "highest existing
+    # v<base>.* tag" in "Compute version inputs" and compute the identical next patch, then race to
+    # create the identical release - the exact 422 the step below exists to survive, but surviving it
+    # means one of the two pushes' own build silently overwrites the other's rather than each getting
+    # its own version. Serializing this job onto one queue per workflow removes the race instead of
+    # only recovering from it; `cancel-in-progress: false` queues a second run behind the first rather
+    # than cancelling it, since every push here still deserves its own release, just not concurrently.
+    concurrency:
+      group: ago-android-publish-apk
+      cancel-in-progress: false
     permissions:
       contents: write # `gh release create` against this repository's own GITHUB_TOKEN — no new
       # secret, the same property `adr/0018` and `publish-images` already rely on for their own
@@ -214,17 +224,32 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Four outputs, all computed here so no later step re-derives one its own way:
+      # Five outputs, all computed here so no later step re-derives one its own way:
       #
       #   `short_sha` — not the full 40 hex, because this is the build-metadata half of what
       #   `versionName` shows on the phone (Settings → О приложении, `26-17`) and what the release
       #   notes use, so it needs to be read without a person truncating it by eye.
       #
-      #   `release_version` — `26-24`'s hand-bumped semver, read straight out of
-      #   `app/build.gradle.kts` rather than repeated here: that file is the single place it is
-      #   declared, and a second copy in this workflow would be a second thing to remember to bump.
-      #   `test -n` is what turns a renamed or reformatted declaration into a loud failure here
-      #   instead of an empty string quietly producing `AGO_Chat_v.apk` further down.
+      #   `release_version` — `26-38`: `MAJOR` is still the hand-bumped literal (`agoMajorVersion` in
+      #   `app/build.gradle.kts` — that file stays the one place it is declared), but MINOR and PATCH
+      #   are now facts about the commits themselves, semver's own definition of the two read
+      #   literally off this project's `feat`/`fix` commit-subject convention: find the highest
+      #   existing `v<major>.*.*` tag (`--sort=-v:refname` is git's own version-aware sort, so
+      #   `v0.2.0` correctly outranks `v0.1.10`, which a lexical sort would not), then look at every
+      #   commit since it (the identical range `previous_tag`/the changelog step below builds its own
+      #   diff from) - a real `feat` anywhere in that range bumps MINOR and resets PATCH to zero
+      #   (a fix riding along with a feature is still "added functionality", the standard semver
+      #   reading of a mixed release); otherwise PATCH alone increments. No tag under this major at
+      #   all means this is that major's first release: MINOR/PATCH start at `0.0`, and the identical
+      #   bump rule then still applies to whatever is in history so far - which is exactly how this
+      #   project's own real first release became `v0.1.0` rather than `v0.0.0`, without a special
+      #   case written for it here. `test -n` on the major is what turns a renamed or reformatted
+      #   declaration into a loud failure here instead of silently computing a nonsense version.
+      #
+      #   `previous_tag` — the tag `release_version` was computed relative to, or empty on a major's
+      #   first release. Exposed so "Build changelog" below diffs against the exact same reference
+      #   this step already found, rather than re-deriving what "the previous release" means a second
+      #   way that could disagree with this one.
       #
       #   `apk` — the release APK's real path, which `app/build.gradle.kts`'s own
       #   `androidComponents.onVariants` block names for the product rather than leaving at AGP's
@@ -232,19 +257,40 @@ jobs:
       #   read the same value and the path cannot drift between them as the version moves.
       #
       #   `tag` — `26-26`: the release tag/title now name the version (`v<semver>`) rather than the
-      #   commit, and three later steps (the changelog's own "which tag is this replacing" search,
-      #   the delete-existing-release check, and `gh release create` itself) all need the identical
-      #   string — computed once here for the same reason `apk` is, not because any one of those
-      #   steps needs it more than the others.
+      #   commit, and later steps (the delete-existing-release check and `gh release create` itself)
+      #   all need the identical string — computed once here for the same reason `apk` is, not
+      #   because any one of those steps needs it more than the others.
       - name: Compute version inputs
         id: version
         run: |
           set -euo pipefail
-          release_version="$(sed -n 's/^val agoReleaseVersion = "\(.*\)"$/\1/p' app/build.gradle.kts | head -1)"
-          test -n "$release_version"
+          major="$(sed -n 's/^val agoMajorVersion = "\(.*\)"$/\1/p' app/build.gradle.kts | head -1)"
+          test -n "$major"
+
+          previous_tag="$(git tag -l "v$major.*.*" --sort=-v:refname | head -1)"
+          if [ -n "$previous_tag" ]; then
+            version_part="${previous_tag#v}"
+            minor="$(echo "$version_part" | cut -d. -f2)"
+            patch="$(echo "$version_part" | cut -d. -f3)"
+            range="$previous_tag..HEAD"
+          else
+            minor=0
+            patch=0
+            range="HEAD"
+          fi
+
+          if git log "$range" --format='%s' | grep -qE '^feat[(:]'; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          release_version="$major.$minor.$patch"
+
           {
             echo "short_sha=${GITHUB_SHA:0:7}"
             echo "release_version=$release_version"
+            echo "previous_tag=$previous_tag"
             echo "apk=app/build/outputs/apk/release/AGO_Chat_v$release_version.apk"
             echo "tag=v$release_version"
           } >> "$GITHUB_OUTPUT"
@@ -266,12 +312,16 @@ jobs:
       # compiles (`26-08`'s own gate), unversioned and unsigned. Passing the APK between jobs
       # would save a rebuild at the cost of an upload/download step and a second place the build
       # inputs could drift from what `build-test` actually exercised — not a trade worth making at
-      # two jobs. `-PagoVersionName`/`-PagoVersionCode` are the Gradle properties
-      # `app/build.gradle.kts` reads. `-PagoVersionName` is still the bare short sha and nothing
-      # else: since `26-24` the build file composes `versionName` itself as
-      # `<hand-set semver>+<this property>`, so the commit provenance `adr/0051` asks for is
+      # two jobs. `-PagoVersionName`/`-PagoVersionCode`/`-PagoReleaseVersion` are the Gradle
+      # properties `app/build.gradle.kts` reads. `-PagoVersionName` is still the bare short sha and
+      # nothing else: since `26-24` the build file composes `versionName` itself as
+      # `<release version>+<this property>`, so the commit provenance `adr/0051` asks for is
       # supplied from here while the product version stays declared in one place, in the repository,
-      # rather than being passed in by whatever happens to invoke Gradle. `25-215`:
+      # rather than being passed in by whatever happens to invoke Gradle. `-PagoReleaseVersion`
+      # (`26-38`) is the full `MAJOR.MINOR.PATCH` this job's own "Compute version inputs" step just
+      # derived — passed in so the APK's own filename and `versionName` name the exact version this
+      # job is about to tag and publish, rather than the file's own unversioned `<major>.0.0`
+      # default, which is correct only for a build nobody is about to release. `25-215`:
       # `assembleRelease`, not `assembleDebug` — a stable,
       # persistent-key fingerprint is only useful on the build type RuStore and any future
       # distribution actually cares about — plus the four `agoSigning*` properties that make
@@ -290,6 +340,7 @@ jobs:
           ./gradlew assembleRelease --no-daemon \
             -PagoVersionName=${{ steps.version.outputs.short_sha }} \
             -PagoVersionCode=${{ github.run_number }} \
+            -PagoReleaseVersion=${{ steps.version.outputs.release_version }} \
             -PagoSigningKeystorePath="$RUNNER_TEMP/ago-android-release.keystore" \
             -PagoSigningStorePassword="$AGO_SIGNING_STORE_PASSWORD" \
             -PagoSigningKeyPassword="$AGO_SIGNING_STORE_PASSWORD" \
@@ -334,39 +385,30 @@ jobs:
           path: ${{ steps.version.outputs.apk }}
           if-no-files-found: error
 
-      # `26-26`: the changelog is cumulative across every rebuild of one hand-set version rather than
-      # resetting on each push under the same version — so the range runs from the most recent *other*
-      # `v*` tag to `HEAD`, never "since the last time this job ran". `--sort=-creatordate` orders
-      # existing version tags newest-first; the loop takes the first one that is not the tag this run
-      # is about to (re)create, so a same-version rebuild still diffs against the *previous distinct*
-      # version, not against the tag it is itself replacing a moment later. There is never more than
-      # one tag to skip, because `agoReleaseVersion` only ever moves forward by hand (`26-24`).
-      #
-      # The very first release under this scheme has no earlier `v*` tag at all — true of this
-      # repository today (`git tag -l 'v*'` finds nothing yet, only the `release-*`/`debug-*` tags
-      # this item retires) — so `range` falls back to plain `HEAD`, and `git log HEAD` means "every
-      # commit reachable from HEAD", i.e. this project's entire history to date. That is a deliberate
-      # choice, not an oversight: at 38 commits today it reads as a complete, reasonable "what's in
-      # this build" list rather than something that needs truncating.
+      # `26-26`/`26-38`: the range runs from the previous release to `HEAD`, reusing
+      # `steps.version.outputs.previous_tag` rather than re-deriving "which tag is that" a second
+      # way that could disagree with what "Compute version inputs" already decided the MINOR/PATCH
+      # bump from — the changelog and the version bump have to agree on what "since the last release"
+      # means, since a commit the bump logic never looked at is a commit the changelog has no
+      # business claiming either. Empty `previous_tag` means this major's first release, which has no
+      # earlier tag to diff against at all, so `range` falls back to plain `HEAD` — `git log HEAD`
+      # means "every commit reachable from HEAD", the project's entire history to date. That is a
+      # deliberate choice for the very first release, not an oversight: at under 40 commits it reads
+      # as a complete, reasonable "what's in this build" list rather than something that needs
+      # truncating.
       #
       # `--format=%s` takes only the subject line, on the same reasoning `docs/backlog/26-26-*.md`
       # gives: this project's commits already write a real sentence as the subject (e.g. `feat(26-24):
       # hand-set semver and a product-named release APK`), so a second "body" line would just repeat
       # it. No merge commit can ever land in this range to produce a blank or malformed line —
       # `docs/conventions/git-workflow.md`'s rebase-and-merge convention means `main` never gets one
-      # (verified against this repository's own history: `git log --merges` is empty over all 38
-      # commits), so there is no placeholder-subject case to guard against here.
+      # (verified against this repository's own history: `git log --merges` is empty), so there is no
+      # placeholder-subject case to guard against here.
       - name: Build changelog
         id: changelog
         run: |
           set -euo pipefail
-          previous_tag=""
-          for candidate in $(git tag -l 'v*' --sort=-creatordate); do
-            if [ "$candidate" != "${{ steps.version.outputs.tag }}" ]; then
-              previous_tag="$candidate"
-              break
-            fi
-          done
+          previous_tag="${{ steps.version.outputs.previous_tag }}"
           if [ -n "$previous_tag" ]; then
             range="$previous_tag..HEAD"
           else
@@ -390,17 +432,20 @@ jobs:
           Version \`${{ steps.version.outputs.release_version }}\`, built from commit \`${{ github.sha }}\` — versionName \`${{ steps.version.outputs.release_version }}+${{ steps.version.outputs.short_sha }}\`, versionCode \`${{ github.run_number }}\`.
           EOF
 
-      # `26-26`: `agoReleaseVersion` is a hand-bumped literal, not incremented on every push, so more
-      # than one push to `main` can carry the same version — and `gh release create` fails outright
+      # `26-26`, kept as a safety net under `26-38`'s auto-patch: `gh release create` fails outright
       # (HTTP 422, "Release.tag_name already exists") on a tag that already has a release, rather
-      # than updating it. Checking `gh release view`'s exit code — not its output, which would look
-      # the same for "no release" as for a release whose body happens to be short — is what tells a
-      # repeat push under an unbumped version apart from that version's first push. `--cleanup-tag`
-      # removes the underlying git tag along with the release object, so a repeat push always starts
-      # the create step below from a genuinely clean slate instead of layering a new release onto an
-      # old tag ref. Proven against a real (throwaway, since deleted) tag on this repository before
-      # this item was called done: create → second create fails with exactly that 422 → delete
-      # --cleanup-tag → view fails (tag gone) → create again succeeds with fresh content.
+      # than updating it. Ordinary pushes never hit this any more — each one computes a patch that,
+      # by construction, has never been tagged before — but the job-level `concurrency` group below
+      # only serializes *this workflow's own* runs; a manual `gh workflow run`/rerun of the identical
+      # commit, or any path that re-executes "Compute version inputs" against the same tag history a
+      # second time, would otherwise hit the exact 422 this step exists to avoid. Checking
+      # `gh release view`'s exit code — not its output, which would look the same for "no release" as
+      # for a release whose body happens to be short — is what tells that case apart from the
+      # ordinary one. `--cleanup-tag` removes the underlying git tag along with the release object,
+      # so a repeat run always starts the create step below from a genuinely clean slate. Proven
+      # against a real (throwaway, since deleted) tag on this repository before `26-26` was called
+      # done: create → second create fails with exactly that 422 → delete --cleanup-tag → view fails
+      # (tag gone) → create again succeeds with fresh content.
       - name: Delete existing release for this version, if any
         env:
           GH_TOKEN: ${{ github.token }}
