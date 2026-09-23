@@ -20,6 +20,18 @@ public interface BookingsApi {
      * `CalendarQueuePage.tsx`, "there is deliberately no filter by calendar").
      */
     public suspend fun fetchPendingQueue(): PendingBookingsResult
+
+    /**
+     * `26-51`: `GET /api/v1/console/confirmed-bookings` — every calendar the tenant has, across a
+     * business-local date range, both bounds inclusive (`ago-console`'s own `getConfirmedBookings`,
+     * `calendarApi.ts:645`). A range, not a single day: the date strip needs the whole range to know
+     * which days carry a dot, and only the *rendering* is per-day
+     * ([ago.chat.android.bookings.ConfirmedBookingsViewModel]'s own doc comment).
+     */
+    public suspend fun fetchConfirmedBookings(
+        from: String,
+        to: String,
+    ): ConfirmedBookingsResult
 }
 
 /** What answering "what is waiting to auto-confirm" came back with. */
@@ -45,6 +57,29 @@ public sealed interface PendingBookingsResult {
 }
 
 /**
+ * `26-51`: what answering "what is on for this range" came back with — the identical three-arm shape
+ * [PendingBookingsResult] already establishes for the queue, restated rather than shared because the
+ * two reads have no field in common to generalise over ([Loaded] carries [ConfirmedBooking], not
+ * [PendingBooking]).
+ */
+public sealed interface ConfirmedBookingsResult {
+    public data class Loaded(
+        val bookings: List<ConfirmedBooking>,
+    ) : ConfirmedBookingsResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact [PendingBookingsResult.NotConfigured]'s
+     * own doc comment explains. */
+    public data object NotConfigured : ConfirmedBookingsResult
+
+    /** [BookingsQueueFailure] is reused rather than a second, identically-shaped enum invented here —
+     * despite its name, the type answers only "no network" vs. "something else", a classification this
+     * read needs exactly as much as the queue does. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : ConfirmedBookingsResult
+}
+
+/**
  * `26-48`'s own reading of `26-59` (not landed at the time this port was written, per this item's own
  * brief): a network failure never reaches the operator as a raw exception class name or a hostname, and
  * the way to keep a fifth `describe()` copy from being born here is to never hold a message string in
@@ -52,6 +87,10 @@ public sealed interface PendingBookingsResult {
  * `:app`'s own job (a string resource, not a field on this type) — the identical "adapter classifies,
  * UI renders" split `26-59`'s own Scope states for the shared version of this idea it has not landed
  * yet.
+ *
+ * `26-51`: also [ConfirmedBookingsResult.Failed]'s own classification — the name is a historical
+ * artifact of the pending queue being the first caller, not a queue-specific concept; both reads reduce
+ * a failure to the identical two-way question ("is it me, or is it broken") this type already answers.
  */
 public enum class BookingsQueueFailure {
     /** No route to the server reached at all — offline, a DNS failure, a dropped connection, a

@@ -2,6 +2,7 @@ package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import kotlinx.coroutines.Dispatchers
@@ -123,5 +124,12 @@ class BookingsViewModelTest {
             if (hangFetch) awaitCancellation()
             return result
         }
+
+        // `26-51` widened `BookingsApi` with a second method this class has no test of its own for -
+        // never called by `BookingsViewModel`, which only ever reads the pending queue.
+        override suspend fun fetchConfirmedBookings(
+            from: String,
+            to: String,
+        ): ConfirmedBookingsResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
     }
 }

@@ -2,11 +2,14 @@ package ago.chat.android.core.network.bookings
 
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmedBooking
+import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -15,7 +18,9 @@ import java.io.IOException
 /**
  * `26-48`: the adapter behind [BookingsApi] — the same "the whole status-code-to-meaning mapping lives
  * here, and only here" shape `KtorConversationsApi`'s own doc comment states for the conversation
- * queue.
+ * queue. `26-51` adds [fetchConfirmedBookings] to this same class rather than a second adapter, since
+ * both methods share every one of the properties this doc comment states — same base URL, same
+ * not-configured check, same classification.
  *
  * `X-Ago-Active-Site` and the bearer token are attached by client plugins (`installAgoRestDefaults`),
  * not threaded through this method either — the identical reason `KtorConversationsApi` gives.
@@ -65,6 +70,44 @@ public class KtorBookingsApi(
             PendingBookingsResult.Failed(classify(failure))
         }
     }
+
+    /**
+     * `26-51`: `GET /api/v1/console/confirmed-bookings?from=&to=` — the identical
+     * check-base-URL-first, classify-never-invent shape [fetchPendingQueue] above already establishes,
+     * restated for this second endpoint rather than factored out: the two reads share no request shape
+     * beyond "a `GET` against this same base URL", and a shared helper parameterised over a wire DTO
+     * type would buy less clarity than it costs.
+     */
+    override suspend fun fetchConfirmedBookings(
+        from: String,
+        to: String,
+    ): ConfirmedBookingsResult {
+        val baseUrl = calendarApiBaseUrl ?: return ConfirmedBookingsResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/confirmed-bookings") {
+                    parameter("from", from)
+                    parameter("to", to)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ConfirmedBookingsResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return ConfirmedBookingsResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            ConfirmedBookingsResult.Loaded(response.body<List<ConfirmedBookingWireDto>>().map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            ConfirmedBookingsResult.Failed(classify(failure))
+        }
+    }
 }
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. An
@@ -99,4 +142,41 @@ private fun PendingBookingWireDto.toDomain() =
         startsAt = startsAt,
         endsAt = endsAt,
         confirmationDeadline = confirmationDeadline,
+    )
+
+/** `Ago.Calendar.Contracts.ConfirmedBookingResponse`, reduced to the fields [ConfirmedBooking]
+ * carries — `phone`/`masked` are on the wire and simply omitted here, the identical
+ * `ignoreUnknownKeys`-backed reduction [PendingBookingWireDto]'s own doc comment explains, applied for
+ * the identical reason ([ConfirmedBooking]'s own doc comment: the masked-phone reveal is `26-53`, not
+ * this item). */
+@Serializable
+private data class ConfirmedBookingWireDto(
+    val bookingId: String,
+    val calendarId: String,
+    val workerId: String,
+    val workerDisplayName: String,
+    val serviceId: String,
+    val serviceName: String?,
+    val customerId: String,
+    val customerDisplayName: String?,
+    val startsAt: String,
+    val endsAt: String,
+    val localDate: String,
+    val weekday: Int,
+)
+
+private fun ConfirmedBookingWireDto.toDomain() =
+    ConfirmedBooking(
+        bookingId = bookingId,
+        calendarId = calendarId,
+        workerId = workerId,
+        workerDisplayName = workerDisplayName,
+        serviceId = serviceId,
+        serviceName = serviceName,
+        customerId = customerId,
+        customerDisplayName = customerDisplayName,
+        startsAt = startsAt,
+        endsAt = endsAt,
+        localDate = localDate,
+        weekday = weekday,
     )

@@ -31,6 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -54,9 +57,44 @@ import java.time.format.DateTimeFormatter
  * Диалоги.
  */
 @Composable
-public fun BookingsRoute(viewModel: BookingsViewModel = hiltViewModel()) {
+public fun BookingsRoute(
+    showConfirmedSegment: Boolean,
+    viewModel: BookingsViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    BookingsScreen(state = state, onRetry = viewModel::refresh)
+    var selectedTab by rememberSaveable { mutableStateOf(BookingsTab.Pending) }
+
+    // `26-51`: [ConfirmedBookingsViewModel] is obtained by `hiltViewModel()` only inside this branch, so
+    // an operator lacking `customer:read` never constructs it and never triggers its `init`-time read
+    // (that class's own doc comment). Calling a `@Composable` conditionally like this is safe here
+    // specifically because `hiltViewModel()` is keyed by the requesting class against the surrounding
+    // `NavBackStackEntry`'s own `ViewModelStore`, not by the call's position in the composition, so
+    // toggling this branch never recreates the view model underneath it.
+    val confirmedState: ConfirmedBookingsUiState?
+    val onSelectDay: (String) -> Unit
+    val onRetryConfirmed: () -> Unit
+    if (showConfirmedSegment) {
+        val confirmedViewModel: ConfirmedBookingsViewModel = hiltViewModel()
+        val collectedConfirmedState by confirmedViewModel.state.collectAsStateWithLifecycle()
+        confirmedState = collectedConfirmedState
+        onSelectDay = confirmedViewModel::onDaySelected
+        onRetryConfirmed = confirmedViewModel::refresh
+    } else {
+        confirmedState = null
+        onSelectDay = {}
+        onRetryConfirmed = {}
+    }
+
+    BookingsScreen(
+        state = state,
+        showConfirmedSegment = showConfirmedSegment,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
+        onRetry = viewModel::refresh,
+        confirmedState = confirmedState,
+        onSelectDay = onSelectDay,
+        onRetryConfirmed = onRetryConfirmed,
+    )
 }
 
 /**
@@ -64,26 +102,33 @@ public fun BookingsRoute(viewModel: BookingsViewModel = hiltViewModel()) {
  * ([AppShellScreen]'s own `bookingsTab` slot needs a Hilt-free substitute for the back-button-contract
  * tests, the identical reason that file's own `conversationsTab`/`settingsScreen` slots exist).
  *
- * **Only the «Ожидают» segment is ever drawn.** The mockup's segmented control also names «Утверждены»
- * and «Клиенты», and drawing either of those here — with nothing behind them to open — is exactly the
- * "leading nowhere" shape `docs/backlog/26-48-*.md`'s own Scope forbids, the identical rule
- * `MoreScreen.buildMoreRows` already applies to Ещё's own three folded sections. So this
- * [SingleChoiceSegmentedButtonRow] carries exactly one [SegmentedButton], not three with two disabled —
- * the day `26-51`/`26-52` land a real screen behind one of the other two, it gains a row here, the same
- * way [ago.chat.android.conversations.ConversationListScreen]'s own two-tab row grew from
- * `buildMoreRows`'s one-row precedent.
+ * **The segmented control is built from [showConfirmedSegment], never drawn with a fixed shape.** The
+ * mockup's segmented control also names «Клиенты», and drawing it here — with nothing behind it to
+ * open — is exactly the "leading nowhere" shape `docs/backlog/26-48-*.md`'s own Scope forbids, the
+ * identical rule `MoreScreen.buildMoreRows` already applies to Ещё's own folded sections. `26-48`
+ * shipped this with exactly one hard-coded [SegmentedButton]; `26-51` replaces that with
+ * [visibleBookingsTabs] — the same "compute the list, don't draw a fixed shape" correction
+ * `visibleBottomDestinations` already models one level up — so the day `26-52` lands Клиенты, it is a
+ * third entry in that function, not a third hand-written [SegmentedButton] here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BookingsScreen(
     state: BookingsUiState,
+    showConfirmedSegment: Boolean,
+    selectedTab: BookingsTab,
+    onTabSelected: (BookingsTab) -> Unit,
     onRetry: () -> Unit,
+    confirmedState: ConfirmedBookingsUiState?,
+    onSelectDay: (String) -> Unit,
+    onRetryConfirmed: () -> Unit,
 ) {
     // `ago-console`'s own `useNow` hook, restated - the one clock read this screen makes, so every
     // deadline countdown on it re-renders together rather than each row reading `OffsetDateTime.now()`
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
     // `rememberTickingNow`).
     val now = rememberTickingNow()
+    val tabs = visibleBookingsTabs(showConfirmedSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(topBar = { TopAppBar(title = { Text(text = stringResource(R.string.nav_bookings)) }) }) { padding ->
@@ -91,30 +136,53 @@ internal fun BookingsScreen(
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    SegmentedButton(
-                        selected = true,
-                        onClick = {},
-                        shape = SegmentedButtonDefaults.itemShape(0, 1),
-                        label = { Text(text = pendingSegmentLabel(countFor(state))) },
-                    )
+                    tabs.forEachIndexed { index, tab ->
+                        SegmentedButton(
+                            selected = selectedTab == tab,
+                            onClick = { onTabSelected(tab) },
+                            shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
+                            label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
+                        )
+                    }
                 }
 
-                when (state) {
-                    BookingsUiState.Loading -> LoadingBody()
-                    is BookingsUiState.Loaded ->
-                        if (state.bookings.isEmpty()) {
-                            EmptyBody(stringResource(R.string.bookings_queue_empty))
-                        } else {
-                            PendingBookingsList(bookings = state.bookings, now = now)
+                when (selectedTab) {
+                    BookingsTab.Pending ->
+                        when (state) {
+                            BookingsUiState.Loading -> LoadingBody()
+                            is BookingsUiState.Loaded ->
+                                if (state.bookings.isEmpty()) {
+                                    EmptyBody(stringResource(R.string.bookings_queue_empty))
+                                } else {
+                                    PendingBookingsList(bookings = state.bookings, now = now)
+                                }
+
+                            BookingsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
+                            is BookingsUiState.Failed -> RefusalBody(reason = state.reason, onRetry = onRetry)
                         }
 
-                    BookingsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
-                    is BookingsUiState.Failed -> RefusalBody(reason = state.reason, onRetry = onRetry)
+                    // `confirmedState` is non-null exactly when `showConfirmedSegment` is true - the only
+                    // condition under which this tab even appears in `tabs` for `onTabSelected` to have
+                    // been able to select it in the first place.
+                    BookingsTab.Confirmed ->
+                        confirmedState?.let {
+                            ConfirmedBookingsBody(state = it, onSelectDay = onSelectDay, onRetry = onRetryConfirmed)
+                        }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun bookingsTabLabel(
+    tab: BookingsTab,
+    pendingState: BookingsUiState,
+): AnnotatedString =
+    when (tab) {
+        BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
+        BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
+    }
 
 /** `null` before [BookingsUiState.Loaded] is known, exactly the "no digit for a count not yet known"
  * rule [ago.chat.android.conversations.segmentedCountFor] already states for Диалоги's own two tabs. */
@@ -136,15 +204,18 @@ private fun pendingSegmentLabel(count: Int?): AnnotatedString =
         }
     }
 
+/** `internal`, not `private`: [ConfirmedBookingsScreen.kt][ConfirmedBookingsBody] reuses this and the
+ * three composables below it for the identical loading/empty/refusal states, rather than a second copy
+ * of each. */
 @Composable
-private fun LoadingBody() {
+internal fun LoadingBody() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
     }
 }
 
 @Composable
-private fun EmptyBody(text: String) {
+internal fun EmptyBody(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Text(
             text = text,
@@ -159,11 +230,19 @@ private fun EmptyBody(text: String) {
  * exception class name" — [failureMessage] is the one place this screen turns
  * [ago.chat.android.core.domain.bookings.BookingsQueueFailure] into the Russian sentence, never the
  * adapter that produced it (`KtorBookingsApi`'s own doc comment: classification lives there, wording
- * lives here). */
+ * lives here).
+ *
+ * [unexpectedMessageRes] is a parameter, not hard-coded, because `26-51`'s own Утверждены segment reads
+ * a different endpoint than the pending queue and needs its own wording for
+ * [BookingsQueueFailure.Unexpected] (`bookings_load_failed_unexpected`'s own Russian text names "очередь
+ * записей" specifically) — [BookingsQueueFailure.Transport]'s own wording is shared as-is, since it is
+ * already worded generically about reaching AGO Calendar at all, not about either read's own shape.
+ */
 @Composable
-private fun RefusalBody(
+internal fun RefusalBody(
     reason: BookingsQueueFailure,
     onRetry: () -> Unit,
+    unexpectedMessageRes: Int = R.string.bookings_load_failed_unexpected,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -171,7 +250,7 @@ private fun RefusalBody(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = failureMessage(reason),
+            text = failureMessage(reason, unexpectedMessageRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -183,10 +262,13 @@ private fun RefusalBody(
 }
 
 @Composable
-private fun failureMessage(reason: BookingsQueueFailure): String =
+private fun failureMessage(
+    reason: BookingsQueueFailure,
+    unexpectedMessageRes: Int,
+): String =
     when (reason) {
         BookingsQueueFailure.Transport -> stringResource(R.string.bookings_load_failed_transport)
-        BookingsQueueFailure.Unexpected -> stringResource(R.string.bookings_load_failed_unexpected)
+        BookingsQueueFailure.Unexpected -> stringResource(unexpectedMessageRes)
     }
 
 @Composable

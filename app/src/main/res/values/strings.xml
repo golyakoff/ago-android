@@ -173,10 +173,10 @@
     <string name="team_chat_removed_placeholder">Сообщение удалено</string>
 
     <!--
-        `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Утверждены» and
-        «Клиенты» too, but only this segment has a screen behind it (this file's own
-        `BookingsScreen`/`bookings_tab_pending` doc comment - the identical "a row exists only for a
-        screen that exists" rule `more_settings_row` above already follows).
+        `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
+        that segment has no screen behind it yet (this file's own `BookingsScreen`/`bookings_tab_pending`
+        doc comment - the identical "a row exists only for a screen that exists" rule
+        `more_settings_row` above already follows). `26-51` gave «Утверждены» its own screen below.
     -->
     <string name="bookings_tab_pending">Ожидают</string>
     <string name="bookings_queue_empty">Ничего не ожидает.</string>
@@ -193,6 +193,35 @@
     <string name="bookings_card_when_label">Когда</string>
     <string name="bookings_card_worker_label">Мастер</string>
     <string name="bookings_card_calendar_label">Календарь</string>
+
+    <!--
+        `26-51`: Записи's own «Утверждены» segment - one chosen day's confirmed bookings, grouped by
+        master (`scope-inventory.md` §4: "day-first" - a date strip, then that day's rows). Gated on
+        `customer:read` alone, matching `CalendarBookingsPage.tsx:156,182` - see
+        `ConfirmedBookingsViewModel`'s own doc comment for why an operator lacking it never even
+        constructs this segment's view model.
+    -->
+    <string name="bookings_tab_confirmed">Утверждены</string>
+    <!-- `docs/backlog/26-51-*.md`'s own Done-when: "a day with nothing booked renders a stated empty
+         state, not a blank area" - distinct wording from `bookings_queue_empty` above, since "nothing on
+         this day" and "nothing waiting to auto-confirm" are different facts about different reads. -->
+    <string name="bookings_confirmed_day_empty">На этот день ничего не записано.</string>
+    <!-- Distinct from `bookings_load_failed_unexpected` above, which is worded about the queue
+         specifically ("очередь записей") - this read has no queue to name. `bookings_load_failed_transport`
+         above is reused as-is: it is already worded generically, about reaching AGO Calendar at all. -->
+    <string name="bookings_confirmed_load_failed_unexpected">Не удалось загрузить записи на этот период. Попробуйте ещё раз.</string>
+    <!-- The date strip's own weekday labels, index 0 = Sunday - `ConfirmedBooking.weekday`'s own
+         convention (`ConfirmedBooking.kt`'s doc comment), so a strip day's `weekday` indexes this array
+         directly with no remapping at the call site. -->
+    <string-array name="bookings_weekday_short">
+        <item>Вс</item>
+        <item>Пн</item>
+        <item>Вт</item>
+        <item>Ср</item>
+        <item>Чт</item>
+        <item>Пт</item>
+        <item>Сб</item>
+    </string-array>
 
     <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
          at least one real row (`navigation.md` §"The top-level shape"). -->
