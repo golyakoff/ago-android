@@ -38,8 +38,8 @@
     <string name="routing_unavailable_owner">Не удалось проверить права владельца платформы.</string>
     <string name="routing_unavailable_contradiction">Сервер одновременно показывает ваш магазин и отказывает в доступе к нему. Это не похоже на правду, поэтому мы ничего не предполагаем.</string>
     <string name="routing_unavailable_status">Код ответа: %1$d</string>
-    <string name="routing_unavailable_transport">Соединение: %1$s</string>
-    <string name="routing_unavailable_malformed">Ответ сервера: %1$s</string>
+    <string name="routing_unavailable_transport">Нет соединения с сервером.</string>
+    <string name="routing_unavailable_malformed">Сервер ответил не в ожидаемом формате.</string>
     <string name="action_retry">Повторить</string>
 
     <!-- `adr/0068`: one identity, several tenancies. Shown once, before the app proper opens. -->
@@ -397,4 +397,17 @@
          neither the bar nor a guess at it. -->
     <string name="app_shell_permissions_loading">Загружаем права доступа…</string>
     <string name="app_shell_permissions_load_failed_title">Не удалось загрузить права доступа</string>
+
+    <!--
+        `26-59`: the shared "why didn't that work" vocabulary for `NetworkFailure`'s three arms — used
+        everywhere a network call's failure reaches the operator (the conversation list's own banner, a
+        claim attempt that failed without a genuine server refusal to show, the thread screen's
+        join/load-older failures, and this permissions load failure) instead of a Java class name or
+        this deployment's own hostname (`docs/backlog/26-59-*.md`'s own Found). `network_failure_server_status`
+        deliberately still names the numeric code — a status code is not the kind of detail this app
+        hides, only an exception's own class name and message are.
+    -->
+    <string name="network_failure_no_connection">Нет соединения. Проверьте подключение к интернету и попробуйте ещё раз.</string>
+    <string name="network_failure_server_status">Сервер ответил ошибкой (код %1$d). Попробуйте ещё раз.</string>
+    <string name="network_failure_unexpected">Что-то пошло не так. Попробуйте ещё раз.</string>
 </resources>

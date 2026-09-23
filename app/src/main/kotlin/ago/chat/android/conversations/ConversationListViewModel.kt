@@ -64,7 +64,7 @@ public class ConversationListViewModel
         private var newlyAssignedIds: Set<String> = emptySet()
         private var unreadBumps: Map<String, Int> = emptyMap()
         private var claimingIds: Set<String> = emptySet()
-        private var claimErrors: Map<String, String> = emptyMap()
+        private var claimErrors: Map<String, ClaimErrorUi> = emptyMap()
 
         private var waitingPollJob: Job? = null
 
@@ -181,7 +181,7 @@ public class ConversationListViewModel
                         // The cache (or the previous fetch's own answer) stays on screen exactly as it
                         // was - only the error banner changes. Never cleared to empty on a failure: a
                         // network blip must not make a real list disappear.
-                        mutableState.update { it.copy(loadError = result.message) }
+                        mutableState.update { it.copy(loadError = result.reason) }
                     }
                 }
             }
@@ -210,11 +210,20 @@ public class ConversationListViewModel
 
                     is ClaimResult.Refused -> {
                         claimingIds = claimingIds - conversationId
-                        claimErrors = claimErrors + (conversationId to result.detail)
+                        claimErrors = claimErrors + (conversationId to ClaimErrorUi.ServerRefusal(result.detail))
                         render(stale = mutableState.value.isStale)
                         // Deliberately no retry of any kind, automatic or scheduled - `result.detail`
                         // is shown once, inline, and the row stays exactly where the server left it,
                         // in «Ожидают».
+                    }
+
+                    is ClaimResult.Failed -> {
+                        // `26-59`: this call never reached a genuine server refusal at all - a dropped
+                        // connection, or a non-2xx with no `detail` to show. Rendered from
+                        // [result.reason]'s own classification, never a fabricated `detail` string.
+                        claimingIds = claimingIds - conversationId
+                        claimErrors = claimErrors + (conversationId to ClaimErrorUi.Unavailable(result.reason))
+                        render(stale = mutableState.value.isStale)
                     }
                 }
             }

@@ -1,9 +1,9 @@
 package ago.chat.android.shell
 
 import ago.chat.android.BuildConfig
-import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.Role
@@ -94,7 +94,7 @@ class SettingsScreenTest {
             SettingsScreen(
                 themeMode = ThemeMode.System,
                 onThemeModeSelected = {},
-                tenancies = TenancyListing.Unanswered(ProbeFailure.Transport("timed out")),
+                tenancies = TenancyListing.Unanswered(NetworkFailure.NoConnection),
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},

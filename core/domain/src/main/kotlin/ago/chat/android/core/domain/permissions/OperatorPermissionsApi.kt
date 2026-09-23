@@ -1,6 +1,6 @@
 package ago.chat.android.core.domain.permissions
 
-import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.net.NetworkFailure
 
 /**
  * The port the app's shell reads [OperatorPermissions] through — declared here, implemented in
@@ -37,6 +37,6 @@ public sealed interface PermissionsFetch {
     ) : PermissionsFetch
 
     public data class Failed(
-        val reason: ProbeFailure,
+        val reason: NetworkFailure,
     ) : PermissionsFetch
 }

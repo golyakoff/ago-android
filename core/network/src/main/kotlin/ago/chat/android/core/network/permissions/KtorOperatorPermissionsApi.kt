@@ -1,6 +1,6 @@
 package ago.chat.android.core.network.permissions
 
-import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
 import io.ktor.client.HttpClient
@@ -35,11 +35,11 @@ public class KtorOperatorPermissionsApi(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
-                return PermissionsFetch.Failed(ProbeFailure.Transport(failure.describe()))
+                return PermissionsFetch.Failed(NetworkFailure.from(failure))
             }
 
         if (!response.status.isSuccess()) {
-            return PermissionsFetch.Failed(ProbeFailure.UnexpectedStatus(response.status.value))
+            return PermissionsFetch.Failed(NetworkFailure.ServerError(response.status.value))
         }
 
         return try {
@@ -51,12 +51,10 @@ public class KtorOperatorPermissionsApi(
             // A `200` whose body has no readable `permissions` array is not "holds nothing" - the
             // identical `KtorIdentityApi.listMyTenancies` lesson (`ago-console`'s `shapeGuard.ts`):
             // a dropped array must never look like a real, empty answer.
-            PermissionsFetch.Failed(ProbeFailure.Malformed(failure.describe()))
+            PermissionsFetch.Failed(NetworkFailure.from(failure))
         }
     }
 }
-
-private fun Exception.describe(): String = "${this::class.simpleName}: ${message ?: "no detail"}"
 
 /** `Ago.Chat.Contracts.OperatorPermissionsResponse`, camelCase per ASP.NET Core's default policy -
  * only the one field this class actually reads. */

@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
@@ -95,7 +96,7 @@ class ConversationListViewModelTest {
     fun `killing the network still renders the cached list, visibly marked stale, never blank`() =
         runTest(dispatcher) {
             val cache = FakeConversationListCache(cached = queueOf(mine = listOf(waiting("cached-row"))))
-            val api = FakeConversationsApi(queueResult = QueueResult.Failed("no network"))
+            val api = FakeConversationsApi(queueResult = QueueResult.Failed(NetworkFailure.NoConnection))
             val viewModel = viewModelWith(api = api, cache = cache)
 
             advanceUntilIdle()
@@ -107,7 +108,7 @@ class ConversationListViewModelTest {
                     .map { it.conversationId },
             )
             assertTrue("still marked stale - the fetch never actually confirmed it", viewModel.state.value.isStale)
-            assertEquals("no network", viewModel.state.value.loadError)
+            assertEquals(NetworkFailure.NoConnection, viewModel.state.value.loadError)
         }
 
     @Test
@@ -336,7 +337,7 @@ class ConversationListViewModelTest {
             val row =
                 viewModel.state.value.waiting
                     .single()
-            assertEquals("Этот диалог уже забрал другой оператор.", row.claimError)
+            assertEquals(ClaimErrorUi.ServerRefusal("Этот диалог уже забрал другой оператор."), row.claimError)
             assertFalse(
                 "the row is not silently moved on a refusal",
                 row.conversationId in
@@ -507,7 +508,7 @@ class ConversationListViewModelTest {
     ) = ConversationQueue(waiting = waiting, assignedToMe = mine)
 
     private class FakeConversationsApi(
-        var queueResult: QueueResult = QueueResult.Failed("not configured"),
+        var queueResult: QueueResult = QueueResult.Failed(NetworkFailure.Unexpected),
         /** When set, [fetchQueue] never returns at all - proves a render sourced only from the cache,
          * with the network call genuinely still pending rather than merely fast. */
         var hangQueueFetch: Boolean = false,

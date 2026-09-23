@@ -1,5 +1,7 @@
 package ago.chat.android.conversations
 
+import ago.chat.android.core.domain.net.NetworkFailure
+
 /** «Мои» / «Ожидают» — `docs/backlog/26-14-*.md`'s own Scope: "one screen with a segmented control,
  * not two screens", so this is a value the one screen renders differently, never a navigation
  * destination. */
@@ -27,11 +29,13 @@ public data class ConversationRowUi(
      * flight — the same "hidden, not disabled... two operators clicking this within the same instant
      * is the ordinary case" posture `ago-console`'s `ClaimConversationButton` already documents. */
     public val isClaiming: Boolean = false,
-    /** The server's own refusal text, shown once and cleared only by
+    /** What the last claim attempt on this row failed with, shown once and cleared only by
      * [ConversationListViewModel.dismissClaimError] or by this conversation moving out of «Ожидают»
      * entirely (a claim that then succeeded from elsewhere, or the visitor leaving) — never cleared by
-     * an automatic retry, because there never is one. */
-    public val claimError: String? = null,
+     * an automatic retry, because there never is one. `26-59`: [ClaimErrorUi] rather than a `String`, so
+     * a genuine server refusal ([ClaimErrorUi.ServerRefusal]) and a transport failure that never reached
+     * the server ([ClaimErrorUi.Unavailable]) render differently instead of sharing one field. */
+    public val claimError: ClaimErrorUi? = null,
     /** `26-15`: carried through unchanged from [ago.chat.android.core.domain.conversations.ConversationSummary] -
      * the thread screen's own attach-control gate, read from the row the list already fetched rather
      * than a second network call (that field's own doc comment). Not read by anything on this screen
@@ -73,5 +77,24 @@ public data class ConversationListUiState(
     /** `false` only before either a cache read or a network answer has produced anything at all - the
      * one moment a loading skeleton, rather than an empty-state message, is the honest thing to show. */
     public val hasData: Boolean = false,
-    public val loadError: String? = null,
+    /** `26-59`: [NetworkFailure]'s own classification rather than a pre-rendered `String` — this
+     * screen stopped choosing the operator's words the moment it stopped being trustworthy enough to
+     * write an exception's own message into them; [ConversationListScreen] renders this into a
+     * sentence. */
+    public val loadError: NetworkFailure? = null,
 )
+
+/** `26-59`: what a claim attempt on one row failed with — a genuine server answer
+ * ([ServerRefusal], shown verbatim) or anything that kept the answer from ever being genuine at all
+ * ([Unavailable], a classification, never a fabricated sentence). Mirrors
+ * [ago.chat.android.core.domain.conversations.ClaimResult]'s own two failure arms one-to-one; this type
+ * exists only because [ConversationRowUi] needs one field to hold either. */
+public sealed interface ClaimErrorUi {
+    public data class ServerRefusal(
+        val detail: String,
+    ) : ClaimErrorUi
+
+    public data class Unavailable(
+        val reason: NetworkFailure,
+    ) : ClaimErrorUi
+}

@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
@@ -31,7 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * component, no network and no real hub connection in play at all.
  */
 internal class FakeConversationsApi(
-    var queueResult: QueueResult = QueueResult.Failed("not configured"),
+    var queueResult: QueueResult = QueueResult.Failed(NetworkFailure.Unexpected),
     var claimResult: (String) -> ClaimResult = { ClaimResult.Claimed },
 ) : ConversationsApi {
     var fetchCalls: Int = 0

@@ -1,5 +1,7 @@
 package ago.chat.android.core.domain.identity
 
+import ago.chat.android.core.domain.net.NetworkFailure
+
 /**
  * What a single post-authentication probe answered.
  *
@@ -23,29 +25,15 @@ public sealed interface ProbeOutcome {
      */
     public data object Refused : ProbeOutcome
 
-    /** The question was not answered at all. Never either terminal arm. */
-    public data class Unanswered(
-        val reason: ProbeFailure,
-    ) : ProbeOutcome
-}
-
-/** Why a probe could not answer. Rendered to the operator, so each case says something different. */
-public sealed interface ProbeFailure {
-    /**
-     * A status the caller has no reading for — a `401` (the bearer token was rejected *after* the
-     * client's own refresh-and-retry already had its turn), a `5xx`, anything else.
+    /** The question was not answered at all. Never either terminal arm.
+     *
+     * `26-59`: [reason] used to be this package's own [Unanswered]-only failure type
+     * (`UnexpectedStatus`/`Transport`/`Malformed`, each of the latter two carrying a raw exception
+     * description). It is [ago.chat.android.core.domain.net.NetworkFailure] now — the identical
+     * three-way distinction, generalised once it became clear every adapter in this app needed the
+     * same answer, not only this one's three probes.
      */
-    public data class UnexpectedStatus(
-        val status: Int,
-    ) : ProbeFailure
-
-    /** The request never reached a server, or its answer never came back. */
-    public data class Transport(
-        val message: String,
-    ) : ProbeFailure
-
-    /** A `2xx` whose body was not the shape this contract promises. */
-    public data class Malformed(
-        val message: String,
-    ) : ProbeFailure
+    public data class Unanswered(
+        val reason: NetworkFailure,
+    ) : ProbeOutcome
 }

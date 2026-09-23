@@ -3,9 +3,11 @@ package ago.chat.android.thread
 import ago.chat.android.R
 import ago.chat.android.core.domain.conversations.ConversationStateLabel
 import ago.chat.android.core.domain.conversations.conversationStateLabel
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.ui.components.HubConnectionDot
+import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
@@ -372,14 +374,14 @@ private fun LoadingBody() {
 
 @Composable
 private fun JoinErrorBody(
-    error: String,
+    error: NetworkFailure,
     onRetry: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = stringResource(R.string.thread_join_failed_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                text = error,
+                text = networkFailureText(error),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
@@ -425,7 +427,7 @@ private fun MessageList(
     messages: List<MessageDto>,
     canLoadOlder: Boolean,
     loadingOlder: Boolean,
-    historyError: String?,
+    historyError: NetworkFailure?,
     onLoadOlder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -458,7 +460,11 @@ private fun MessageList(
         // once the join itself succeeded, so any `historyError` here is this list's own to show.
         historyError?.let { error ->
             item(key = "history-error") {
-                DismissibleBanner(message = error, actionLabel = stringResource(R.string.action_retry), onAction = onLoadOlder)
+                DismissibleBanner(
+                    message = networkFailureText(error),
+                    actionLabel = stringResource(R.string.action_retry),
+                    onAction = onLoadOlder,
+                )
             }
         }
     }

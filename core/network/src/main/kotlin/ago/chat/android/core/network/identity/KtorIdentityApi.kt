@@ -1,10 +1,10 @@
 package ago.chat.android.core.network.identity
 
 import ago.chat.android.core.domain.identity.IdentityApi
-import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.ProbeOutcome
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.domain.net.NetworkFailure
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -45,11 +45,11 @@ public class KtorIdentityApi(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
-                return TenancyListing.Unanswered(ProbeFailure.Transport(failure.describe()))
+                return TenancyListing.Unanswered(NetworkFailure.from(failure))
             }
 
         if (!response.status.isSuccess()) {
-            return TenancyListing.Unanswered(ProbeFailure.UnexpectedStatus(response.status.value))
+            return TenancyListing.Unanswered(NetworkFailure.ServerError(response.status.value))
         }
 
         return try {
@@ -61,7 +61,7 @@ public class KtorIdentityApi(
             // A `200` whose body is not the promised shape is not "no tenancies" — that reading is
             // what `ago-console`'s own `shapeGuard.ts` was added to stop, after a dropped array
             // looked exactly like an identity with one shop. It is a call that did not answer.
-            TenancyListing.Unanswered(ProbeFailure.Malformed(failure.describe()))
+            TenancyListing.Unanswered(NetworkFailure.from(failure))
         }
     }
 
@@ -101,25 +101,16 @@ public class KtorIdentityApi(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
-                return ProbeOutcome.Unanswered(ProbeFailure.Transport(failure.describe()))
+                return ProbeOutcome.Unanswered(NetworkFailure.from(failure))
             }
 
         return when {
             response.status.isSuccess() -> ProbeOutcome.Accepted
             response.status.value == refusedStatus -> ProbeOutcome.Refused
-            else -> ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(response.status.value))
+            else -> ProbeOutcome.Unanswered(NetworkFailure.ServerError(response.status.value))
         }
     }
 }
-
-/**
- * The exception's type and its own message, and nothing this class reached for itself.
- *
- * Deliberately not `toString()` on an arbitrary cause chain and never the request that produced it:
- * this string is rendered on a retry screen and may end up in a bug report, and a request built by
- * this client carries an `Authorization` header.
- */
-private fun Exception.describe(): String = "${this::class.simpleName}: ${message ?: "no detail"}"
 
 /** `Ago.Chat.Contracts.TenanciesResponse`, camelCase per ASP.NET Core's default policy. */
 @Serializable

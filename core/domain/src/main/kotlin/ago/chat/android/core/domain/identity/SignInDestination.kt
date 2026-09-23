@@ -1,5 +1,7 @@
 package ago.chat.android.core.domain.identity
 
+import ago.chat.android.core.domain.net.NetworkFailure
+
 /**
  * Where a freshly authenticated identity belongs. Five cases, and the fifth is the one this type
  * exists for.
@@ -44,7 +46,7 @@ public sealed interface SignInDestination {
 public sealed interface RoutingFailure {
     public data class ProbeDidNotAnswer(
         val step: RoutingStep,
-        val reason: ProbeFailure,
+        val reason: NetworkFailure,
     ) : RoutingFailure
 
     /**

@@ -1,5 +1,6 @@
 package ago.chat.android.core.domain.identity
 
+import ago.chat.android.core.domain.net.NetworkFailure
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -73,10 +74,10 @@ class PostSignInRouterTest {
         runTest {
             val nonAnswers =
                 listOf(
-                    ProbeFailure.UnexpectedStatus(401),
-                    ProbeFailure.UnexpectedStatus(500),
-                    ProbeFailure.UnexpectedStatus(503),
-                    ProbeFailure.Transport("Unable to resolve host chat-api.reserve-me.ru"),
+                    NetworkFailure.ServerError(401),
+                    NetworkFailure.ServerError(500),
+                    NetworkFailure.ServerError(503),
+                    NetworkFailure.NoConnection,
                 )
 
             for (reason in nonAnswers) {
@@ -114,7 +115,7 @@ class PostSignInRouterTest {
                 FakeIdentityApi(
                     tenancies = TenancyListing.Known(emptyList()),
                     seat = ProbeOutcome.Refused,
-                    owner = ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(500)),
+                    owner = ProbeOutcome.Unanswered(NetworkFailure.ServerError(500)),
                 )
 
             val destination = routerFor(api, RecordingActiveSite()).route()
@@ -123,7 +124,7 @@ class PostSignInRouterTest {
                 SignInDestination.Unavailable(
                     RoutingFailure.ProbeDidNotAnswer(
                         RoutingStep.OWNER_ELIGIBILITY,
-                        ProbeFailure.UnexpectedStatus(500),
+                        NetworkFailure.ServerError(500),
                     ),
                 ),
                 destination,
@@ -221,7 +222,7 @@ class PostSignInRouterTest {
         runTest {
             val api =
                 FakeIdentityApi(
-                    tenancies = TenancyListing.Unanswered(ProbeFailure.Transport("connection reset")),
+                    tenancies = TenancyListing.Unanswered(NetworkFailure.NoConnection),
                     seat = ProbeOutcome.Refused,
                     owner = ProbeOutcome.Refused,
                 )
@@ -232,7 +233,7 @@ class PostSignInRouterTest {
                 SignInDestination.Unavailable(
                     RoutingFailure.ProbeDidNotAnswer(
                         RoutingStep.TENANCIES,
-                        ProbeFailure.Transport("connection reset"),
+                        NetworkFailure.NoConnection,
                     ),
                 ),
                 destination,

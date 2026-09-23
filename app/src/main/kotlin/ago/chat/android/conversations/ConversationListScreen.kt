@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.HubConnectionDot
 import ago.chat.android.ui.components.VisitorAvatar
+import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.shortElapsedText
@@ -216,9 +217,9 @@ internal fun ConversationListScreen(
                 if (state.isStale) {
                     StaleBanner(onRefresh = onRefresh)
                 }
-                state.loadError?.let { message ->
+                state.loadError?.let { reason ->
                     Text(
-                        text = message,
+                        text = networkFailureText(reason),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -860,7 +861,14 @@ private fun WaitingRow(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
             ) {
                 Text(
-                    text = error,
+                    // `26-59`: only [ClaimErrorUi.ServerRefusal] is a sentence the server itself wrote;
+                    // [ClaimErrorUi.Unavailable] renders through the identical classification-driven
+                    // vocabulary every other network failure in this app now uses.
+                    text =
+                        when (error) {
+                            is ClaimErrorUi.ServerRefusal -> error.detail
+                            is ClaimErrorUi.Unavailable -> networkFailureText(error.reason)
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f),
