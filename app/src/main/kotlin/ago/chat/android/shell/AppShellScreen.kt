@@ -5,6 +5,8 @@ import ago.chat.android.bookings.BookingsRoute
 import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
 import ago.chat.android.core.domain.permissions.OperatorPermissions
+import ago.chat.android.core.domain.permissions.Permission
+import ago.chat.android.core.domain.permissions.holds
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.team.TeamChatRoute
 import ago.chat.android.ui.icons.AgoIcons
@@ -150,7 +152,14 @@ internal fun AppShellScreen(
     // `clause3_backNeverWalksThroughPreviouslyVisitedTabs` is the one back-contract test that actually
     // clicks «Записи», and substitutes a trivial marker here for the same Hilt-free reason
     // `BackContractMoreScreenTest` substitutes one for `settingsScreen` below.
-    bookingsTab: @Composable () -> Unit = { BookingsRoute() },
+    //
+    // `26-51`: the `Boolean` this slot now takes is whether the signed-in operator holds
+    // `customer:read` — computed once below, from the [OperatorPermissions.Known] this function already
+    // has in hand, and handed to [BookingsRoute] as [ago.chat.android.bookings.BookingsRoute.showConfirmedSegment].
+    // A back-contract test's own substitute lambda (`{ Text("BOOKINGS_MARKER") }`) still type-checks
+    // unchanged against this widened type: a single-parameter function literal that never reads its
+    // parameter is ordinary Kotlin, not a test-only accommodation.
+    bookingsTab: @Composable (Boolean) -> Unit = { showConfirmedSegment -> BookingsRoute(showConfirmedSegment = showConfirmedSegment) },
     // `26-17`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for the same
     // reason - `BackContractMoreScreenTest` drives the real `NavHost`/`MoreScreen`/back-stack mechanics
     // with no Hilt component in play, and the default below is the one place `SettingsRoute`'s own
@@ -201,7 +210,7 @@ internal fun AppShellScreen(
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     conversationsTab: @Composable () -> Unit,
-    bookingsTab: @Composable () -> Unit,
+    bookingsTab: @Composable (Boolean) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable () -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -297,7 +306,12 @@ private fun AppShellContent(
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
-            composable(BottomDestination.Bookings.route()) { bookingsTab() }
+            // `26-51`: `customer:read` alone is what earns Утверждены — see [Permission]'s own doc
+            // comment table and `CalendarBookingsPage.tsx:156,182`. Computed here, once, from
+            // [permissions] rather than inside [ago.chat.android.bookings.BookingsScreen], the same
+            // "the caller who already has the permission set computes the Boolean" split
+            // [visibleBottomDestinations] draws one level up for this whole destination's own visibility.
+            composable(BottomDestination.Bookings.route()) { bookingsTab(permissions.holds(Permission.CUSTOMER_READ)) }
             composable(BottomDestination.Team.route()) { teamTab() }
             composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
             composable(BottomDestination.More.route()) {
