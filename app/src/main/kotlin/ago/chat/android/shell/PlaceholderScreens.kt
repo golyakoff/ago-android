@@ -19,12 +19,15 @@ import androidx.compose.ui.unit.dp
 
 /**
  * `26-16`'s own Out of scope: "Any Записи, Команда or Аналитика screen. The destinations exist and
- * are empty-but-honest; their contents are later waves." These three composables are that honest
- * emptiness — a title, one sentence saying content is not built yet, and nothing that pretends
- * otherwise (no spinner, since nothing is loading; no error styling, since nothing failed).
+ * are empty-but-honest; their contents are later waves." Записи got its real screen at `26-48`
+ * ([ago.chat.android.bookings.BookingsRoute]) and Команда at `26-54`
+ * ([ago.chat.android.team.TeamChatRoute]); Аналитика is still this honest emptiness — a title, one
+ * sentence saying content is not built yet, and nothing that pretends otherwise (no spinner, since
+ * nothing is loading; no error styling, since nothing failed).
  *
- * One shared shell rather than three near-identical `Scaffold`s, because the only thing that differs
- * between Записи/Команда/Аналитика at this wave is which string resource names the destination.
+ * `PlaceholderDestinationScreen` itself stays — a single row's worth of shared shape for whichever
+ * destination is next to lose its placeholder — even though only one caller ([AnalyticsPlaceholderScreen])
+ * remains.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,14 +47,6 @@ internal fun PlaceholderDestinationScreen(
             }
         }
     }
-}
-
-@Composable
-internal fun BookingsPlaceholderScreen() {
-    PlaceholderDestinationScreen(
-        title = stringResource(R.string.nav_bookings),
-        body = stringResource(R.string.bookings_placeholder_body),
-    )
 }
 
 @Composable

@@ -54,7 +54,15 @@ class AgoAuthSessionSignOutTest {
                 AgoAuthSession(
                     context = context,
                     store = store,
-                    config = OidcConfig(issuer = "", clientId = "", redirectUri = "", apiBaseUrl = "", consoleUrl = ""),
+                    config =
+                        OidcConfig(
+                            issuer = "",
+                            clientId = "",
+                            redirectUri = "",
+                            apiBaseUrl = "",
+                            consoleUrl = "",
+                            calendarApiBaseUrl = null,
+                        ),
                     ioDispatcher = Dispatchers.IO,
                 )
 

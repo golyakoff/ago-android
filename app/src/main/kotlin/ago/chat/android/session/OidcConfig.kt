@@ -24,4 +24,11 @@ public data class OidcConfig(
     val apiBaseUrl: String,
     /** The web console, linked to from the platform-owner terminal screen (`scope-inventory.md` §2). */
     val consoleUrl: String,
+    /**
+     * `26-48`: `Ago.Calendar.Api`'s own origin — a *different* backend than [apiBaseUrl], on its own
+     * deployment. `null` when this deployment does not run AGO Calendar at all, the identical
+     * `string | null` shape `ago-console`'s own `config.calendarApiBaseUrl` already carries
+     * (`calendarApi.ts`'s own doc comment) — never a guessed or default hostname.
+     */
+    val calendarApiBaseUrl: String?,
 )

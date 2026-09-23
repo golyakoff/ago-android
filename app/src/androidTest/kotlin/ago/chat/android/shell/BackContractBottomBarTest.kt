@@ -122,8 +122,12 @@ class BackContractBottomBarTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
-                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
-                // none of - the identical substitution `conversationsTab` above already makes.
+                // `26-48`/`26-54`: [ago.chat.android.bookings.BookingsRoute] and
+                // [ago.chat.android.team.TeamChatRoute] both need a Hilt component this suite
+                // deliberately has none of - the identical Hilt-avoidance substitution `conversationsTab`
+                // above already makes for Диалоги's own content. This clause is about the bottom bar's
+                // own back stack, not about either tab's content, and this test visits both.
+                bookingsTab = { Text("BOOKINGS_MARKER") },
                 teamTab = { Text("TEAM_MARKER") },
             )
         }

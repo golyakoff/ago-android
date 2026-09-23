@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.bookings.BookingsRoute
 import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
 import ago.chat.android.core.domain.permissions.OperatorPermissions
@@ -144,6 +145,12 @@ internal fun AppShellScreen(
     conversationsTab: @Composable () -> Unit = {
         ConversationsTabHost(activeSiteId = activeSiteId, hubConnectionState = hubConnectionState, onSignOut = onSignOut)
     },
+    // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for
+    // [BookingsRoute]'s own `hiltViewModel()` call - `BackContractBottomBarTest`'s own
+    // `clause3_backNeverWalksThroughPreviouslyVisitedTabs` is the one back-contract test that actually
+    // clicks «Записи», and substitutes a trivial marker here for the same Hilt-free reason
+    // `BackContractMoreScreenTest` substitutes one for `settingsScreen` below.
+    bookingsTab: @Composable () -> Unit = { BookingsRoute() },
     // `26-17`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for the same
     // reason - `BackContractMoreScreenTest` drives the real `NavHost`/`MoreScreen`/back-stack mechanics
     // with no Hilt component in play, and the default below is the one place `SettingsRoute`'s own
@@ -173,6 +180,7 @@ internal fun AppShellScreen(
             AppShellContent(
                 permissions = permissions,
                 conversationsTab = conversationsTab,
+                bookingsTab = bookingsTab,
                 settingsScreen = settingsScreen,
                 teamTab = teamTab,
                 onSiteSwitched = onSiteSwitched,
@@ -193,6 +201,7 @@ internal fun AppShellScreen(
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     conversationsTab: @Composable () -> Unit,
+    bookingsTab: @Composable () -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable () -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -288,7 +297,7 @@ private fun AppShellContent(
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
-            composable(BottomDestination.Bookings.route()) { BookingsPlaceholderScreen() }
+            composable(BottomDestination.Bookings.route()) { bookingsTab() }
             composable(BottomDestination.Team.route()) { teamTab() }
             composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
             composable(BottomDestination.More.route()) {
