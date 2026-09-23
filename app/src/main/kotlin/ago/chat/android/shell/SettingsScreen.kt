@@ -5,6 +5,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -106,8 +108,14 @@ internal fun SettingsScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.more_settings_row)) },
                     navigationIcon = {
+                        // `26-43`: the mockup's `i-back`, a real vector - this used to be a literal
+                        // `Text("←")`, the same gap `26-23` had already closed on `ThreadScreen` and
+                        // `AppShellScreen`. Matches `ThreadScreen.kt`'s own navigation icon exactly.
                         IconButton(onClick = onBack) {
-                            Text(text = "←", style = MaterialTheme.typography.headlineSmall)
+                            Icon(
+                                imageVector = AgoIcons.Back,
+                                contentDescription = stringResource(R.string.action_back),
+                            )
                         }
                     },
                 )
