@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -174,7 +175,11 @@ class SettingsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("←").performClick()
+        // `26-43`: the back control used to be found by its own literal "←" text; it is a real
+        // vector `Icon` now, so the semantics tree carries no text at all for it - found by its
+        // `contentDescription` instead ("Назад", `R.string.action_back`), the same hardcoded-literal
+        // convention this file's own other `onNodeWithText` calls already use.
+        composeTestRule.onNodeWithContentDescription("Назад").performClick()
 
         assertEquals(1, backCalls)
     }
