@@ -54,6 +54,10 @@ public data class ConversationRowUi(
      * (`ConversationsTabHost`) rather than a second network call. Not read by anything on this screen
      * itself; `""` (the field's own default) means "predates this field" and renders no state word. */
     public val state: String = "",
+    /** `26-76`: carried through unchanged from [ago.chat.android.core.domain.conversations.ConversationSummary] -
+     * `null` for plain prose, non-null for a module step. [ConversationListScreen]'s own snippet-line
+     * call site reads this to prefix [lastMessagePreview] with "📅 " rather than rendering it bare. */
+    public val lastMessageContentKind: String? = null,
 )
 
 /**

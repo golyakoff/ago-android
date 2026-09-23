@@ -501,7 +501,12 @@ private fun ConversationRow(
             // therefore never an orphaned timestamp either (`ConversationRowSnippetLine`'s own doc
             // comment on why this reads `lastMessagePreview` alone, not `lastMessageAt`).
             row.lastMessagePreview?.let { preview ->
-                ConversationRowSnippetLine(preview = preview, lastMessageAt = row.lastMessageAt, now = now)
+                // `26-76`: exactly one module (Ago.Calendar) is wired to any site today, so "non-null
+                // contentKind" and "came from Calendar" are the same fact by elimination, not something
+                // Chat's own contract actually knows (adr/0065 decision 4) - a second wired module would
+                // need this icon choice revisited.
+                val snippetText = if (row.lastMessageContentKind != null) "📅 $preview" else preview
+                ConversationRowSnippetLine(preview = snippetText, lastMessageAt = row.lastMessageAt, now = now)
             }
             if (row.isNewlyAssigned) {
                 // `.rmeta{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap}` - a plain `Row`

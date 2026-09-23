@@ -119,6 +119,10 @@ private data class ConversationSummaryWireDto(
     // `Ago.Chat.Contracts.ConversationSummaryDto.State`'s own wire spelling, unparsed here -
     // [ConversationSummary]'s own doc comment on why the classification lives in `:core:domain`.
     val state: String = "",
+    // `26-76`: additive the identical way — `null` for plain prose and for a row that predates the
+    // field. `Ago.Chat.Contracts.ConversationSummaryDto.LastMessageContentKind`'s own raw wire value,
+    // unparsed here - [ConversationSummary]'s own doc comment carries the reasoning.
+    val lastMessageContentKind: String? = null,
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -141,6 +145,7 @@ private fun ConversationSummaryWireDto.toDomain() =
         lastMessagePreview = lastMessagePreview,
         lastMessageAt = lastMessageAt,
         state = state,
+        lastMessageContentKind = lastMessageContentKind,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =
