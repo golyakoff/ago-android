@@ -103,6 +103,7 @@ public fun AppShellRoute(
 ) {
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    val identity by viewModel.identity.collectAsStateWithLifecycle()
 
     // `26-17`: the Settings screen's own site switcher writes a new site *through* `ActiveSiteSelection`
     // (`di/AppModule`'s single source of truth) rather than through this value, so this local override
@@ -116,6 +117,8 @@ public fun AppShellRoute(
         loadError = loadError,
         activeSiteId = currentActiveSiteId,
         hubConnectionState = hubConnectionState,
+        operatorDisplayName = identity?.displayName,
+        operatorEmail = identity?.email,
         onRetry = viewModel::retry,
         onSignOut = onSignOut,
         onSiteSwitched = { newSiteId -> currentActiveSiteId = newSiteId },
@@ -137,6 +140,14 @@ public fun AppShellRoute(
  * drive the *real* `NavHost`/bottom-bar wiring below with no Hilt component in play at all — the
  * identical reasoning [ConversationListRoute]/[ThreadRoute] already apply to their own `viewModel`
  * parameter, one level up.
+ *
+ * `26-77`: every tab slot below now takes one more argument, `onOpenSettings: () -> Unit` — each
+ * top-level screen's own [ago.chat.android.ui.components.AccountAvatarAction] needs one, and only
+ * [AppShellContent] holds the `NavController` that call actually navigates through (see that
+ * function's own doc comment for why the wiring sits there and not in these defaults). A back-contract
+ * test's own substitute lambda that ignores the new parameter still type-checks unchanged against a
+ * widened function type — `bookingsTab`'s own comment below already states why for its two
+ * pre-existing `Boolean`s, and one more unread parameter changes nothing about that.
  */
 @Composable
 internal fun AppShellScreen(
@@ -146,9 +157,18 @@ internal fun AppShellScreen(
     hubConnectionState: OperatorHubConnectionState,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
     onSiteSwitched: (String) -> Unit = {},
-    conversationsTab: @Composable () -> Unit = {
-        ConversationsTabHost(activeSiteId = activeSiteId, hubConnectionState = hubConnectionState, onSignOut = onSignOut)
+    conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit = { onOpenSettings ->
+        ConversationsTabHost(
+            activeSiteId = activeSiteId,
+            hubConnectionState = hubConnectionState,
+            onSignOut = onSignOut,
+            operatorDisplayName = operatorDisplayName,
+            operatorEmail = operatorEmail,
+            onOpenSettings = onOpenSettings,
+        )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for
     // [BookingsRoute]'s own `hiltViewModel()` call - `BackContractBottomBarTest`'s own
@@ -165,17 +185,32 @@ internal fun AppShellScreen(
     // (`{ Text("BOOKINGS_MARKER") }`) still type-checks unchanged against this widened type: a
     // function literal that never reads its parameters is ordinary Kotlin, not a test-only
     // accommodation.
-    bookingsTab: @Composable (Boolean, Boolean) -> Unit = { showConfirmedSegment, showClientsSegment ->
-        BookingsRoute(showConfirmedSegment = showConfirmedSegment, showClientsSegment = showClientsSegment)
+    bookingsTab: @Composable (Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
+        showConfirmedSegment,
+        showClientsSegment,
+        onOpenSettings,
+        ->
+        BookingsRoute(
+            showConfirmedSegment = showConfirmedSegment,
+            showClientsSegment = showClientsSegment,
+            hubConnectionState = hubConnectionState,
+            operatorDisplayName = operatorDisplayName,
+            operatorEmail = operatorEmail,
+            onOpenSettings = onOpenSettings,
+            onSignOut = onSignOut,
+        )
     },
     // `26-17`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for the same
     // reason - `BackContractMoreScreenTest` drives the real `NavHost`/`MoreScreen`/back-stack mechanics
     // with no Hilt component in play, and the default below is the one place `SettingsRoute`'s own
     // `hiltViewModel()` call would otherwise force one into existence. The two callbacks this slot is
-    // handed - `onBack` (closes the row, back to the Ещё list) and `onSiteSwitched` (see
-    // [AppShellContent]'s own doc comment) - are supplied at the call site inside [AppShellContent],
-    // not baked into this default, because the second one needs the `NavController` only that function
-    // owns.
+    // handed - `onBack` (pops the new global `settings` route - see [AppShellContent]'s own doc
+    // comment) and `onSiteSwitched` - are supplied at the call site inside [AppShellContent], not baked
+    // into this default, because both need the `NavController` only that function owns.
+    //
+    // `26-77`: this slot used to be reached only from `MoreScreen`'s own `openRowId`; it is now wired
+    // to a real, top-level `NavHost` route any screen's account menu can push, and `MoreScreen` no
+    // longer takes this parameter at all (its own doc comment states why).
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit = { onBack, onSwitched ->
         SettingsRoute(onBack = onBack, onSignOut = onSignOut, onSiteSwitched = onSwitched)
     },
@@ -188,8 +223,15 @@ internal fun AppShellScreen(
     // [OperatorPermissions.holds] answers `false` for that case and this default is only ever actually
     // *drawn* once [AppShellScreen]'s own `when` below has already matched [OperatorPermissions.Known]
     // (`AppShellContent`'s only caller).
-    teamTab: @Composable () -> Unit = {
-        TeamRoute(canManageOperators = permissions.holds(Permission.SITE_MANAGE_OPERATORS))
+    teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit = { onOpenSettings ->
+        TeamRoute(
+            canManageOperators = permissions.holds(Permission.SITE_MANAGE_OPERATORS),
+            hubConnectionState = hubConnectionState,
+            operatorDisplayName = operatorDisplayName,
+            operatorEmail = operatorEmail,
+            onOpenSettings = onOpenSettings,
+            onSignOut = onSignOut,
+        )
     },
 ) {
     when (permissions) {
@@ -203,6 +245,10 @@ internal fun AppShellScreen(
         is OperatorPermissions.Known ->
             AppShellContent(
                 permissions = permissions,
+                hubConnectionState = hubConnectionState,
+                operatorDisplayName = operatorDisplayName,
+                operatorEmail = operatorEmail,
+                onSignOut = onSignOut,
                 conversationsTab = conversationsTab,
                 bookingsTab = bookingsTab,
                 settingsScreen = settingsScreen,
@@ -220,14 +266,38 @@ internal fun AppShellScreen(
  * than re-invented. [onSiteSwitched] (the plain, `NavController`-free half) still bubbles further up, to
  * [AppShellRoute]'s own local override - see that function's doc comment for why the site shown while
  * *not* switching lives there rather than here.
+ *
+ * ## `26-77`: Настройки becomes a real, top-level `NavHost` destination
+ *
+ * Every tab slot below is now called with an `onOpenSettings` lambda that pushes [SETTINGS_ROUTE] —
+ * `navController.navigate(SETTINGS_ROUTE)`, an ordinary push with no `popUpTo`/`launchSingleTop`
+ * recipe, unlike the bottom bar's own `onClick` above. That distinction is the whole answer to this
+ * item's own hardest question ("how does Настройки become reachable from every tab without moving
+ * anything out of each screen's own `Scaffold`"): the bottom-bar recipe exists so that switching
+ * between the five *tabs* never grows the back stack past two entries; Настройки is not a tab, it is a
+ * drill-in **on top of** whichever tab was current, so it wants the opposite property — a genuine push
+ * that a single back pop undoes, landing exactly back on that tab. Tracing it through: open Команда
+ * (stack `[conversations, team]`), open Настройки from its avatar (stack `[conversations, team,
+ * settings]`), back pops `settings` → `team` is showing again, exactly the screen the operator left,
+ * with its own tab still highlighted since `currentRoute` matches `team` once more. A second back pops
+ * `team` → `conversations`, and a third exits — clause 3 (`AppShellScreen`'s own doc comment) extended
+ * by exactly one more, perfectly ordinary layer, not re-implemented for it.
+ *
+ * `MoreScreen` no longer receives `settingsScreen` at all — see that file's own doc comment for why
+ * Настройки leaving Ещё simplifies rather than complicates it — so this function is now the *only*
+ * place [settingsScreen] is invoked.
  */
 @Composable
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
-    conversationsTab: @Composable () -> Unit,
-    bookingsTab: @Composable (Boolean, Boolean) -> Unit,
+    hubConnectionState: OperatorHubConnectionState,
+    operatorDisplayName: String?,
+    operatorEmail: String?,
+    onSignOut: () -> Unit,
+    conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
+    bookingsTab: @Composable (Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
-    teamTab: @Composable () -> Unit,
+    teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
 ) {
     val navController = rememberNavController()
@@ -320,7 +390,9 @@ private fun AppShellContent(
             // is what stops a destination's own `Scaffold` from reserving it a second time.
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
-            composable(BottomDestination.Conversations.route()) { conversationsTab() }
+            composable(BottomDestination.Conversations.route()) {
+                conversationsTab { navController.navigate(SETTINGS_ROUTE) }
+            }
             // `26-51`/`26-52`: `customer:read` alone earns Утверждены; `calendar:configure` or
             // `customer:read` earns Клиенты — a third, independent gate matching
             // `CalendarContactsPage.tsx:48` exactly, not the same Boolean reused (see [Permission]'s own
@@ -332,27 +404,58 @@ private fun AppShellContent(
                 bookingsTab(
                     permissions.holds(Permission.CUSTOMER_READ),
                     permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                ) { navController.navigate(SETTINGS_ROUTE) }
+            }
+            composable(BottomDestination.Team.route()) {
+                teamTab { navController.navigate(SETTINGS_ROUTE) }
+            }
+            composable(BottomDestination.Analytics.route()) {
+                // `26-77`: no Hilt-avoidance slot exists for Аналитика — no back-contract test has ever
+                // needed to visit its own content, only to navigate past it (`BackContractBottomBarTest`'s
+                // own `clause3_backNeverWalksThroughPreviouslyVisitedTabs`), so `AnalyticsRoute` is wired
+                // directly here rather than through one more slot on [AppShellScreen] nobody would ever
+                // substitute.
+                AnalyticsRoute(
+                    hubConnectionState = hubConnectionState,
+                    operatorDisplayName = operatorDisplayName,
+                    operatorEmail = operatorEmail,
+                    onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
+                    onSignOut = onSignOut,
                 )
             }
-            composable(BottomDestination.Team.route()) { teamTab() }
-            composable(BottomDestination.Analytics.route()) { AnalyticsRoute() }
             composable(BottomDestination.More.route()) {
+                // `26-77`: `MoreScreen` no longer takes a `settingsScreen` slot - Настройки left Ещё
+                // entirely (that file's own doc comment) - so this call site needs nothing but the same
+                // account-menu inputs every other destination above already receives.
                 MoreScreen(
-                    settingsScreen = { onBack ->
-                        settingsScreen(onBack) { newSiteId ->
-                            onSiteSwitched(newSiteId)
-                            navController.navigate(BottomDestination.Conversations.route()) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    },
+                    hubConnectionState = hubConnectionState,
+                    operatorDisplayName = operatorDisplayName,
+                    operatorEmail = operatorEmail,
+                    onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
+                    onSignOut = onSignOut,
                 )
+            }
+            // `26-77`: the one `NavHost` route none of the five bottom-nav destinations owns - pushed by
+            // any of their own account menus (`AppShellContent`'s own doc comment above states the back-
+            // stack reasoning in full) rather than reached through the bottom bar's `popUpTo` recipe.
+            composable(SETTINGS_ROUTE) {
+                settingsScreen({ navController.popBackStack() }) { newSiteId ->
+                    onSiteSwitched(newSiteId)
+                    navController.navigate(BottomDestination.Conversations.route()) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
             }
         }
     }
 }
+
+/** `26-77`: Настройки's own `NavHost` route — not a [BottomDestination] (it is reached by every
+ * account menu's own push, never by a `NavigationBarItem`), so it is named here rather than added as a
+ * sixth enum member `visibleBottomDestinations` would then have to be taught to always exclude. */
+internal const val SETTINGS_ROUTE: String = "settings"
 
 /** The route string [BottomDestination] is navigated by — kept here, not on the `:core:domain` enum
  * itself, since a Navigation Compose route is a UI/wiring detail the domain module has no reason to

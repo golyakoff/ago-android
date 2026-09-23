@@ -1,6 +1,8 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -28,27 +30,23 @@ import androidx.compose.ui.unit.dp
 
 /**
  * `26-16`: Ещё, `navigation.md`'s own "list-of-lists" — the three folded sections (Каналы,
- * Автоматизация, Администрирование) as headers, their items as rows, no nesting beyond that, plus
- * Settings as a fourth, ungrouped row sitting directly under Ещё rather than inside any of the three
- * (`navigation.md`'s own Mermaid diagram: `More --> Set["Настройки"]`, a direct child, not routed
- * through `Ch`/`Au`/`Ad`).
+ * Автоматизация, Администрирование) as headers, their items as rows, no nesting beyond that.
  *
- * **Every one of this wave's rows is honest about not existing yet.** [buildMoreRows] returns exactly
- * one entry — Settings — because none of Каналы/Автоматизация/Администрирование's own screens are
- * built in this app yet (`26-16`'s own Out of scope names every one of them as later work), and "a row
- * exists only for a screen that exists" (`docs/backlog/26-16-*.md`'s own Scope) is not a rule this
- * wave gets to apply selectively. [buildMoreSections] is the identical `buildSection`-returns-null-then-
- * filter rule `ago-console/src/shell/consoleNav.ts` applies to its own seven sections, ported: with
- * every section's own row list empty, all three disappear, and what an operator actually sees this
- * wave is a one-row screen. That is the correct, current answer, not a bug this item leaves behind —
- * the machinery is what a later item needs when it adds the first real Каналы/Автоматизация/
- * Администрирование screen, not a placeholder list invented to look fuller than the app actually is.
+ * **`26-77` moved Настройки out of this screen entirely** — into
+ * [AccountAvatarAction][ago.chat.android.ui.components.AccountAvatarAction]'s own menu, reachable from
+ * every top-level screen rather than only this one (`docs/backlog/26-77-*.md`'s own Scope: `26-16`'s
+ * own brief had already named the row's placement here as "a stated exception… even if that row
+ * currently points nowhere… since `26-17` hasn't landed" — a documented stopgap, not a considered
+ * permanent home). `SETTINGS_ROW_ID` and its branch are gone with it; this screen no longer takes a
+ * `settingsScreen` parameter at all, since nothing inside it opens Settings any more —
+ * [AppShellScreen]'s own `NavHost` owns that now, one level up.
  *
- * **Settings gets a stated exception to that same rule.** `docs/backlog/26-16-*.md`'s own brief:
- * "this item puts the row in Ещё, even if that row currently points nowhere (or a placeholder) since
- * `26-17` hasn't landed" — so [SETTINGS_ROW_ID] is drawn unconditionally. `26-17` is the item that
- * lands: opening the row now renders the real [SettingsRoute] rather than the placeholder this file
- * used to draw in its place.
+ * **Every row below is honest about not existing yet.** [buildMoreRows] returns four rows —
+ * Автоматизация's «Готовые ответы»/«Автоответ вне смены», Администрирование's «Операторы и роли»/
+ * «Тариф и оплата» — each opening [PlaceholderDestinationScreen], because none of their own real
+ * screens are built in this app yet. Каналы still has none at all, so it still does not appear
+ * ([buildMoreSections]' own "a section with no rows is not returned at all" rule, ported from
+ * `ago-console/src/shell/consoleNav.ts`'s `buildSection`) — unchanged from every wave before this one.
  *
  * ## Back-button contract clause 2
  *
@@ -62,25 +60,65 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MoreScreen(settingsScreen: @Composable (onBack: () -> Unit) -> Unit) {
+internal fun MoreScreen(
+    hubConnectionState: OperatorHubConnectionState,
+    operatorDisplayName: String?,
+    operatorEmail: String?,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
+    val rows = remember { buildMoreRows() }
     BackHandler(enabled = openRowId != null) { openRowId = null }
 
-    when (openRowId) {
-        SETTINGS_ROW_ID -> settingsScreen { openRowId = null }
-        else -> MoreListScreen(onRowClick = { rowId -> openRowId = rowId })
+    val openRow = rows.firstOrNull { it.id == openRowId }
+    if (openRow != null) {
+        PlaceholderDestinationScreen(title = stringResource(openRow.labelRes), body = stringResource(R.string.more_placeholder_body))
+    } else {
+        MoreListScreen(
+            rows = rows,
+            hubConnectionState = hubConnectionState,
+            operatorDisplayName = operatorDisplayName,
+            operatorEmail = operatorEmail,
+            onOpenSettings = onOpenSettings,
+            onSignOut = onSignOut,
+            onRowClick = { rowId -> openRowId = rowId },
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MoreListScreen(onRowClick: (String) -> Unit) {
-    val rows = remember { buildMoreRows() }
+private fun MoreListScreen(
+    rows: List<MoreRow>,
+    hubConnectionState: OperatorHubConnectionState,
+    operatorDisplayName: String?,
+    operatorEmail: String?,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+    onRowClick: (String) -> Unit,
+) {
     val sections = remember(rows) { buildMoreSections(rows) }
     val ungrouped = remember(rows) { rows.filter { it.section == null } }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Scaffold(topBar = { TopAppBar(title = { Text(text = stringResource(R.string.nav_more)) }) }) { padding ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(text = stringResource(R.string.nav_more)) },
+                    actions = {
+                        AccountAvatarAction(
+                            displayName = operatorDisplayName,
+                            email = operatorEmail,
+                            hubConnectionState = hubConnectionState,
+                            onOpenSettings = onOpenSettings,
+                            onSignOut = onSignOut,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                )
+            },
+        ) { padding ->
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 for ((section, sectionRows) in sections) {
                     item(key = "header-${section.name}") {
@@ -126,18 +164,42 @@ internal enum class MoreSectionId(
 internal data class MoreRow(
     val id: String,
     val labelRes: Int,
-    /** `null` for a row that sits directly under Ещё, outside any of the three folded sections —
-     * Settings is the one row `navigation.md` draws this way. */
+    /** `null` for a row that sits directly under Ещё, outside any of the three folded sections. No
+     * row draws this shape any more since `26-77` moved Настройки into the account menu — kept
+     * nullable rather than made non-optional, since `navigation.md` does not rule out Ещё ever
+     * gaining another ungrouped row of its own. */
     val section: MoreSectionId?,
 )
 
-internal const val SETTINGS_ROW_ID: String = "settings"
+internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
+internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
+internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
+internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 
-/** Every row this wave actually has a screen for. See this file's own top-of-file doc comment for why
- * that is exactly one row today, and why that is the correct answer rather than an oversight. */
+/** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
+ * opens [PlaceholderDestinationScreen] rather than a finished screen. */
 internal fun buildMoreRows(): List<MoreRow> =
     listOf(
-        MoreRow(id = SETTINGS_ROW_ID, labelRes = R.string.more_settings_row, section = null),
+        MoreRow(
+            id = AUTOMATION_QUICK_REPLIES_ROW_ID,
+            labelRes = R.string.more_automation_quick_replies_row,
+            section = MoreSectionId.Automation,
+        ),
+        MoreRow(
+            id = AUTOMATION_AFTER_HOURS_ROW_ID,
+            labelRes = R.string.more_automation_after_hours_row,
+            section = MoreSectionId.Automation,
+        ),
+        MoreRow(
+            id = ADMINISTRATION_OPERATORS_ROW_ID,
+            labelRes = R.string.more_administration_operators_row,
+            section = MoreSectionId.Administration,
+        ),
+        MoreRow(
+            id = ADMINISTRATION_BILLING_ROW_ID,
+            labelRes = R.string.more_administration_billing_row,
+            section = MoreSectionId.Administration,
+        ),
     )
 
 /** `ago-console/src/shell/consoleNav.ts`'s own `buildSection`, ported: a section with no rows is not

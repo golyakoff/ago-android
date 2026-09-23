@@ -30,6 +30,7 @@ import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.DataStoreThemePreferences
 import ago.chat.android.session.OidcConfig
+import ago.chat.android.session.OperatorIdentityProvider
 import ago.chat.android.signin.SignInSession
 import ago.chat.android.ui.theme.ThemePreferences
 import android.content.Context
@@ -106,6 +107,15 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideSignInSession(session: AgoAuthSession): SignInSession = session
+
+    /**
+     * `26-77`: [ago.chat.android.shell.AppShellViewModel]'s own port for the account menu's header —
+     * see [OperatorIdentityProvider]'s own doc comment for why this is a third view onto the same
+     * `AgoAuthSession` singleton rather than a new call to anything.
+     */
+    @Provides
+    @Singleton
+    public fun provideOperatorIdentityProvider(session: AgoAuthSession): OperatorIdentityProvider = session
 
     /**
      * One client for the whole app. Both request-shaping plugins are installed by

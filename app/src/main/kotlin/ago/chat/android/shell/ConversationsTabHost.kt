@@ -44,6 +44,9 @@ public fun ConversationsTabHost(
     activeSiteId: String?,
     hubConnectionState: OperatorHubConnectionState,
     onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -60,6 +63,9 @@ public fun ConversationsTabHost(
                 viewModel = viewModel,
                 onOpenConversation = { conversationId -> openConversationId = conversationId },
                 onSignOut = onSignOut,
+                operatorDisplayName = operatorDisplayName,
+                operatorEmail = operatorEmail,
+                onOpenSettings = onOpenSettings,
             )
         }
     } else {

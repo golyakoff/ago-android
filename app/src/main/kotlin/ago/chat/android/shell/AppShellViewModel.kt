@@ -5,6 +5,8 @@ import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.session.OperatorIdentity
+import ago.chat.android.session.OperatorIdentityProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,12 +50,23 @@ public class AppShellViewModel
     @Inject
     constructor(
         private val api: OperatorPermissionsApi,
+        private val identityProvider: OperatorIdentityProvider,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
         public val permissions: StateFlow<OperatorPermissions> = mutablePermissions.asStateFlow()
 
         private val mutableLoadError = MutableStateFlow<NetworkFailure?>(null)
+
+        /**
+         * `26-77`: the account menu's own header fields. `null` until the read below completes — never
+         * blocking [AppShellContent] the way [permissions] genuinely does, because there is no
+         * "safe floor" question riding on identity the way there is on which bottom-nav destinations to
+         * draw; [ago.chat.android.ui.components.AccountAvatarAction] already renders an honest fallback
+         * for a `null`/absent name, so this has nothing to gate.
+         */
+        private val mutableIdentity = MutableStateFlow<OperatorIdentity?>(null)
+        public val identity: StateFlow<OperatorIdentity?> = mutableIdentity.asStateFlow()
 
         /** `null` while loading or once [permissions] has resolved — set only while [permissions] is
          * still [OperatorPermissions.Unknown] *and* the one fetch that could have resolved it failed.
@@ -65,6 +78,7 @@ public class AppShellViewModel
 
         init {
             load()
+            viewModelScope.launch { mutableIdentity.value = identityProvider.currentIdentity() }
         }
 
         /** The retry screen's only control — re-asks the identical question, nothing else changes. */

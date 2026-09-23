@@ -127,7 +127,7 @@ class BackContractBottomBarTest {
                 // deliberately has none of - the identical Hilt-avoidance substitution `conversationsTab`
                 // above already makes for Диалоги's own content. This clause is about the bottom bar's
                 // own back stack, not about either tab's content, and this test visits both.
-                bookingsTab = { _, _ -> Text("BOOKINGS_MARKER") },
+                bookingsTab = { _, _, _ -> Text("BOOKINGS_MARKER") },
                 teamTab = { Text("TEAM_MARKER") },
             )
         }

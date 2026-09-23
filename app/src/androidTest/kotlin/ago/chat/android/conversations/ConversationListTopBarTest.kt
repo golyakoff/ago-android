@@ -17,14 +17,15 @@ import org.junit.runner.RunWith
 /**
  * `26-32`: the conversation list's top bar, which the author reported as "still a debug bar".
  *
+ * `26-77` replaced the dot+kebab pair this suite originally proved with the shared
+ * [ago.chat.android.ui.components.AccountAvatarAction] — this file is updated in place rather than
+ * retired, since its four underlying facts (no debug line, the connection state stays readable, sign-out
+ * stays behind a tap rather than sitting on the bar, and that tap actually signs out) are exactly the
+ * same four facts `26-77`'s own Done-when still requires, just reached through the new composable.
+ *
  * Drives the stateless [ConversationListScreen] directly, with no Hilt component and no view model —
  * the same "route wires, screen renders, a test substitutes its own state" split every other screen in
  * this app follows, and the reason that function is `internal` rather than private.
- *
- * These four cases are deliberately about what the bar *is*, not about how it is drawn: no pixel
- * assertions, no screenshot comparison. The three facts worth locking down are that the debug line is
- * gone, that the connection state still says something a screen reader can read, and that sign-out is
- * no longer one stray tap away on the busiest screen in the app.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -47,6 +48,8 @@ class ConversationListTopBarTest {
                 onDismissClaimError = {},
                 onOpenConversation = {},
                 onSignOut = { signOuts++ },
+                operatorDisplayName = "Андрей Голяков",
+                operatorEmail = "andrey@example.com",
             )
         }
     }
@@ -60,7 +63,8 @@ class ConversationListTopBarTest {
         composeTestRule.onNodeWithText("Подключено").assertDoesNotExist()
     }
 
-    /** …but it is still *said*, which is the only reason the `hub_connection_*` strings survived. */
+    /** …but it is still *said*, which is the only reason the `hub_connection_*` strings survived - now
+     * spoken by the avatar's own presence dot rather than by a free-standing [ago.chat.android.ui.components.HubConnectionDot]. */
     @Test
     fun theConnectionStateIsStillReadableByAScreenReader() {
         renderList(OperatorHubConnectionState.Disconnected)
@@ -68,25 +72,52 @@ class ConversationListTopBarTest {
         composeTestRule.onNodeWithContentDescription("Соединение: Отключено").assertExists()
     }
 
-    /** Sign-out was the most prominent control on the busiest screen. Now it is behind the ⋮. */
+    /** Sign-out was the most prominent control on the busiest screen. Now it is behind the avatar. */
     @Test
-    fun signOutIsNotOnTheBarUntilTheOverflowIsOpened() {
+    fun signOutIsNotOnTheBarUntilTheAccountMenuIsOpened() {
         renderList()
 
         composeTestRule.onNodeWithText("Выйти").assertDoesNotExist()
 
-        composeTestRule.onNodeWithContentDescription("Ещё").performClick()
+        composeTestRule.onNodeWithContentDescription("Меню аккаунта").performClick()
         composeTestRule.onNodeWithText("Выйти").assertIsDisplayed()
     }
 
     @Test
-    fun choosingSignOutFromTheOverflowSignsOut() {
+    fun choosingSignOutFromTheAccountMenuSignsOut() {
         renderList()
 
-        composeTestRule.onNodeWithContentDescription("Ещё").performClick()
+        composeTestRule.onNodeWithContentDescription("Меню аккаунта").performClick()
         composeTestRule.onNodeWithText("Выйти").performClick()
 
         composeTestRule.waitForIdle()
         assertEquals(1, signOuts)
+    }
+
+    /** `26-77`'s own new promise for this bar: Настройки is reachable from it, with a chevron, and
+     * calls back through [ConversationListScreen]'s own `onOpenSettings` - never a second sign-out
+     * pathway invented beside it. */
+    @Test
+    fun choosingSettingsFromTheAccountMenuCallsOnOpenSettings() {
+        var settingsOpened = false
+        composeTestRule.setContent {
+            ConversationListScreen(
+                state = ConversationListUiState(hasData = true),
+                hubConnectionState = OperatorHubConnectionState.Connected,
+                onTabSelected = {},
+                onRefresh = {},
+                onClaim = {},
+                onDismissClaimError = {},
+                onOpenConversation = {},
+                onSignOut = {},
+                onOpenSettings = { settingsOpened = true },
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Меню аккаунта").performClick()
+        composeTestRule.onNodeWithText("Настройки").performClick()
+
+        composeTestRule.waitForIdle()
+        assertEquals(true, settingsOpened)
     }
 }

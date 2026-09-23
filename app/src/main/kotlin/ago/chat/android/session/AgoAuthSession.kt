@@ -78,7 +78,8 @@ public class AgoAuthSession
         private val config: OidcConfig,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : AccessTokenProvider,
-        SignInSession {
+        SignInSession,
+        OperatorIdentityProvider {
         /**
          * Serialises every mutation of [state] and every token refresh. Held *across* the refresh
          * network call on purpose: two requests hitting a just-expired token should produce one
@@ -161,6 +162,33 @@ public class AgoAuthSession
             }
 
         override suspend fun currentAccessToken(): String? = withContext(ioDispatcher) { mutex.withLock { freshAccessToken() } }
+
+        /**
+         * `26-77`: [OperatorIdentity.kt][ago.chat.android.session.OperatorIdentity]'s own doc comment
+         * states why this reads [AuthState.getParsedIdToken] rather than calling anything — there is no
+         * network round trip here, only a lookup into a claims map AppAuth already parsed and cached the
+         * moment [completeAuthorization] ran. Guarded by the same [mutex] as every other read of [state]
+         * for the identical reason: a sign-out racing this read must never hand back a stale identity for
+         * a session that is, by the time the caller sees the result, already gone.
+         *
+         * **`name`/`email` come from [IdToken.additionalClaims], not a typed field.** This library
+         * version's own [IdToken] only models the registered claims every OIDC token carries (`iss`,
+         * `sub`, `aud`, `exp`, `iat`, `nonce`, `azp`) — verified against the resolved `appauth` artifact
+         * rather than assumed — and folds every claim it does not otherwise recognise, `name`/`email`
+         * included, into that one untyped map. `as? String` is this file's own honest reading of an
+         * entry neither this class nor AppAuth can guarantee is even present, let alone a `String`.
+         */
+        override suspend fun currentIdentity(): OperatorIdentity? =
+            withContext(ioDispatcher) {
+                mutex.withLock {
+                    loadState().parsedIdToken?.let { idToken ->
+                        OperatorIdentity(
+                            displayName = idToken.additionalClaims[CLAIM_NAME] as? String,
+                            email = idToken.additionalClaims[CLAIM_EMAIL] as? String,
+                        )
+                    }
+                }
+            }
 
         override suspend fun refreshAccessToken(): String? =
             withContext(ioDispatcher) {
@@ -286,5 +314,11 @@ public class AgoAuthSession
              * the token say more about tenancy.
              */
             const val SCOPE = "openid profile email"
+
+            /** The two standard OIDC claim names `currentIdentity()` reads out of
+             * [net.openid.appauth.IdToken.additionalClaims] — named once here rather than as string
+             * literals at that one call site. */
+            const val CLAIM_NAME = "name"
+            const val CLAIM_EMAIL = "email"
         }
     }

@@ -9,6 +9,8 @@ import ago.chat.android.core.domain.analytics.OwnAnalyticsFailure
 import ago.chat.android.core.domain.analytics.endOfDayIso
 import ago.chat.android.core.domain.analytics.formatDurationSeconds
 import ago.chat.android.core.domain.analytics.startOfDayIso
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,9 +64,25 @@ import java.util.Locale
  * identical wiring [ago.chat.android.bookings.BookingsRoute] already establishes for Записи.
  */
 @Composable
-public fun AnalyticsRoute(viewModel: AnalyticsViewModel = hiltViewModel()) {
+public fun AnalyticsRoute(
+    hubConnectionState: OperatorHubConnectionState,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    viewModel: AnalyticsViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    AnalyticsScreen(state = state, onApplyRange = viewModel::load, onRetry = viewModel::retry)
+    AnalyticsScreen(
+        state = state,
+        onApplyRange = viewModel::load,
+        onRetry = viewModel::retry,
+        hubConnectionState = hubConnectionState,
+        operatorDisplayName = operatorDisplayName,
+        operatorEmail = operatorEmail,
+        onOpenSettings = onOpenSettings,
+        onSignOut = onSignOut,
+    )
 }
 
 /**
@@ -85,11 +103,35 @@ internal fun AnalyticsScreen(
     state: AnalyticsUiState,
     onApplyRange: (from: String?, to: String?) -> Unit,
     onRetry: () -> Unit,
+    hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     val zone = remember { ZoneId.systemDefault() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Scaffold(topBar = { TopAppBar(title = { Text(text = stringResource(R.string.nav_analytics)) }) }) { padding ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(text = stringResource(R.string.nav_analytics)) },
+                    actions = {
+                        // `26-77`: Аналитика had neither a presence dot nor a menu before this item -
+                        // the same "first `actions` content" gap Записи had (`BookingsScreen`'s own
+                        // identical comment).
+                        AccountAvatarAction(
+                            displayName = operatorDisplayName,
+                            email = operatorEmail,
+                            hubConnectionState = hubConnectionState,
+                            onOpenSettings = onOpenSettings,
+                            onSignOut = onSignOut,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    },
+                )
+            },
+        ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 DateRangeControl(
                     zone = zone,

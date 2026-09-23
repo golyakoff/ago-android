@@ -5,6 +5,8 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmationCountdown
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.confirmationCountdown
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +62,11 @@ import java.time.format.DateTimeFormatter
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    hubConnectionState: OperatorHubConnectionState,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
     viewModel: BookingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -113,6 +120,11 @@ public fun BookingsRoute(
         onRetryConfirmed = onRetryConfirmed,
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
+        hubConnectionState = hubConnectionState,
+        operatorDisplayName = operatorDisplayName,
+        operatorEmail = operatorEmail,
+        onOpenSettings = onOpenSettings,
+        onSignOut = onSignOut,
     )
 }
 
@@ -142,6 +154,11 @@ internal fun BookingsScreen(
     onRetryConfirmed: () -> Unit,
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
+    hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
+    operatorDisplayName: String? = null,
+    operatorEmail: String? = null,
+    onOpenSettings: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated - the one clock read this screen makes, so every
     // deadline countdown on it re-renders together rather than each row reading `OffsetDateTime.now()`
@@ -151,7 +168,25 @@ internal fun BookingsScreen(
     val tabs = visibleBookingsTabs(showConfirmedSegment, showClientsSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Scaffold(topBar = { TopAppBar(title = { Text(text = stringResource(R.string.nav_bookings)) }) }) { padding ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(text = stringResource(R.string.nav_bookings)) },
+                    actions = {
+                        // `26-77`: Записи had neither a presence dot nor a menu before this item - the
+                        // avatar is this screen's first `actions` content of any kind.
+                        AccountAvatarAction(
+                            displayName = operatorDisplayName,
+                            email = operatorEmail,
+                            hubConnectionState = hubConnectionState,
+                            onOpenSettings = onOpenSettings,
+                            onSignOut = onSignOut,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    },
+                )
+            },
+        ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),

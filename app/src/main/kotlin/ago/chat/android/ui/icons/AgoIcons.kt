@@ -184,6 +184,21 @@ public object AgoIcons {
                 close()
             },
         )
+
+    /** `26-77` — the account menu's own «Настройки» row, its trailing chevron. [Back]'s second
+     * subpath (`M11 6l-6 6 6 6`) mirrored left-to-right rather than redrawn: the identical angle,
+     * pointed the other way, which is what a chevron *into* a screen means against [Back]'s chevron
+     * *out of* one. */
+    public val ChevronRight: ImageVector =
+        strokeIcon(
+            "AgoChevronRight",
+            // M9 6l6 6-6 6
+            {
+                moveTo(9f, 6f)
+                lineToRelative(6f, 6f)
+                lineToRelative(-6f, 6f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */
