@@ -212,7 +212,7 @@ internal fun AppShellScreen(
     // to a real, top-level `NavHost` route any screen's account menu can push, and `MoreScreen` no
     // longer takes this parameter at all (its own doc comment states why).
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit = { onBack, onSwitched ->
-        SettingsRoute(onBack = onBack, onSignOut = onSignOut, onSiteSwitched = onSwitched)
+        SettingsRoute(onBack = onBack, onSiteSwitched = onSwitched)
     },
     // `26-54`/`26-55`: the identical "Hilt-avoidance slot" [conversationsTab] above already is —
     // `TeamRoute` needs `hiltViewModel()` for both [ago.chat.android.team.TeamChatViewModel] and

@@ -22,9 +22,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +54,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 public fun SettingsRoute(
     onBack: () -> Unit,
-    onSignOut: () -> Unit,
     onSiteSwitched: (String) -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -72,7 +73,6 @@ public fun SettingsRoute(
         currentSiteId = currentSiteId,
         switching = switching,
         onSwitchSite = viewModel::switchSite,
-        onSignOut = onSignOut,
         onBack = onBack,
     )
 }
@@ -100,7 +100,6 @@ internal fun SettingsScreen(
     currentSiteId: String?,
     switching: Boolean,
     onSwitchSite: (String) -> Unit,
-    onSignOut: () -> Unit,
     onBack: () -> Unit,
 ) {
     val switchableSites = (tenancies as? TenancyListing.Known)?.tenancies.orEmpty()
@@ -127,13 +126,23 @@ internal fun SettingsScreen(
             LazyColumn(modifier = Modifier.fillMaxWidth().padding(padding)) {
                 item { SectionLabel(stringResource(R.string.settings_theme_section)) }
                 item {
-                    // `26-66`: `selectableGroup()` on the shared container - not on the `LazyColumn`
-                    // itself, which would fold this set and the site set below into one announced
-                    // group - is what supplies "N of M"; `ThemeMode.entries` is short and fixed-length,
-                    // so folding it into a single `LazyColumn` item costs nothing worth keying rows for.
-                    Column(modifier = Modifier.selectableGroup()) {
-                        ThemeMode.entries.forEach { mode ->
-                            ThemeModeRow(mode = mode, selected = mode == themeMode, onSelected = { onThemeModeSelected(mode) })
+                    // `26-77` follow-up, 2026-09-23: a segmented control, matching the mockup's own
+                    // `.seg` - three fixed, mutually exclusive options read better as tabs than as a
+                    // list of radio rows, and `SegmentedButton` inside `SingleChoiceSegmentedButtonRow`
+                    // already sets `Role.RadioButton` on each segment (Material 3's own single-choice
+                    // semantics), so `26-66`'s own "announce role, selection, position" Done-when
+                    // carries over unchanged rather than being re-earned. `icon = {}` on every segment,
+                    // matching `26-78`'s own fix elsewhere in this app - Material 3's default selected
+                    // checkmark is exactly what that item removed from every other segmented row.
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        ThemeMode.entries.forEachIndexed { index, mode ->
+                            SegmentedButton(
+                                selected = mode == themeMode,
+                                onClick = { onThemeModeSelected(mode) },
+                                shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                                icon = {},
+                                label = { Text(text = themeModeLabel(mode)) },
+                            )
                         }
                     }
                 }
@@ -172,46 +181,9 @@ internal fun SettingsScreen(
                         AboutLine(stringResource(R.string.settings_about_build_label), BuildConfig.BUILD_TYPE)
                         AboutLine(stringResource(R.string.settings_about_version_label), BuildConfig.VERSION_NAME)
                     }
-                    HorizontalDivider()
-                }
-
-                item {
-                    TextButton(
-                        onClick = onSignOut,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                    ) {
-                        Text(text = stringResource(R.string.action_sign_out))
-                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ThemeModeRow(
-    mode: ThemeMode,
-    selected: Boolean,
-    onSelected: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                // `26-66`: `role = Role.RadioButton` - without it the merged node carries a selected
-                // state and no idea what kind of control it is, so a screen reader announces the label
-                // and, at best, "selected", never "radio button".
-                .selectable(selected = selected, onClick = onSelected, role = Role.RadioButton)
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // `onClick = null`: the enclosing `Row`'s own `.selectable` above already owns the click - a
-        // second, independently-clickable child here is the one thing that would stop its semantics
-        // (and therefore its label's text, `onNodeWithText(...).performClick()`'s own target) from
-        // merging into the row's, the recommended Material3 shape for exactly this row-of-radio-buttons
-        // layout.
-        RadioButton(selected = selected, onClick = null)
-        Text(text = themeModeLabel(mode), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -234,14 +206,19 @@ private fun SiteRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // `26-66`: `role = Role.RadioButton` - same reasoning as `ThemeModeRow`. `enabled`
-                // was already threaded through; a `selectable` with a role announces its own disabled
-                // state once the role makes it a real control rather than a bare selected node.
+                // `26-66`: `role = Role.RadioButton` - Тема now says the same thing through a
+                // `SegmentedButton`'s own built-in role instead, but Сайт's own row count is
+                // unbounded, so it keeps this list shape. `enabled` was already threaded through; a
+                // `selectable` with a role announces its own disabled state once the role makes it a
+                // real control rather than a bare selected node.
                 .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // `onClick = null` - see `ThemeModeRow`'s own comment on why the enclosing `Row` owns the click.
+        // `onClick = null`: the enclosing `Row`'s own `.selectable` above already owns the click - a
+        // second, independently-clickable child here is the one thing that would stop this row's own
+        // semantics from merging into one node, the recommended Material 3 shape for a row-of-radio-
+        // buttons list.
         RadioButton(selected = selected, onClick = null, enabled = enabled)
         Column(modifier = Modifier.padding(start = 8.dp)) {
             Text(text = tenancy.siteName, style = MaterialTheme.typography.bodyLarge)

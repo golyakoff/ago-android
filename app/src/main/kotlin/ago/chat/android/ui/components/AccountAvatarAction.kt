@@ -92,24 +92,23 @@ public fun AccountAvatarAction(
             dotColor = dotColor,
             dotDescription = dotDescription,
             avatarSize = AvatarSize,
-            modifier =
+            avatarModifier =
                 Modifier
-                    .clip(CircleShape)
                     .clickable(onClickLabel = openMenuLabel) { expanded = true }
                     .semantics { contentDescription = openMenuLabel },
         )
 
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // `26-77` follow-up, 2026-09-23, both from the author's own live-device review: the header
+            // row's own avatar shrank to [AvatarSize] - the same circle size as the trigger just
+            // tapped, not a second, larger drawing of it - and it carries no presence dot of its own.
+            // The trigger directly above already showed the dot once; this row's own job is the name
+            // and the email, not a second announcement of the same online/offline fact.
             Row(
                 modifier = Modifier.widthIn(min = HeaderMinWidth).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PresenceAvatar(
-                    initials = initials,
-                    dotColor = dotColor,
-                    dotDescription = dotDescription,
-                    avatarSize = HeaderAvatarSize,
-                )
+                AvatarCircle(initials = initials, size = AvatarSize)
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
@@ -159,11 +158,19 @@ public fun AccountAvatarAction(
 }
 
 /**
- * The avatar circle and its overlapping presence dot, with no click handling of its own — reused for
- * both the app-bar trigger (clickable, wrapped by its caller above) and the menu's own header row
- * (inert, just drawn larger). Keeping this parameter-for-parameter identical between the two call sites
- * is what makes the header read as "the same avatar, closer up" rather than a second, slightly
- * different drawing of the same idea.
+ * The avatar circle and its overlapping presence dot, with no click handling of its own — the
+ * app-bar trigger wraps [avatarModifier] with its own `clickable`/`semantics` above; the menu header
+ * reaches for the bare [AvatarCircle] beneath this instead, since it draws no dot of its own at all
+ * (`26-77` follow-up, 2026-09-23).
+ *
+ * **The outer [Box] carries no [clip] of its own, on purpose.** It used to — clipped to
+ * [CircleShape] at [avatarSize] — which silently cut off the presence dot below, since the dot is a
+ * *sibling* deliberately positioned to overflow past that same [avatarSize] box (`.align(BottomEnd)`
+ * plus a positive [DotRingInset] offset), and a circular clip removes exactly a shape's own corners —
+ * precisely where the dot sits. Found live, on a real device, by the author. [clip] now lives only on
+ * [AvatarCircle] itself, sized to match, so the *avatar's* own corners still round correctly (and its
+ * ripple, via [avatarModifier], still bounds to that same circle) while the dot's overflow is never
+ * touched by a clip meant for a different child.
  */
 @Composable
 private fun PresenceAvatar(
@@ -171,19 +178,10 @@ private fun PresenceAvatar(
     dotColor: Color,
     dotDescription: String,
     avatarSize: Dp,
-    modifier: Modifier = Modifier,
+    avatarModifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.size(avatarSize), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier.size(avatarSize).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
+    Box(modifier = Modifier.size(avatarSize), contentAlignment = Alignment.Center) {
+        AvatarCircle(initials = initials, size = avatarSize, modifier = avatarModifier)
 
         // The presence dot overlapping the avatar's own bottom-right corner
         // (`docs/backlog/26-77-*.md`'s own Scope item 2) - a small ring in the surrounding surface
@@ -214,6 +212,29 @@ private fun PresenceAvatar(
 }
 
 /**
+ * Just the circle and its initials, no presence dot — [PresenceAvatar] draws one of these and then
+ * overlays the dot on top; the menu's own header row (`26-77` follow-up) draws this directly, since a
+ * dot repeating the trigger's own already-announced state a few pixels below it is noise, not news.
+ */
+@Composable
+private fun AvatarCircle(
+    initials: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = initials,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
+/**
  * `docs/backlog/26-77-*.md`'s own derivation rule, settled here rather than guessed in the backlog
  * item itself: the first letter of the first two space-separated words ("Андрей Голяков" → "АГ"); a
  * single word uses [String.take] of 2 (naturally clamping to 1 for a one-character word, so "Ы" stays
@@ -240,11 +261,10 @@ internal fun initialsFor(
     }
 }
 
-// `.avatar{width:36px;height:36px}` - the mockup's own app-bar avatar size; the header row's own
-// avatar reads visibly larger ("slightly larger", `docs/backlog/26-77-*.md`'s own Scope item 3)
-// without a second literal CSS rule to anchor it to, so `1.4x` is this file's own, stated choice.
+// `.avatar{width:36px;height:36px}` - the mockup's own app-bar avatar size, and (`26-77` follow-up,
+// 2026-09-23) the menu header's own avatar too: the author's own live-device correction to this
+// file's first pass, which drew the header's copy visibly larger.
 private val AvatarSize = 36.dp
-private val HeaderAvatarSize = 50.dp
 private val HeaderMinWidth = 220.dp
 
 // The presence dot: a small ring in the surface colour, then the coloured dot itself, inset toward the

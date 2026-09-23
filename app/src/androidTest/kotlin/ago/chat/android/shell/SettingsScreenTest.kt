@@ -17,7 +17,6 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -51,7 +50,6 @@ class SettingsScreenTest {
                 currentSiteId = siteA.siteId,
                 switching = false,
                 onSwitchSite = { switchedTo = it },
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -75,7 +73,6 @@ class SettingsScreenTest {
                 currentSiteId = siteA.siteId,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -98,7 +95,6 @@ class SettingsScreenTest {
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -117,7 +113,6 @@ class SettingsScreenTest {
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -137,38 +132,12 @@ class SettingsScreenTest {
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
 
         composeTestRule.onNodeWithText(BuildConfig.BUILD_TYPE).assertExists()
         composeTestRule.onNodeWithText(BuildConfig.VERSION_NAME).assertExists()
-    }
-
-    @Test
-    fun tappingSignOutCallsOnSignOut() {
-        var signedOut = false
-        composeTestRule.setContent {
-            SettingsScreen(
-                themeMode = ThemeMode.System,
-                onThemeModeSelected = {},
-                tenancies = TenancyListing.Known(emptyList()),
-                currentSiteId = null,
-                switching = false,
-                onSwitchSite = {},
-                onSignOut = { signedOut = true },
-                onBack = {},
-            )
-        }
-
-        // `26-69`: on a real device (never on CI's emulator) this `LazyColumn`'s last item - the one
-        // this test targets - was found by `onNodeWithText` in a state where `performClick()` ran but
-        // `onSignOut` never fired; scrolling the node into a stable, fully-measured position first is
-        // the standing fix for a `LazyColumn`-bottom-item click, real cause or not.
-        composeTestRule.onNodeWithText("Выйти").performScrollTo().performClick()
-
-        assertEquals(true, signedOut)
     }
 
     @Test
@@ -182,7 +151,6 @@ class SettingsScreenTest {
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = { backCalls++ },
             )
         }
@@ -211,7 +179,6 @@ class SettingsScreenTest {
                 currentSiteId = null,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -235,7 +202,6 @@ class SettingsScreenTest {
                 currentSiteId = siteA.siteId,
                 switching = true,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
@@ -268,7 +234,6 @@ class SettingsScreenTest {
                 currentSiteId = siteA.siteId,
                 switching = false,
                 onSwitchSite = {},
-                onSignOut = {},
                 onBack = {},
             )
         }
