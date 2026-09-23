@@ -95,6 +95,11 @@ import java.time.OffsetDateTime
  * only [ConversationListViewModel.onScreenStarted]/[ConversationListViewModel.onScreenStopped], the
  * «Ожидают» poll's own visibility gate (that class's own doc comment on why it is narrower than
  * `ago-console`'s always-on timer).
+ *
+ * `26-75`: [ConversationListViewModel.claimedConversations] is collected here, not left for
+ * `ConversationsTabHost` to reach into directly — this route already owns the identical collection for
+ * a tapped row ([onOpenConversation] just below), so a successful claim opens the thread through the
+ * exact same [onOpenConversation] callback rather than a second navigation pathway existing beside it.
  */
 @Composable
 public fun ConversationListRoute(
@@ -111,6 +116,16 @@ public fun ConversationListRoute(
     // `ConversationListViewModel.onActiveSiteChanged`'s own doc comment for why the dedup that makes
     // this safe lives on the view model instance rather than here.
     LaunchedEffect(activeSiteId) { viewModel.onActiveSiteChanged(activeSiteId) }
+
+    // `26-75`: a successful claim opens the thread the same way tapping a row in «Мои» already does -
+    // through this same `onOpenConversation` callback, not a second one. Deliberately *not* routed
+    // through `viewModel.onRowOpened` first (the wrapped lambda passed to `ConversationListScreen`
+    // below does that for a tapped row) - a freshly claimed conversation was never in
+    // `newlyAssignedIds` to begin with, so that call would be a documented no-op here, and going
+    // through the raw callback keeps this event's own path traceable to exactly one cause.
+    LaunchedEffect(viewModel) {
+        viewModel.claimedConversations.collect { conversationId -> onOpenConversation(conversationId) }
+    }
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer =
@@ -830,12 +845,21 @@ private fun WaitingList(
 }
 
 /**
- * **No confirmation dialog, and no navigation on claim** — `ago-console`'s `ClaimConversationButton`'s
- * own doc comment: taking a conversation is the ordinary, reversible act this whole item exists to make
- * reachable. The button disables itself while [ConversationRowUi.isClaiming] rather than being hidden
- * behind a permission check — this app has no permission model yet to check against
- * (`scope-inventory.md`), so every operator who can see this screen at all may claim from it, the same
- * posture the console takes before `23-04`'s own `CONVERSATION_CLAIM_PERMISSION` existed.
+ * **No confirmation dialog on claim, and this button — not the whole row — is still the trigger.**
+ * `26-75` corrected which console screen this actually mirrors: `ago-console`'s
+ * `ClaimConversationButton` (its own "no navigation" doc comment) is real, but it only ever appears on
+ * `AdminConversationsPage`/`SearchConversationsPage`, two monitoring screens where a mis-click costs
+ * nothing more than one extra row claimed while scanning a table — it is not the console's own
+ * primary-workspace behaviour. That workspace's actual equivalent of this «Ожидают» tab is
+ * `WorkspaceLayout`/`ConversationList.tsx`, whose waiting row is a `NavLink` that **does** navigate on
+ * claim (`23-04`), which is what `ConversationListViewModel.claim`'s own `ClaimResult.Claimed` branch
+ * now does here too. What stays true to `ClaimConversationButton`'s reasoning is narrower than its
+ * headline: the *button* remains this row's only claim trigger — the row itself still is not one, since
+ * a mis-tap in a phone-sized list costs more than it does in the console's own table — only what happens
+ * *after* a successful claim changed. The button disables itself while [ConversationRowUi.isClaiming]
+ * rather than being hidden behind a permission check — this app has no permission model yet to check
+ * against (`scope-inventory.md`), so every operator who can see this screen at all may claim from it,
+ * the same posture the console takes before `23-04`'s own `CONVERSATION_CLAIM_PERMISSION` existed.
  */
 @Composable
 private fun WaitingRow(

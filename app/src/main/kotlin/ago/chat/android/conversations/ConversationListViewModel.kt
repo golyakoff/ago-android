@@ -15,10 +15,13 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -67,6 +70,16 @@ public class ConversationListViewModel
         private var claimErrors: Map<String, ClaimErrorUi> = emptyMap()
 
         private var waitingPollJob: Job? = null
+
+        /** `26-75`: a one-shot event — a successful [claim] takes the operator straight into the thread,
+         * matching `ago-console`'s own primary-workspace behaviour (`23-04`, `ConversationList.tsx`'s
+         * `NavLink` row). Not a `StateFlow`, for the identical reason
+         * [ago.chat.android.shell.SettingsViewModel.siteSwitched] gives for its own `Channel`: a
+         * `StateFlow` re-delivering the same conversationId to a screen recreated after rotation would
+         * navigate a second time for free, into a thread the operator had already opened and possibly
+         * already left. */
+        private val claimedEvents = Channel<String>(Channel.BUFFERED)
+        public val claimedConversations: Flow<String> = claimedEvents.receiveAsFlow()
 
         /** [onActiveSiteChanged]'s own memory of the last site it was told about — `null` is a real,
          * distinct value ("no site known yet"), so [knownActiveSite] is not itself enough to tell
@@ -202,6 +215,16 @@ public class ConversationListViewModel
                 when (val result = withContext(ioDispatcher) { api.claim(conversationId) }) {
                     ClaimResult.Claimed -> {
                         claimingIds = claimingIds - conversationId
+                        // `26-75`: fired directly off this successful response, not after `refresh()`
+                        // below confirms anything - the same synchronous guarantee `ago-console`'s own
+                        // `ClaimConversationButtonProps.onClaimed` documents: "there is no completion
+                        // poll to wait on first". By the time the server answered `Claimed` the claim
+                        // already happened; waiting for this screen's own re-fetch to catch up before
+                        // moving the operator would only add a round trip's worth of visible delay to a
+                        // fact that is already true. `onTabSelected` (not a bare state mutation) so the
+                        // switch also stops the «Ожидают» poll the same way a manual tab tap would.
+                        onTabSelected(ConversationListTab.Mine)
+                        claimedEvents.send(conversationId)
                         // The row's own move into "Мои" is observed by re-fetching, never assumed from
                         // this `204` alone - the same "re-fetch rather than trust a partial write
                         // result" choice `onAssigned` below makes for a hub push.
