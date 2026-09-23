@@ -38,6 +38,9 @@ class BackContractMoreScreenTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
                 // `26-17`: the real `SettingsRoute` needs a Hilt component this suite deliberately has
                 // none of (this file's own doc comment) - a trivial marker stands in, the identical
                 // substitution `conversationsTab` above already makes for Диалоги's own Hilt-backed
@@ -81,6 +84,9 @@ class BackContractMoreScreenTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
                 settingsScreen = { _, _ -> Text("SETTINGS_MARKER") },
             )
         }
@@ -107,6 +113,9 @@ class BackContractMoreScreenTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
             )
         }
 

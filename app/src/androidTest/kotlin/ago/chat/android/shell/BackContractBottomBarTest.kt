@@ -53,6 +53,9 @@ class BackContractBottomBarTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
             )
         }
 
@@ -77,6 +80,9 @@ class BackContractBottomBarTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
             )
         }
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertExists()
@@ -116,6 +122,9 @@ class BackContractBottomBarTest {
                 onRetry = {},
                 onSignOut = {},
                 conversationsTab = { Text("DIALOGI_MARKER") },
+                // `26-54`: the real `TeamChatRoute` needs a Hilt component this suite deliberately has
+                // none of - the identical substitution `conversationsTab` above already makes.
+                teamTab = { Text("TEAM_MARKER") },
             )
         }
 
