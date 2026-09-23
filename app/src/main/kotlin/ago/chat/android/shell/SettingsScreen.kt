@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +32,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -124,19 +126,33 @@ internal fun SettingsScreen(
         ) { padding ->
             LazyColumn(modifier = Modifier.fillMaxWidth().padding(padding)) {
                 item { SectionLabel(stringResource(R.string.settings_theme_section)) }
-                items(ThemeMode.entries.toList()) { mode ->
-                    ThemeModeRow(mode = mode, selected = mode == themeMode, onSelected = { onThemeModeSelected(mode) })
+                item {
+                    // `26-66`: `selectableGroup()` on the shared container - not on the `LazyColumn`
+                    // itself, which would fold this set and the site set below into one announced
+                    // group - is what supplies "N of M"; `ThemeMode.entries` is short and fixed-length,
+                    // so folding it into a single `LazyColumn` item costs nothing worth keying rows for.
+                    Column(modifier = Modifier.selectableGroup()) {
+                        ThemeMode.entries.forEach { mode ->
+                            ThemeModeRow(mode = mode, selected = mode == themeMode, onSelected = { onThemeModeSelected(mode) })
+                        }
+                    }
                 }
 
                 if (switchableSites.size > 1) {
                     item { SectionLabel(stringResource(R.string.settings_site_section)) }
-                    items(switchableSites, key = { it.siteId }) { tenancy ->
-                        SiteRow(
-                            tenancy = tenancy,
-                            selected = tenancy.siteId == currentSiteId,
-                            enabled = !switching,
-                            onClick = { onSwitchSite(tenancy.siteId) },
-                        )
+                    item {
+                        // Same reasoning as the theme group above: its own `selectableGroup()`, kept
+                        // separate from the theme group's, so each announces its own "N of M".
+                        Column(modifier = Modifier.selectableGroup()) {
+                            switchableSites.forEach { tenancy ->
+                                SiteRow(
+                                    tenancy = tenancy,
+                                    selected = tenancy.siteId == currentSiteId,
+                                    enabled = !switching,
+                                    onClick = { onSwitchSite(tenancy.siteId) },
+                                )
+                            }
+                        }
                     }
                     if (switching) {
                         item {
@@ -182,7 +198,10 @@ private fun ThemeModeRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .selectable(selected = selected, onClick = onSelected)
+                // `26-66`: `role = Role.RadioButton` - without it the merged node carries a selected
+                // state and no idea what kind of control it is, so a screen reader announces the label
+                // and, at best, "selected", never "radio button".
+                .selectable(selected = selected, onClick = onSelected, role = Role.RadioButton)
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -215,7 +234,10 @@ private fun SiteRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .selectable(selected = selected, enabled = enabled, onClick = onClick)
+                // `26-66`: `role = Role.RadioButton` - same reasoning as `ThemeModeRow`. `enabled`
+                // was already threaded through; a `selectable` with a role announces its own disabled
+                // state once the role makes it a real control rather than a bare selected node.
+                .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -223,7 +245,16 @@ private fun SiteRow(
         RadioButton(selected = selected, onClick = null, enabled = enabled)
         Column(modifier = Modifier.padding(start = 8.dp)) {
             Text(text = tenancy.siteName, style = MaterialTheme.typography.bodyLarge)
-            IdentifierText(id = tenancy.siteId, style = MaterialTheme.typography.bodySmall)
+            // `26-66`: `clearAndSetSemantics {}` drops this node out of the merge entirely rather than
+            // giving the row an explicit `contentDescription` that repeats `tenancy.siteName` by hand -
+            // the id is eight monospace hex characters meant to be read with the eyes or dictated by a
+            // human (this composable's own doc comment), never announced, and excluding it here means
+            // the spoken name can never drift from the one already drawn on screen above it.
+            IdentifierText(
+                id = tenancy.siteId,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
         }
     }
     HorizontalDivider()
