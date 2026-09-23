@@ -169,6 +169,31 @@
     <string name="team_chat_removed_placeholder">Сообщение удалено</string>
 
     <!--
+        `26-55`: Команда's own segmented control - «Общение» (the room above) and «Люди», drawn only
+        for `site:manage_operators` (`TeamRoute`'s own doc comment). No console equivalent for the pair
+        itself: there, Люди and Общение are two separate nav rows (`navOperatorsTeam`/`navTeamChat` in
+        `ru.ts`), not two segments of one screen - this app's own destination is one bottom-nav entry,
+        so the segmented control is this screen's own invention, not borrowed wording.
+    -->
+    <string name="team_tab_communication">Общение</string>
+    <string name="team_tab_people">Люди</string>
+
+    <!--
+        `26-55`: Люди - the roster and per-role seat summary, read-only. Wording follows `ago-console`'s
+        own `operatorsTeam*` strings (`ru.ts`) where the same fact is said on both surfaces.
+    -->
+    <string name="people_empty">На этом сайте пока нет операторов.</string>
+    <string name="people_load_failed_transport">Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.</string>
+    <string name="people_load_failed_unexpected">Не удалось загрузить команду. Попробуйте ещё раз.</string>
+    <!-- `%1$d`/`%2$d` - held seats over the role's own limit, e.g. "3/5". -->
+    <string name="people_seats_summary_value">%1$d/%2$d</string>
+    <string name="people_over_limit_label">Превышен лимит</string>
+    <string name="people_seat_held">Занимает место</string>
+    <string name="people_seat_not_held">Без места</string>
+    <string name="people_role_operator">Оператор</string>
+    <string name="people_role_admin">Администратор</string>
+
+    <!--
         `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
         that segment has no screen behind it yet (this file's own `BookingsScreen`/`bookings_tab_pending`
         doc comment - the identical "a row exists only for a screen that exists" rule

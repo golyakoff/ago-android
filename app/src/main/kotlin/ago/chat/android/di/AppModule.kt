@@ -10,6 +10,7 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
@@ -19,6 +20,7 @@ import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.RoomConversationListCache
@@ -206,6 +208,19 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): BookingsApi = KtorBookingsApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-55`: [ago.chat.android.team.PeopleViewModel]'s own port — plain REST on the chat API this app
+     * already talks to, no new base URL ([KtorOperatorTeamApi]'s own doc comment states why
+     * [ActiveSiteSelection] is threaded through here rather than left implicit, the way
+     * [provideConversationsApi] above can leave it).
+     */
+    @Provides
+    public fun provideOperatorTeamApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): OperatorTeamApi = KtorOperatorTeamApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-14`: Room's first database in this app — one `@Singleton` file for the process's whole life,

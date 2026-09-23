@@ -9,7 +9,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.domain.permissions.holds
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.team.TeamChatRoute
+import ago.chat.android.team.TeamRoute
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -172,11 +172,18 @@ internal fun AppShellScreen(
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit = { onBack, onSwitched ->
         SettingsRoute(onBack = onBack, onSignOut = onSignOut, onSiteSwitched = onSwitched)
     },
-    // `26-54`: the identical "Hilt-avoidance slot" [conversationsTab] above already is — `TeamChatRoute`
-    // needs `hiltViewModel()` for [ago.chat.android.team.TeamChatViewModel], and the back-contract tests
-    // that visit Команда while exercising the bottom-bar/Ещё back-stack (clause 2 and clause 3) need a
-    // trivial substitute here, the same way they already substitute [conversationsTab]/[settingsScreen].
-    teamTab: @Composable () -> Unit = { TeamChatRoute() },
+    // `26-54`/`26-55`: the identical "Hilt-avoidance slot" [conversationsTab] above already is —
+    // `TeamRoute` needs `hiltViewModel()` for both [ago.chat.android.team.TeamChatViewModel] and
+    // [ago.chat.android.team.PeopleViewModel], and the back-contract tests that visit Команда while
+    // exercising the bottom-bar/Ещё back-stack (clause 2 and clause 3) need a trivial substitute here,
+    // the same way they already substitute [conversationsTab]/[settingsScreen]. The default reads
+    // [permissions] directly — safe even while it is still [OperatorPermissions.Unknown], since
+    // [OperatorPermissions.holds] answers `false` for that case and this default is only ever actually
+    // *drawn* once [AppShellScreen]'s own `when` below has already matched [OperatorPermissions.Known]
+    // (`AppShellContent`'s only caller).
+    teamTab: @Composable () -> Unit = {
+        TeamRoute(canManageOperators = permissions.holds(Permission.SITE_MANAGE_OPERATORS))
+    },
 ) {
     when (permissions) {
         OperatorPermissions.Unknown ->

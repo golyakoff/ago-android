@@ -7,6 +7,7 @@ import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,12 +28,18 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -50,101 +57,213 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * `26-54`: Команда, for real — the tenant's one team room, ridden over the operator hub connection this
- * app already holds open (this file's own package doc: [TeamChatViewModel]). No segmented control (Люди
- * is `26-55`, `MoreScreen`'s own one-row precedent restated) and no left/right message sides — see
- * [TeamMessageRow]'s own doc comment for why.
+ * `26-54`/`26-55`: Команда's two segments — «Общение» (`26-54`'s own room) and «Люди»
+ * (`26-55`'s roster), matching `ago-console/src/shell/consoleNav.ts:345`'s own `site:manage_operators`
+ * gate for the identical destination, folded here into one segmented control rather than the console's
+ * two separate nav rows because Команда is one bottom-navigation destination on this app, not a rail
+ * section — [ago.chat.android.core.domain.navigation.BottomDestination.Team]'s own doc comment.
+ */
+internal enum class TeamTab {
+    Communication,
+    People,
+}
+
+/**
+ * `26-55`: Команда's real entry point, replacing the old parameterless `TeamChatRoute` this file used to
+ * expose directly to [ago.chat.android.shell.AppShellScreen]. [canManageOperators] is
+ * `OperatorPermissions.holds(Permission.SITE_MANAGE_OPERATORS)`
+ * (`ago.chat.android.core.domain.permissions`), read once by the caller and handed down as a plain
+ * `Boolean` — this composable has no reason to know about `OperatorPermissions` as a type, only the one
+ * fact it already decided.
  *
- * Modelled on [ago.chat.android.thread.ThreadScreen] wherever the shape is genuinely shared (the
- * composer, the loading/error bodies), but its own, smaller file rather than a reuse of that screen's
- * private composables — a team message has no attachment control, no visitor title block and no
- * keyboard-driven `BackHandler` of its own (this is a bottom-tab destination, not a pushed screen), so
- * threading this room through `ThreadScreen`'s own parameter list would cost more than the handful of
- * composables this file repeats.
+ * **No segmented control at all without the permission** — `navigation.md`'s own "a destination with
+ * nothing extra inside it draws nothing extra" rule, restated one level down from
+ * [ago.chat.android.core.domain.navigation.visibleBottomDestinations] itself: Команда is always drawn,
+ * but an operator lacking `site:manage_operators` sees exactly what `26-54` shipped — the room, and
+ * nothing else — because [TeamScreen] below never draws [TeamSegmentedRow] for that operator at all,
+ * not a segmented row with «Люди» disabled or hidden-but-present in the tab enum.
+ *
+ * [TeamChatViewModel] is always obtained here, never only when «Общение» is selected — it always was
+ * (this is the identical `hiltViewModel()` call `26-54`'s own `TeamChatRoute` already made
+ * unconditionally), so an operator who opens Люди first still has a warm hub connection the moment they
+ * switch back.
  */
 @Composable
-public fun TeamChatRoute(viewModel: TeamChatViewModel = hiltViewModel()) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+public fun TeamRoute(
+    canManageOperators: Boolean,
+    chatViewModel: TeamChatViewModel = hiltViewModel(),
+    peopleContent: @Composable () -> Unit = { PeopleRoute() },
+) {
+    val chatState by chatViewModel.state.collectAsStateWithLifecycle()
+    var selectedTab by rememberSaveable { mutableStateOf(TeamTab.Communication) }
 
-    TeamChatScreen(
-        state = state,
-        onRetryLoad = viewModel::retryLoad,
-        onLoadOlder = viewModel::loadOlder,
-        onDraftChanged = viewModel::onDraftChanged,
-        onSend = viewModel::sendClicked,
-        onRetrySend = viewModel::retrySend,
-        onDismissSendRefusal = viewModel::dismissSendRefusal,
+    TeamScreen(
+        canManageOperators = canManageOperators,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
+        chatState = chatState,
+        onRetryLoad = chatViewModel::retryLoad,
+        onLoadOlder = chatViewModel::loadOlder,
+        onDraftChanged = chatViewModel::onDraftChanged,
+        onSend = chatViewModel::sendClicked,
+        onRetrySend = chatViewModel::retrySend,
+        onDismissSendRefusal = chatViewModel::dismissSendRefusal,
+        peopleContent = peopleContent,
     )
 }
 
-/** The stateless half - [TeamChatRoute] wires the [TeamChatViewModel] above it, the same "route wires,
- * screen renders" split every other screen in this app already follows. */
+/**
+ * The stateless half — [TeamRoute] wires [TeamChatViewModel] above it, the same "route wires, screen
+ * renders" split every other screen in this app already follows. One `Scaffold`, one `TopAppBar` titled
+ * Команда regardless of which segment is selected (`BookingsScreen`'s own precedent: the app-bar title
+ * names the destination, not the segment) — [TeamSegmentedRow] and the body beneath it are the only
+ * parts that change.
+ *
+ * The composer (`TeamComposer`) is Общение's own `bottomBar`, drawn only while that segment is
+ * selected — Люди is read-only end to end (`docs/backlog/26-55-*.md`'s own Out of scope), so it has
+ * nothing to compose into. [HubConnectionDot] is likewise Общение-only: the hub connection state
+ * describes the chat room, not the plain-REST roster read beside it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TeamChatScreen(
-    state: TeamChatUiState,
+internal fun TeamScreen(
+    canManageOperators: Boolean,
+    selectedTab: TeamTab,
+    onTabSelected: (TeamTab) -> Unit,
+    chatState: TeamChatUiState,
     onRetryLoad: () -> Unit,
     onLoadOlder: () -> Unit,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
+    peopleContent: @Composable () -> Unit,
 ) {
+    val showChat = !canManageOperators || selectedTab == TeamTab.Communication
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.nav_team)) },
                     actions = {
-                        HubConnectionDot(state = state.hubConnectionState, modifier = Modifier.padding(end = 16.dp))
+                        if (showChat) {
+                            HubConnectionDot(state = chatState.hubConnectionState, modifier = Modifier.padding(end = 16.dp))
+                        }
                     },
                 )
             },
             bottomBar = {
-                TeamComposer(
-                    draft = state.draft,
-                    sending = state.sending,
-                    onDraftChanged = onDraftChanged,
-                    onSend = onSend,
-                )
+                if (showChat) {
+                    TeamComposer(
+                        draft = chatState.draft,
+                        sending = chatState.sending,
+                        onDraftChanged = onDraftChanged,
+                        onSend = onSend,
+                    )
+                }
             },
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                if (state.pendingRetry) {
-                    DismissibleTeamBanner(
-                        message = stringResource(R.string.thread_send_pending_retry),
-                        actionLabel = stringResource(R.string.action_retry),
-                        onAction = onRetrySend,
-                    )
-                }
-                state.sendRefusedMessage?.let { refusal ->
-                    DismissibleTeamBanner(
-                        message = refusal,
-                        actionLabel = stringResource(R.string.action_dismiss),
-                        onAction = onDismissSendRefusal,
-                    )
+                if (canManageOperators) {
+                    TeamSegmentedRow(selected = selectedTab, onSelected = onTabSelected)
                 }
 
-                when {
-                    state.loading -> TeamLoadingBody()
-                    // The identical "a join failure never leaves any message on screen" signal
-                    // `ThreadScreen`'s own `when` uses to tell an initial-load failure apart from a
-                    // later "load older" failure, restated for this room's own `historyError`.
-                    state.messages.isEmpty() && state.historyError != null ->
-                        TeamLoadErrorBody(error = state.historyError, onRetry = onRetryLoad)
-
-                    else ->
-                        TeamMessageList(
-                            modifier = Modifier.weight(1f),
-                            messages = state.messages,
-                            canLoadOlder = state.canLoadOlder,
-                            loadingOlder = state.loadingOlder,
-                            historyError = state.historyError,
-                            onLoadOlder = onLoadOlder,
-                        )
+                if (showChat) {
+                    TeamChatBody(
+                        state = chatState,
+                        onRetryLoad = onRetryLoad,
+                        onLoadOlder = onLoadOlder,
+                        onRetrySend = onRetrySend,
+                        onDismissSendRefusal = onDismissSendRefusal,
+                    )
+                } else {
+                    peopleContent()
                 }
             }
         }
+    }
+}
+
+/**
+ * `26-51`'s own dynamic, permission-driven segment list read for Команда's two segments instead of
+ * Записи's booking-status ones — [ConversationListScreen][ago.chat.android.conversations.ConversationListScreen]'s
+ * own `SingleChoiceSegmentedButtonRow`/`SegmentedButton` loop over an enum's `entries`, restated (this
+ * screen carries no per-segment count the way that one's `Мои`/`Ожидают` badges do, so
+ * [segmentedTabLabel] has nothing to build beyond the bare label).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TeamSegmentedRow(
+    selected: TeamTab,
+    onSelected: (TeamTab) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        TeamTab.entries.forEachIndexed { index, tab ->
+            SegmentedButton(
+                selected = selected == tab,
+                onClick = { onSelected(tab) },
+                shape = SegmentedButtonDefaults.itemShape(index, TeamTab.entries.size),
+                label = { Text(text = stringResource(tab.labelRes())) },
+            )
+        }
+    }
+}
+
+private fun TeamTab.labelRes(): Int =
+    when (this) {
+        TeamTab.Communication -> R.string.team_tab_communication
+        TeamTab.People -> R.string.team_tab_people
+    }
+
+/**
+ * `26-54`'s own room content — banners, then whichever of loading/error/message-list applies. Lifted
+ * unchanged out of what used to be `TeamChatScreen`'s own `Scaffold` content lambda: `26-55`'s own brief
+ * is explicit that this body's logic is not this item's to touch, only the chrome that now surrounds it
+ * ([TeamScreen] above).
+ */
+@Composable
+private fun ColumnScope.TeamChatBody(
+    state: TeamChatUiState,
+    onRetryLoad: () -> Unit,
+    onLoadOlder: () -> Unit,
+    onRetrySend: () -> Unit,
+    onDismissSendRefusal: () -> Unit,
+) {
+    if (state.pendingRetry) {
+        DismissibleTeamBanner(
+            message = stringResource(R.string.thread_send_pending_retry),
+            actionLabel = stringResource(R.string.action_retry),
+            onAction = onRetrySend,
+        )
+    }
+    state.sendRefusedMessage?.let { refusal ->
+        DismissibleTeamBanner(
+            message = refusal,
+            actionLabel = stringResource(R.string.action_dismiss),
+            onAction = onDismissSendRefusal,
+        )
+    }
+
+    when {
+        state.loading -> TeamLoadingBody()
+        // The identical "a join failure never leaves any message on screen" signal `ThreadScreen`'s own
+        // `when` uses to tell an initial-load failure apart from a later "load older" failure, restated
+        // for this room's own `historyError`.
+        state.messages.isEmpty() && state.historyError != null ->
+            TeamLoadErrorBody(error = state.historyError, onRetry = onRetryLoad)
+
+        else ->
+            TeamMessageList(
+                modifier = Modifier.weight(1f),
+                messages = state.messages,
+                canLoadOlder = state.canLoadOlder,
+                loadingOlder = state.loadingOlder,
+                historyError = state.historyError,
+                onLoadOlder = onLoadOlder,
+            )
     }
 }
 
