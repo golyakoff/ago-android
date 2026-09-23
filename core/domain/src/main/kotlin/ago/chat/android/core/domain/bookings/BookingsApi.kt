@@ -32,6 +32,17 @@ public interface BookingsApi {
         from: String,
         to: String,
     ): ConfirmedBookingsResult
+
+    /**
+     * `26-52`: `GET /api/v1/console/contacts` — one row per customer this tenant has ever booked, no
+     * date range and no "mine" (`ago-console`'s own `getContacts`, `calendarApi.ts:685`). Gated
+     * server-side on `calendar:configure` or `customer:read` — a third, distinct gate from
+     * [fetchConfirmedBookings]'s own `customer:read`-alone gate, matching
+     * `CalendarContactsPage.tsx:48` exactly. Read-only: every write on this data — a display name, a
+     * note, the audited phone reveal, merging two customers — is a separate item
+     * (`docs/backlog/26-52-*.md`'s own Out of scope).
+     */
+    public suspend fun fetchContacts(): ContactsResult
 }
 
 /** What answering "what is waiting to auto-confirm" came back with. */
@@ -77,6 +88,29 @@ public sealed interface ConfirmedBookingsResult {
     public data class Failed(
         val reason: BookingsQueueFailure,
     ) : ConfirmedBookingsResult
+}
+
+/**
+ * `26-52`: what answering "who are this tenant's customers" came back with — the identical three-arm
+ * shape [PendingBookingsResult]/[ConfirmedBookingsResult] already establish, restated rather than
+ * shared for the same reason those two are restated from one another: [Loaded] carries [Contact], a
+ * type with no field in common with either sibling worth generalising over.
+ */
+public sealed interface ContactsResult {
+    public data class Loaded(
+        val contacts: List<Contact>,
+    ) : ContactsResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact [PendingBookingsResult.NotConfigured]'s
+     * own doc comment explains. */
+    public data object NotConfigured : ContactsResult
+
+    /** [BookingsQueueFailure] is reused again here, for the identical reason
+     * [ConfirmedBookingsResult.Failed]'s own doc comment gives: this read reduces to the same
+     * "is it me, or is it broken" two-way question the other two already answer with it. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : ContactsResult
 }
 
 /**

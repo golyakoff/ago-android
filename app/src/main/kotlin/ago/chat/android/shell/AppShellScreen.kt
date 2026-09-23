@@ -154,13 +154,18 @@ internal fun AppShellScreen(
     // clicks «Записи», and substitutes a trivial marker here for the same Hilt-free reason
     // `BackContractMoreScreenTest` substitutes one for `settingsScreen` below.
     //
-    // `26-51`: the `Boolean` this slot now takes is whether the signed-in operator holds
+    // `26-51`: the first `Boolean` this slot takes is whether the signed-in operator holds
     // `customer:read` — computed once below, from the [OperatorPermissions.Known] this function already
     // has in hand, and handed to [BookingsRoute] as [ago.chat.android.bookings.BookingsRoute.showConfirmedSegment].
-    // A back-contract test's own substitute lambda (`{ Text("BOOKINGS_MARKER") }`) still type-checks
-    // unchanged against this widened type: a single-parameter function literal that never reads its
-    // parameter is ordinary Kotlin, not a test-only accommodation.
-    bookingsTab: @Composable (Boolean) -> Unit = { showConfirmedSegment -> BookingsRoute(showConfirmedSegment = showConfirmedSegment) },
+    // `26-52` widens this to a second `Boolean` — `calendar:configure` or `customer:read`, matching
+    // [ago.chat.android.bookings.BookingsRoute.showClientsSegment]'s own doc comment — computed the
+    // same way, once, at the call site below. A back-contract test's own substitute lambda
+    // (`{ Text("BOOKINGS_MARKER") }`) still type-checks unchanged against this widened type: a
+    // function literal that never reads its parameters is ordinary Kotlin, not a test-only
+    // accommodation.
+    bookingsTab: @Composable (Boolean, Boolean) -> Unit = { showConfirmedSegment, showClientsSegment ->
+        BookingsRoute(showConfirmedSegment = showConfirmedSegment, showClientsSegment = showClientsSegment)
+    },
     // `26-17`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for the same
     // reason - `BackContractMoreScreenTest` drives the real `NavHost`/`MoreScreen`/back-stack mechanics
     // with no Hilt component in play, and the default below is the one place `SettingsRoute`'s own
@@ -218,7 +223,7 @@ internal fun AppShellScreen(
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     conversationsTab: @Composable () -> Unit,
-    bookingsTab: @Composable (Boolean) -> Unit,
+    bookingsTab: @Composable (Boolean, Boolean) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable () -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -314,12 +319,19 @@ private fun AppShellContent(
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
-            // `26-51`: `customer:read` alone is what earns Утверждены — see [Permission]'s own doc
-            // comment table and `CalendarBookingsPage.tsx:156,182`. Computed here, once, from
-            // [permissions] rather than inside [ago.chat.android.bookings.BookingsScreen], the same
-            // "the caller who already has the permission set computes the Boolean" split
-            // [visibleBottomDestinations] draws one level up for this whole destination's own visibility.
-            composable(BottomDestination.Bookings.route()) { bookingsTab(permissions.holds(Permission.CUSTOMER_READ)) }
+            // `26-51`/`26-52`: `customer:read` alone earns Утверждены; `calendar:configure` or
+            // `customer:read` earns Клиенты — a third, independent gate matching
+            // `CalendarContactsPage.tsx:48` exactly, not the same Boolean reused (see [Permission]'s own
+            // doc comment table). Computed here, once, from [permissions] rather than inside
+            // [ago.chat.android.bookings.BookingsScreen], the same "the caller who already has the
+            // permission set computes the Boolean" split [visibleBottomDestinations] draws one level up
+            // for this whole destination's own visibility.
+            composable(BottomDestination.Bookings.route()) {
+                bookingsTab(
+                    permissions.holds(Permission.CUSTOMER_READ),
+                    permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                )
+            }
             composable(BottomDestination.Team.route()) { teamTab() }
             composable(BottomDestination.Analytics.route()) { AnalyticsRoute() }
             composable(BottomDestination.More.route()) {

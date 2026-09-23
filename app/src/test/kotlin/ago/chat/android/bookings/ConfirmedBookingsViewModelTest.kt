@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
+import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -168,5 +169,9 @@ class ConfirmedBookingsViewModelTest {
             if (hangFetch) awaitCancellation()
             return result
         }
+
+        // `26-52` widened `BookingsApi` with a third method this class has no test of its own for -
+        // never called by `ConfirmedBookingsViewModel`, which only ever reads the confirmed range.
+        override suspend fun fetchContacts(): ContactsResult = throw UnsupportedOperationException("not used by this class")
     }
 }

@@ -3,6 +3,8 @@ package ago.chat.android.core.network.bookings
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
+import ago.chat.android.core.domain.bookings.Contact
+import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.network.InMemoryActiveSite
@@ -247,6 +249,103 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(ConfirmedBookingsResult.NotConfigured, api.fetchConfirmedBookings(from = "2026-09-23", to = "2026-09-29"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `contacts are read in the order the server sent them`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond(
+                        """
+                        [
+                          {
+                            "customerId":"c1","phone":"+7***5678","masked":true,"displayName":"Анна",
+                            "noShowCount":2,"phoneVerifiedAt":"2026-09-01T10:00:00Z",
+                            "phoneConfirmedByOperatorAt":null
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchContacts()
+
+            assertEquals(
+                ContactsResult.Loaded(
+                    listOf(
+                        Contact(
+                            customerId = "c1",
+                            phone = "+7***5678",
+                            masked = true,
+                            displayName = "Анна",
+                            noShowCount = 2,
+                            phoneVerifiedAt = "2026-09-01T10:00:00Z",
+                            phoneConfirmedByOperatorAt = null,
+                        ),
+                    ),
+                ),
+                result,
+            )
+            assertEquals("$baseUrl/api/v1/console/contacts", requestedUrl)
+        }
+
+    @Test
+    fun `an unknown field on the contacts wire does not break the read`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """
+                        [
+                          {
+                            "customerId":"c1","phone":"+7***5678","masked":true,"displayName":null,
+                            "noShowCount":0,"phoneVerifiedAt":null,"phoneConfirmedByOperatorAt":null,
+                            "notes":"important","firstSeenAt":"2026-01-01T00:00:00Z",
+                            "lastSeenAt":"2026-01-01T00:00:00Z","duplicatePhoneCustomerIds":["c2"]
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertTrue(api.fetchContacts() is ContactsResult.Loaded)
+        }
+
+    @Test
+    fun `contacts - a 5xx is Unexpected, not an empty list`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.ServiceUnavailable) }
+
+            assertEquals(ContactsResult.Failed(BookingsQueueFailure.Unexpected), api.fetchContacts())
+        }
+
+    @Test
+    fun `contacts - a dropped connection is Transport, not an empty list`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(ContactsResult.Failed(BookingsQueueFailure.Transport), api.fetchContacts())
+        }
+
+    @Test
+    fun `contacts - no calendar base URL configured is NotConfigured, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(ContactsResult.NotConfigured, api.fetchContacts())
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 
