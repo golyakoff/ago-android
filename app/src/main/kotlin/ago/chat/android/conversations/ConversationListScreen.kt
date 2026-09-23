@@ -225,6 +225,7 @@ internal fun ConversationListScreen(
                             onClick = { onTabSelected(tab) },
                             shape = SegmentedButtonDefaults.itemShape(index, ConversationListTab.entries.size),
                             label = { Text(text = segmentedTabLabel(tab = tab, count = segmentedCountFor(tab, state))) },
+                            icon = {},
                         )
                     }
                 }
