@@ -200,6 +200,53 @@ class ConversationListRowTest {
         composeTestRule.onNodeWithText("01a0c839", substring = true).assertDoesNotExist()
     }
 
+    /** `26-76`: a row whose latest message came from a module step (a non-null
+     * [ConversationRowUi.lastMessageContentKind]) renders the snippet with a 📅 prefix in front of the
+     * preview text - the same text, not a replacement for it. */
+    @Test
+    fun aModuleStepRowRendersTheSnippetWithACalendarPrefix() {
+        renderMine(
+            ConversationRowUi(
+                conversationId = "c1",
+                visitorId = visitorId,
+                emojiCreature = "🦊",
+                emojiFood = "🍊",
+                visitorName = "Аня",
+                createdAt = "2026-09-22T09:00:00Z",
+                unreadCount = 0,
+                lastMessagePreview = "Выберите дату",
+                lastMessageAt = "2026-09-22T09:58:00Z",
+                lastMessageContentKind = "choice_list",
+            ),
+        )
+
+        composeTestRule.onNodeWithText("📅 Выберите дату").assertExists()
+        composeTestRule.onNodeWithText("Выберите дату").assertDoesNotExist()
+    }
+
+    /** `26-76`'s own regression half: a plain-text row (`lastMessageContentKind` null) renders the
+     * preview bare - no prefix appears where there is no module step behind it. */
+    @Test
+    fun aPlainTextRowRendersTheSnippetWithNoPrefix() {
+        renderMine(
+            ConversationRowUi(
+                conversationId = "c1",
+                visitorId = visitorId,
+                emojiCreature = "🦊",
+                emojiFood = "🍊",
+                visitorName = "Аня",
+                createdAt = "2026-09-22T09:00:00Z",
+                unreadCount = 0,
+                lastMessagePreview = "Здравствуйте, оплата не прошла",
+                lastMessageAt = "2026-09-22T09:58:00Z",
+                lastMessageContentKind = null,
+            ),
+        )
+
+        composeTestRule.onNodeWithText("Здравствуйте, оплата не прошла").assertExists()
+        composeTestRule.onNodeWithText("📅", substring = true).assertDoesNotExist()
+    }
+
     /** The unread-count badge - second refinement - still renders on the same line as the name. */
     @Test
     fun theUnreadBadgeRendersWithTheRow() {

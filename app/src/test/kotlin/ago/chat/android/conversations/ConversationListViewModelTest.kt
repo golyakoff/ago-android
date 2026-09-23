@@ -239,6 +239,22 @@ class ConversationListViewModelTest {
         }
 
     @Test
+    fun `26-76 lastMessageContentKind carries through to the row unchanged`() =
+        runTest(dispatcher) {
+            val summaryWithModuleStep =
+                waiting("c1").copy(lastMessagePreview = "Выберите дату", lastMessageContentKind = "choice_list")
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(summaryWithModuleStep))))
+            val viewModel = viewModelWith(api = api)
+
+            advanceUntilIdle()
+
+            val row =
+                viewModel.state.value.mine
+                    .single()
+            assertEquals("choice_list", row.lastMessageContentKind)
+        }
+
+    @Test
     fun `the operator's own message still refreshes the row's snippet, live`() =
         runTest(dispatcher) {
             // `26-30`: found live on a real device - an operator sent a reply, returned to the list, and

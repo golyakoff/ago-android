@@ -42,6 +42,11 @@ package ago.chat.android.core.domain.conversations
  * real wire value, the same "a row that predates the field compiles unchanged" rule
  * [hasAttachmentUploadGrant] already follows. The thread screen's app-bar subtitle (`26-40`) is this
  * field's first reader.
+ *
+ * `26-76`: [lastMessageContentKind] joins the same additive way — the raw `MessageContentKind` value
+ * `Ago.Chat.Contracts.ConversationSummaryDto.LastMessageContentKind` carries, `null` for plain prose and
+ * for a row that predates the field. Carried through unparsed for the identical reason [state] already
+ * is: this type states the wire fact, `:app` decides what to draw from it.
  */
 public data class ConversationSummary(
     public val conversationId: String,
@@ -55,6 +60,7 @@ public data class ConversationSummary(
     public val lastMessagePreview: String? = null,
     public val lastMessageAt: String? = null,
     public val state: String = "",
+    public val lastMessageContentKind: String? = null,
 )
 
 /**

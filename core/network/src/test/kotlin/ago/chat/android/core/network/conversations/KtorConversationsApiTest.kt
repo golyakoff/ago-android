@@ -161,6 +161,39 @@ class KtorConversationsApiTest {
         }
 
     @Test
+    fun `26-76's lastMessageContentKind maps through, and defaults null for a row that predates it`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "waiting": [],
+                          "assignedToMe": [
+                            {
+                              "conversationId":"c1","visitorId":"v1","createdAt":"2026-09-22T09:00:00Z","operatorUnreadCount":1,
+                              "lastMessagePreview":"Выберите дату","lastMessageAt":"2026-09-22T09:05:00Z",
+                              "lastMessageContentKind":"choice_list"
+                            },
+                            {"conversationId":"c2","visitorId":"v2","createdAt":"2026-09-22T09:00:00Z","operatorUnreadCount":0}
+                          ]
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val loaded = api.fetchQueue() as QueueResult.Loaded
+
+            val moduleStepRow = loaded.queue.assignedToMe.single { it.conversationId == "c1" }
+            assertEquals("choice_list", moduleStepRow.lastMessageContentKind)
+
+            val predatesTheField = loaded.queue.assignedToMe.single { it.conversationId == "c2" }
+            assertEquals(null, predatesTheField.lastMessageContentKind)
+        }
+
+    @Test
     fun `an unknown field on the wire does not break the read`() =
         runTest {
             val api =

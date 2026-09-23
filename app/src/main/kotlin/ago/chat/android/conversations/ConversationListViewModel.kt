@@ -300,6 +300,7 @@ public class ConversationListViewModel
                 lastMessagePreview = lastMessagePreview,
                 lastMessageAt = lastMessageAt,
                 state = state,
+                lastMessageContentKind = lastMessageContentKind,
             )
 
         /**
