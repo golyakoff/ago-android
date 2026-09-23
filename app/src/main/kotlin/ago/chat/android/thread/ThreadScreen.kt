@@ -487,6 +487,19 @@ private fun MessageList(
  * bubble that may take *up to* the other 76% (`fill = false`) — because Compose has no percentage
  * `max-width` modifier, and `fillMaxWidth(0.76f)` would make every bubble exactly that wide rather
  * than at most.
+ *
+ * **The delivery tick.** `26-42`: one tick once the server has an operator's message, two once
+ * [MessageDto.deliveredAt] is set — this mockup screen's own caption states plainly what the second one
+ * means and what it does not: "Порядок — это назначаемый сервером `sequence`, никогда не часы, а
+ * вторая галочка — это `Message.DeliveredAt`, собственное подтверждение виджета, **а не квитанция об
+ * отправке**." Appended inside the same `Text` as the clock time — the mockup's own `.t` line reads
+ * `09:39 ✓✓` as one string, not two elements — and so drawn in the identical [LocalContentColor] alpha
+ * this timestamp already reads, for the identical reason that alpha exists at all. A literal glyph, not
+ * a vector: `26-23`'s own lesson was about a literal character standing in for a *tap target* ("←"/"📎"
+ * as a button's whole content) — a non-interactive tick appended to a string already being built by
+ * hand for this exact line is the case that item's own report left open, and the mockup's caption above
+ * draws the identical glyphs. A visitor's or system message never carries a tick — [deliveryTick] is
+ * only ever consulted when [isOperator] is true.
  */
 @Composable
 private fun MessageBubble(message: MessageDto) {
@@ -508,7 +521,7 @@ private fun MessageBubble(message: MessageDto) {
                 Text(text = message.body, style = MaterialTheme.typography.bodyMedium)
                 clockTimeOrNull(message.createdAt)?.let { time ->
                     Text(
-                        text = time,
+                        text = if (isOperator) "$time ${deliveryTick(message.deliveredAt)}" else time,
                         style = MaterialTheme.typography.labelSmall,
                         color = LocalContentColor.current.copy(alpha = BUBBLE_TIMESTAMP_ALPHA),
                         modifier = Modifier.padding(top = 2.dp),
@@ -521,6 +534,15 @@ private fun MessageBubble(message: MessageDto) {
         }
     }
 }
+
+/** `26-42`: one tick ("✓") — the server has the message — until [deliveredAt] is set, then two
+ * ("✓✓") — the visitor's own widget acknowledged it. Never a third state: there is no read receipt in
+ * this product (`docs/backlog/26-42-*.md`'s own Out of scope), so [deliveredAt] absent-or-present is
+ * the whole of it. */
+private fun deliveryTick(deliveredAt: String?): String = if (deliveredAt != null) TICK_DELIVERED else TICK_SENT
+
+private const val TICK_SENT = "✓"
+private const val TICK_DELIVERED = "✓✓"
 
 /** `.bub{border-radius:16px}` with the one tail corner at 5px — bottom-start for the visitor's
  * bubbles, bottom-end for the operator's. */

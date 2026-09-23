@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -215,6 +216,7 @@ class SettingsViewModelTest {
         override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 1)
+        override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 1)
 
         var reconnectCalls: Int = 0
             private set

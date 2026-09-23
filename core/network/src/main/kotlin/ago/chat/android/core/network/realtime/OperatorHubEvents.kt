@@ -54,6 +54,15 @@ public interface OperatorHubEvents {
     public val assignments: SharedFlow<ConversationAssignedDto>
 
     /**
+     * `26-42`: every `MessageDelivered` push — the visitor's own widget acknowledging one of this
+     * operator's messages, the live half of the second delivery tick. Unscoped the identical way
+     * [assignments] is: the server only ever sends this to the message's own operator, so [ThreadViewModel]
+     * (`:app`) is what decides whether the named conversation is the one currently open before applying
+     * it to a message already on screen.
+     */
+    public val messageDelivered: SharedFlow<MessageDeliveredDto>
+
+    /**
      * `26-15`: [OperatorHubConnection.joinConversation], restated on this interface for the identical
      * testability reason every member above it already is — `ThreadViewModel` (`:app`) is the first
      * caller that needs to *act* on the connection, not only observe it, and depending on this

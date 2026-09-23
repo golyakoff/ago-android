@@ -3,6 +3,7 @@ package ago.chat.android.thread
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -200,6 +201,81 @@ class ThreadViewModelTest {
                     .count { it.id == "dup" },
             )
             assertEquals(3, viewModel.state.value.messages.size)
+        }
+
+    // ------------------------------------------------------------------------------ delivery tick
+
+    @Test
+    fun `a live MessageDelivered push sets deliveredAt on the message already on screen`() =
+        runTest(dispatcher) {
+            val sent = MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Operator", body = "Добрый день")
+            val hub = FakeOperatorHubEvents(fixtureAscending = listOf(sent))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertNull(
+                viewModel.state.value.messages
+                    .single()
+                    .deliveredAt,
+            )
+
+            hub.messageDelivered.tryEmit(MessageDeliveredDto(conversationId = "c1", messageId = "m1", deliveredAt = "2026-09-22T09:41:00Z"))
+            advanceUntilIdle()
+
+            assertEquals(
+                "2026-09-22T09:41:00Z",
+                viewModel.state.value.messages
+                    .single()
+                    .deliveredAt,
+            )
+        }
+
+    @Test
+    fun `a repeated MessageDelivered for the same message changes nothing`() =
+        runTest(dispatcher) {
+            val sent = MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Operator", body = "Добрый день")
+            val hub = FakeOperatorHubEvents(fixtureAscending = listOf(sent))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            hub.messageDelivered.tryEmit(MessageDeliveredDto(conversationId = "c1", messageId = "m1", deliveredAt = "2026-09-22T09:41:00Z"))
+            advanceUntilIdle()
+            // A second, later delivery notice for the same message - at-least-once redelivery, or a
+            // duplicate fan-out - must not overwrite the first timestamp with a different one.
+            hub.messageDelivered.tryEmit(MessageDeliveredDto(conversationId = "c1", messageId = "m1", deliveredAt = "2026-09-22T09:55:00Z"))
+            advanceUntilIdle()
+
+            assertEquals(
+                "the first delivery notice wins - a repeat changes nothing",
+                "2026-09-22T09:41:00Z",
+                viewModel.state.value.messages
+                    .single()
+                    .deliveredAt,
+            )
+            assertEquals(1, viewModel.state.value.messages.size)
+        }
+
+    @Test
+    fun `a MessageDelivered for a different conversation than the one open is ignored`() =
+        runTest(dispatcher) {
+            val sent = MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Operator", body = "Добрый день")
+            val hub = FakeOperatorHubEvents(fixtureAscending = listOf(sent))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            hub.messageDelivered.tryEmit(
+                MessageDeliveredDto(conversationId = "other", messageId = "m1", deliveredAt = "2026-09-22T09:41:00Z"),
+            )
+            advanceUntilIdle()
+
+            assertNull(
+                viewModel.state.value.messages
+                    .single()
+                    .deliveredAt,
+            )
         }
 
     // ---------------------------------------------------------------------------- outbound retry
@@ -420,6 +496,7 @@ class ThreadViewModelTest {
         override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+        override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
 
         val loadOlderCursors: MutableList<Long> = mutableListOf()
         val sendCalls: MutableList<Pair<String, String>> = mutableListOf()
