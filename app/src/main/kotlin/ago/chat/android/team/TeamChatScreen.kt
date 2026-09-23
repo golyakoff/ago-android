@@ -207,6 +207,7 @@ private fun TeamSegmentedRow(
                 onClick = { onSelected(tab) },
                 shape = SegmentedButtonDefaults.itemShape(index, TeamTab.entries.size),
                 label = { Text(text = stringResource(tab.labelRes())) },
+                icon = {},
             )
         }
     }

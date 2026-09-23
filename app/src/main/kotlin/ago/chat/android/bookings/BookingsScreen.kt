@@ -162,6 +162,7 @@ internal fun BookingsScreen(
                             onClick = { onTabSelected(tab) },
                             shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
                             label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
+                            icon = {},
                         )
                     }
                 }
