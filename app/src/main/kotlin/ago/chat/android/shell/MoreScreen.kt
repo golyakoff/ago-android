@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
@@ -83,12 +84,9 @@ private fun MoreListScreen(onRowClick: (String) -> Unit) {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 for ((section, sectionRows) in sections) {
                     item(key = "header-${section.name}") {
-                        Text(
-                            text = stringResource(section.labelRes),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        // `26-44`: the mockup's `.slabel`, shared with `SettingsScreen`'s own section
+                        // headings rather than a second inlined copy of the same five properties.
+                        SectionLabel(stringResource(section.labelRes))
                     }
                     items(sectionRows, key = { it.id }) { row -> MoreRowItem(row, onRowClick) }
                 }

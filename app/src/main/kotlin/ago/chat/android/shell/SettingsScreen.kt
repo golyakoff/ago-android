@@ -5,6 +5,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.compose.foundation.layout.Column
@@ -122,13 +123,13 @@ internal fun SettingsScreen(
             },
         ) { padding ->
             LazyColumn(modifier = Modifier.fillMaxWidth().padding(padding)) {
-                item { SectionHeader(stringResource(R.string.settings_theme_section)) }
+                item { SectionLabel(stringResource(R.string.settings_theme_section)) }
                 items(ThemeMode.entries.toList()) { mode ->
                     ThemeModeRow(mode = mode, selected = mode == themeMode, onSelected = { onThemeModeSelected(mode) })
                 }
 
                 if (switchableSites.size > 1) {
-                    item { SectionHeader(stringResource(R.string.settings_site_section)) }
+                    item { SectionLabel(stringResource(R.string.settings_site_section)) }
                     items(switchableSites, key = { it.siteId }) { tenancy ->
                         SiteRow(
                             tenancy = tenancy,
@@ -149,7 +150,7 @@ internal fun SettingsScreen(
                     }
                 }
 
-                item { SectionHeader(stringResource(R.string.settings_about_section)) }
+                item { SectionLabel(stringResource(R.string.settings_about_section)) }
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         AboutLine(stringResource(R.string.settings_about_build_label), BuildConfig.BUILD_TYPE)
@@ -169,16 +170,6 @@ internal fun SettingsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-    )
 }
 
 @Composable
