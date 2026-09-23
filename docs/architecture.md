@@ -159,9 +159,12 @@ it rather than re-deciding it. Every value in `Color.kt` is either CARRIED OVER 
 colour roles — the `surfaceContainer*` tonal-elevation family, `secondary`/`tertiary`, `inversePrimary`
 — than `tokens.css` has tokens for) — the same CARRIED OVER / DERIVED discipline `tokens.css`'s own
 header comment applies to itself. A handful of `tokens.css` tokens (`--ago-warning`,
-`--ago-brand-hover`, `--ago-live`) have no honest Material 3 `ColorScheme` slot at all and are kept as
-named constants for a future call site to read directly, rather than forced into a role that doesn't
-fit.
+`--ago-brand-hover`, `--ago-live`, `--ago-ink-faint`) have no honest Material 3 `ColorScheme` slot at
+all — every slot is already assigned to a different token — and are kept as named constants for a call
+site to read directly, rather than forced into a role that doesn't fit. `26-44`'s `SectionLabel`
+(`ui/components/`) is `--ago-ink-faint`'s own call site, and its own doc comment states the reasoning in
+full, including why it resolves dark/light from the active `ColorScheme` rather than
+`isSystemInDarkTheme()`.
 
 **Android 12+ dynamic colour is not used — a decision, not an oversight.** `dynamicLightColorScheme()`/
 `dynamicDarkColorScheme()` (wallpaper-derived, Android 12+) are never called anywhere in this app;
