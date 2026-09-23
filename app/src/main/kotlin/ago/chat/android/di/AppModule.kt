@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
@@ -9,6 +10,7 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
@@ -179,6 +181,18 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversationsApi = KtorConversationsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-57`: [ago.chat.android.analytics.AnalyticsViewModel]'s own port — `config.apiBaseUrl`, the
+     * identical chat API base URL [provideConversationsApi] above already reads, since
+     * `GET /api/v1/conversations/analytics/me` is one more endpoint on that same origin — no new base
+     * URL, unlike [provideBookingsApi] below.
+     */
+    @Provides
+    public fun provideOwnAnalyticsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): OwnAnalyticsApi = KtorOwnAnalyticsApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is

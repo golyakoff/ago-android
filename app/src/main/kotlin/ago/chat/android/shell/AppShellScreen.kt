@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.analytics.AnalyticsRoute
 import ago.chat.android.bookings.BookingsRoute
 import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
@@ -313,7 +314,7 @@ private fun AppShellContent(
             // [visibleBottomDestinations] draws one level up for this whole destination's own visibility.
             composable(BottomDestination.Bookings.route()) { bookingsTab(permissions.holds(Permission.CUSTOMER_READ)) }
             composable(BottomDestination.Team.route()) { teamTab() }
-            composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
+            composable(BottomDestination.Analytics.route()) { AnalyticsRoute() }
             composable(BottomDestination.More.route()) {
                 MoreScreen(
                     settingsScreen = { onBack ->
