@@ -154,7 +154,7 @@ class BackContractDialogsTabTest {
         composeTestRule.onNodeWithText("Мария").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Напишите сообщение…").performTextInput("Уже смотрю ваш заказ")
+        composeTestRule.onNodeWithText("Сообщение…").performTextInput("Уже смотрю ваш заказ")
         composeTestRule.waitForIdle()
 
         triggerBackPress(composeTestRule)

@@ -18,16 +18,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -36,7 +39,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -44,10 +46,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -553,40 +558,129 @@ private fun Composer(
     onSend: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (hasAttachmentUploadGrant) {
-                // A real, visible control - not disabled - whose tap does nothing yet. See this file's
-                // own top-of-file doc comment on why that stub is the honest shape for this item.
-                // `26-23` swapped its literal `"📎"` for the mockup's own `i-clip` vector; what the
-                // control *does* is untouched, and still deliberately nothing.
-                IconButton(onClick = { }) {
+        Column {
+            // `26-41`: `.composer{border-top:1px solid var(--line)}` - `--line` is `outlineVariant`
+            // (`Theme.kt`, confirmed rather than assumed). Without this the composer and the message
+            // list above it shared an edge with nothing drawn on it at all.
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = ComposerHorizontalPadding, vertical = ComposerVerticalPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                // `.composer{gap:9px}` - one gap, applied evenly on both sides of the field regardless
+                // of whether the paperclip is drawn at all, rather than a lone `Spacer` on one side of
+                // it (the shape this replaced: no gap before the field, an 8dp `Spacer` only after it).
+                horizontalArrangement = Arrangement.spacedBy(ComposerGap),
+            ) {
+                if (hasAttachmentUploadGrant) {
+                    // A real, visible control - not disabled - whose tap does nothing yet. See this file's
+                    // own top-of-file doc comment on why that stub is the honest shape for this item.
+                    // `26-23` swapped its literal `"📎"` for the mockup's own `i-clip` vector; what the
+                    // control *does* is untouched, and still deliberately nothing.
+                    IconButton(onClick = { }) {
+                        Icon(
+                            imageVector = AgoIcons.Clip,
+                            contentDescription = stringResource(R.string.thread_composer_attach),
+                        )
+                    }
+                }
+                ComposerField(
+                    draft = draft,
+                    onDraftChanged = onDraftChanged,
+                    modifier = Modifier.weight(1f),
+                )
+                // `26-23`: the mockup's `.iconbtn.tinted` - a circular brand-filled button carrying the
+                // `i-send` paper plane, not a text-labelled `Button`. `FilledIconButton`'s own defaults
+                // already *are* that description (`primary` container, `onPrimary` content, circular), so
+                // nothing about the shape is restated here. `thread_composer_send` survives as the
+                // control's accessible name rather than being deleted with the visible label: a send
+                // button that a screen reader announces as "button" and nothing else is worse than the
+                // text one it replaces.
+                FilledIconButton(onClick = onSend, enabled = draft.isNotBlank() && !sending) {
                     Icon(
-                        imageVector = AgoIcons.Clip,
-                        contentDescription = stringResource(R.string.thread_composer_attach),
+                        imageVector = AgoIcons.Send,
+                        contentDescription = stringResource(R.string.thread_composer_send),
                     )
                 }
-            }
-            TextField(
-                value = draft,
-                onValueChange = onDraftChanged,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(text = stringResource(R.string.thread_composer_placeholder)) },
-                maxLines = 5,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            // `26-23`: the mockup's `.iconbtn.tinted` - a circular brand-filled button carrying the
-            // `i-send` paper plane, not a text-labelled `Button`. `FilledIconButton`'s own defaults
-            // already *are* that description (`primary` container, `onPrimary` content, circular), so
-            // nothing about the shape is restated here. `thread_composer_send` survives as the
-            // control's accessible name rather than being deleted with the visible label: a send
-            // button that a screen reader announces as "button" and nothing else is worse than the
-            // text one it replaces.
-            FilledIconButton(onClick = onSend, enabled = draft.isNotBlank() && !sending) {
-                Icon(
-                    imageVector = AgoIcons.Send,
-                    contentDescription = stringResource(R.string.thread_composer_send),
-                )
             }
         }
     }
 }
+
+/**
+ * `26-41`: the mockup's `.field` — a 40dp, fully-rounded, sunken pill (`docs/backlog/26-41-*.md`'s own
+ * Found), never Material 3's default filled `TextField`: that control is 56dp tall with 4dp
+ * top-corners-only and carries the filled variant's own underline indicator in every state, none of
+ * which the mockup draws. Built on [BasicTextField] rather than [TextField] with an overridden shape and
+ * colours — `TextField`'s own minimum height and internal label/indicator layout are built around
+ * Material 3's filled-field spec, and fighting that spec down to a literal 40dp pill with no indicator
+ * anywhere is more code, and less certain to actually have no indicator in every state, than drawing the
+ * handful of things a pill needs (fill, shape, padding, a placeholder) directly on the same
+ * `BasicTextField` primitive `TextField` itself is built on. `heightIn(min = ...)` rather than a fixed
+ * `height` is what keeps `maxLines = 5` growth working: the pill is exactly 40dp tall at rest and taller
+ * once the draft wraps, the identical growth the old `TextField` already had.
+ */
+@Composable
+private fun ComposerField(
+    draft: String,
+    onDraftChanged: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // `.field{font-size:13.5px}` - no existing type-scale token sits at 13.5sp (`Type.kt`'s own scale is
+    // 12/13/15/17/20/22), so this is the mockup's own literal, named here with its CSS rule rather than
+    // silently rounded to a nearby token - the identical "traceable, not invented" treatment this file's
+    // own `BUBBLE_*` constants already get below.
+    val textStyle = TextStyle(fontSize = ComposerFieldFontSize, color = MaterialTheme.colorScheme.onSurface)
+    Surface(
+        modifier = modifier.heightIn(min = ComposerFieldHeight),
+        shape = CircleShape,
+        // `.field{background:var(--sunken)}` - `surfaceVariant` is `--sunken` (`Theme.kt`'s own
+        // confirmed mapping, the identical role the visitor's own message bubble already reads).
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        // `.field{padding:0 14px}` - horizontal padding only; the mockup centres its content with
+        // `align-items:center`, which [Alignment.CenterStart] below gives for free without an invented
+        // vertical padding of its own.
+        Box(modifier = Modifier.padding(horizontal = ComposerFieldHorizontalPadding), contentAlignment = Alignment.CenterStart) {
+            if (draft.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.thread_composer_placeholder),
+                    style = textStyle,
+                    // `.field{color:var(--ink-faint)}` for the mockup's own placeholder text - this app's
+                    // `ColorScheme` has no role wired to `--ink-faint` (`Theme.kt`'s own DERIVED/CARRIED
+                    // OVER accounting), so `onSurfaceVariant` (`--ink-soft`, one step darker) is the
+                    // nearest already-public role rather than a new one added for this single call site.
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            BasicTextField(
+                value = draft,
+                onValueChange = onDraftChanged,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = textStyle,
+                maxLines = COMPOSER_MAX_LINES,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+            )
+        }
+    }
+}
+
+// `26-41`: the mockup's own composer metrics, named once here with the CSS rule each one comes from -
+// nothing below is a chosen number.
+//
+// `.composer{padding:9px 12px}`
+private val ComposerHorizontalPadding = 12.dp
+private val ComposerVerticalPadding = 9.dp
+
+// `.composer{gap:9px}`
+private val ComposerGap = 9.dp
+
+// `.field{height:40px}`
+private val ComposerFieldHeight = 40.dp
+
+// `.field{padding:0 14px}`
+private val ComposerFieldHorizontalPadding = 14.dp
+
+// `.field{font-size:13.5px}`
+private val ComposerFieldFontSize = 13.5.sp
+
+private const val COMPOSER_MAX_LINES = 5
