@@ -32,6 +32,16 @@ package ago.chat.android.core.domain.conversations
  * system message, or one with no safe-to-preview content) - the row renders no snippet line at all in
  * that case, never an orphaned timestamp (`ConversationListScreen`'s own doc comment on
  * `ConversationRowSnippetLine`).
+ *
+ * `26-40`: [state] joins the same additive way — `Ago.Chat.Contracts.ConversationSummaryDto.State`
+ * (`Ago.Chat.Domain.ConversationState`'s own member names: `"Waiting"`/`"Assigned"`/`"Closed"`, and
+ * `"Pending"` in principle though no operator-facing read ever produces one), carried through verbatim
+ * as the wire spelling rather than parsed here — the identical "the arithmetic/classification is a pure
+ * `:core:domain` function, the prose is `:app`'s job" split [elapsedSince]/[ElapsedLabel] already
+ * establish, restated by [conversationStateLabel]/[ConversationStateLabel]. Defaults to `""`, never a
+ * real wire value, the same "a row that predates the field compiles unchanged" rule
+ * [hasAttachmentUploadGrant] already follows. The thread screen's app-bar subtitle (`26-40`) is this
+ * field's first reader.
  */
 public data class ConversationSummary(
     public val conversationId: String,
@@ -44,6 +54,7 @@ public data class ConversationSummary(
     public val hasAttachmentUploadGrant: Boolean = false,
     public val lastMessagePreview: String? = null,
     public val lastMessageAt: String? = null,
+    public val state: String = "",
 )
 
 /**

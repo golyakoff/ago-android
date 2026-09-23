@@ -107,6 +107,19 @@
     <string name="conversation_list_elapsed_days_short">%d д</string>
 
     <!--
+        `26-40`: `ConversationStateLabel`'s prose half - the thread app-bar subtitle's own status word,
+        lowercase and mid-sentence (it always sits beside the elapsed time, never sentence-initial).
+        `conversation_state_assigned` is the mockup's own wording verbatim («в работе»); the other three
+        are this item's own judgement call, made to read the same way beside a short elapsed time rather
+        than reusing `ago-console`'s noun-form badge text (`conversationStateAssigned`'s own Russian is
+        "Назначен"), which does not read naturally next to «· 2 мин».
+    -->
+    <string name="conversation_state_waiting">ожидание</string>
+    <string name="conversation_state_assigned">в работе</string>
+    <string name="conversation_state_closed">закрыт</string>
+    <string name="conversation_state_pending">не начат</string>
+
+    <!--
         `26-15`: the thread screen - history, send, receive.
     -->
     <string name="thread_composer_placeholder">Напишите сообщение…</string>

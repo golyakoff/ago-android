@@ -226,21 +226,34 @@ on the web.
 which parts are present, and the exact text-composition rule, matched against
 `ago-console/src/workspace/visitorEmoji.ts`'s own `visitorEmojiPrefix`/`visitorDisplayPrefix` (each
 present part supplies its own trailing space, none supplies a leading one, so a pair-less, name-less
-visitor renders the short id alone with no gap) — and `VisitorDisplayPrefix` (`:app`,
-`ui/components/`) is the composable that lays the parts out, sizing the emoji pair from
-`MaterialTheme.typography.titleLarge` and rendering the id through `IdentifierText`.
+visitor renders the short id alone with no gap). `26-40` retired the `:app` composable this paragraph
+used to name here (`VisitorDisplayPrefix`, `ui/components/`) — see that item's own note below.
 
 `26-30`: `VisitorDisplayPrefixParts` grew a fourth field, `displayName` — the visitor's own real name
 when there is one, else the emoji pair's own localized fallback label ("Лиса · Апельсин", from
 `VisitorEmojiNames.kt`, a byte-for-byte port of `ago-console/src/i18n/visitorEmojiNames.ts`'s table
 over `Ago.Chat.Domain.VisitorEmojiDictionary`), else `null`. `visitorName` itself is unchanged — the
 real name only, still what `visitorDisplayPrefixText` reads — so `displayName` is additive, not a
-replacement. Both real call sites (`VisitorDisplayPrefix` for the thread screen's app-bar title, and
-the conversation-list row's own identity line) read `displayName`, which is what gives the thread
-screen the identical fallback with no derivation of its own. The conversation-list row goes one step
-further and drops the short code from that line entirely — every real visitor has a name or a pair by
-now, so the code was carrying no load there; the thread screen still renders it via `IdentifierText`,
-since an operator dictating or matching an id still needs it.
+replacement. Both real call sites read `displayName`, which is what gives each one the identical
+fallback with no derivation of its own.
+
+`26-40`: the thread screen's app-bar title stopped being the one place that still rendered the short
+code. Reading the approved mockup Artifact against real code found the app bar drawing a code the
+mockup's own title never draws at all — `VisitorDisplayPrefix` (`:app`, `ui/components/`) drew the id
+unconditionally, with no caller opt-out — while the mockup's own second line (channel · state · age)
+was entirely absent. The fix retired that composable (its only caller was this app bar) in favour of
+the thread screen's own `ThreadTitleBlock`, which reads `visitorDisplayPrefixParts` directly and draws
+`displayName` alone — the identical "read the `:core:domain` function directly, keep the layout local"
+choice `ConversationListScreen`'s own `ConversationRowIdentityLine` already made for the row's name
+line. Underneath it, a subtitle renders the conversation's state
+(`ConversationSummary.state`/`ConversationRowUi.state`, grown the same additive way `26-15` grew
+`hasAttachmentUploadGrant`, classified by the pure `conversationStateLabel`/`ConversationStateLabel`
+pair in `:core:domain`) and its age (`shortElapsedText`, moved out of `ConversationListScreen` into
+`ui/components/ElapsedText.kt` once the app bar became a second caller) — never the channel, which no
+field on the wire carries at all (incoming-channel expansion is `Ago.Chat`'s own Stage 14). The one
+place an eight-character code is still drawn today is `IdentifierText`'s two other real call sites —
+`SettingsScreen`'s site rows and the sign-in site picker — both ids an operator genuinely may have to
+match, unlike a visitor's own conversation-list/app-bar identity.
 
 Two places where an id is what the wire carries and a name is what the screen needs — the pending
 booking queue (`PendingBooking` has `workerId`/`serviceId`/`calendarId` and no names) and the

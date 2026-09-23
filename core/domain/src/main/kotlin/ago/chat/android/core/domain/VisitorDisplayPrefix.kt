@@ -40,9 +40,9 @@ public fun visitorEmojiPair(
  * pre-existing tests are provably unchanged; [displayName] is the new "what a screen should actually
  * show" value — [visitorName] when there is one, else the emoji pair's own localized fallback label
  * ("Лиса · Апельсин"), else `null`. Both of this item's two real call sites — the conversation-list
- * row's identity line, and the thread screen's app-bar title (`ui.components.VisitorDisplayPrefix`) —
- * read [displayName], never [visitorName] directly, which is what gives the thread screen the same
- * fallback with no separate derivation of its own.
+ * row's identity line, and the thread screen's app-bar title (`26-40`'s own
+ * `ago.chat.android.thread.ThreadTitleBlock`) — read [displayName], never [visitorName] directly, which
+ * is what gives the thread screen the same fallback with no separate derivation of its own.
  */
 public data class VisitorDisplayPrefixParts(
     public val emoji: VisitorEmojiPair?,

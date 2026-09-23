@@ -45,6 +45,11 @@ public data class ConversationRowUi(
      * short elapsed format the name line's [createdAt] already uses. Read only when [lastMessagePreview]
      * is non-null - never a lone timestamp with nothing to attach to. */
     public val lastMessageAt: String? = null,
+    /** `26-40`: carried through unchanged from [ago.chat.android.core.domain.conversations.ConversationSummary] -
+     * the thread screen's own app-bar subtitle, read from the row the list already fetched
+     * (`ConversationsTabHost`) rather than a second network call. Not read by anything on this screen
+     * itself; `""` (the field's own default) means "predates this field" and renders no state word. */
+    public val state: String = "",
 )
 
 /**

@@ -1,12 +1,12 @@
 package ago.chat.android.conversations
 
 import ago.chat.android.R
-import ago.chat.android.core.domain.conversations.ElapsedLabel
-import ago.chat.android.core.domain.conversations.elapsedSince
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.HubConnectionDot
 import ago.chat.android.ui.components.VisitorAvatar
+import ago.chat.android.ui.components.rememberTickingNow
+import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +64,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import java.time.OffsetDateTime
 
 /**
@@ -152,15 +151,9 @@ internal fun ConversationListScreen(
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
-    // its own recomposition schedule. Coarser than a second and finer than a minute, matching that
-    // hook's own `ELAPSED_TICK_MS` reasoning.
-    var now by remember { mutableStateOf(OffsetDateTime.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(ELAPSED_TICK_MILLIS)
-            now = OffsetDateTime.now()
-        }
-    }
+    // its own recomposition schedule. `26-40`: the ticker itself moved to `ui.components.ElapsedText`
+    // now that the thread app-bar's subtitle is a second caller of the identical mechanism.
+    val now = rememberTickingNow()
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -495,11 +488,11 @@ private fun ConversationRow(
  * so this is not a case any current row hits).
  *
  * The emoji pair itself is deliberately *not* drawn here: [VisitorAvatar] at the row's leading edge
- * already carries it. Rather than teach [ago.chat.android.ui.components.VisitorDisplayPrefix] to
- * suppress its own emoji half, this reads the same `:core:domain` function that composable reads —
- * [visitorDisplayPrefixParts], which already separates "the pair" from "the name" from "the id" — so
- * the rule about which parts are present is stated exactly once, in the one module that owns it, and
- * only the *layout* differs.
+ * already carries it. Rather than deriving a second, ad hoc "just the name" rule, this reads
+ * [visitorDisplayPrefixParts] directly — the same `:core:domain` function
+ * `ago.chat.android.thread.ThreadTitleBlock` reads for the identical reason (`26-40`) — which already
+ * separates "the pair" from "the name" from "the id", so the rule about which parts are present is
+ * stated exactly once, in the one module that owns it, and only the *layout* differs per caller.
  *
  * `.rtime-strong{font-size:13px; font-weight:700; color:var(--ink)}` — bold and full-strength ink,
  * unlike the snippet line's own `.rtime` (`ConversationRowSnippetLine`): the mockup's own comment on
@@ -733,38 +726,10 @@ private fun EmptyBody(text: String) {
     }
 }
 
-/**
- * `26-30`: the one shared elapsed-time formatter for this whole screen — the name line's own
- * age-since-creation and the snippet line's own last-message time both call this, and nothing else on
- * this screen formats an elapsed duration. Renders the mockup's own short form — «4 ч», «20 мин», «2 д»
- * — with no «Открыт»/«Ждёт» prefix of any kind: the two tabs no longer differ in how they render this
- * value at all, which is why `elapsedPrefixRes`/`R.string.conversation_list_opened_prefix`/
- * `R.string.conversation_list_waiting_since_prefix` are gone entirely rather than merely unused.
- *
- * Genuinely prefix-free, not just a shorter prefix: Russian's short time units («ч», «мин», «д») do not
- * inflect by count the way the full words «час»/«часа»/«часов» do, so this reads a plain formatted
- * string resource rather than [androidx.compose.ui.res.pluralStringResource] — there is no plural rule
- * left to apply once the unit itself stopped needing one.
- */
-@Composable
-private fun shortElapsedText(
-    timestamp: String,
-    now: OffsetDateTime,
-): String =
-    when (val elapsed = elapsedSince(timestamp, now)) {
-        is ElapsedLabel.Minutes ->
-            stringResource(R.string.conversation_list_elapsed_minutes_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
-
-        is ElapsedLabel.Hours ->
-            stringResource(R.string.conversation_list_elapsed_hours_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
-
-        is ElapsedLabel.Days ->
-            stringResource(R.string.conversation_list_elapsed_days_short, elapsed.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
-
-        ElapsedLabel.Unknown -> stringResource(R.string.conversation_list_elapsed_unknown)
-    }
-
-private const val ELAPSED_TICK_MILLIS = 30_000L
+// `26-30`/`26-40`: the shared elapsed-time formatter — `ui.components.ElapsedText.shortElapsedText` —
+// used to be a private function of this screen; it moved out once the thread app-bar's subtitle became
+// a second caller of the identical mockup short form («4 ч», «20 мин», «2 д»). See that file's own doc
+// comment for the full reasoning; nothing about the wording or the bucketing changed in the move.
 
 // `26-23`: the mockup's own row metrics, named once here rather than repeated as bare literals at each
 // call site, with the CSS rule each one comes from. Nothing below is a chosen number.

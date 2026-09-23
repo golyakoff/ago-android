@@ -290,6 +290,7 @@ public class ConversationListViewModel
                 hasAttachmentUploadGrant = hasAttachmentUploadGrant,
                 lastMessagePreview = lastMessagePreview,
                 lastMessageAt = lastMessageAt,
+                state = state,
             )
 
         /**

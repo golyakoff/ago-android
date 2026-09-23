@@ -21,15 +21,17 @@ import androidx.compose.ui.unit.sp
  * `26-23`: the visitor's emoji identity as the approved mockup composes it — the creature centred in a
  * circular brand tint, the food emoji floating over the circle's bottom-right edge with **no background
  * of its own**. The mockup's own CSS carries the reason this is a separate composable rather than a
- * tweak to [VisitorDisplayPrefix]: "`25-207`: badge composition, not a side-by-side pair - the creature
- * alone, centered, larger than the old squeezed-pair glyph". [VisitorDisplayPrefix] still draws that
- * old inline pair, and is still correct where it is used — the thread screen's app-bar title, which has
- * no avatar circle at all — so it is deliberately left untouched here.
+ * tweak to the old inline emoji-pair glyph: "`25-207`: badge composition, not a side-by-side pair - the
+ * creature alone, centered, larger than the old squeezed-pair glyph". `26-40` retired that old inline
+ * pair's one remaining call site (the thread screen's app-bar title, which draws no emoji at all any
+ * more — that item's own Scope: "the mockup's own title is plain text") — this composable is unaffected,
+ * since it never drew that pair itself.
  *
  * **Absence is absence, never a blank circle.** The presence rule is not restated here: it is
- * [visitorEmojiPair] (`:core:domain`), the same function [VisitorDisplayPrefix] routes through, which
- * treats a half-present pair exactly like a missing one ("never half a badge", that function's own doc
- * comment). When it answers `null` — a visitor predating the emoji-pair column — this composable draws
+ * [visitorEmojiPair] (`:core:domain`), the same function every other caller of the emoji pair reads
+ * through, which treats a half-present pair exactly like a missing one ("never half a badge", that
+ * function's own doc comment). When it answers `null` — a visitor predating the emoji-pair column —
+ * this composable draws
  * *nothing at all*, rather than an empty tinted circle. An empty circle would be the "leading-space
  * artifact"/"blank placeholder" that `visitorDisplayPrefixText`'s own doc comment rejects for the text
  * form, drawn in pixels instead of characters; the row simply starts at its text, the way the console's
