@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -154,7 +155,11 @@ class SettingsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Выйти").performClick()
+        // `26-69`: on a real device (never on CI's emulator) this `LazyColumn`'s last item - the one
+        // this test targets - was found by `onNodeWithText` in a state where `performClick()` ran but
+        // `onSignOut` never fired; scrolling the node into a stable, fully-measured position first is
+        // the standing fix for a `LazyColumn`-bottom-item click, real cause or not.
+        composeTestRule.onNodeWithText("Выйти").performScrollTo().performClick()
 
         assertEquals(true, signedOut)
     }
