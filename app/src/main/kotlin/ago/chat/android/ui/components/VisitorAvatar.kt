@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,20 @@ import androidx.compose.ui.unit.sp
  *
  * Every dimension below is the mockup's own `.av`/`.av-food` rule, transcribed rather than chosen —
  * which is why they are named constants with the CSS beside them, not literals inline.
+ *
+ * `26-64`: `clearAndSetSemantics {}` below is [ui.components.HubConnectionDot]'s own rule, applied in the
+ * opposite direction. That composable's own doc comment states the rule this app otherwise follows: "a
+ * coloured circle with no text is invisible to a screen reader... it is decorative here by construction:
+ * the same pair is already spoken as a name" — right after this avatar, on
+ * `ConversationListScreen.kt`'s own identity line, which reads
+ * [ago.chat.android.core.domain.VisitorDisplayPrefixParts.displayName]. Without this, TalkBack read the
+ * two raw emoji characters below as *glyph names* ("Fox face. Tangerine.") — in whichever language the
+ * TTS engine happens to run, not necessarily Russian — once for every row, right before repeating the
+ * same identity as a name. `clearAndSetSemantics {}` (empty) drops this composable's own semantics and
+ * every descendant's, which is the ordinary Compose shape for "this subtree is decorative" — distinct
+ * from the row-level `mergeDescendants = true` in `ConversationRow`, which *folds* descendants into one
+ * description rather than silencing them; this avatar wants silence, not folding, because folding it in
+ * would still speak the glyph names as part of the merged sentence.
  */
 @Composable
 public fun VisitorAvatar(
@@ -48,7 +63,7 @@ public fun VisitorAvatar(
 ) {
     val pair = visitorEmojiPair(emojiCreature, emojiFood) ?: return
 
-    Box(modifier = modifier.size(AvatarDiameter)) {
+    Box(modifier = modifier.size(AvatarDiameter).clearAndSetSemantics {}) {
         Box(
             modifier =
                 Modifier

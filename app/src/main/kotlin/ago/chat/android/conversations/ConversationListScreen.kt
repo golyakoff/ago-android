@@ -1,13 +1,17 @@
 package ago.chat.android.conversations
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.conversations.ElapsedLabel
+import ago.chat.android.core.domain.conversations.elapsedSince
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.HubConnectionDot
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.rememberTickingNow
+import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,7 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -407,7 +414,21 @@ private fun MineRow(
     // `26-30`: the unread badge used to be this row's own `trailing` slot - the row's far trailing
     // edge, opposite the name. It now sits beside the name instead (`ConversationRowIdentityLine`'s own
     // doc comment), so «Мои» has nothing left to pass here; «Ожидают» still does, for its claim button.
-    ConversationRow(row = row, now = now, modifier = Modifier.clickable(onClick = onClick))
+    //
+    // `26-64`: `onClickLabel` names the action a tap actually performs. Without it, TalkBack announces
+    // Compose's generic clickable hint ("double-tap to activate") - true of any clickable element and
+    // therefore useless for telling this row apart from the claim button two composables over. The
+    // label replaces only the *hint*; the row's own `contentDescription` (set on `ConversationRow`
+    // below, via `mergeDescendants`) still carries what the row itself says.
+    ConversationRow(
+        row = row,
+        now = now,
+        modifier =
+            Modifier.clickable(
+                onClickLabel = stringResource(R.string.conversation_list_open_action),
+                onClick = onClick,
+            ),
+    )
 }
 
 /**
@@ -426,6 +447,25 @@ private fun MineRow(
  * incoming-channel expansion is `Ago.Chat`'s Stage 14, not built. The one pill drawn here is the one
  * with a real field behind it, [ConversationRowUi.isNewlyAssigned]. Recorded in this item's report as a
  * gap worth its own future item, same as `26-23`'s report recorded this row's now-closed gaps.
+ *
+ * `26-64`: **one accessibility node, one sentence.** Before this, none of the children below carried any
+ * semantics of its own, so TalkBack walked the five/six `Text`/`Box` nodes one at a time — a name, then
+ * an unread digit with no context, then a bold time and a quiet one that sound identical, then a
+ * snippet — as five disconnected fragments (`docs/backlog/26-64-*.md`'s own Found section). Compose's
+ * ordinary shape for "this whole subtree is one thing" is `Modifier.semantics(mergeDescendants = true)`
+ * with an explicit `contentDescription` that overrides whatever text the merge would otherwise
+ * concatenate from the children — the identical mechanism [ago.chat.android.ui.components.HubConnectionDot]
+ * already uses on a childless `Box`, applied here to a `Row` with several. [VisitorAvatar]'s own
+ * `clearAndSetSemantics {}` (that composable's own doc comment) keeps the emoji pair's glyph names out of
+ * what gets merged, so [conversationRowContentDescription] is the *only* source of what this node says.
+ *
+ * On «Ожидают», [trailing] is the claim `Button` — deliberately still a child of this same `Row`, not
+ * moved outside it. Compose does not fold an actionable descendant (one with its own click action) into
+ * an ancestor's `mergeDescendants = true`: an element a person can act on stays independently reachable
+ * by design, which is the built-in rule this composable relies on rather than re-implements — the same
+ * reason a `Card(onClick = …)` containing an `IconButton` leaves that button separately double-tappable
+ * elsewhere in Compose Material 3. `ConversationRowSemanticsTest` asserts this directly rather than
+ * trusting the rule by citation alone.
  */
 @Composable
 private fun ConversationRow(
@@ -434,8 +474,14 @@ private fun ConversationRow(
     modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit = {},
 ) {
+    val description = conversationRowContentDescription(row = row, now = now)
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag(CONVERSATION_ROW_CONTENT_TEST_TAG)
+                .semantics(mergeDescendants = true) { contentDescription = description },
         // `.row{align-items:flex-start}` - a multi-line row's avatar sits level with the name, not
         // floated to the vertical middle of the block.
         verticalAlignment = Alignment.Top,
@@ -469,6 +515,114 @@ private fun ConversationRow(
         trailing()
     }
 }
+
+/**
+ * `26-64`: the row's one spoken sentence, in the same left-to-right order the row draws it — who
+ * ([ago.chat.android.core.domain.VisitorDisplayPrefixParts.displayName]), how old
+ * ([ConversationRowUi.createdAt]), how many unread (named as unread, never [UnreadBadge]'s own bare
+ * digit), and what was last said (the snippet, with its own elapsed time worded apart from the first so
+ * the two don't sound identical).
+ *
+ * Assembled with [listOfNotNull] and [joinToString], the same shape
+ * [ago.chat.android.core.domain.visitorDisplayPrefixParts]'s own module already uses for the *visible*
+ * prefix text (`visitorDisplayPrefixText`'s own doc comment: "each present part supplies its own trailing
+ * space... no part ever supplies a leading one") — applied here to the *spoken* description instead, with
+ * Kotlin's own tool for "each optional part supplies itself, and a missing one leaves no trace" rather
+ * than that function's hand-rolled per-part trailing space. A row with no name, no snippet and no unread
+ * count simply has a shorter list to join — never a stray leading/trailing separator, never two in a row.
+ */
+@Composable
+private fun conversationRowContentDescription(
+    row: ConversationRowUi,
+    now: OffsetDateTime,
+): String {
+    val parts = visitorDisplayPrefixParts(row.emojiCreature, row.emojiFood, row.visitorName, row.visitorId)
+    val openedClause =
+        conversationRowElapsedClause(
+            elapsed = elapsedSince(row.createdAt, now),
+            unknownRes = R.string.conversation_row_opened_unknown,
+            agoRes = R.string.conversation_row_opened_ago,
+        )
+    val unreadClause =
+        row.unreadCount.takeIf { it > 0 }?.let { count ->
+            russianPluralStringResource(
+                count = count.toLong(),
+                one = R.string.conversation_row_unread_one,
+                few = R.string.conversation_row_unread_few,
+                many = R.string.conversation_row_unread_many,
+            )
+        }
+    val snippetClause =
+        row.lastMessagePreview?.let { preview ->
+            val lastMessageClause =
+                row.lastMessageAt?.let { at ->
+                    conversationRowElapsedClause(
+                        elapsed = elapsedSince(at, now),
+                        unknownRes = R.string.conversation_row_last_message_unknown,
+                        agoRes = R.string.conversation_row_last_message_ago,
+                    )
+                }
+            listOfNotNull(preview, lastMessageClause).joinToString(separator = ", ")
+        }
+
+    return listOfNotNull(parts.displayName, openedClause, unreadClause, snippetClause).joinToString(separator = ". ")
+}
+
+/**
+ * One [ElapsedLabel] spoken two different ways depending on which of the row's two timestamps it came
+ * from — [agoRes] is `conversation_row_opened_ago` ("открыт %1$s назад") or
+ * `conversation_row_last_message_ago` ("последнее сообщение %1$s назад"); [unknownRes] is that same
+ * call's own "time unknown" wording, never [ElapsedLabel.Unknown] rendered as "0 minutes ago"
+ * ([elapsedSince]'s own doc comment states that rule for the visible form; nothing about it changes for
+ * the spoken one).
+ */
+@Composable
+private fun conversationRowElapsedClause(
+    elapsed: ElapsedLabel,
+    @StringRes unknownRes: Int,
+    @StringRes agoRes: Int,
+): String =
+    when (elapsed) {
+        ElapsedLabel.Unknown -> stringResource(unknownRes)
+
+        is ElapsedLabel.Minutes ->
+            stringResource(
+                agoRes,
+                russianPluralStringResource(
+                    elapsed.value,
+                    R.string.conversation_row_elapsed_minutes_one,
+                    R.string.conversation_row_elapsed_minutes_few,
+                    R.string.conversation_row_elapsed_minutes_many,
+                ),
+            )
+
+        is ElapsedLabel.Hours ->
+            stringResource(
+                agoRes,
+                russianPluralStringResource(
+                    elapsed.value,
+                    R.string.conversation_row_elapsed_hours_one,
+                    R.string.conversation_row_elapsed_hours_few,
+                    R.string.conversation_row_elapsed_hours_many,
+                ),
+            )
+
+        is ElapsedLabel.Days ->
+            stringResource(
+                agoRes,
+                russianPluralStringResource(
+                    elapsed.value,
+                    R.string.conversation_row_elapsed_days_one,
+                    R.string.conversation_row_elapsed_days_few,
+                    R.string.conversation_row_elapsed_days_many,
+                ),
+            )
+    }
+
+/** `26-64`: `ConversationRowSemanticsTest`'s own hook onto the merged row node - a `testTag` rather than
+ * a query built on the (Russian, wording-sensitive) `contentDescription` itself, so a future rewording
+ * of the sentence doesn't also break the test that checks its shape. */
+internal const val CONVERSATION_ROW_CONTENT_TEST_TAG = "conversationRowContent"
 
 /**
  * `26-30`: the mockup's `.rtop` — `display:flex; align-items:baseline; gap:8px` over exactly three
