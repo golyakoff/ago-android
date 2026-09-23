@@ -55,14 +55,6 @@ internal fun BookingsPlaceholderScreen() {
 }
 
 @Composable
-internal fun TeamPlaceholderScreen() {
-    PlaceholderDestinationScreen(
-        title = stringResource(R.string.nav_team),
-        body = stringResource(R.string.team_placeholder_body),
-    )
-}
-
-@Composable
 internal fun AnalyticsPlaceholderScreen() {
     PlaceholderDestinationScreen(
         title = stringResource(R.string.nav_analytics),
