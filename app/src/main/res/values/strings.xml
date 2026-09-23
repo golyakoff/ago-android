@@ -122,7 +122,10 @@
     <!--
         `26-15`: the thread screen - history, send, receive.
     -->
-    <string name="thread_composer_placeholder">Напишите сообщение…</string>
+    <!-- `26-41`: the mockup's own `.field` text, verbatim - shorter than the previous
+         «Напишите сообщение…», and the shorter one is what fits a 40dp pill beside two buttons on a
+         360dp-wide phone. -->
+    <string name="thread_composer_placeholder">Сообщение…</string>
     <!--
         `26-23`: still the send control's own name, now read out rather than drawn - the button shows
         the mockup's paper-plane vector and carries this as its `contentDescription`.

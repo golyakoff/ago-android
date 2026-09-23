@@ -121,7 +121,7 @@ class AssignmentNeverNavigatesTest {
         composeTestRule.onNodeWithText("Новое").assertExists()
 
         // The whole point: still the list, never the thread.
-        composeTestRule.onNodeWithText("Напишите сообщение…").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Сообщение…").assertDoesNotExist()
         assertEquals(
             "a live assignment must never construct a ThreadViewModel - that only ever happens by opening a row",
             0,
@@ -132,7 +132,7 @@ class AssignmentNeverNavigatesTest {
         // open the thread, right after the push that must not have.
         composeTestRule.onNodeWithText("Иван").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Напишите сообщение…").assertExists()
+        composeTestRule.onNodeWithText("Сообщение…").assertExists()
         assertTrue("clicking the row does open the thread, unlike the live push above", threadOpened > 0)
     }
 }
