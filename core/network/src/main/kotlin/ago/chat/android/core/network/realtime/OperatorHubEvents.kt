@@ -119,4 +119,73 @@ public interface OperatorHubEvents {
      * assert against, not a real `HubConnection` attempting a real socket.
      */
     public suspend fun reconnectToActiveSite()
+
+    /**
+     * `26-54`: every `TeamMessageReceived` push — one tenant-wide room, so unlike [messages] there is
+     * no "which conversation is joined" scoping question to answer: every push on this connection
+     * belongs to the one team room this operator's site membership already grants. [TeamChatViewModel]
+     * (`:app`) is the only planned consumer, and does its own id-based merge/dedup — this stream carries
+     * no [MessageSubscription]-style resume record of its own, because there is nothing to resume: see
+     * [getTeamDelta]'s own doc comment for why a reconnect catches up by delta instead.
+     */
+    public val teamMessages: SharedFlow<TeamMessageDto>
+
+    /**
+     * `26-54`: every `TeamMessageRemoved` push — a distinct push, distinct method name, never routed
+     * through [teamMessages]'s own dedup. The payload is the *same* [TeamMessageDto] already rendered,
+     * with [TeamMessageDto.removedAt] now set and [TeamMessageDto.body] redacted to `null` — a caller
+     * updates the matching entry it already holds by [TeamMessageDto.id], the same
+     * `applyRemoval`/`teamMessageRemovedListener` shape `ago-console`'s own `TeamChatPage.tsx` takes.
+     * Removing a message is this item's own Out of scope (`RemoveTeamMessageButton`'s confirmation flow
+     * is a separate promise), but a removal by *another* operator must still stop showing this
+     * connection's own already-rendered content, which is why this push is wired even with no button
+     * on this screen to trigger one.
+     */
+    public val teamMessageRemovals: SharedFlow<TeamMessageDto>
+
+    /**
+     * `26-54`: `OperatorHub.GetTeamHistoryAsync` — the team room's own backward-keyset page,
+     * `ago-console`'s own `getTeamHistory` restated. `beforeSequence: null` is the initial "most recent
+     * page" load, exactly [loadOlderHistory]'s own convention for a conversation's history.
+     */
+    public suspend fun getTeamHistory(
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): TeamHistoryPage
+
+    /**
+     * `26-54`: `OperatorHub.GetTeamDeltaAsync` — every team message strictly after [afterSequence],
+     * oldest first. The team room's own reconnect catch-up: unlike a conversation
+     * ([OperatorHubConnection.resumeSubscription]), there is no `JoinConversationAsync` analogue for
+     * this room to replay on a fresh socket — `SendTeamMessageAsync`/`GetTeamHistoryAsync` are reachable
+     * the moment the connection authenticates, with no server-side group membership to lose — so the
+     * only gap a reconnect opens is a [teamMessages] push sent while the socket was down, and a caller
+     * already knows the last sequence it rendered. `ago-console`'s own `getTeamDelta`, restated.
+     */
+    public suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage
+
+    /**
+     * `26-54`: `OperatorHub.SendTeamMessageAsync`, called with its full two-argument arity
+     * (`body`, `clientMessageId`) every time — the identical "a hub method's parameter count is a
+     * contract" rule [sendMessage] already states, unshortened by this method having fewer arguments
+     * than that one. Unlike [sendMessage] there is no conversation id: a site's operator claim already
+     * names the one room this connection may ever write to. Reuses [SendMessageResult] rather than a
+     * second sealed type — the retry-safety rule that type's own doc comment states (fresh id for
+     * [SendMessageResult.NotConnected], the same id for [SendMessageResult.OutcomeUnknown]) is
+     * unchanged by which hub method produced the ambiguity. The sent message is never appended to
+     * [teamMessages] from this return value directly — the server's own local echo is what actually
+     * delivers it back over that flow, [sendMessage]'s own doc comment's shape restated here.
+     */
+    public suspend fun sendTeamMessage(
+        body: String,
+        clientMessageId: String,
+    ): SendMessageResult
+
+    /**
+     * `26-54`: `OperatorHub.RemoveTeamMessageAsync` — declared here so [OperatorHubEvents] carries the
+     * team room's whole hub-method surface even though no screen calls this one yet (`RemoveTeamMessageButton`
+     * is a separate item's own promise). No return value: the caller's own tab learns the outcome
+     * through [teamMessageRemovals], the identical local-echo-via-push shape [sendTeamMessage] takes.
+     */
+    public suspend fun removeTeamMessage(teamMessageId: String)
 }

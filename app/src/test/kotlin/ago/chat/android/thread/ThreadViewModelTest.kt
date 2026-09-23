@@ -8,6 +8,8 @@ import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.core.network.realtime.TeamHistoryPage
+import ago.chat.android.core.network.realtime.TeamMessageDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -497,6 +499,8 @@ class ThreadViewModelTest {
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
         override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
+        override val teamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+        override val teamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
 
         val loadOlderCursors: MutableList<Long> = mutableListOf()
         val sendCalls: MutableList<Pair<String, String>> = mutableListOf()
@@ -526,6 +530,20 @@ class ThreadViewModelTest {
         }
 
         override suspend fun reconnectToActiveSite() = error("not used by this screen")
+
+        override suspend fun getTeamHistory(
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun sendTeamMessage(
+            body: String,
+            clientMessageId: String,
+        ): SendMessageResult = error("not used by this screen")
+
+        override suspend fun removeTeamMessage(teamMessageId: String) = error("not used by this screen")
 
         private fun pageBefore(
             beforeSequence: Long?,

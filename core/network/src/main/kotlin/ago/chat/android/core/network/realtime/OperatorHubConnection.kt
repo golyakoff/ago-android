@@ -76,10 +76,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * `docs/architecture/realtime.md`'s "a hub method's parameter count is a contract" rule. `26-15` adds
  * two more real callers of that same rule, never violating it: [loadOlderHistory] always sends
  * `GetHistoryAsync`'s full three arguments, and [sendMessage] always sends `SendMessageAsync`'s full
- * four — see each method's own doc comment.
+ * four — see each method's own doc comment. `26-54` adds the team room's own four methods
+ * ([getTeamHistory], [getTeamDelta], [sendTeamMessage], [removeTeamMessage]), each with its own smaller
+ * but equally fixed arity.
  *
- * What this class deliberately still does **not** do: `SetAwayAsync`/presence and the team chat's own
- * hub traffic — no backlog item has reached either yet.
+ * What this class deliberately still does **not** do: `SetAwayAsync`/presence — no backlog item has
+ * reached it yet.
  */
 public class OperatorHubConnection(
     private val hubUrl: String,
@@ -127,6 +129,16 @@ public class OperatorHubConnection(
 
     /** [OperatorHubEvents.messageDelivered]. */
     public override val messageDelivered: SharedFlow<MessageDeliveredDto> = mutableMessageDelivered.asSharedFlow()
+
+    private val mutableTeamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 64)
+
+    /** [OperatorHubEvents.teamMessages]. */
+    public override val teamMessages: SharedFlow<TeamMessageDto> = mutableTeamMessages.asSharedFlow()
+
+    private val mutableTeamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+
+    /** [OperatorHubEvents.teamMessageRemovals]. */
+    public override val teamMessageRemovals: SharedFlow<TeamMessageDto> = mutableTeamMessageRemovals.asSharedFlow()
 
     @Volatile
     private var connection: HubConnection? = null
@@ -281,6 +293,74 @@ public class OperatorHubConnection(
         connect()
     }
 
+    /**
+     * `26-54`: `GetTeamHistoryAsync`, called with its full two-argument arity — see
+     * [OperatorHubEvents.getTeamHistory]'s own doc comment. No [MessageSubscription]-style
+     * "mark already delivered" bookkeeping here: that machinery exists to keep one joined
+     * conversation's [messages] stream exactly-once, and the team room has no join or resume record of
+     * its own for a fetched page to be reconciled against — [TeamChatViewModel] (`:app`) does its own
+     * id-based merge, the identical shape [teamMessages]'s own doc comment already states for a live
+     * push.
+     */
+    public override suspend fun getTeamHistory(
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): TeamHistoryPage =
+        requireConnection()
+            .invoke(TeamHistoryPage::class.java, GET_TEAM_HISTORY_METHOD, beforeSequence, pageSize)
+            .await()
+
+    /** `26-54`: `GetTeamDeltaAsync` — see [OperatorHubEvents.getTeamDelta]'s own doc comment for why a
+     * reconnect catches this room up by delta rather than by rejoining. */
+    public override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage =
+        requireConnection()
+            .invoke(TeamHistoryPage::class.java, GET_TEAM_DELTA_METHOD, afterSequence)
+            .await()
+
+    /**
+     * `26-54`: `OperatorHub.SendTeamMessageAsync`, called with its full two-argument arity
+     * (`body`, `clientMessageId`) every time — see [OperatorHubEvents.sendTeamMessage]'s own doc
+     * comment. The not-connected/outcome-unknown/refused split is the identical logic [sendMessage]
+     * above already carries, restated for this method's own two-argument invoke rather than shared as a
+     * private helper — the two calls differ in exactly the arguments each sends, and threading an
+     * arity-generic helper through both would obscure the one property this whole file exists to make
+     * checkable by inspection: which literal arguments a given hub call sends.
+     */
+    public override suspend fun sendTeamMessage(
+        body: String,
+        clientMessageId: String,
+    ): SendMessageResult {
+        val hub = connection
+        if (hub == null || hub.connectionState != HubConnectionState.CONNECTED) {
+            return SendMessageResult.NotConnected
+        }
+
+        return try {
+            val sequence =
+                hub
+                    .invoke(Int::class.javaObjectType, SEND_TEAM_MESSAGE_METHOD, body, clientMessageId)
+                    .await()
+            SendMessageResult.Sent(sequence.toLong())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            if (hub.connectionState != HubConnectionState.CONNECTED) {
+                SendMessageResult.OutcomeUnknown(failure)
+            } else {
+                SendMessageResult.Refused(failure.message ?: (failure::class.simpleName ?: "send failed"))
+            }
+        }
+    }
+
+    /** `26-54`: `RemoveTeamMessageAsync` — no return value, so this uses `HubConnection.invoke`'s
+     * `Completable`-returning overload (`send()` would not wait for the server to acknowledge the
+     * call, the same distinction every other method in this class already draws by awaiting its own
+     * invoke). See [OperatorHubEvents.removeTeamMessage]'s own doc comment for why this exists with no
+     * caller yet. */
+    public override suspend fun removeTeamMessage(teamMessageId: String) {
+        requireConnection().invoke(REMOVE_TEAM_MESSAGE_METHOD, teamMessageId).await()
+    }
+
     // ------------------------------------------------------------------------------ internals
 
     private fun requireConnection(): HubConnection = connection ?: error("OperatorHubConnection: connect() has not been called yet.")
@@ -338,6 +418,18 @@ public class OperatorHubConnection(
             MESSAGE_DELIVERED_METHOD,
             { dto: MessageDeliveredDto -> mutableMessageDelivered.tryEmit(dto) },
             MessageDeliveredDto::class.java,
+        )
+        // `26-54`: the team room's own two pushes — no dedup/resume record for either, the identical
+        // "no join to replay" shape [OperatorHubEvents.teamMessages]'s own doc comment states.
+        hub.on(
+            TEAM_MESSAGE_RECEIVED_METHOD,
+            { dto: TeamMessageDto -> mutableTeamMessages.tryEmit(dto) },
+            TeamMessageDto::class.java,
+        )
+        hub.on(
+            TEAM_MESSAGE_REMOVED_METHOD,
+            { dto: TeamMessageDto -> mutableTeamMessageRemovals.tryEmit(dto) },
+            TeamMessageDto::class.java,
         )
         hub.onClosed { onConnectionClosed(hub) }
 
@@ -425,5 +517,11 @@ public class OperatorHubConnection(
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
         const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"
         const val MESSAGE_DELIVERED_METHOD = "MessageDelivered"
+        const val GET_TEAM_HISTORY_METHOD = "GetTeamHistoryAsync"
+        const val GET_TEAM_DELTA_METHOD = "GetTeamDeltaAsync"
+        const val SEND_TEAM_MESSAGE_METHOD = "SendTeamMessageAsync"
+        const val REMOVE_TEAM_MESSAGE_METHOD = "RemoveTeamMessageAsync"
+        const val TEAM_MESSAGE_RECEIVED_METHOD = "TeamMessageReceived"
+        const val TEAM_MESSAGE_REMOVED_METHOD = "TeamMessageRemoved"
     }
 }

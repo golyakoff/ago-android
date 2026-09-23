@@ -147,11 +147,26 @@
     <string name="nav_analytics">Аналитика</string>
     <string name="nav_more">Ещё</string>
 
-    <!-- `26-16`'s own Out of scope: these three destinations exist and are empty-but-honest; their
-         real content is a later wave. -->
+    <!-- `26-16`'s own Out of scope: these two destinations are still empty-but-honest; their real
+         content is a later wave. Команда's own placeholder is gone - `26-54` replaced it with the real
+         team room. -->
     <string name="bookings_placeholder_body">Экран записей появится в одной из следующих версий.</string>
-    <string name="team_placeholder_body">Командный чат появится в одной из следующих версий.</string>
     <string name="analytics_placeholder_body">Аналитика появится в одной из следующих версий.</string>
+
+    <!--
+        `26-54`: the team room - one tenant-wide chat, no segmented control (Люди is `26-55`). Wording
+        carried over verbatim from `ago-console`'s own `ru.ts` (`teamChat*`) - the same room, described
+        the same way on both surfaces.
+    -->
+    <string name="team_chat_loading_label">Загружаем общение…</string>
+    <string name="team_chat_load_failed_title">Не удалось загрузить чат</string>
+    <string name="team_chat_load_error">Не удалось загрузить чат команды. Попробуйте ещё раз.</string>
+    <string name="team_chat_empty_state">Здесь пока никто ничего не написал.</string>
+    <string name="team_chat_composer_placeholder">Сообщение команде…</string>
+    <string name="team_chat_composer_send">Отправить</string>
+    <string name="team_chat_admin_badge">Владелец</string>
+    <string name="team_chat_unnamed_author">Коллега</string>
+    <string name="team_chat_removed_placeholder">Сообщение удалено</string>
 
     <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
          at least one real row (`navigation.md` §"The top-level shape"). -->

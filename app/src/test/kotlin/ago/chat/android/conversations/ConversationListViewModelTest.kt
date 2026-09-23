@@ -13,6 +13,8 @@ import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.core.network.realtime.TeamHistoryPage
+import ago.chat.android.core.network.realtime.TeamMessageDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -543,6 +545,8 @@ class ConversationListViewModelTest {
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
         override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
+        override val teamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+        override val teamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
 
         // `26-15`: this screen never joins/sends/pages history - it only ever reads [assignments]/
         // [allMessages] above - so these four exist purely to satisfy the interface, the same "not this
@@ -565,5 +569,19 @@ class ConversationListViewModelTest {
         ): SendMessageResult = error("not used by this screen")
 
         override suspend fun reconnectToActiveSite() = error("not used by this screen")
+
+        override suspend fun getTeamHistory(
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun sendTeamMessage(
+            body: String,
+            clientMessageId: String,
+        ): SendMessageResult = error("not used by this screen")
+
+        override suspend fun removeTeamMessage(teamMessageId: String) = error("not used by this screen")
     }
 }

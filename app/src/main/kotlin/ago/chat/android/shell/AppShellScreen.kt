@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.team.TeamChatRoute
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -281,7 +282,7 @@ private fun AppShellContent(
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
             composable(BottomDestination.Bookings.route()) { BookingsPlaceholderScreen() }
-            composable(BottomDestination.Team.route()) { TeamPlaceholderScreen() }
+            composable(BottomDestination.Team.route()) { TeamChatRoute() }
             composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
             composable(BottomDestination.More.route()) {
                 MoreScreen(

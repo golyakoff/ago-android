@@ -12,6 +12,8 @@ import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.core.network.realtime.TeamHistoryPage
+import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
 import kotlinx.coroutines.CoroutineScope
@@ -217,6 +219,8 @@ class SettingsViewModelTest {
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 1)
         override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 1)
+        override val teamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 1)
+        override val teamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 1)
 
         var reconnectCalls: Int = 0
             private set
@@ -241,5 +245,19 @@ class SettingsViewModelTest {
         override suspend fun reconnectToActiveSite() {
             reconnectCalls++
         }
+
+        override suspend fun getTeamHistory(
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage = error("not used by this screen")
+
+        override suspend fun sendTeamMessage(
+            body: String,
+            clientMessageId: String,
+        ): SendMessageResult = error("not used by this screen")
+
+        override suspend fun removeTeamMessage(teamMessageId: String) = error("not used by this screen")
     }
 }
