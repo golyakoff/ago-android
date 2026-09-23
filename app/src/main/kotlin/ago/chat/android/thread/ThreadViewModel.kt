@@ -1,6 +1,7 @@
 package ago.chat.android.thread
 
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -164,7 +165,7 @@ public class ThreadViewModel
                     throw cancellation
                 } catch (failure: Exception) {
                     if (openConversationId != conversationId) return@launch
-                    mutableState.update { it.copy(joining = false, historyError = failure.describe()) }
+                    mutableState.update { it.copy(joining = false, historyError = NetworkFailure.from(failure)) }
                 }
             }
         }
@@ -203,7 +204,7 @@ public class ThreadViewModel
                     throw cancellation
                 } catch (failure: Exception) {
                     if (openConversationId != conversationId) return@launch
-                    mutableState.update { it.copy(loadingOlder = false, historyError = failure.describe()) }
+                    mutableState.update { it.copy(loadingOlder = false, historyError = NetworkFailure.from(failure)) }
                 }
             }
         }
@@ -365,8 +366,6 @@ public class ThreadViewModel
             const val DRAFT_WRITE_DEBOUNCE_MILLIS = 400L
         }
     }
-
-private fun Exception.describe(): String = "${this::class.simpleName}: ${message ?: "no detail"}"
 
 /** `26-15`: `ago-console`'s own `HISTORY_PAGE_SIZE` (`ConversationPage.tsx`), same value - there is no
  * reason for the two clients to disagree about a number neither of them chose for a technical reason

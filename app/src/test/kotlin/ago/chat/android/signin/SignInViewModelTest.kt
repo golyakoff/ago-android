@@ -3,12 +3,12 @@ package ago.chat.android.signin
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
-import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.ProbeOutcome
 import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
@@ -163,7 +163,7 @@ class SignInViewModelTest {
             val api =
                 FakeIdentityApi(
                     TenancyListing.Known(emptyList()),
-                    seat = ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(503)),
+                    seat = ProbeOutcome.Unanswered(NetworkFailure.ServerError(503)),
                     owner = ProbeOutcome.Accepted,
                 )
             val viewModel = viewModelWith(api)
@@ -173,7 +173,7 @@ class SignInViewModelTest {
                 SignInUiState.Unavailable(
                     RoutingFailure.ProbeDidNotAnswer(
                         RoutingStep.OPERATOR_SEAT,
-                        ProbeFailure.UnexpectedStatus(503),
+                        NetworkFailure.ServerError(503),
                     ),
                 ),
                 viewModel.state.value,

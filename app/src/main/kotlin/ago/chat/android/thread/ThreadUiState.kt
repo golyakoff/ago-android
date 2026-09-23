@@ -1,5 +1,6 @@
 package ago.chat.android.thread
 
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 
@@ -22,8 +23,11 @@ public data class ThreadUiState(
     public val joining: Boolean = true,
     public val loadingOlder: Boolean = false,
     /** A join or a "load older" call failed outright. Shown inline; retried only by the operator's own
-     * explicit action, never automatically. */
-    public val historyError: String? = null,
+     * explicit action, never automatically. `26-59`: [NetworkFailure]'s own classification rather than
+     * a pre-rendered `String` — this class stopped deciding the operator's words the moment it stopped
+     * being trustworthy enough to write an exception's own message into them; [ThreadScreen] renders
+     * this into a sentence. */
+    public val historyError: NetworkFailure? = null,
     public val draft: String = "",
     public val sending: Boolean = false,
     /** `true` when the most recent send's outcome is ambiguous or definitely failed to leave the

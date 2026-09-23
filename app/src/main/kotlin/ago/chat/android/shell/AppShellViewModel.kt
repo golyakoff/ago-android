@@ -1,6 +1,6 @@
 package ago.chat.android.shell
 
-import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
@@ -53,11 +53,15 @@ public class AppShellViewModel
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
         public val permissions: StateFlow<OperatorPermissions> = mutablePermissions.asStateFlow()
 
-        private val mutableLoadError = MutableStateFlow<String?>(null)
+        private val mutableLoadError = MutableStateFlow<NetworkFailure?>(null)
 
         /** `null` while loading or once [permissions] has resolved — set only while [permissions] is
-         * still [OperatorPermissions.Unknown] *and* the one fetch that could have resolved it failed. */
-        public val loadError: StateFlow<String?> = mutableLoadError.asStateFlow()
+         * still [OperatorPermissions.Unknown] *and* the one fetch that could have resolved it failed.
+         * `26-59`: [NetworkFailure]'s own classification rather than a pre-rendered `String` — this
+         * class used to build one itself, reading an exception's own message for two of the three
+         * cases; `AppShellScreen` renders this into a sentence instead, the same split every other
+         * network-failure surface in this app now follows. */
+        public val loadError: StateFlow<NetworkFailure?> = mutableLoadError.asStateFlow()
 
         init {
             load()
@@ -80,16 +84,9 @@ public class AppShellViewModel
                     is PermissionsFetch.Failed -> {
                         // `permissions` stays `Unknown` - a failed read is not "holds nothing", and
                         // must never compute the four-destination floor as though it had answered.
-                        mutableLoadError.value = describe(fetch.reason)
+                        mutableLoadError.value = fetch.reason
                     }
                 }
             }
         }
-    }
-
-private fun describe(reason: ProbeFailure): String =
-    when (reason) {
-        is ProbeFailure.UnexpectedStatus -> "HTTP ${reason.status}"
-        is ProbeFailure.Transport -> reason.message
-        is ProbeFailure.Malformed -> reason.message
     }

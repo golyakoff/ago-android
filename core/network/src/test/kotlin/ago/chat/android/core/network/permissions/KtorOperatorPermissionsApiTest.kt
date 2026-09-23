@@ -1,6 +1,6 @@
 package ago.chat.android.core.network.permissions
 
-import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.PermissionsFetch
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
@@ -15,7 +15,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -88,10 +87,7 @@ class KtorOperatorPermissionsApiTest {
                     )
                 }
 
-            val fetch = api.fetchMyPermissions()
-
-            assertTrue(fetch is PermissionsFetch.Failed)
-            assertTrue((fetch as PermissionsFetch.Failed).reason is ProbeFailure.Malformed)
+            assertEquals(PermissionsFetch.Failed(NetworkFailure.Unexpected), api.fetchMyPermissions())
         }
 
     @Test
@@ -103,10 +99,7 @@ class KtorOperatorPermissionsApiTest {
             // read as a plain failure rather than a second `Refused`-shaped success case.
             val api = apiFor { respondError(HttpStatusCode.Forbidden) }
 
-            val fetch = api.fetchMyPermissions()
-
-            assertTrue(fetch is PermissionsFetch.Failed)
-            assertEquals(ProbeFailure.UnexpectedStatus(403), (fetch as PermissionsFetch.Failed).reason)
+            assertEquals(PermissionsFetch.Failed(NetworkFailure.ServerError(403)), api.fetchMyPermissions())
         }
 
     @Test
@@ -115,7 +108,7 @@ class KtorOperatorPermissionsApiTest {
             val api = apiFor { respondError(HttpStatusCode.BadGateway) }
 
             assertEquals(
-                PermissionsFetch.Failed(ProbeFailure.UnexpectedStatus(502)),
+                PermissionsFetch.Failed(NetworkFailure.ServerError(502)),
                 api.fetchMyPermissions(),
             )
         }
@@ -125,10 +118,7 @@ class KtorOperatorPermissionsApiTest {
         runTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
-            val fetch = api.fetchMyPermissions()
-
-            assertTrue(fetch is PermissionsFetch.Failed)
-            assertTrue((fetch as PermissionsFetch.Failed).reason is ProbeFailure.Transport)
+            assertEquals(PermissionsFetch.Failed(NetworkFailure.NoConnection), api.fetchMyPermissions())
         }
 
     private fun apiFor(handler: MockRequestHandler): KtorOperatorPermissionsApi {

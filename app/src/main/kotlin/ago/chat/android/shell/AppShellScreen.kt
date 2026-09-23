@@ -5,11 +5,13 @@ import ago.chat.android.analytics.AnalyticsRoute
 import ago.chat.android.bookings.BookingsRoute
 import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.domain.permissions.holds
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.team.TeamRoute
+import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -139,7 +141,7 @@ public fun AppShellRoute(
 @Composable
 internal fun AppShellScreen(
     permissions: OperatorPermissions,
-    loadError: String?,
+    loadError: NetworkFailure?,
     activeSiteId: String?,
     hubConnectionState: OperatorHubConnectionState,
     onRetry: () -> Unit,
@@ -193,7 +195,7 @@ internal fun AppShellScreen(
     when (permissions) {
         OperatorPermissions.Unknown ->
             if (loadError != null) {
-                PermissionsLoadFailedScreen(message = loadError, onRetry = onRetry)
+                PermissionsLoadFailedScreen(failure = loadError, onRetry = onRetry)
             } else {
                 PermissionsLoadingScreen()
             }
@@ -411,7 +413,7 @@ private fun PermissionsLoadingScreen() {
 
 @Composable
 private fun PermissionsLoadFailedScreen(
-    message: String,
+    failure: NetworkFailure,
     onRetry: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -426,7 +428,7 @@ private fun PermissionsLoadFailedScreen(
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = message,
+                text = networkFailureText(failure),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

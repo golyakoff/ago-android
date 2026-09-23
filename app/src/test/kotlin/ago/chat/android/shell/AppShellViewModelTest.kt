@@ -1,6 +1,6 @@
 package ago.chat.android.shell
 
-import ago.chat.android.core.domain.identity.ProbeFailure
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
@@ -73,18 +73,18 @@ class AppShellViewModelTest {
     fun `a failed fetch stays Unknown and surfaces a retry, never a guessed grant set`() =
         runTest(dispatcher) {
             val viewModel =
-                viewModelWith(FakeOperatorPermissionsApi(result = PermissionsFetch.Failed(ProbeFailure.UnexpectedStatus(503))))
+                viewModelWith(FakeOperatorPermissionsApi(result = PermissionsFetch.Failed(NetworkFailure.ServerError(503))))
 
             advanceUntilIdle()
 
             assertEquals(OperatorPermissions.Unknown, viewModel.permissions.value)
-            assertEquals("HTTP 503", viewModel.loadError.value)
+            assertEquals(NetworkFailure.ServerError(503), viewModel.loadError.value)
         }
 
     @Test
     fun `retry re-asks and can recover from a failure into a real answer`() =
         runTest(dispatcher) {
-            val api = FakeOperatorPermissionsApi(result = PermissionsFetch.Failed(ProbeFailure.Transport("timeout")))
+            val api = FakeOperatorPermissionsApi(result = PermissionsFetch.Failed(NetworkFailure.NoConnection))
             val viewModel = viewModelWith(api)
             advanceUntilIdle()
             assertEquals(OperatorPermissions.Unknown, viewModel.permissions.value)

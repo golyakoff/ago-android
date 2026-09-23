@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
 import ago.chat.android.core.network.installAgoRestDefaults
@@ -243,19 +244,19 @@ class KtorConversationsApiTest {
         }
 
     @Test
-    fun `a refusal with no problem-details body falls back to the status`() =
+    fun `a refusal with no problem-details body classifies as a server error, never a fabricated string`() =
         runTest {
             val api = apiFor { respondError(HttpStatusCode.Forbidden) }
 
-            assertEquals(ClaimResult.Refused("http.403"), api.claim("c1"))
+            assertEquals(ClaimResult.Failed(NetworkFailure.ServerError(403)), api.claim("c1"))
         }
 
     @Test
-    fun `a dropped connection on claim is a refusal, not a silently retried write`() =
+    fun `a dropped connection on claim is a transport failure, not a silently retried write`() =
         runTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
-            assertTrue(api.claim("c1") is ClaimResult.Refused)
+            assertEquals(ClaimResult.Failed(NetworkFailure.NoConnection), api.claim("c1"))
         }
 
     private fun apiFor(

@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.net.NetworkFailure
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -34,11 +35,11 @@ public class KtorConversationsApi(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
-                return QueueResult.Failed(failure.describe())
+                return QueueResult.Failed(NetworkFailure.from(failure))
             }
 
         if (!response.status.isSuccess()) {
-            return QueueResult.Failed("http.${response.status.value}")
+            return QueueResult.Failed(NetworkFailure.ServerError(response.status.value))
         }
 
         return try {
@@ -49,14 +50,16 @@ public class KtorConversationsApi(
             // A `200` whose body is not the promised shape is not "an empty queue" - the identical
             // `KtorIdentityApi`/`shapeGuard.ts` lesson, read onto this endpoint: a dropped array here
             // must not look like a shop with nothing waiting and nothing assigned.
-            QueueResult.Failed(failure.describe())
+            QueueResult.Failed(NetworkFailure.from(failure))
         }
     }
 
     /**
-     * `POST /api/v1/conversations/{id}/claim` — `204` on success, every other status a [ClaimResult.Refused]
-     * carrying the server's own RFC 7807 `detail` when the body has one (`ConversationsEndpoints.HandleClaimAsync`'s
-     * own doc comment: "no request body... the caller already knows what it asked for").
+     * `POST /api/v1/conversations/{id}/claim` — `204` on success, a non-2xx with an RFC 7807 `detail`
+     * a [ClaimResult.Refused] carrying it verbatim (`ConversationsEndpoints.HandleClaimAsync`'s own doc
+     * comment: "no request body... the caller already knows what it asked for"). `26-59`: a transport
+     * exception, or a non-2xx with no `detail` to show, is [ClaimResult.Failed] instead — this method
+     * never fabricates a `detail` string of its own.
      */
     override suspend fun claim(conversationId: String): ClaimResult {
         val response =
@@ -65,7 +68,7 @@ public class KtorConversationsApi(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
-                return ClaimResult.Refused(failure.describe())
+                return ClaimResult.Failed(NetworkFailure.from(failure))
             }
 
         if (response.status.isSuccess()) {
@@ -81,11 +84,9 @@ public class KtorConversationsApi(
                 null
             }
 
-        return ClaimResult.Refused(detail ?: "http.${response.status.value}")
+        return detail?.let { ClaimResult.Refused(it) } ?: ClaimResult.Failed(NetworkFailure.ServerError(response.status.value))
     }
 }
-
-private fun Exception.describe(): String = "${this::class.simpleName}: ${message ?: "no detail"}"
 
 /** RFC 7807, read for exactly the one field a claim refusal needs — `ago-console`'s own
  * `problemDetailsFrom` reads `type` too, which this screen has no use for: every refusal renders the

@@ -1,5 +1,7 @@
 package ago.chat.android.core.domain.identity
 
+import ago.chat.android.core.domain.net.NetworkFailure
+
 /**
  * One `Site` this identity may sign into — `adr/0068`'s "one identity, several tenancies".
  *
@@ -20,7 +22,7 @@ public sealed interface TenancyListing {
     ) : TenancyListing
 
     public data class Unanswered(
-        val reason: ProbeFailure,
+        val reason: NetworkFailure,
     ) : TenancyListing
 }
 

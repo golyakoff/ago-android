@@ -1,9 +1,9 @@
 package ago.chat.android.core.network.identity
 
-import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.ProbeOutcome
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
 import ago.chat.android.core.network.installAgoRestDefaults
@@ -17,7 +17,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -55,7 +54,7 @@ class KtorIdentityApiTest {
             val api = apiFor { respondError(HttpStatusCode.Unauthorized) }
 
             assertEquals(
-                ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(401)),
+                ProbeOutcome.Unanswered(NetworkFailure.ServerError(401)),
                 api.probeOperatorSeat(),
             )
         }
@@ -66,7 +65,7 @@ class KtorIdentityApiTest {
             val api = apiFor { respondError(HttpStatusCode.BadGateway) }
 
             assertEquals(
-                ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(502)),
+                ProbeOutcome.Unanswered(NetworkFailure.ServerError(502)),
                 api.probeOperatorSeat(),
             )
         }
@@ -76,10 +75,7 @@ class KtorIdentityApiTest {
         runTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
-            val outcome = api.probeOperatorSeat()
-
-            assertTrue(outcome is ProbeOutcome.Unanswered)
-            assertTrue((outcome as ProbeOutcome.Unanswered).reason is ProbeFailure.Transport)
+            assertEquals(ProbeOutcome.Unanswered(NetworkFailure.NoConnection), api.probeOperatorSeat())
         }
 
     // -------------------------------------------------------------- GET /api/v1/owner/sites?limit=1
@@ -119,7 +115,7 @@ class KtorIdentityApiTest {
             // authenticated enough to be handed a 403 one request earlier cannot be unauthenticated
             // now - so it is evidence something is wrong, never evidence of a new registrant.
             assertEquals(
-                ProbeOutcome.Unanswered(ProbeFailure.UnexpectedStatus(401)),
+                ProbeOutcome.Unanswered(NetworkFailure.ServerError(401)),
                 api.probeOwnerEligibility(),
             )
         }
@@ -201,8 +197,7 @@ class KtorIdentityApiTest {
             // This is `ago-console`'s `shapeGuard.ts` lesson: a dropped array read as "no tenancies"
             // looks exactly like a real pre-onboarding identity, and would route a working operator
             // into the registration arm.
-            assertTrue(listing is TenancyListing.Unanswered)
-            assertTrue((listing as TenancyListing.Unanswered).reason is ProbeFailure.Malformed)
+            assertEquals(TenancyListing.Unanswered(NetworkFailure.Unexpected), listing)
         }
 
     @Test
@@ -211,7 +206,7 @@ class KtorIdentityApiTest {
             val api = apiFor { respondError(HttpStatusCode.ServiceUnavailable) }
 
             assertEquals(
-                TenancyListing.Unanswered(ProbeFailure.UnexpectedStatus(503)),
+                TenancyListing.Unanswered(NetworkFailure.ServerError(503)),
                 api.listMyTenancies(),
             )
         }

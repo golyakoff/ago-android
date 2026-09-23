@@ -1,10 +1,10 @@
 package ago.chat.android.signin
 
 import ago.chat.android.R
-import ago.chat.android.core.domain.identity.ProbeFailure
 import ago.chat.android.core.domain.identity.RoutingFailure
 import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.shell.AppShellRoute
 import ago.chat.android.ui.components.IdentifierText
@@ -350,9 +350,9 @@ private fun detailOf(failure: RoutingFailure): String? =
         RoutingFailure.OperatorSeatRefusedDespiteTenancies -> null
         is RoutingFailure.ProbeDidNotAnswer ->
             when (val reason = failure.reason) {
-                is ProbeFailure.UnexpectedStatus -> stringResource(R.string.routing_unavailable_status, reason.status)
-                is ProbeFailure.Transport -> stringResource(R.string.routing_unavailable_transport, reason.message)
-                is ProbeFailure.Malformed -> stringResource(R.string.routing_unavailable_malformed, reason.message)
+                is NetworkFailure.ServerError -> stringResource(R.string.routing_unavailable_status, reason.status)
+                NetworkFailure.NoConnection -> stringResource(R.string.routing_unavailable_transport)
+                NetworkFailure.Unexpected -> stringResource(R.string.routing_unavailable_malformed)
             }
     }
 
