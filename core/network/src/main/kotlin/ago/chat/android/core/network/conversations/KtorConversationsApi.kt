@@ -10,6 +10,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -86,7 +89,53 @@ public class KtorConversationsApi(
 
         return detail?.let { ClaimResult.Refused(it) } ?: ClaimResult.Failed(NetworkFailure.ServerError(response.status.value))
     }
+
+    /**
+     * `26-80`: `POST /api/v1/conversations/{id}/read`, body `{"upToSequence":...}` -
+     * `MarkConversationReadRequest` on the server side (`ConversationsEndpoints.cs`). The body is
+     * handed to Ktor as a `@Serializable` value, not a raw string - `installAgoRestDefaults`' own
+     * `ContentNegotiation { json(agoJson) }` is what turns [MarkConversationReadRequestWireDto] into
+     * the request's JSON, the identical plugin [fetchQueue] already relies on for the read direction.
+     *
+     * The `200` body carries the conversation's resulting unread state
+     * (`MarkConversationReadHandler`'s own doc comment explains why `200` rather than `204` here), but
+     * this method never reads it - [ConversationsApi.markRead]'s own doc comment says why a plain
+     * success flag is the whole contract a fire-and-forget caller needs.
+     */
+    override suspend fun markRead(
+        conversationId: String,
+        upToSequence: Int,
+    ): Boolean {
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/conversations/$conversationId/read") {
+                    // `26-80`, confirmed the hard way by a `MockEngine` test rather than assumed:
+                    // `ContentNegotiation`'s client-side request transform only serializes a body it can
+                    // match to a registered converter, and it matches on the request's own declared
+                    // `Content-Type` - with none set, `setBody` alone falls through to Ktor's generic
+                    // "guess how to send this object" path, which needs `kotlin-reflect` (not on this
+                    // app's classpath) and fails with "Kotlin reflection is not available". This is the
+                    // first request body this class has ever sent - every fix here is one every future
+                    // POST body will need too.
+                    contentType(ContentType.Application.Json)
+                    setBody(MarkConversationReadRequestWireDto(upToSequence))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return false
+            }
+
+        return response.status.isSuccess()
+    }
 }
+
+/** `Ago.Chat.Api.Conversations.ConversationsEndpoints.MarkConversationReadRequest` - the one field
+ * that endpoint's own body carries. */
+@Serializable
+private data class MarkConversationReadRequestWireDto(
+    val upToSequence: Int,
+)
 
 /** RFC 7807, read for exactly the one field a claim refusal needs — `ago-console`'s own
  * `problemDetailsFrom` reads `type` too, which this screen has no use for: every refusal renders the

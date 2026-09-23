@@ -54,6 +54,7 @@ class MessageBubbleSemanticsTest {
                 onSend = {},
                 onRetrySend = {},
                 onDismissSendRefusal = {},
+                onNewestVisibleSequenceChanged = {},
             )
         }
     }
