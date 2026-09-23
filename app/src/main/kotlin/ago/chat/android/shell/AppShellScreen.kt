@@ -155,6 +155,11 @@ internal fun AppShellScreen(
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit = { onBack, onSwitched ->
         SettingsRoute(onBack = onBack, onSignOut = onSignOut, onSiteSwitched = onSwitched)
     },
+    // `26-54`: the identical "Hilt-avoidance slot" [conversationsTab] above already is — `TeamChatRoute`
+    // needs `hiltViewModel()` for [ago.chat.android.team.TeamChatViewModel], and the back-contract tests
+    // that visit Команда while exercising the bottom-bar/Ещё back-stack (clause 2 and clause 3) need a
+    // trivial substitute here, the same way they already substitute [conversationsTab]/[settingsScreen].
+    teamTab: @Composable () -> Unit = { TeamChatRoute() },
 ) {
     when (permissions) {
         OperatorPermissions.Unknown ->
@@ -169,6 +174,7 @@ internal fun AppShellScreen(
                 permissions = permissions,
                 conversationsTab = conversationsTab,
                 settingsScreen = settingsScreen,
+                teamTab = teamTab,
                 onSiteSwitched = onSiteSwitched,
             )
     }
@@ -188,6 +194,7 @@ private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     conversationsTab: @Composable () -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
+    teamTab: @Composable () -> Unit,
     onSiteSwitched: (String) -> Unit,
 ) {
     val navController = rememberNavController()
@@ -282,7 +289,7 @@ private fun AppShellContent(
         ) {
             composable(BottomDestination.Conversations.route()) { conversationsTab() }
             composable(BottomDestination.Bookings.route()) { BookingsPlaceholderScreen() }
-            composable(BottomDestination.Team.route()) { TeamChatRoute() }
+            composable(BottomDestination.Team.route()) { teamTab() }
             composable(BottomDestination.Analytics.route()) { AnalyticsPlaceholderScreen() }
             composable(BottomDestination.More.route()) {
                 MoreScreen(
