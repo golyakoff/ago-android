@@ -16,15 +16,18 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -387,6 +390,93 @@ class ConversationListViewModelTest {
                     .claimError,
             )
             assertEquals(1, api.claimCalls.size)
+        }
+
+    @Test
+    fun `claiming successfully switches to Мои and fires the navigation event straight off the response`() =
+        runTest(dispatcher) {
+            // `26-75`: `hangQueueFetch` makes `refresh()`'s own re-fetch hang forever - if the
+            // navigation below only fired once that re-fetch answered, this test would never get past
+            // `runCurrent()` below. It does, which is the proof the event fires directly off
+            // `ClaimResult.Claimed`, the same synchronous guarantee `ago-console`'s own
+            // `ClaimConversationButtonProps.onClaimed` documents.
+            //
+            // `runCurrent()`, not `advanceUntilIdle()`, on purpose from here down: selecting «Ожидают»
+            // starts [ConversationListViewModel.startWaitingPollIfNeeded]'s own `while (isActive) {
+            // delay(...); refresh() }` loop, and `advanceUntilIdle()` fast-forwards virtual time through
+            // every one of that loop's own `delay` calls forever, since nothing ever satisfies it - the
+            // exact trap `` `the waiting poll only runs while Ожидают is selected and the screen is
+            // visible` `` avoids with its own bounded `advanceTimeBy` calls, restated here because this
+            // test also needs the tab actually selected. `onTabSelected(Mine)` inside the `Claimed`
+            // branch below cancels that job before its first `delay` ever elapses, so `runCurrent()` -
+            // draining only what is runnable *now*, never touching a future-scheduled `delay` - is
+            // enough to observe the whole claim without ever running the poll body at all.
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf(waiting = listOf(waiting("c1")))),
+                    claimResult = { ClaimResult.Claimed },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.Waiting)
+            runCurrent()
+
+            val navigated = mutableListOf<String>()
+            // `SettingsViewModelTest`'s own `` `switchSite carries the new site id on siteSwitched...` ``
+            // establishes this shape for the identical reason: a plain `launch` here would make
+            // `collectJob` a child of this test's own scope, which never completes on its own since
+            // [ConversationListViewModel.claimedConversations] never closes - a separate
+            // `CoroutineScope(dispatcher)` is not tracked by `runTest`'s own completion check at all.
+            val collectJob = CoroutineScope(dispatcher).launch { viewModel.claimedConversations.collect { navigated.add(it) } }
+
+            api.hangQueueFetch = true
+            viewModel.claim("c1")
+            runCurrent()
+
+            assertEquals(listOf("c1"), navigated)
+            assertEquals(
+                "claiming switches the operator to Мои the same way tapping the tab would",
+                ConversationListTab.Mine,
+                viewModel.state.value.selectedTab,
+            )
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `a refused claim never fires the navigation event or switches tabs`() =
+        runTest(dispatcher) {
+            // `runCurrent()`, not `advanceUntilIdle()`: unlike the `Claimed` case above, nothing in the
+            // `Refused` branch ever cancels the «Ожидают» poll started below, so `advanceUntilIdle()`
+            // would run that job's own `while (isActive) { delay(...); refresh() }` loop forever - see
+            // the sibling test above for the full reasoning.
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf(waiting = listOf(waiting("c1")))),
+                    claimResult = { ClaimResult.Refused("Этот диалог уже забрал другой оператор.") },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.Waiting)
+            runCurrent()
+
+            val navigated = mutableListOf<String>()
+            val collectJob = CoroutineScope(dispatcher).launch { viewModel.claimedConversations.collect { navigated.add(it) } }
+
+            viewModel.claim("c1")
+            runCurrent()
+
+            assertEquals("a refusal never navigates anywhere", emptyList<String>(), navigated)
+            assertEquals(
+                "a refusal leaves the operator exactly where they were, in «Ожидают»",
+                ConversationListTab.Waiting,
+                viewModel.state.value.selectedTab,
+            )
+
+            collectJob.cancel()
+            // The «Ожидают» poll this test started is still active (never cancelled by a refusal) -
+            // stopped explicitly rather than left to outlive the test.
+            viewModel.onScreenStopped()
         }
 
     // ------------------------------------------------------------------------------- poll interval
