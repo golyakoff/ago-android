@@ -71,6 +71,8 @@ public fun ConversationsTabHost(
                 emojiCreature = row?.emojiCreature,
                 emojiFood = row?.emojiFood,
                 visitorName = row?.visitorName,
+                createdAt = row?.createdAt,
+                conversationState = row?.state,
                 hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant ?: false,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")

@@ -1,9 +1,13 @@
 package ago.chat.android.thread
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.conversations.ConversationStateLabel
+import ago.chat.android.core.domain.conversations.conversationStateLabel
+import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.ui.components.HubConnectionDot
-import ago.chat.android.ui.components.VisitorDisplayPrefix
+import ago.chat.android.ui.components.rememberTickingNow
+import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +45,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -60,7 +66,7 @@ import java.time.format.DateTimeFormatter
  *
  * `navigation.md` draws the app bar's visitor identity as a tappable chip opening the (not-yet-built)
  * visitor context sheet, and asks this item to pick "present-but-inert" or "absent-until-then". This
- * screen picks **absent**: [TopAppBar]'s title below is [VisitorDisplayPrefix] rendered as plain,
+ * screen picks **absent**: [TopAppBar]'s title below is [ThreadTitleBlock] rendered as plain,
  * non-interactive text — no `clickable`, no ripple, nothing that looks like it should respond to a
  * tap. The ticket's own reasoning is why: "a chip that does nothing when tapped is worse than no
  * chip" is a stronger, more specific claim than "a control that appears later is a layout change
@@ -90,6 +96,8 @@ public fun ThreadRoute(
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
+    createdAt: String?,
+    conversationState: String?,
     hasAttachmentUploadGrant: Boolean,
     onBack: () -> Unit,
     viewModel: ThreadViewModel = hiltViewModel(),
@@ -136,6 +144,8 @@ public fun ThreadRoute(
         emojiCreature = emojiCreature,
         emojiFood = emojiFood,
         visitorName = visitorName,
+        createdAt = createdAt,
+        conversationState = conversationState,
         hasAttachmentUploadGrant = hasAttachmentUploadGrant,
         onBack = leaveThread,
         onLoadOlder = viewModel::loadOlder,
@@ -157,6 +167,8 @@ internal fun ThreadScreen(
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
+    createdAt: String?,
+    conversationState: String?,
     hasAttachmentUploadGrant: Boolean,
     onBack: () -> Unit,
     onLoadOlder: () -> Unit,
@@ -166,6 +178,19 @@ internal fun ThreadScreen(
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
 ) {
+    // `26-40`: the app-bar subtitle's own age half - the mockup's short elapsed form, ticking on the
+    // identical shared clock `ConversationListScreen`'s own row ages already read
+    // (`ui.components.ElapsedText`). `createdAt` is `null` exactly when `ConversationsTabHost` opened
+    // this screen with no matching queue row in hand - the one case this whole subtitle renders nothing
+    // for, rather than a guessed age or a stray leading separator.
+    val now = rememberTickingNow()
+    val subtitle =
+        createdAt?.let { started ->
+            val elapsed = shortElapsedText(started, now)
+            val stateWord = conversationState?.let { threadStateWord(conversationStateLabel(it)) }
+            if (stateWord != null) "$stateWord · $elapsed" else elapsed
+        }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
@@ -191,11 +216,12 @@ internal fun ThreadScreen(
                     },
                     title = {
                         // Plain text, not a chip - see this file's own top-of-file doc comment.
-                        VisitorDisplayPrefix(
+                        ThreadTitleBlock(
                             emojiCreature = emojiCreature,
                             emojiFood = emojiFood,
                             visitorName = visitorName,
                             visitorId = visitorId,
+                            subtitle = subtitle,
                         )
                     },
                     actions = {
@@ -258,6 +284,76 @@ internal fun ThreadScreen(
         }
     }
 }
+
+/**
+ * `26-40`: the mockup's `.appbar .ttl.sm` / `.sub` pair — `docs/backlog/26-40-*.md`'s own Found: the
+ * title line is the visitor's name alone (no eight-character code, no emoji glyphs), and a quiet
+ * second line under it carries the conversation's state and its age when both are known.
+ *
+ * Reads [visitorDisplayPrefixParts] directly rather than delegating to
+ * `ui.components.VisitorDisplayPrefix` (which this call site was the only caller of, and which drew the
+ * id unconditionally with no opt-out) — the same choice `ConversationListScreen`'s own
+ * `ConversationRowIdentityLine` already makes for the row's identity line: the rule about *which parts
+ * of a visitor identity exist at all* stays stated exactly once, in [visitorDisplayPrefixParts]
+ * (`:core:domain`), and only the *layout* differs per caller. The emoji pair itself is deliberately not
+ * drawn here either, even as a small glyph beside the name: the mockup's own title is plain text
+ * (`Лиса · Апельсин` is [VisitorDisplayPrefixParts.displayName]'s own fallback *wording*, not the emoji
+ * glyphs plus that wording), and this app bar has no avatar slot for a pair to sit beside the way the
+ * row's leading `VisitorAvatar` does.
+ */
+@Composable
+private fun ThreadTitleBlock(
+    emojiCreature: String?,
+    emojiFood: String?,
+    visitorName: String?,
+    visitorId: String,
+    subtitle: String?,
+) {
+    val parts = visitorDisplayPrefixParts(emojiCreature, emojiFood, visitorName, visitorId)
+    Column {
+        parts.displayName?.let { name ->
+            Text(
+                text = name,
+                // `.appbar .ttl.sm{font-size:17px; font-weight:700; letter-spacing:-.01em}` -
+                // `titleLarge` is this app's own 17sp token-backed role (`Type.kt`); only the weight is
+                // lifted, the same "nearest token, weight adjusted" move `ConversationRowIdentityLine`
+                // already makes for its own bold name line.
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        subtitle?.let { text ->
+            Text(
+                text = text,
+                // `.appbar .sub{font-size:11.5px; font-weight:500; color:var(--ink-soft)}` -
+                // `onSurfaceVariant` is `--ink-soft` (`Theme.kt`'s own confirmed mapping); `labelSmall`
+                // is the nearest token size (12sp/Medium).
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * `26-40`: [ConversationStateLabel]'s own prose half — the classification is [conversationStateLabel]'s
+ * job (`:core:domain`, pure and testable); which Russian word each arm reads is `:app`'s, the identical
+ * split `ConversationListScreen`'s own elapsed-time rendering already draws between [ElapsedLabel] and
+ * its `stringResource` calls. `null` for [ConversationStateLabel.Unknown] - an empty or unrecognised
+ * wire spelling renders no state word at all, never a guessed one.
+ */
+@Composable
+private fun threadStateWord(label: ConversationStateLabel): String? =
+    when (label) {
+        ConversationStateLabel.Pending -> stringResource(R.string.conversation_state_pending)
+        ConversationStateLabel.Waiting -> stringResource(R.string.conversation_state_waiting)
+        ConversationStateLabel.Assigned -> stringResource(R.string.conversation_state_assigned)
+        ConversationStateLabel.Closed -> stringResource(R.string.conversation_state_closed)
+        ConversationStateLabel.Unknown -> null
+    }
 
 @Composable
 private fun LoadingBody() {

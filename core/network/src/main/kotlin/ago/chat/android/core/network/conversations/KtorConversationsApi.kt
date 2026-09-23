@@ -114,6 +114,10 @@ private data class ConversationSummaryWireDto(
     // "both null together" rule; this class only mirrors the wire shape.
     val lastMessagePreview: String? = null,
     val lastMessageAt: String? = null,
+    // `26-40`: additive the identical way — `""` for a row that predates the field.
+    // `Ago.Chat.Contracts.ConversationSummaryDto.State`'s own wire spelling, unparsed here -
+    // [ConversationSummary]'s own doc comment on why the classification lives in `:core:domain`.
+    val state: String = "",
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -135,6 +139,7 @@ private fun ConversationSummaryWireDto.toDomain() =
         hasAttachmentUploadGrant = hasAttachmentUploadGrant,
         lastMessagePreview = lastMessagePreview,
         lastMessageAt = lastMessageAt,
+        state = state,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =
