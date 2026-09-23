@@ -288,6 +288,33 @@
     </string-array>
 
     <!--
+        `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only
+        (`docs/backlog/26-52-*.md`'s own Scope: "lists this tenant's real customers, read-only, with
+        phones left masked"). Gated on `calendar:configure` or `customer:read`, matching
+        `CalendarContactsPage.tsx:48` exactly - a third, distinct gate from Утверждены's own
+        `customer:read`-alone gate.
+    -->
+    <string name="bookings_tab_clients">Клиенты</string>
+    <!-- Distinct wording from `bookings_queue_empty`/`bookings_confirmed_day_empty` above, since "no
+         customers at all" is a third, different fact from either. -->
+    <string name="bookings_contacts_empty">У этого тенанта пока нет клиентов.</string>
+    <string name="bookings_contacts_load_failed_unexpected">Не удалось загрузить клиентов. Попробуйте ещё раз.</string>
+    <string name="bookings_contacts_noshow_label">Неявки</string>
+    <!-- `ago-console`'s own `calendarContactsColumnPhoneVerified`/`calendarContactsVerifiedLabel`/
+         `calendarContactsNotVerifiedLabel`, folded into one line per state for a card rather than a
+         column-plus-badge pair - "proven reachable by an SMS code" (`Contact.phoneVerifiedAt`'s own doc
+         comment). -->
+    <string name="bookings_contacts_phone_verified_yes">Подтверждён кодом</string>
+    <string name="bookings_contacts_phone_verified_no">Не подтверждён кодом</string>
+    <!-- `ago-console`'s own `calendarContactsColumnPhoneConfirmed`/`calendarContactsConfirmedLabel`/
+         `calendarContactsNotConfirmedLabel`, folded the identical way - "an operator called and it is
+         them" (`Contact.phoneConfirmedByOperatorAt`'s own doc comment). Worded distinctly from the pair
+         above on purpose: the two facts must never read as the same strength of evidence
+         (`docs/backlog/26-52-*.md`'s own Scope item 3). -->
+    <string name="bookings_contacts_phone_confirmed_yes">Подтверждён оператором</string>
+    <string name="bookings_contacts_phone_confirmed_no">Не подтверждён оператором</string>
+
+    <!--
         `26-57`: Аналитика's own «Мои показатели» - the one ungated, personal report on this app. Wording
         carried over from `ago-console`'s own `ru.ts` (`myNumbers*`/`analytics*`) where the console has an
         equivalent string, since this is the same numbers described the same way on both surfaces.

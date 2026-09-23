@@ -59,6 +59,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
+    showClientsSegment: Boolean,
     viewModel: BookingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -85,15 +86,33 @@ public fun BookingsRoute(
         onRetryConfirmed = {}
     }
 
+    // `26-52`: the identical Hilt-avoidance-when-ungated shape [confirmedState] above already
+    // establishes, applied to [ContactsViewModel] for the same reason - an operator lacking both
+    // `calendar:configure` and `customer:read` never triggers this read either.
+    val contactsState: ContactsUiState?
+    val onRetryContacts: () -> Unit
+    if (showClientsSegment) {
+        val contactsViewModel: ContactsViewModel = hiltViewModel()
+        val collectedContactsState by contactsViewModel.state.collectAsStateWithLifecycle()
+        contactsState = collectedContactsState
+        onRetryContacts = contactsViewModel::refresh
+    } else {
+        contactsState = null
+        onRetryContacts = {}
+    }
+
     BookingsScreen(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
+        showClientsSegment = showClientsSegment,
         selectedTab = selectedTab,
         onTabSelected = { selectedTab = it },
         onRetry = viewModel::refresh,
         confirmedState = confirmedState,
         onSelectDay = onSelectDay,
         onRetryConfirmed = onRetryConfirmed,
+        contactsState = contactsState,
+        onRetryContacts = onRetryContacts,
     )
 }
 
@@ -102,33 +121,34 @@ public fun BookingsRoute(
  * ([AppShellScreen]'s own `bookingsTab` slot needs a Hilt-free substitute for the back-button-contract
  * tests, the identical reason that file's own `conversationsTab`/`settingsScreen` slots exist).
  *
- * **The segmented control is built from [showConfirmedSegment], never drawn with a fixed shape.** The
- * mockup's segmented control also names «Клиенты», and drawing it here — with nothing behind it to
- * open — is exactly the "leading nowhere" shape `docs/backlog/26-48-*.md`'s own Scope forbids, the
- * identical rule `MoreScreen.buildMoreRows` already applies to Ещё's own folded sections. `26-48`
- * shipped this with exactly one hard-coded [SegmentedButton]; `26-51` replaces that with
- * [visibleBookingsTabs] — the same "compute the list, don't draw a fixed shape" correction
- * `visibleBottomDestinations` already models one level up — so the day `26-52` lands Клиенты, it is a
- * third entry in that function, not a third hand-written [SegmentedButton] here.
+ * **The segmented control is built from [showConfirmedSegment]/[showClientsSegment], never drawn with a
+ * fixed shape.** `26-48` shipped this with exactly one hard-coded [SegmentedButton]; `26-51` replaced
+ * that with [visibleBookingsTabs] for Утверждены — the same "compute the list, don't draw a fixed
+ * shape" correction `visibleBottomDestinations` already models one level up; `26-52` lands the mockup's
+ * third segment, Клиенты, as a third entry in that same function, computed from its own independent
+ * gate rather than a third hand-written [SegmentedButton] here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
+    showClientsSegment: Boolean,
     selectedTab: BookingsTab,
     onTabSelected: (BookingsTab) -> Unit,
     onRetry: () -> Unit,
     confirmedState: ConfirmedBookingsUiState?,
     onSelectDay: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
+    contactsState: ContactsUiState?,
+    onRetryContacts: () -> Unit,
 ) {
     // `ago-console`'s own `useNow` hook, restated - the one clock read this screen makes, so every
     // deadline countdown on it re-renders together rather than each row reading `OffsetDateTime.now()`
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
     // `rememberTickingNow`).
     val now = rememberTickingNow()
-    val tabs = visibleBookingsTabs(showConfirmedSegment)
+    val tabs = visibleBookingsTabs(showConfirmedSegment, showClientsSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(topBar = { TopAppBar(title = { Text(text = stringResource(R.string.nav_bookings)) }) }) { padding ->
@@ -168,6 +188,11 @@ internal fun BookingsScreen(
                         confirmedState?.let {
                             ConfirmedBookingsBody(state = it, onSelectDay = onSelectDay, onRetry = onRetryConfirmed)
                         }
+
+                    // `26-52`: the identical "non-null exactly when selectable" invariant
+                    // `BookingsTab.Confirmed`'s own comment above states, for `showClientsSegment`.
+                    BookingsTab.Clients ->
+                        contactsState?.let { ContactsBody(state = it, onRetry = onRetryContacts) }
                 }
             }
         }
@@ -182,6 +207,7 @@ private fun bookingsTabLabel(
     when (tab) {
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
+        BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
     }
 
 /** `null` before [BookingsUiState.Loaded] is known, exactly the "no digit for a count not yet known"

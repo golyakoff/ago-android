@@ -4,6 +4,8 @@ import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
+import ago.chat.android.core.domain.bookings.Contact
+import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import io.ktor.client.HttpClient
@@ -20,7 +22,8 @@ import java.io.IOException
  * here, and only here" shape `KtorConversationsApi`'s own doc comment states for the conversation
  * queue. `26-51` adds [fetchConfirmedBookings] to this same class rather than a second adapter, since
  * both methods share every one of the properties this doc comment states — same base URL, same
- * not-configured check, same classification.
+ * not-configured check, same classification. `26-52` adds [fetchContacts] here for the identical
+ * reason, not a fourth adapter.
  *
  * `X-Ago-Active-Site` and the bearer token are attached by client plugins (`installAgoRestDefaults`),
  * not threaded through this method either — the identical reason `KtorConversationsApi` gives.
@@ -108,6 +111,37 @@ public class KtorBookingsApi(
             ConfirmedBookingsResult.Failed(classify(failure))
         }
     }
+
+    /**
+     * `26-52`: `GET /api/v1/console/contacts` — the identical check-base-URL-first,
+     * classify-never-invent shape [fetchPendingQueue]/[fetchConfirmedBookings] above already establish,
+     * restated for this third endpoint for the same reason [fetchConfirmedBookings]'s own doc comment
+     * gives for not factoring the three into one shared helper.
+     */
+    override suspend fun fetchContacts(): ContactsResult {
+        val baseUrl = calendarApiBaseUrl ?: return ContactsResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/contacts")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ContactsResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return ContactsResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            ContactsResult.Loaded(response.body<List<ContactWireDto>>().map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            ContactsResult.Failed(classify(failure))
+        }
+    }
 }
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. An
@@ -179,4 +213,30 @@ private fun ConfirmedBookingWireDto.toDomain() =
         endsAt = endsAt,
         localDate = localDate,
         weekday = weekday,
+    )
+
+/** `Ago.Calendar.Contracts.ContactResponse`, reduced to the fields [Contact] carries — `notes`/
+ * `firstSeenAt`/`lastSeenAt`/`duplicatePhoneCustomerIds` are all on the wire and simply omitted here,
+ * the identical `ignoreUnknownKeys`-backed reduction [PendingBookingWireDto]'s own doc comment
+ * explains, applied for the identical reason [Contact]'s own doc comment gives. */
+@Serializable
+private data class ContactWireDto(
+    val customerId: String,
+    val phone: String,
+    val masked: Boolean,
+    val displayName: String?,
+    val noShowCount: Int,
+    val phoneVerifiedAt: String?,
+    val phoneConfirmedByOperatorAt: String?,
+)
+
+private fun ContactWireDto.toDomain() =
+    Contact(
+        customerId = customerId,
+        phone = phone,
+        masked = masked,
+        displayName = displayName,
+        noShowCount = noShowCount,
+        phoneVerifiedAt = phoneVerifiedAt,
+        phoneConfirmedByOperatorAt = phoneConfirmedByOperatorAt,
     )
