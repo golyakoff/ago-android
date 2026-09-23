@@ -1,6 +1,7 @@
 package ago.chat.android.thread
 
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
+import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
@@ -458,17 +459,191 @@ class ThreadViewModelTest {
             assertEquals("", viewModel.state.value.draft)
         }
 
+    // -------------------------------------------------------------------------------- mark-read (26-80)
+
+    @Test
+    fun `markReadUpTo debounces - nothing is sent before the window elapses`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..3)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.markReadUpTo(3)
+            advanceTimeBy(100)
+            assertEquals("still inside the debounce window", emptyList<Pair<String, Int>>(), api.markReadCalls)
+
+            advanceTimeBy(450)
+            assertEquals(listOf("c1" to 3), api.markReadCalls)
+        }
+
+    @Test
+    fun `rapid successive reports before the debounce fires collapse into one call, for the latest sequence`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..5)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            // The shape three quick scroll/arrival ticks take before the 500ms window closes - each
+            // one cancels the previous still-pending timer (`ThreadViewModel.markReadUpTo`'s own doc
+            // comment), the same `clearTimeout` cleanup `ago-console`'s own effect relies on.
+            viewModel.markReadUpTo(3)
+            viewModel.markReadUpTo(4)
+            viewModel.markReadUpTo(5)
+            advanceUntilIdle()
+
+            assertEquals(
+                "only the latest sequence is ever sent - the earlier timers were cancelled, not queued",
+                listOf("c1" to 5),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `a sequence already confirmed sent is not re-sent`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..5)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.markReadUpTo(3)
+            advanceUntilIdle()
+            assertEquals(listOf("c1" to 3), api.markReadCalls)
+
+            // A later report at or below the already-confirmed watermark - a recomposition that
+            // reports the same visible item again, or a momentary scroll back over already-read
+            // history - must not spend a second network call on a position the server already knows.
+            viewModel.markReadUpTo(3)
+            viewModel.markReadUpTo(2)
+            advanceUntilIdle()
+
+            assertEquals(
+                "no new call for a sequence already confirmed sent",
+                listOf("c1" to 3),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `a higher sequence arriving after one was already confirmed sent is still forwarded - the watermark keeps moving`() =
+        runTest(dispatcher) {
+            // The client-side half of `Conversation.MarkReadByOperator`'s own doc comment: a visitor
+            // message landing in the same instant as a read must still be counted once it is itself
+            // read, which on this side of the wire means confirming sequence 3 must never stop this
+            // instance from later confirming 5 once the operator has genuinely seen that message too -
+            // proving the client's own watermark, not re-deriving the server's clamp-and-subtract logic.
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..5)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.markReadUpTo(3)
+            advanceUntilIdle()
+            assertEquals(listOf("c1" to 3), api.markReadCalls)
+
+            // A new message (sequence 5) arrives and is scrolled into view - the identical live shape
+            // `MessageList`'s own `onNewestVisibleSequenceChanged` reports for a real arrival.
+            viewModel.markReadUpTo(5)
+            advanceUntilIdle()
+
+            assertEquals(
+                "the later, higher watermark is a real second call, never swallowed by the first send",
+                listOf("c1" to 3, "c1" to 5),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `opening a different conversation resets the watermark - a stale high sequence never suppresses the new one's first read`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..10)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.markReadUpTo(10)
+            advanceUntilIdle()
+            assertEquals(listOf("c1" to 10), api.markReadCalls)
+
+            viewModel.close()
+            viewModel.open("c2")
+            advanceUntilIdle()
+            viewModel.markReadUpTo(1)
+            advanceUntilIdle()
+
+            assertEquals(
+                "c2's own low sequence must not be swallowed by c1's leftover watermark",
+                listOf("c1" to 10, "c2" to 1),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `closing the thread abandons a still-pending mark-read rather than sending it early`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..3)), conversationsApi = api)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.markReadUpTo(3)
+            viewModel.close()
+            advanceUntilIdle()
+
+            assertEquals(
+                "the debounce timer never got to fire - closing cancelled it, matching the doc comment's own reasoning",
+                emptyList<Pair<String, Int>>(),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `markReadUpTo before anything is open does nothing`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(), conversationsApi = api)
+
+            viewModel.markReadUpTo(1)
+            advanceUntilIdle()
+
+            assertEquals(emptyList<Pair<String, Int>>(), api.markReadCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
         hub: OperatorHubEvents,
         draftStore: ComposerDraftStore = FakeComposerDraftStore(),
+        conversationsApi: ConversationsApi = FakeConversationsApi(),
     ): ThreadViewModel =
         ThreadViewModel(
             hubEvents = hub,
             draftStore = draftStore,
+            conversationsApi = conversationsApi,
             ioDispatcher = dispatcher,
         )
+
+    /** `26-80`: records every call rather than branching on outcome - [ThreadViewModel.markReadUpTo]'s
+     * own doc comment states why the `Boolean` [ConversationsApi.markRead] returns is never read: this
+     * app never distinguishes a server refusal from a transport failure for this one call, so a fake
+     * that always answers `true` is a faithful stand-in for "the real adapter never throws" without
+     * needing a failure-injection knob nothing here would read. */
+    private class FakeConversationsApi : ConversationsApi {
+        val markReadCalls: MutableList<Pair<String, Int>> = mutableListOf()
+
+        override suspend fun fetchQueue() = error("not used by this screen")
+
+        override suspend fun claim(conversationId: String) = error("not used by this screen")
+
+        override suspend fun markRead(
+            conversationId: String,
+            upToSequence: Int,
+        ): Boolean {
+            markReadCalls.add(conversationId to upToSequence)
+            return true
+        }
+    }
 
     private fun messages(range: IntRange): List<MessageDto> =
         range.map { seq ->

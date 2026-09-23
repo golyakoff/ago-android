@@ -1,6 +1,7 @@
 package ago.chat.android.thread
 
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
+import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
@@ -69,6 +70,7 @@ public class ThreadViewModel
     constructor(
         private val hubEvents: OperatorHubEvents,
         private val draftStore: ComposerDraftStore,
+        private val conversationsApi: ConversationsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ThreadUiState())
@@ -80,6 +82,14 @@ public class ThreadViewModel
         private var draftWriteJob: Job? = null
         private var messagesJob: Job? = null
         private var deliveryJob: Job? = null
+
+        /** `26-80`: this instance's own "already told the server this" watermark for the conversation
+         * currently open - `ago-console`'s own `lastMarked` ref, restated. `null` until the first call,
+         * and reset in [open] for every new conversation - never carried from one conversation to the
+         * next, which would let a high sequence from a *previous* thread suppress the first real
+         * mark-read of this one. */
+        private var lastMarkedReadSequence: Long? = null
+        private var markReadJob: Job? = null
 
         /** The conversation this instance is currently open on - `null` before the first [open].
          * `ago-console`'s own `joinedConversationId` ref, restated: the guard that stops a
@@ -113,6 +123,9 @@ public class ThreadViewModel
             nextBeforeSequence = null
             failedSend = null
             draftWriteJob?.cancel()
+            markReadJob?.cancel()
+            markReadJob = null
+            lastMarkedReadSequence = null
             mutableState.value = ThreadUiState(conversationId = conversationId, hubConnectionState = mutableState.value.hubConnectionState)
 
             messagesJob?.cancel()
@@ -179,8 +192,74 @@ public class ThreadViewModel
             messagesJob = null
             deliveryJob?.cancel()
             deliveryJob = null
+            // `26-80`: a pending debounced mark-read is abandoned, not flushed early, the same way a
+            // pending debounced draft write is flushed *early* rather than abandoned above - the two
+            // pull in opposite directions on purpose. A draft is this operator's own words; losing one
+            // because the timer had not fired yet would be a real loss `flushDraft` exists to prevent.
+            // A mark-read the debounce window has not yet confirmed has, by definition, not dwelled on
+            // screen long enough to be confidently "read" - `ago-console`'s own `tabVisible` guard makes
+            // the identical call for a backgrounded tab (this file's own doc comment on why an Android
+            // equivalent of that guard is not needed does not extend to "leaving the thread entirely").
+            markReadJob?.cancel()
+            markReadJob = null
             hubEvents.leaveConversation()
             openConversationId = null
+        }
+
+        /**
+         * `26-80`: tells the server how far the operator has actually read, and does so honestly rather
+         * than by assuming this screen's newest *loaded* message is its newest *rendered* one.
+         *
+         * `ago-console`'s own `ConversationPage.tsx` gets to make that assumption - its doc comment
+         * states why: `Thread` auto-scrolls to the newest arrival whenever the operator is already at
+         * the bottom, which they are on open, so "loaded" and "on screen" are the same fact there.
+         * **That does not transfer here.** `ThreadScreen`'s `MessageList` starts at the bottom on open
+         * for the identical reason (`reverseLayout = true` with `LazyListState`'s own default
+         * `firstVisibleItemIndex = 0`), but nothing in this app re-scrolls to a new arrival while the
+         * conversation stays open - checked directly against `ThreadScreen.kt`, which has no
+         * `scrollToItem`/`animateScrollToItem` call anywhere in it. An operator scrolled up into history
+         * when a new message lands has not seen it, and claiming its sequence here would mute it. So
+         * [sequence] is never read off [ThreadUiState.messages] directly; it is what `MessageList`
+         * itself reports as the newest message its `LazyListState` currently has visible - the one thing
+         * this screen can actually prove was on screen, scrolled-to-the-bottom or not.
+         *
+         * **The `tabVisible` guard `WorkspaceLayout.markRead`'s own effect carries has no call here for
+         * a different reason than "porting the bottom check already covers it": a backgrounded tab
+         * still receives live pushes in a browser, which is exactly why the console needs the guard;
+         * this app's own `OperatorHubConnectionLifecycle` (see `SignInViewModel.routeNow`'s doc comment)
+         * ties the hub connection to process foreground, so a backgrounded app is not receiving the
+         * pushes that would move [sequence] in the first place. If that ever changes - a background
+         * push channel, say - this guard would need to be added for real, not assumed away a second
+         * time.**
+         *
+         * Debounced and de-duplicated the same shape `ago-console`'s own `lastMarked` ref plus
+         * `setTimeout` pair uses: [lastMarkedReadSequence] is the high-watermark already confirmed sent
+         * for this conversation, so a [sequence] at or below it returns before a timer is even started,
+         * and a newer one cancels whatever timer was still waiting rather than racing it - one settled
+         * position sent, never a burst of intermediate ones.
+         */
+        public fun markReadUpTo(sequence: Long) {
+            val conversationId = openConversationId ?: return
+            val alreadySent = lastMarkedReadSequence
+            if (alreadySent != null && alreadySent >= sequence) return
+
+            markReadJob?.cancel()
+            markReadJob =
+                viewModelScope.launch {
+                    delay(MARK_READ_DEBOUNCE_MILLIS)
+                    lastMarkedReadSequence = sequence
+                    // Fire-and-forget, matching `SignInViewModel.routeNow`'s own `hubConnection.connect()`
+                    // call for a comparable non-critical background write: `ConversationsApi.markRead`
+                    // never throws (it classifies its own transport/status failures internally, see its
+                    // own doc comment), and its `Boolean` is deliberately not read here - a `false` is a
+                    // cosmetic staleness the next debounced call or the next `open` corrects, never
+                    // something worth an error an operator is not waiting on anyway (this item's own
+                    // Scope: "fire-and-forget... never shown to the operator as an error"). `upToSequence`
+                    // is `Int` on the wire (`MarkConversationReadRequest`, `ago-chat`) because the server
+                    // assigns sequences as `int`; this app carries them as `Long` only because
+                    // `MessageDto.sequence` does, so the narrowing here is exact, never a real truncation.
+                    conversationsApi.markRead(conversationId, sequence.toInt())
+                }
         }
 
         /** The manual "load older messages" affordance - a no-op while already loading, and a no-op
@@ -364,6 +443,12 @@ public class ThreadViewModel
 
         private companion object {
             const val DRAFT_WRITE_DEBOUNCE_MILLIS = 400L
+
+            /** `ago-console`'s own `MARK_READ_DEBOUNCE_MS` (`ConversationPage.tsx`) - the identical
+             * value, for the identical reason: there is no technical basis for the two clients to
+             * disagree about how long to wait before confirming a read position neither of them chose
+             * for a load-bearing reason. */
+            const val MARK_READ_DEBOUNCE_MILLIS = 500L
         }
     }
 

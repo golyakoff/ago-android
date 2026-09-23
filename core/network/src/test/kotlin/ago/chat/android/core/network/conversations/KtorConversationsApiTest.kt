@@ -16,6 +16,7 @@ import io.ktor.client.engine.mock.respondError
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -290,6 +291,70 @@ class KtorConversationsApiTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
             assertEquals(ClaimResult.Failed(NetworkFailure.NoConnection), api.claim("c1"))
+        }
+
+    // -------------------------------------------------------------- POST /api/v1/conversations/{id}/read
+
+    @Test
+    fun `a 200 is true, and the body sent carries the exact watermark asked for`() =
+        runTest {
+            val requested = mutableListOf<Pair<HttpMethod, String>>()
+            var sentBody = ""
+            val api =
+                apiFor(recordTo = requested) { request ->
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond(
+                        """{"operatorUnreadCount":0,"operatorLastReadSequence":42}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(true, api.markRead("c1", 42))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/conversations/c1/read", requested.single())
+            assertTrue("the exact watermark asked for, not a rounded or re-derived one", sentBody.contains("\"upToSequence\":42"))
+        }
+
+    @Test
+    fun `a 403 for a conversation that is not this operator's is false, not thrown`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"Conversation.NotYours","detail":"Not the assigned operator."}""",
+                        HttpStatusCode.Forbidden,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            assertEquals(
+                "a real server refusal collapses to false the same as a transport failure - " +
+                    "ConversationsApi.markRead's own doc comment on why this never earns a sealed result",
+                false,
+                api.markRead("c1", 42),
+            )
+        }
+
+    @Test
+    fun `a 409 from a doubly-raced write is false, and is never retried by this method itself`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor {
+                    calls++
+                    respondError(HttpStatusCode.Conflict)
+                }
+
+            assertEquals(false, api.markRead("c1", 42))
+            assertEquals("exactly one attempt - retrying is the next debounced call's job, not this method's", 1, calls)
+        }
+
+    @Test
+    fun `a dropped connection on mark-read is false, not a thrown exception`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(false, api.markRead("c1", 42))
         }
 
     private fun apiFor(

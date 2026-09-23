@@ -634,6 +634,11 @@ class ConversationListViewModelTest {
             claimCalls.add(conversationId)
             return claimResult(conversationId)
         }
+
+        override suspend fun markRead(
+            conversationId: String,
+            upToSequence: Int,
+        ): Boolean = error("not used by this screen")
     }
 
     private class FakeConversationListCache(

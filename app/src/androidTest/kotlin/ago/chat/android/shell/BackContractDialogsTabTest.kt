@@ -85,6 +85,7 @@ class BackContractDialogsTabTest {
             ThreadViewModel(
                 hubEvents = FakeThreadHubEvents(),
                 draftStore = RoomComposerDraftStore(database.composerDraftDao()),
+                conversationsApi = api,
                 ioDispatcher = Dispatchers.IO,
             )
 
@@ -144,7 +145,12 @@ class BackContractDialogsTabTest {
                 viewModel = listViewModel,
                 threadViewModel = {
                     rememberDisposableThreadViewModel {
-                        ThreadViewModel(hubEvents = FakeThreadHubEvents(), draftStore = draftStore, ioDispatcher = Dispatchers.IO)
+                        ThreadViewModel(
+                            hubEvents = FakeThreadHubEvents(),
+                            draftStore = draftStore,
+                            conversationsApi = api,
+                            ioDispatcher = Dispatchers.IO,
+                        )
                     }
                 },
             )

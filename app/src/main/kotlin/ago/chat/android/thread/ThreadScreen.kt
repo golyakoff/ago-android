@@ -46,6 +46,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -63,6 +65,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapNotNull
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -164,6 +168,10 @@ public fun ThreadRoute(
         onSend = viewModel::sendClicked,
         onRetrySend = viewModel::retrySend,
         onDismissSendRefusal = viewModel::dismissSendRefusal,
+        // `26-80`: the one signal `MessageList` reports upward - see `ThreadViewModel.markReadUpTo`'s
+        // own doc comment for why this has to come from the list's actual scroll state rather than
+        // simply `state.messages`' own newest entry.
+        onNewestVisibleSequenceChanged = viewModel::markReadUpTo,
     )
 }
 
@@ -187,6 +195,7 @@ internal fun ThreadScreen(
     onSend: () -> Unit,
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
+    onNewestVisibleSequenceChanged: (Long) -> Unit,
 ) {
     // `26-40`: the app-bar subtitle's own age half - the mockup's short elapsed form, ticking on the
     // identical shared clock `ConversationListScreen`'s own row ages already read
@@ -288,6 +297,7 @@ internal fun ThreadScreen(
                             loadingOlder = state.loadingOlder,
                             historyError = state.historyError,
                             onLoadOlder = onLoadOlder,
+                            onNewestVisibleSequenceChanged = onNewestVisibleSequenceChanged,
                         )
                 }
             }
@@ -421,6 +431,18 @@ private fun DismissibleBanner(
  * ordinary chat convention) and scrolling *up* moves toward older ones - the "Load older messages"
  * button, an explicit tap rather than a silent infinite-scroll trigger (matching `ago-console`'s own
  * `Thread.tsx`), sits at the far end of the reversed list, which renders at the visual top.
+ *
+ * `26-80`: this is also the one place that can honestly answer "what has the operator actually seen" -
+ * [onNewestVisibleSequenceChanged] reports the [MessageDto.sequence] of whichever currently-visible
+ * item sits closest to the bottom (the smallest index in [listState]'s own reversed layout, so the
+ * newest of whatever is genuinely on screen, not [messages]' own newest entry). One persistent
+ * `LaunchedEffect` keyed on [listState] - not on [messages], which would restart it on every merge and
+ * throw away `distinctUntilChanged`'s memory of the last value reported - covers both triggers this
+ * needs: a new message changing [newestFirst] (via [rememberUpdatedState], so the collector always
+ * reads the current list) and the operator scrolling to reveal a different item, with no list change
+ * at all. [ThreadViewModel.markReadUpTo]'s own doc comment covers why the console's simpler
+ * "just use the newest loaded message" cannot be ported as-is - it depends on `Thread` always
+ * re-scrolling to a new arrival, which this list does not do.
  */
 @Composable
 private fun MessageList(
@@ -429,10 +451,20 @@ private fun MessageList(
     loadingOlder: Boolean,
     historyError: NetworkFailure?,
     onLoadOlder: () -> Unit,
+    onNewestVisibleSequenceChanged: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val newestFirst = messages.asReversed()
     val listState = rememberLazyListState()
+    val currentNewestFirst by rememberUpdatedState(newestFirst)
+    val currentOnNewestVisibleSequenceChanged by rememberUpdatedState(onNewestVisibleSequenceChanged)
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.minOfOrNull { it.index } }
+            .mapNotNull { minIndex -> minIndex?.let { currentNewestFirst.getOrNull(it)?.sequence } }
+            .distinctUntilChanged()
+            .collect { sequence -> currentOnNewestVisibleSequenceChanged(sequence) }
+    }
 
     LazyColumn(
         state = listState,

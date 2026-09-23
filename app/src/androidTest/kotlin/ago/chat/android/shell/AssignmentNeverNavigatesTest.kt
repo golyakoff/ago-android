@@ -101,7 +101,12 @@ class AssignmentNeverNavigatesTest {
                 threadViewModel = {
                     rememberDisposableThreadViewModel {
                         threadOpened++
-                        ThreadViewModel(hubEvents = FakeThreadHubEvents(), draftStore = draftStore, ioDispatcher = Dispatchers.IO)
+                        ThreadViewModel(
+                            hubEvents = FakeThreadHubEvents(),
+                            draftStore = draftStore,
+                            conversationsApi = api,
+                            ioDispatcher = Dispatchers.IO,
+                        )
                     }
                 },
             )

@@ -39,6 +39,10 @@ internal class FakeConversationsApi(
         private set
     val claimCalls: MutableList<String> = mutableListOf()
 
+    // `26-80`: recorded, not asserted on by every test that happens to construct a `ThreadViewModel`
+    // through this fake - only a test that cares whether mark-read fired needs to read this.
+    val markReadCalls: MutableList<Pair<String, Int>> = mutableListOf()
+
     override suspend fun fetchQueue(): QueueResult {
         fetchCalls++
         return queueResult
@@ -47,6 +51,14 @@ internal class FakeConversationsApi(
     override suspend fun claim(conversationId: String): ClaimResult {
         claimCalls.add(conversationId)
         return claimResult(conversationId)
+    }
+
+    override suspend fun markRead(
+        conversationId: String,
+        upToSequence: Int,
+    ): Boolean {
+        markReadCalls.add(conversationId to upToSequence)
+        return true
     }
 }
 

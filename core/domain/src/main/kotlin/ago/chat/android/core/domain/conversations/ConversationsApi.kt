@@ -32,6 +32,31 @@ public interface ConversationsApi {
      * exact words differ.
      */
     public suspend fun claim(conversationId: String): ClaimResult
+
+    /**
+     * `26-80`: `POST /api/v1/conversations/{id}/read` — the write that makes `operatorUnreadCount`
+     * mean "unread by this operator", not "ever received" (`Conversation.MarkReadByOperator`'s own doc
+     * comment, `ago-chat`). Nothing in this app called it before this item; [ThreadViewModel] is the
+     * one caller, ported from `ago-console`'s own `ConversationPage.tsx`/`WorkspaceLayout.markRead`.
+     *
+     * [upToSequence] must be the newest message this screen can actually prove was rendered — never
+     * the server's own already-known `lastSequence` for the row, which can already be ahead of what is
+     * on screen; claiming it would mute a message the operator never saw. See [ThreadViewModel]'s own
+     * doc comment for how this app computes that, which is not simply "the newest message loaded" the
+     * way the console's version is (`ThreadScreen` does not always keep the newest message on screen
+     * the way `ago-console`'s `Thread` does).
+     *
+     * A plain `Boolean` — `true` on a `2xx`, `false` for everything else, transport failure and a
+     * genuine server refusal alike — rather than a sealed result the way [claim] gets one. [claim]
+     * needs three arms because a refusal's own `detail` is shown to the operator verbatim; this call is
+     * fire-and-forget by design (this item's own Scope: "a failed mark-read is logged/ignored, never
+     * shown as an error"), so there is no caller left to read a reason apart from "did it land" — a
+     * second sealed type nothing ever branches on would just be a shape this port invented for itself.
+     */
+    public suspend fun markRead(
+        conversationId: String,
+        upToSequence: Int,
+    ): Boolean
 }
 
 /** What answering "what's waiting, what's mine" came back with. */
