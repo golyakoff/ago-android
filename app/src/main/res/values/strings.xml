@@ -153,10 +153,6 @@
     <string name="nav_analytics">Аналитика</string>
     <string name="nav_more">Ещё</string>
 
-    <!-- `26-16`'s own Out of scope: Аналитика is still empty-but-honest; its real content is a later
-         wave. Записи (`26-48`) and Команда (`26-54`) both stopped being one of these. -->
-    <string name="analytics_placeholder_body">Аналитика появится в одной из следующих версий.</string>
-
     <!--
         `26-54`: the team room - one tenant-wide chat, no segmented control (Люди is `26-55`). Wording
         carried over verbatim from `ago-console`'s own `ru.ts` (`teamChat*`) - the same room, described
@@ -222,6 +218,48 @@
         <item>Пт</item>
         <item>Сб</item>
     </string-array>
+
+    <!--
+        `26-57`: Аналитика's own «Мои показатели» - the one ungated, personal report on this app. Wording
+        carried over from `ago-console`'s own `ru.ts` (`myNumbers*`/`analytics*`) where the console has an
+        equivalent string, since this is the same numbers described the same way on both surfaces.
+    -->
+    <string name="analytics_from_field_label">С</string>
+    <string name="analytics_to_field_label">По</string>
+    <string name="analytics_apply_button">Применить</string>
+    <string name="analytics_dialog_confirm">ОК</string>
+    <string name="analytics_dialog_cancel">Отмена</string>
+    <!-- `myNumbersRangeLabel`, restated with both bounds as arguments - the response's own `from`/`to`,
+         never the (possibly blank) inputs (`docs/backlog/26-57-*.md`'s own Scope item 2). -->
+    <string name="analytics_range_label">Отчёт за период: %1$s – %2$s</string>
+    <string name="analytics_invalid_range_error">Начало периода должно быть раньше его конца.</string>
+    <string name="analytics_load_failed_transport">Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.</string>
+    <string name="analytics_load_failed_unexpected">Не удалось загрузить аналитику. Попробуйте ещё раз.</string>
+    <!-- The one value every "nothing to average/no rate yet" cell renders - `analyticsNoResponsesValue`/
+         `conversionReportNoDataValue` are the identical single character on the console. -->
+    <string name="analytics_no_data_value">—</string>
+
+    <string name="analytics_bucket_heading">Ваши диалоги</string>
+    <string name="analytics_conversation_count_label">Диалогов</string>
+    <string name="analytics_average_first_response_label">Ср. время ответа</string>
+    <string name="analytics_average_duration_label">Ср. длительность</string>
+    <string name="analytics_missed_count_label">Без ответа</string>
+
+    <string name="analytics_load_heading">Ваша нагрузка</string>
+    <string name="analytics_load_empty">В этом периоде пока нет данных о назначениях.</string>
+    <string name="analytics_held_label">Всего вели</string>
+    <string name="analytics_standard_label">Штатно</string>
+    <string name="analytics_additional_label">Сверх нормы</string>
+
+    <string name="analytics_conversion_heading">Ваша конверсия</string>
+    <string name="analytics_conversion_empty">У того, что вы вели, пока нет отмеченного результата в этом периоде.</string>
+    <string name="analytics_conversion_not_verified_banner">Этот показатель построен на том, что указали операторы, а не на подтверждённой продаже или заказе — это реальное и полезное число, но это не то же самое, что «N% диалогов завершились подтверждённой продажей».</string>
+    <string name="analytics_converted_label">Продажа состоялась</string>
+    <string name="analytics_not_converted_label">Продажа не состоялась</string>
+    <string name="analytics_follow_up_needed_label">Нужен повторный контакт</string>
+    <string name="analytics_unset_label">Не указан</string>
+    <string name="analytics_rate_label">Конверсия</string>
+    <string name="analytics_rate_value">%1$s%% (%2$d из %3$d)</string>
 
     <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
          at least one real row (`navigation.md` §"The top-level shape"). -->
