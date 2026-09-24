@@ -5,6 +5,9 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.identity.SignInDestination
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.devices.DeviceRegistrar
+import ago.chat.android.devices.DeviceRegistrationScheduler
+import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.session.SignInFailedException
 import android.content.Intent
@@ -43,6 +46,8 @@ public class SignInViewModel
         private val router: PostSignInRouter,
         private val activeSite: ActiveSiteSelection,
         private val hubConnection: OperatorHubConnection,
+        private val deviceRegistrar: DeviceRegistrar,
+        private val registrationScheduler: DeviceRegistrationScheduler,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<SignInUiState>(SignInUiState.Starting)
@@ -58,6 +63,13 @@ public class SignInViewModel
          * left open (see that function's doc comment).
          */
         public val hubConnectionState: StateFlow<OperatorHubConnectionState> = hubConnection.state
+
+        /**
+         * `26-06`: a plain relay onto [DeviceRegistrar.pushAvailability] - the identical
+         * `hubConnectionState` shape immediately above, so a future screen (`26-19`) can bind to a
+         * real diagnostic with no new plumbing. `null` until [routeNow] has actually asked once.
+         */
+        public val pushAvailability: StateFlow<PushAvailability?> = deviceRegistrar.pushAvailability
 
         /**
          * Authorization `Intent`s for the Activity to launch. A `Channel` rather than a `StateFlow`
@@ -163,6 +175,17 @@ public class SignInViewModel
                 is SignInDestination.Operator -> {
                     viewModelScope.launch(ioDispatcher) {
                         runCatching { hubConnection.connect() }
+                    }
+                    // `26-06`: **every sign-in**, the first of the three call sites
+                    // `docs/architecture/push-notifications.md` names. `schedulePeriodicRegistration()`
+                    // is synchronous and idempotent (`ExistingPeriodicWorkPolicy.KEEP`) so it runs here
+                    // directly rather than inside the launch below; `registerThisDevice()` is launched
+                    // the identical fire-and-forget way `hubConnection.connect()` is immediately above -
+                    // a slow or failed push registration must never fail sign-in itself, the same
+                    // reasoning that launch's own doc comment states for the hub connect attempt.
+                    registrationScheduler.schedulePeriodicRegistration()
+                    viewModelScope.launch(ioDispatcher) {
+                        runCatching { deviceRegistrar.registerThisDevice() }
                     }
                     SignInUiState.SignedIn(destination.activeSiteId)
                 }

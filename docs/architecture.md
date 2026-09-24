@@ -148,6 +148,60 @@ control lives, not to invent a per-device variant of it.
 Reconnection uses the client's own backoff with full jitter, and a reconnect re-reads history from
 the last known `sequence` rather than trusting what was in memory when the socket dropped.
 
+## Push
+
+`26-06`/`adr/0180`: RuStore Push, not FCM — `adr/0180` names the reason (Russian data residency on a
+stock Android phone, settled by changing provider rather than by the legal escalation `adr/0179` left
+open). `docs/architecture/push-notifications.md` is the authoritative design; this section states what
+this repository's own code does with it.
+
+**Three call sites write the same row.** `PUT /api/v1/me/devices/{installationId}` runs at every
+sign-in (`SignInViewModel.routeNow()`'s `Operator` arm), from `AgoPushMessagingService.onNewToken` (the
+provider's own rotation callback), and from a periodic `WorkManager` job
+(`DeviceRegistrationWorker`/`WorkManagerDeviceRegistrationScheduler`) — the third one exists because
+`onNewToken` cannot fire for an app that was not running when a rotation happened.
+`DeviceRegistrationCoordinator` is the one place that sequence — read the installation id, ask the SDK
+for the current token, write it — is expressed, precisely so the three call sites cannot quietly drift
+from one another (`26-59`'s own history is the reason that drift is worth naming as a risk at all).
+
+**The periodic job runs every 24 hours, with a `NetworkType.CONNECTED` constraint.** Not the 15-minute
+floor `PeriodicWorkRequest` itself allows: `onNewToken` already handles a rotation in real time while
+the app is running, so this job exists solely as a backstop for the case it cannot cover. There is no
+documented token lifetime to race, so nothing calls for a shorter interval; a daily heartbeat is
+frequent enough that the server's own `last_seen_at` drifting more than a day stale is a genuine "is
+this install still alive" signal, and infrequent enough to cost nothing worth measuring in battery for
+a write this cheap. It is scheduled once, at sign-in (`ExistingPeriodicWorkPolicy.KEEP`, so a second
+sign-in never resets its clock), and deliberately never explicitly cancelled on sign-out — see
+`WorkManagerDeviceRegistrationScheduler`'s own doc comment for why a bounded, harmless retry against an
+idle endpoint costs less than the coupling cancelling it would add to `AgoAuthSession`.
+
+**`installation_id` lives in its own, unencrypted `DataStore` file — never `SessionStore`'s.** It has to
+survive exactly the sign-out that empties `SessionStore` (`docs/architecture/push-notifications.md`'s
+own reason `installation_id` exists: the server row's identity is `(operator_id, installation_id)`, not
+`(operator_id, token)`), and it is not a credential, so it costs nothing `EncryptedSharedPreferences`
+would be buying.
+
+**The RuStore SDK is reached through one seam, `PushRegistrationGateway`**, declared in `:app` rather
+than `:core:domain` — unlike `DeviceRegistrationApi` (a REST port, `:core:domain`, the identical
+`ConversationsApi` shape), a push provider chosen specifically because it runs on Android has no
+KMP-`commonMain` generalisation to protect (`adr/0178`), the same reasoning that already keeps
+`SignInSession`'s AppAuth-shaped session in `:app`. `RuStorePushGateway`'s own doc comment states why it
+bridges the SDK's own callback-shaped `Task` type with `suspendCancellableCoroutine` rather than the
+SDK's own blocking `Task.await()`.
+
+**`checkPushAvailability()`'s answer is recorded, never hidden.** `DeviceRegistrationCoordinator` logs
+an `Unavailable` result at `WARN` (the reason only, never a token) and exposes the last answer as
+`SignInViewModel.pushAvailability`, the identical `StateFlow` shape `hubConnectionState` already
+establishes — so a future screen (`26-19`) has a real value to bind to with no further plumbing, without
+this item building a screen that is not its job to build.
+
+**A RuStore Console push project already exists** — "AGO Chat Production",
+`1Q8iLXwwBZViuznG6eCTHgkzrTE9Bto6` (`25-216`) — supplied as a `BuildConfig` field
+(`AGO_RUSTORE_PUSH_PROJECT_ID`) the identical way every other deployment value in `app/build.gradle.kts`
+already is. One project for both build types, not one per build type: `25-215` unified debug and release
+under a single signing key/fingerprint before this project existed, which is what makes one RuStore
+Console project (bound to that one fingerprint) enough.
+
 ## The design system: tokens, dynamic colour, and hardcoded-colour enforcement
 
 `26-10` transcribes `ago-console/src/design/tokens.css` — the console's own single source for colour,

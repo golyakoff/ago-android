@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         `26-12`: the app talks to `Ago.Chat.Api` and to the Keycloak realm, both over HTTPS. No
@@ -7,6 +8,16 @@
         nothing here needs it.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        `26-06`: `POST_NOTIFICATIONS` (API 33+) ships in `pushclient-7.5.0.aar`'s own manifest and
+        merges in automatically — RuStore's own documentation states this has been the SDK's default
+        since 1.4.0. Declared here as a comment, not a line, so a future reader searching this file for
+        the permission finds the explanation rather than concluding it is missing. The *runtime*
+        request (`ActivityResultContracts.RequestPermission`) is `26-18`'s job, alongside rendering the
+        first real notification — asking for it before this app can show anything would be a permission
+        prompt an operator has no way to connect to a benefit yet.
+    -->
 
     <application
         android:name=".AgoChatApplication"
@@ -62,6 +73,24 @@
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
             android:theme="@style/Theme.AppCompat.Translucent.NoTitleBar" />
+
+        <!--
+            `26-06`/`adr/0180`: RuStore's own required shape - a service extending
+            `RuStoreMessagingService`, `exported="true"` with an intent-filter on exactly this action
+            string, both copied verbatim from RuStore's own Kotlin/Java Push SDK documentation rather
+            than guessed at. `exported="true"` is the SDK's own distributor-delivery mechanism (the
+            distributor app, running in its own process, is what starts this service) and not a gap
+            this app introduced - `tools:ignore` says so for Lint's `ExportedService` check the same
+            way RuStore's own sample manifest does.
+        -->
+        <service
+            android:name="ago.chat.android.devices.AgoPushMessagingService"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="ru.rustore.sdk.pushclient.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

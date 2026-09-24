@@ -169,6 +169,22 @@ android {
         // `26-48`: a *second*, nullable deployment target — see [agoOptionalProperty]'s own doc comment
         // for why this one field breaks the "always a default" pattern every field above it follows.
         buildConfigField("String", "AGO_CALENDAR_API_BASE_URL", agoOptionalProperty("agoCalendarApiBaseUrl"))
+
+        // `26-06`/`adr/0180`/`25-216`: the real RuStore Console push project id — "AGO Chat Production",
+        // `1Q8iLXwwBZViuznG6eCTHgkzrTE9Bto6`, created by the author while scoping this item and already
+        // wired into the demo deployment's own Worker config (`25-216`'s own Outcome). Not a secret —
+        // `docs/architecture/secrets.md` never lists it as one, and it ships inside every APK's own
+        // manifest either way, readable by anyone with a copy, the identical "public by construction"
+        // reasoning `AGO_OIDC_CLIENT_ID` above already carries. One value for both build types, not one
+        // per build type: `25-215` unified debug and release under a single signing key/fingerprint
+        // *before* this RuStore Console project existed, so the "budget for a project per build type"
+        // concern this item's own Scope originally named no longer applies — `25-216`'s own Out-of-scope
+        // line says so explicitly ("RuStore Console needs exactly one project for this app, not two").
+        buildConfigField(
+            "String",
+            "AGO_RUSTORE_PUSH_PROJECT_ID",
+            agoProperty("agoRuStorePushProjectId", "1Q8iLXwwBZViuznG6eCTHgkzrTE9Bto6"),
+        )
     }
 
     // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP
@@ -219,6 +235,19 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    // `26-06`: the first time a plain JVM `test` in this app exercises a code path that calls a real
+    // `android.*` framework method (`DeviceRegistrationCoordinator`'s `android.util.Log.w` on an
+    // `Unavailable` push result) rather than one this project's own classes wrap. Every earlier test
+    // either avoided the framework entirely or ran instrumented. AGP's unit-test `android.jar` stub
+    // throws `RuntimeException: Method ... not mocked` on any such call by default; this is AGP's own
+    // documented switch for exactly that case, returning safe defaults (`Log.w` returns `0`) instead of
+    // throwing - not a suppression of a real bug, since nothing here asserts on `Log`'s own return value.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
         }
     }
 }
@@ -288,6 +317,10 @@ dependencies {
     // row for why it, and not Room or plain `SharedPreferences`.
     implementation(libs.androidx.datastore.preferences)
 
+    // `26-06`/`adr/0180`: RuStore Push — see `gradle/libs.versions.toml`'s own remarks on both rows.
+    implementation(libs.rustore.pushclient)
+    implementation(libs.androidx.work.runtime.ktx)
+
     // `26-14`: Room, the conversation list's stale-until-proven-fresh cache
     // (`docs/architecture.md` "Offline"). Lives here, not in a `:core:*` module, for the identical
     // "a concrete Android technology is wired in :app, behind a :core:domain port" reason
@@ -323,6 +356,10 @@ dependencies {
     // only an instrumented test can provide without Robolectric (this catalog entry's own remarks).
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    // `26-06`: `TestListenableWorkerBuilder`, for `DeviceRegistrationWorkerTest` - see
+    // `gradle/libs.versions.toml`'s own remarks on this row for why it is instrumented, not a plain
+    // JVM test.
+    androidTestImplementation(libs.androidx.work.testing)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

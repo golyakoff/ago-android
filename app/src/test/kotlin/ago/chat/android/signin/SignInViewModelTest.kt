@@ -12,9 +12,13 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.devices.DeviceRegistrar
+import ago.chat.android.devices.DeviceRegistrationScheduler
+import ago.chat.android.devices.PushAvailability
 import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -101,6 +105,25 @@ class SignInViewModelTest {
                 "signing in must attempt to connect the hub, not only route to the signed-in screen",
                 observedStates.contains(OperatorHubConnectionState.Connecting),
             )
+        }
+
+    @Test
+    fun `landing signed in schedules the periodic push job and registers this device - 26-06's own two call sites`() =
+        runTest(dispatcher) {
+            val deviceRegistrar = FakeDeviceRegistrar()
+            val registrationScheduler = FakeDeviceRegistrationScheduler()
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    deviceRegistrar = deviceRegistrar,
+                    registrationScheduler = registrationScheduler,
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(SignInUiState.SignedIn(shop.siteId), viewModel.state.value)
+            assertEquals(1, registrationScheduler.scheduleCalls)
+            assertEquals(1, deviceRegistrar.registerCalls)
         }
 
     @Test
@@ -232,11 +255,15 @@ class SignInViewModelTest {
         api: FakeIdentityApi,
         activeSite: InMemoryActiveSite = InMemoryActiveSite(),
         session: SignInSession = FakeSession(hasSession = true),
+        deviceRegistrar: DeviceRegistrar = FakeDeviceRegistrar(),
+        registrationScheduler: DeviceRegistrationScheduler = FakeDeviceRegistrationScheduler(),
     ): SignInViewModel =
         SignInViewModel(
             session = session,
             router = PostSignInRouter(api, activeSite),
             activeSite = activeSite,
+            deviceRegistrar = deviceRegistrar,
+            registrationScheduler = registrationScheduler,
             // `26-13`/`26-17`'s own connect-on-sign-in fix: `routeNow()` now really does call
             // `connect()` on this instance. A real `OperatorHubConnection` over a deliberately
             // unreachable host (`example.invalid`, RFC 2606) is still simpler than a second port just
@@ -309,5 +336,31 @@ class SignInViewModelTest {
         override suspend fun currentAccessToken(): String? = null
 
         override suspend fun refreshAccessToken(): String? = null
+    }
+
+    /** `26-06`: the identical "test through a narrow interface, never a concrete class touching
+     * Android" reasoning `FakeAccessTokenProvider` above already applies. */
+    private class FakeDeviceRegistrar : DeviceRegistrar {
+        var registerCalls: Int = 0
+            private set
+
+        override val pushAvailability = MutableStateFlow<PushAvailability?>(null)
+
+        override suspend fun registerThisDevice(): Boolean {
+            registerCalls++
+            return true
+        }
+    }
+
+    /** The real implementation calls `WorkManager.getInstance(context)`, which this plain JVM test has
+     * no Android runtime to satisfy - see [DeviceRegistrationScheduler]'s own doc comment for why this
+     * is a separate interface from [DeviceRegistrar] rather than one more method on it. */
+    private class FakeDeviceRegistrationScheduler : DeviceRegistrationScheduler {
+        var scheduleCalls: Int = 0
+            private set
+
+        override fun schedulePeriodicRegistration() {
+            scheduleCalls++
+        }
     }
 }

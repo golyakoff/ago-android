@@ -1,8 +1,10 @@
 package ago.chat.android.session
 
+import ago.chat.android.devices.DeviceRevocation
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -18,10 +20,13 @@ import org.junit.runner.RunWith
  * (`SessionStore`'s own doc comment) — there is no fake standing in for it here on purpose, since a fake
  * could not prove anything about the real, on-disk file.
  *
- * No network call is exercised (`AgoAuthSession.signOut`'s own body never reaches the network before
- * `26-06` adds a device-revocation call), so this writes directly into [SessionStore] rather than
- * driving a real Keycloak round trip through `beginAuthorization`/`completeAuthorization` — the two
- * fields [AgoAuthSession] itself ever writes are exactly the two this test seeds.
+ * No real network call is exercised even now that `26-06` has added a device-revocation call to
+ * `AgoAuthSession.signOut` — a no-op fake [DeviceRevocation] is supplied below, since this file's own
+ * job is the encrypted store's own contents, not the revocation call itself
+ * (`AgoAuthSessionSignOutOrderingTest` is where that call's ordering is proven). This still writes
+ * directly into [SessionStore] rather than driving a real Keycloak round trip through
+ * `beginAuthorization`/`completeAuthorization` — the two fields [AgoAuthSession] itself ever writes are
+ * exactly the two this test seeds.
  *
  * **What running this for real on a device found, that reading the source alone would not have**: the
  * raw file is not *empty* after `clear()` - `androidx.security.crypto.EncryptedSharedPreferences`
@@ -64,6 +69,7 @@ class AgoAuthSessionSignOutTest {
                             calendarApiBaseUrl = null,
                         ),
                     ioDispatcher = Dispatchers.IO,
+                    deviceRevocation = Lazy { NoOpDeviceRevocation },
                 )
 
             session.signOut()
@@ -87,6 +93,13 @@ class AgoAuthSessionSignOutTest {
                 rawFile.all.keys,
             )
         }
+
+    /** A revocation that does nothing - this file's own assertions are about [SessionStore]'s file, not
+     * about whether a revocation call happened at all (that is `AgoAuthSessionSignOutOrderingTest`'s job). */
+    private object NoOpDeviceRevocation : DeviceRevocation {
+        override suspend fun revokeThisDevice() {
+        }
+    }
 
     private companion object {
         /** `androidx.security.crypto.EncryptedSharedPreferences`'s own two reserved key names -
