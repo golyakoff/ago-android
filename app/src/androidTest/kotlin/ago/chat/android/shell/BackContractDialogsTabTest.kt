@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.testing.FlakyOnCi
 import ago.chat.android.testing.triggerBackPress
 import ago.chat.android.thread.ThreadViewModel
 import androidx.activity.ComponentActivity
@@ -36,6 +37,10 @@ import org.junit.runner.RunWith
  * parameters are overridable.
  */
 @OptIn(ExperimentalTestApi::class)
+// `26-91`: this class asserts Russian text as a literal; the CI emulator boots English and cannot be
+// forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment has the detail). `26-94`
+// tracks the real fix.
+@FlakyOnCi
 @RunWith(AndroidJUnit4::class)
 class BackContractDialogsTabTest {
     // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer

@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.testing.FlakyOnCi
 import ago.chat.android.testing.triggerBackPress
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
@@ -24,7 +25,12 @@ import org.junit.runner.RunWith
  * slot substituted for a trivial marker `Text`, since this clause is about the navigation graph
  * itself, not about Диалоги's own Hilt-backed content (that file's own doc comment on why the slot
  * exists).
+ *
+ * `26-91`: this class asserts Russian text as a literal; the CI emulator boots English and cannot be
+ * forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment has the detail). `26-94`
+ * tracks the real fix.
  */
+@FlakyOnCi
 @RunWith(AndroidJUnit4::class)
 class BackContractBottomBarTest {
     // `25-214`: `...junit4.v2.createAndroidComposeRule`, not the original in `...junit4`. The
