@@ -47,6 +47,19 @@ package ago.chat.android.core.domain.conversations
  * `Ago.Chat.Contracts.ConversationSummaryDto.LastMessageContentKind` carries, `null` for plain prose and
  * for a row that predates the field. Carried through unparsed for the identical reason [state] already
  * is: this type states the wire fact, `:app` decides what to draw from it.
+ *
+ * `26-90`: [operatorName] joins the same additive way — `Ago.Chat.Contracts.ConversationSummaryDto
+ * .OperatorName`, the display name of whoever holds this conversation, `null` when nobody does (a
+ * `Waiting` row has no operator by definition) or when the row comes from the queue read, which does
+ * not join it in. The «Все» tab's own status pill reads it («Назначен: Мария П.»); the console falls
+ * back to the id and this app falls back to the bare word, never the other way round.
+ *
+ * `26-90`: [messageCount] joins the same additive way — `Ago.Chat.Contracts.ConversationSummaryDto
+ * .MessageCount`, **a total, never an unread count**. [operatorUnreadCount] keeps its own separate
+ * meaning untouched; the two answer different questions and the «Все» tab draws only the first
+ * (`26-90`'s own Scope: "`Сообщений: N` ... a total, never an unread count. No unread badge on this
+ * tab"). `0` both for a conversation that genuinely has none and for the queue read, which does not
+ * populate it — that DTO's own doc comment explains why the two are indistinguishable on purpose.
  */
 public data class ConversationSummary(
     public val conversationId: String,
@@ -61,6 +74,8 @@ public data class ConversationSummary(
     public val lastMessageAt: String? = null,
     public val state: String = "",
     public val lastMessageContentKind: String? = null,
+    public val messageCount: Int = 0,
+    public val operatorName: String? = null,
 )
 
 /**

@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -139,10 +140,21 @@ public fun AgoChatTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) AgoDarkColorScheme else AgoLightColorScheme
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AgoTypography,
-        shapes = AgoShapes,
-        content = content,
-    )
+    // `26-90`: the one `tokens.css` pair Material 3 has no role for, resolved from the same
+    // `darkTheme` answer the scheme above is - see `AgoWarningColors`' own doc comment for why this
+    // cannot be decided at the call site.
+    val warningColors =
+        if (darkTheme) {
+            AgoWarningColors(warning = AgoWarningDark, warningTint = AgoWarningTintDark)
+        } else {
+            AgoWarningColors(warning = AgoWarningLight, warningTint = AgoWarningTintLight)
+        }
+    CompositionLocalProvider(LocalAgoWarningColors provides warningColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = AgoTypography,
+            shapes = AgoShapes,
+            content = content,
+        )
+    }
 }

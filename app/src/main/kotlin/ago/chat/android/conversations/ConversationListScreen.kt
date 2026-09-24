@@ -1,7 +1,9 @@
 package ago.chat.android.conversations
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.conversations.ConversationStateLabel
 import ago.chat.android.core.domain.conversations.ElapsedLabel
+import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.conversations.elapsedSince
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
@@ -11,26 +13,43 @@ import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.shortElapsedText
+import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoWarningColors
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -45,8 +64,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -57,6 +84,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,6 +93,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.OffsetDateTime
+import kotlin.math.roundToInt
 
 /**
  * `26-14`: the screen this whole item exists to build — see `docs/backlog/26-14-*.md`'s own Scope for
@@ -102,10 +131,23 @@ public fun ConversationListRoute(
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
+    // `26-90`: the two permission-derived Booleans this screen needs, computed by the caller that
+    // already holds the permission set (`AppShellScreen`'s own `conversationsTab` default) rather than
+    // re-read here — the identical split its `teamTab`/`bookingsTab` slots already use, and the reason
+    // neither this route nor its view model ever reaches for OperatorPermissionsApi itself.
+    // `canSeeAllConversations` is `site:configure`, the permission
+    // `GetAllConversationsForSiteHandler` actually enforces — deliberately *not* `conversation:read`,
+    // which every operator holds and which only ever unlocks their own queue.
+    canSeeAllConversations: Boolean = false,
+    canEraseConversations: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // `26-90`: told on every composition, deduplicated inside the view model - the identical
+    // tolerant-of-repetition shape `onActiveSiteChanged` right below already uses.
+    LaunchedEffect(canEraseConversations) { viewModel.onEraseCapabilityChanged(canEraseConversations) }
 
     // `26-17`: told on every mount/remount, however often that turns out to be - see
     // `ConversationListViewModel.onActiveSiteChanged`'s own doc comment for why the dedup that makes
@@ -138,6 +180,7 @@ public fun ConversationListRoute(
     ConversationListScreen(
         state = state,
         hubConnectionState = hubConnectionState,
+        tabs = remember(canSeeAllConversations) { conversationListTabs(canSeeAllConversations) },
         onTabSelected = viewModel::onTabSelected,
         onRefresh = viewModel::refresh,
         onClaim = viewModel::claim,
@@ -150,6 +193,10 @@ public fun ConversationListRoute(
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
         onOpenSettings = onOpenSettings,
+        onStateFilterToggled = viewModel::onStateFilterToggled,
+        onLoadMoreAll = viewModel::loadMoreAll,
+        onConfirmErasure = viewModel::confirmErasure,
+        onDismissEraseFailure = viewModel::dismissEraseFailure,
     )
 }
 
@@ -169,9 +216,17 @@ internal fun ConversationListScreen(
     onDismissClaimError: (String) -> Unit,
     onOpenConversation: (String) -> Unit,
     onSignOut: () -> Unit,
+    // `26-90`: which segments exist at all - two or three, never three with one greyed out
+    // ([visibleConversationListTabs]'s own doc comment). Defaulted to the two every operator has, so
+    // every existing caller and every existing test compiles and behaves exactly as before.
+    tabs: List<ConversationListTab> = conversationListTabs(canSeeAllConversations = false),
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
+    onStateFilterToggled: (ConversationStateFilter) -> Unit = {},
+    onLoadMoreAll: () -> Unit = {},
+    onConfirmErasure: (String) -> Unit = {},
+    onDismissEraseFailure: () -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
@@ -222,21 +277,32 @@ internal fun ConversationListScreen(
                             bottom = SegmentedRowBottomPadding,
                         ),
                 ) {
-                    ConversationListTab.entries.forEachIndexed { index, tab ->
+                    // `26-90`: iterates the *visible* tabs, not `ConversationListTab.entries` - the
+                    // enum now has a third member that most operators must never be offered, and
+                    // `itemShape` needs the visible count too, or the rightmost visible segment keeps
+                    // a middle segment's square right edge.
+                    tabs.forEachIndexed { index, tab ->
                         SegmentedButton(
                             selected = state.selectedTab == tab,
                             onClick = { onTabSelected(tab) },
-                            shape = SegmentedButtonDefaults.itemShape(index, ConversationListTab.entries.size),
+                            shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
                             label = { Text(text = segmentedTabLabel(tab = tab, count = segmentedCountFor(tab, state))) },
                             icon = {},
                         )
                     }
                 }
 
-                if (state.isStale) {
+                if (state.selectedTab == ConversationListTab.All) {
+                    StatusFilterChip(selected = state.allFilter, onToggle = onStateFilterToggled)
+                    AllReadOnlyNote()
+                }
+
+                if (state.isStale && state.selectedTab != ConversationListTab.All) {
                     StaleBanner(onRefresh = onRefresh)
                 }
-                state.loadError?.let { reason ->
+                val bannerFailure =
+                    if (state.selectedTab == ConversationListTab.All) state.allLoadError else state.loadError
+                bannerFailure?.let { reason ->
                     Text(
                         text = networkFailureText(reason),
                         color = MaterialTheme.colorScheme.error,
@@ -244,8 +310,27 @@ internal fun ConversationListScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
+                if (state.selectedTab == ConversationListTab.All) {
+                    state.eraseFailure?.let { failure ->
+                        EraseFailureBanner(failure = failure, onDismiss = onDismissEraseFailure)
+                    }
+                }
 
                 when {
+                    state.selectedTab == ConversationListTab.All ->
+                        if (!state.allHasData) {
+                            LoadingBody()
+                        } else {
+                            AllList(
+                                rows = state.all,
+                                now = now,
+                                canErase = state.canErase,
+                                isLoadingMore = state.isLoadingAll,
+                                onLoadMore = onLoadMoreAll,
+                                onConfirmErasure = onConfirmErasure,
+                            )
+                        }
+
                     !state.hasData -> LoadingBody()
                     state.selectedTab == ConversationListTab.Mine ->
                         MineList(rows = state.mine, now = now, onOpenConversation = onOpenConversation)
@@ -268,6 +353,7 @@ private fun labelFor(tab: ConversationListTab): String =
     when (tab) {
         ConversationListTab.Mine -> stringResource(R.string.conversation_list_tab_mine)
         ConversationListTab.Waiting -> stringResource(R.string.conversation_list_tab_waiting)
+        ConversationListTab.All -> stringResource(R.string.conversation_list_tab_all)
     }
 
 /**
@@ -330,6 +416,14 @@ private fun segmentedCountFor(
         when (tab) {
             ConversationListTab.Mine -> state.mine.size
             ConversationListTab.Waiting -> state.waiting.size
+            // `26-90`: **no number on «Все», ever** - an explicit author decision, not an oversight.
+            // The other two counts are free (they are the lengths of two lists this screen already
+            // holds whole); this one is not, because the site-wide list is keyset-paged and never knows
+            // its own full length. Drawing `state.all.size` would put "how many have I scrolled past"
+            // on the segment while looking exactly like "how many are there", and asking the server
+            // for the real number is a `COUNT(*)` over tens of thousands of closed conversations on
+            // every open of this screen, for a digit nobody acts on (`26-90`'s own Out of scope).
+            ConversationListTab.All -> null
         }
     }
 
@@ -453,9 +547,13 @@ private fun ConversationRow(
     row: ConversationRowUi,
     now: OffsetDateTime,
     modifier: Modifier = Modifier,
+    // `26-90`: the third line — the status pill and `Сообщений: N` — is the «Все» tab's own addition
+    // and nothing else's, so it is a flag on the shared row rather than a fourth near-copy of this
+    // layout. `false` everywhere but [AllRow], which keeps «Мои»/«Ожидают» byte-for-byte what they were.
+    showStatusLine: Boolean = false,
     trailing: @Composable () -> Unit = {},
 ) {
-    val description = conversationRowContentDescription(row = row, now = now)
+    val description = conversationRowContentDescription(row = row, now = now, includeStatusLine = showStatusLine)
     Row(
         modifier =
             modifier
@@ -497,6 +595,9 @@ private fun ConversationRow(
                     StatusPill(text = stringResource(R.string.conversation_list_new_badge))
                 }
             }
+            if (showStatusLine) {
+                ConversationRowStatusLine(row = row)
+            }
         }
         trailing()
     }
@@ -521,6 +622,10 @@ private fun ConversationRow(
 private fun conversationRowContentDescription(
     row: ConversationRowUi,
     now: OffsetDateTime,
+    // `26-90`: the third line is spoken only where it is drawn. A «Мои» row that silently gained
+    // "Сообщений: 0" in its spoken sentence would be announcing a number the screen does not show and
+    // the queue read does not populate - worse than saying nothing.
+    includeStatusLine: Boolean = false,
 ): String {
     val parts = visitorDisplayPrefixParts(row.emojiCreature, row.emojiFood, row.visitorName, row.visitorId)
     val openedClause =
@@ -551,7 +656,22 @@ private fun conversationRowContentDescription(
             listOfNotNull(preview, lastMessageClause).joinToString(separator = ", ")
         }
 
-    return listOfNotNull(parts.displayName, openedClause, unreadClause, snippetClause).joinToString(separator = ". ")
+    // `26-90`: the same two things the third line draws, in the same order - the status (or the held
+    // "erasing" word, which is the one fact an operator most needs to hear before acting on this row
+    // again) and the total, worded as the visible line words it rather than as a bare digit.
+    val statusClause =
+        if (!includeStatusLine) {
+            null
+        } else if (row.isErasing) {
+            stringResource(R.string.conversation_list_erasing_label)
+        } else {
+            conversationStatusPillText(row)
+        }
+    val countClause =
+        if (includeStatusLine) stringResource(R.string.conversation_list_message_count, row.messageCount) else null
+
+    return listOfNotNull(parts.displayName, openedClause, unreadClause, snippetClause, statusClause, countClause)
+        .joinToString(separator = ". ")
 }
 
 /**
@@ -726,12 +846,23 @@ private fun ConversationRowSnippetLine(
  * Not Material 3's `Badge`, which is a circle/stadium sized for a numeral: the mockup draws a *label*
  * here and a *count* at the row's trailing edge, and those are two different shapes on purpose
  * (`.pill{border-radius:5px}` against `.badge{border-radius:10px}`).
+ *
+ * `26-90`: the two colour parameters default to what this composable has always drawn (`.pill.brand`),
+ * so the existing «Новое» call site is unchanged. The «Все» tab's own status pill is the mockup's
+ * *plain* `.pill` — a quiet surface, not a brand-filled one — and its «Стирается…» variant is
+ * `--danger`; three fills, one shape, rather than three near-copies of the same `Surface`.
  */
 @Composable
-private fun StatusPill(text: String) {
+private fun StatusPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+) {
     Surface(
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
+        modifier = modifier,
+        color = containerColor,
+        contentColor = contentColor,
         shape = RoundedCornerShape(PillCornerRadius),
     ) {
         Text(
@@ -741,6 +872,8 @@ private fun StatusPill(text: String) {
                     fontWeight = FontWeight.Bold,
                     letterSpacing = PillLetterSpacing,
                 ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
         )
     }
@@ -875,6 +1008,472 @@ private fun WaitingRow(
     }
 }
 
+/**
+ * `26-90`: the mockup's `.chips > .chip.on` — one chip under the segmented control, opening the
+ * «Показывать» panel. A Material 3 [FilterChip] in its selected state, because that is what the
+ * mockup's `.chip.on` is (a filled, brand-tinted chip, not an outlined one), with the chevron the
+ * mockup draws on it.
+ *
+ * **No number on the chip, and none in the panel.** `26-90`'s own Out of scope names this explicitly:
+ * a per-status tally is a `COUNT(*)` over a site's whole history, run on every open of the screen, for
+ * a digit nobody acts on. Three words, three checkboxes, nothing else — see [segmentedCountFor]'s own
+ * comment for the same rule applied to the segment.
+ *
+ * The panel itself is a [DropdownMenu]: an anchored popup over a scrim, which is exactly what the
+ * mockup's `.popover.filters` + `.scrim` pair is, and the same mechanism this app's own account menu
+ * (`AccountAvatarAction`) already uses — rather than a bottom sheet, which would be a different
+ * interaction pattern for the same "pick from a short list" job.
+ */
+@Composable
+private fun StatusFilterChip(
+    selected: Set<ConversationStateFilter>,
+    onToggle: (ConversationStateFilter) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Box(modifier = Modifier.padding(start = SegmentedRowHorizontalPadding, bottom = SegmentedRowBottomPadding)) {
+        FilterChip(
+            selected = true,
+            onClick = { expanded = true },
+            label = { Text(text = stringResource(R.string.conversation_list_filter_chip)) },
+            trailingIcon = {
+                Icon(
+                    imageVector = AgoIcons.ChevronRight,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(FilterChipChevronSize)
+                            // The mockup rotates the one right-pointing `#i-chev` rather than shipping
+                            // a second glyph - `rotate(90deg)` on the closed frame, `rotate(-90deg)` on
+                            // the open one. Same here, from the same one icon.
+                            .rotate(
+                                if (expanded) {
+                                    FILTER_CHIP_CHEVRON_OPEN_ROTATION
+                                } else {
+                                    FILTER_CHIP_CHEVRON_CLOSED_ROTATION
+                                },
+                            ),
+                )
+            },
+            modifier = Modifier.testTag(STATUS_FILTER_CHIP_TEST_TAG),
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Text(
+                text = stringResource(R.string.conversation_list_filter_heading),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp),
+            )
+            ConversationStateFilter.entries.forEach { filter ->
+                DropdownMenuItem(
+                    text = { Text(text = stateFilterLabel(filter)) },
+                    leadingIcon = {
+                        // `onCheckedChange = null` - the row itself is the click target, so the box
+                        // must not be a second, separately-tappable one inside it. That is Compose's
+                        // own documented shape for a checkbox that only *displays* state, and it is
+                        // also what keeps TalkBack from announcing two actions for one row.
+                        Checkbox(checked = filter in selected, onCheckedChange = null)
+                    },
+                    onClick = { onToggle(filter) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun stateFilterLabel(filter: ConversationStateFilter): String =
+    when (filter) {
+        ConversationStateFilter.NotStarted -> stringResource(R.string.conversation_list_state_not_started)
+        ConversationStateFilter.Assigned -> stringResource(R.string.conversation_list_state_assigned)
+        ConversationStateFilter.Closed -> stringResource(R.string.conversation_list_state_closed)
+    }
+
+/**
+ * `26-90`: one quiet line saying the list is for looking at, not for opening — the only addition this
+ * screen makes that the approved frames do not draw, and it is here because the frames were drawn
+ * against an assumption the server does not hold (see [AllRow]'s own doc comment for the full chain).
+ * Without it, every tap on this tab does nothing and reads as a broken row; with it, the tab is
+ * honest about being a supervisor's view. `ago-console`'s own admin page carries the same limitation
+ * and the same explanation.
+ */
+@Composable
+private fun AllReadOnlyNote() {
+    Text(
+        text = stringResource(R.string.conversation_list_all_read_only_note),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier.padding(
+                start = SegmentedRowHorizontalPadding,
+                end = SegmentedRowHorizontalPadding,
+                bottom = SegmentedRowBottomPadding,
+            ),
+    )
+}
+
+/** `26-90`: an erasure request that was refused or never landed, shown once above the list and
+ * dismissed by hand — the identical "shown once, never retried automatically" posture [WaitingRow]'s
+ * own claim error already takes, hoisted to the list because the row it concerns is still sitting in
+ * that list exactly where it was. */
+@Composable
+private fun EraseFailureBanner(
+    failure: EraseFailureUi,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text =
+                when (failure) {
+                    is EraseFailureUi.ServerRefusal -> failure.detail
+                    is EraseFailureUi.Unavailable -> networkFailureText(failure.reason)
+                },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onDismiss) {
+            Text(text = stringResource(R.string.action_dismiss))
+        }
+    }
+}
+
+/**
+ * `26-90`: the «Все» tab's own list. The same rows as «Мои»/«Ожидают» — [ConversationRow], not a
+ * table and not a second row composable — plus the third meta line and, for a holder of
+ * `conversation:erase`, the swipe-revealed destructive action.
+ *
+ * **Paged on scroll, newest first, and never re-sorted here.** The server already returns this page in
+ * keyset order (`c.id desc`, and conversation ids are UUID v7 so id order *is* creation order); a
+ * client-side sort would at best repeat that and at worst disagree with the cursor the next page is
+ * fetched with. The trailing item below is the whole paging trigger: it is composed only when the list
+ * has actually been scrolled to its end, and [ConversationListViewModel.loadMoreAll] is guarded against
+ * firing twice for one page, so a recomposition while a page is in flight costs nothing.
+ */
+@Composable
+private fun AllList(
+    rows: List<ConversationRowUi>,
+    now: OffsetDateTime,
+    canErase: Boolean,
+    isLoadingMore: Boolean,
+    onLoadMore: () -> Unit,
+    onConfirmErasure: (String) -> Unit,
+) {
+    if (rows.isEmpty()) {
+        EmptyBody(text = stringResource(R.string.conversation_list_all_empty))
+        return
+    }
+
+    val listState = rememberLazyListState()
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+        items(rows, key = { it.conversationId }) { row ->
+            AllRow(
+                row = row,
+                now = now,
+                canErase = canErase,
+                onConfirmErasure = { onConfirmErasure(row.conversationId) },
+            )
+            HorizontalDivider()
+        }
+        item(key = ALL_LIST_LOAD_MORE_KEY) {
+            LaunchedEffect(rows.size) { onLoadMore() }
+            if (isLoadingMore) {
+                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(LoadMoreSpinnerSize))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * `26-90`: one «Все» row, and the whole swipe mechanism.
+ *
+ * **Why a hand-rolled reveal rather than Material 3's `SwipeToDismissBox`.** That composable's anchors
+ * are the row's own full width — settling at its `EndToStart` anchor slides the row entirely off and
+ * shows the background across the whole row. What the approved frame draws is a *partial* reveal: the
+ * row translated by exactly the action panel's own width, still readable beside it. So the offset is
+ * driven here, by `Modifier.draggable` (stable API) clamped to [EraseActionWidth] and settled to one
+ * of two positions on release — closed, or open — which is the same two-anchor behaviour with the
+ * anchor this design actually has.
+ *
+ * **The gesture is not attached at all without `conversation:erase`.** Not attached-and-refused, not
+ * attached-with-a-disabled-button: `26-90`'s own Scope says "the row does not swipe at all", the same
+ * "hide, don't disable" rule the thread screen's attach control follows. An operator who cannot erase
+ * has a row that behaves exactly like «Мои»'s.
+ *
+ * **The row is not tappable, and that is a server fact rather than a layout choice.** `26-90`'s own
+ * Scope expected "the existing unchanged thread screen"; the server does not allow it. Opening a
+ * thread goes through `OperatorHub.JoinConversationAsync`, which calls `AssignConversation` →
+ * `Conversation.AssignTo` — and that method accepts only a `Waiting` conversation. So a tap here would
+ * do one of three things, none of them "read the history": **claim** a waiting conversation out from
+ * under the queue (a real write, on a row an administrator is only supervising), throw
+ * `InvalidConversationStateException` for one assigned to somebody else, or throw for a closed one —
+ * which is most of this tab. `ago-console`'s own `AdminConversationsPage` reached the identical
+ * conclusion and is read-only for exactly this reason (its own doc comment: "deliberately read-only
+ * summary data, not a way to open an arbitrary conversation's message thread ... doing so would be a
+ * materially bigger change than this backlog item scoped"), which is also what this item's own One
+ * promise says — "the way they already can from the console". Reported as a scope finding; the line
+ * under the filter chip ([AllReadOnlyNote]) is what stops a dead tap from reading as a bug.
+ *
+ * **A held ("erasing") row cannot be swiped again** — a second erase request for a conversation
+ * already being erased is noise, not intent.
+ */
+@Composable
+private fun AllRow(
+    row: ConversationRowUi,
+    now: OffsetDateTime,
+    canErase: Boolean,
+    onConfirmErasure: () -> Unit,
+) {
+    val swipeable = canErase && !row.isErasing
+    val revealWidthPx = with(LocalDensity.current) { EraseActionWidth.toPx() }
+    var offsetX by remember(row.conversationId) { mutableFloatStateOf(0f) }
+    var confirming by rememberSaveable(row.conversationId) { mutableStateOf(false) }
+    val animatedOffset by animateFloatAsState(targetValue = offsetX, label = "eraseReveal")
+
+    // Closes the reveal again whenever the gesture stops being available - a row that entered the
+    // erasing state while held open must not be left sitting on a red panel it can no longer act on.
+    LaunchedEffect(swipeable) { if (!swipeable) offsetX = 0f }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (swipeable && offsetX < 0f) {
+            // `Modifier.matchParentSize()`, not `align(CenterEnd)` + `fillMaxHeight()`: this `Box` sizes
+            // itself from the row below, and inside a `LazyColumn` item the incoming height constraint
+            // is unbounded - a child asking to fill it would be asking to fill infinity. `matchParentSize`
+            // is Compose's own answer for "as big as the parent already decided to be, and contributing
+            // nothing to that decision", which is exactly what a background panel is.
+            Row(modifier = Modifier.matchParentSize(), horizontalArrangement = Arrangement.End) {
+                EraseAction(onClick = { confirming = true })
+            }
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            modifier =
+                Modifier
+                    .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                    .then(
+                        if (swipeable) {
+                            Modifier.draggable(
+                                orientation = Orientation.Horizontal,
+                                state =
+                                    rememberDraggableState { delta ->
+                                        offsetX = (offsetX + delta).coerceIn(-revealWidthPx, 0f)
+                                    },
+                                onDragStopped = {
+                                    offsetX = if (offsetX < -revealWidthPx / 2f) -revealWidthPx else 0f
+                                },
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
+        ) {
+            ConversationRow(row = row, now = now, showStatusLine = true)
+        }
+    }
+
+    if (confirming) {
+        EraseConfirmDialog(
+            onDismiss = { confirming = false },
+            onConfirm = {
+                confirming = false
+                offsetX = 0f
+                onConfirmErasure()
+            },
+        )
+    }
+}
+
+/**
+ * The mockup's `.swipe-del` — a solid `--danger` panel carrying the redrawn `delete_forever` glyph
+ * over a two-line «Удалить» / «диалог» caption, and nothing else on it. Two `Text`s rather than one
+ * string containing a newline, so neither line can be wrapped or hyphenated by a font this app does
+ * not control.
+ */
+@Composable
+private fun EraseAction(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.error,
+        contentColor = MaterialTheme.colorScheme.onError,
+        modifier = modifier.width(EraseActionWidth).fillMaxHeight(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .clickable(
+                        onClickLabel = stringResource(R.string.conversation_list_erase_action_description),
+                        onClick = onClick,
+                    ).testTag(ERASE_ACTION_TEST_TAG)
+                    .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(EraseActionGap, Alignment.CenterVertically),
+        ) {
+            Icon(
+                imageVector = AgoIcons.TrashForever,
+                contentDescription = null,
+                modifier = Modifier.size(EraseActionIconSize),
+            )
+            Text(
+                text = stringResource(R.string.conversation_list_erase_action_line_one),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+            Text(
+                text = stringResource(R.string.conversation_list_erase_action_line_two),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * `26-90`: the confirmation between the swipe and the request. Erasure is irreversible on the server
+ * (`RequestConversationErasureHandler`) and a swipe is a gesture a pocket can perform — those two
+ * facts together are the whole argument for a dialog here, where «Ожидают»'s own claim button
+ * deliberately has none (a mis-claimed conversation costs one release).
+ */
+@Composable
+private fun EraseConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.conversation_list_erase_confirm_title)) },
+        text = { Text(text = stringResource(R.string.conversation_list_erase_confirm_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.conversation_list_erase_confirm_action),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+/**
+ * `26-90`: the row's third line, drawn only on «Все» — the mockup's `.rmeta.split`: a status pill
+ * hard left, `Сообщений: N` hard right.
+ *
+ * `Сообщений: N` is **a total**, and it is drawn in the snippet line's own quiet weight and colour
+ * rather than as a `.badge`, for exactly the reason the mockup's own caption gives: a blue badge in
+ * this product always means *unread*, and this number is the whole length of the conversation. There
+ * is no unread badge on this tab at all — [ConversationRowIdentityLine] still draws one from
+ * [ConversationRowUi.unreadCount], but every row of this list carries `0` there, because the site-wide
+ * read has no "this operator's unread" to report for a conversation that was never theirs.
+ */
+@Composable
+private fun ConversationRowStatusLine(row: ConversationRowUi) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = PillRowTopGap),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        if (row.isErasing) {
+            // `--danger-tint`/`--danger`, the mockup's own `.pill.bad` pair - the same tint family the
+            // swipe panel uses, one step quieter, because this pill reports a state rather than
+            // offering an action.
+            StatusPill(
+                text = stringResource(R.string.conversation_list_erasing_label),
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        } else {
+            conversationStatusPill(row)
+        }
+        Text(
+            // `.rcount{font-size:11.5px; color:var(--ink-faint); font-variant-numeric:tabular-nums}` -
+            // the snippet line's own quiet weight, never the blue `.badge`, because in this product a
+            // badge always means unread and this is the conversation's whole length.
+            text = stringResource(R.string.conversation_list_message_count, row.messageCount),
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * The pill's own words, read off [ConversationRowUi.state] through
+ * [ago.chat.android.core.domain.conversations.conversationStateLabel] rather than by comparing wire
+ * strings here — the classification is `:core:domain`'s, the prose is this screen's (that function's
+ * own doc comment).
+ *
+ * `null` for [ConversationStateLabel.Unknown] and for [ConversationStateLabel.Pending]: an empty or
+ * unrecognised spelling draws no word at all rather than a guessed one, and a `Pending` conversation
+ * is one a visitor opened and never wrote into — it has no status worth a word on a list of real
+ * conversations, and the tab's own always-applied filter means it does not reach this row anyway.
+ */
+@Composable
+private fun RowScope.conversationStatusPill(row: ConversationRowUi) {
+    val text = conversationStatusPillText(row) ?: return
+    // `.rmeta.split .pill{overflow:hidden; text-overflow:ellipsis; min-width:0}` - «Назначен: {имя}»
+    // is the one pill whose width is not bounded by its own vocabulary, so it yields to the count
+    // beside it rather than pushing it off the row. `fill = false` keeps a short pill short.
+    val modifier = Modifier.weight(1f, fill = false)
+    when (conversationStateLabel(row.state)) {
+        // `.pill.warn{background:var(--warning-tint); color:var(--warning)}` - the one pair Material 3
+        // has no role for, which is why `AgoWarningColors` exists (that file's own doc comment).
+        ConversationStateLabel.Waiting ->
+            StatusPill(
+                text = text,
+                containerColor = agoWarningColors().warningTint,
+                contentColor = agoWarningColors().warning,
+                modifier = modifier,
+            )
+
+        // `.pill.ok{background:var(--success-tint); color:var(--success)}` - `tertiaryContainer`/
+        // `onTertiaryContainer` are exactly `--success-tint`/`--success` in this app's own scheme
+        // (`Theme.kt`: `tertiary = AgoSuccess*`, `tertiaryContainer = AgoMint*`), so this is the
+        // mockup's pair read through the role it is already wired to, not a second definition of it.
+        ConversationStateLabel.Assigned ->
+            StatusPill(
+                text = text,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = modifier,
+            )
+
+        // The mockup's plain `.pill` - a quiet sunken surface. A closed conversation is the neutral
+        // case, not a state worth a colour.
+        ConversationStateLabel.Closed ->
+            StatusPill(
+                text = text,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = modifier,
+            )
+
+        ConversationStateLabel.Pending, ConversationStateLabel.Unknown -> Unit
+    }
+}
+
+@Composable
+private fun conversationStatusPillText(row: ConversationRowUi): String? =
+    when (conversationStateLabel(row.state)) {
+        ConversationStateLabel.Waiting -> stringResource(R.string.conversation_list_state_not_started)
+        ConversationStateLabel.Assigned ->
+            row.operatorName?.let { stringResource(R.string.conversation_list_state_assigned_to, it) }
+                ?: stringResource(R.string.conversation_list_state_assigned)
+
+        ConversationStateLabel.Closed -> stringResource(R.string.conversation_list_state_closed)
+        ConversationStateLabel.Pending, ConversationStateLabel.Unknown -> null
+    }
+
 @Composable
 private fun EmptyBody(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -917,3 +1516,38 @@ private val SegmentedRowBottomPadding = 12.dp
 // `.seg .ct{opacity:.85}` - see `segmentedCountStyle`'s own doc comment for why this is an alpha over
 // `LocalContentColor` rather than a flat color token.
 private const val SEGMENTED_COUNT_ALPHA = 0.85f
+
+// `26-90`: the «Все» tab's own metrics, named here beside every other one in this file rather than
+// written as bare literals at their call sites.
+//
+// `.swipe-del{width:80px}` and `.row.swiped{transform:translateX(-80px)}` - one value, because the
+// mockup itself uses one: the row moves exactly as far as the panel it uncovers.
+private val EraseActionWidth = 80.dp
+
+// `.swipe-del .i.lg{width:26px;height:26px}`
+private val EraseActionIconSize = 26.dp
+
+// `.swipe-del{gap:5px}` - between the glyph and the two caption lines.
+private val EraseActionGap = 5.dp
+
+// `.chip .i.sm{width:15px;height:15px}` - the chevron on the filter chip.
+private val FilterChipChevronSize = 15.dp
+
+// `style="transform:rotate(90deg)"` on the closed chip, `rotate(-90deg)` on the open one - the mockup
+// turns the one right-pointing `#i-chev` rather than shipping a second glyph.
+private const val FILTER_CHIP_CHEVRON_CLOSED_ROTATION = 90f
+private const val FILTER_CHIP_CHEVRON_OPEN_ROTATION = -90f
+
+// The trailing paging spinner, at the size Material 3 uses for an inline indicator rather than the
+// full-screen one `LoadingBody` draws.
+private val LoadMoreSpinnerSize = 24.dp
+
+/** `26-90`: a stable key for the «Все» list's trailing paging item, so it is never confused with a
+ * conversation id (the key every other item in that list uses). */
+private const val ALL_LIST_LOAD_MORE_KEY = "all-list-load-more"
+
+/** `26-90`: test hooks for the two controls this tab adds - the filter chip and the swipe-revealed
+ * erase action - for the same reason [CONVERSATION_ROW_CONTENT_TEST_TAG] exists: a query built on the
+ * Russian caption would break on a rewording that changed nothing about the control. */
+internal const val STATUS_FILTER_CHIP_TEST_TAG = "conversationListStatusFilterChip"
+internal const val ERASE_ACTION_TEST_TAG = "conversationListEraseAction"

@@ -97,6 +97,31 @@
     <string name="conversation_list_claiming_label">Taking…</string>
     <string name="conversation_list_elapsed_unknown">time unknown</string>
 
+    <!--
+        `26-90`: the «Все» tab. "All" rather than "All conversations" - it is a segment beside "Mine"
+        and "Waiting", and a segmented control has room for one word. The three status words are the
+        same three in the filter panel and on the row's own pill, deliberately: the filter says what
+        it will show, the row says what it is.
+    -->
+    <string name="conversation_list_tab_all">All</string>
+    <string name="conversation_list_all_empty">Nothing found. Try a different status filter.</string>
+    <string name="conversation_list_filter_chip">Status</string>
+    <string name="conversation_list_all_read_only_note">View only: someone else\'s conversation can\'t be opened yet.</string>
+    <string name="conversation_list_filter_heading">Show</string>
+    <string name="conversation_list_state_not_started">Not started</string>
+    <string name="conversation_list_state_assigned">Assigned</string>
+    <string name="conversation_list_state_assigned_to">Assigned: %1$s</string>
+    <string name="conversation_list_state_closed">Closed</string>
+    <string name="conversation_list_message_count">Messages: %1$d</string>
+    <string name="conversation_list_erase_action_line_one">Delete</string>
+    <string name="conversation_list_erase_action_line_two">conversation</string>
+    <string name="conversation_list_erase_action_description">Delete conversation</string>
+    <string name="conversation_list_erase_confirm_title">Delete this conversation?</string>
+    <string name="conversation_list_erase_confirm_body">The transcript, its attachments and the visitor\'s own details will be erased permanently. This cannot be undone.</string>
+    <string name="conversation_list_erase_confirm_action">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="conversation_list_erasing_label">Erasing…</string>
+
     <string name="conversation_list_elapsed_minutes_short">%dm</string>
     <string name="conversation_list_elapsed_hours_short">%dh</string>
     <string name="conversation_list_elapsed_days_short">%dd</string>

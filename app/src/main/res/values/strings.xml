@@ -107,6 +107,56 @@
     <string name="conversation_list_elapsed_unknown">время неизвестно</string>
 
     <!--
+        `26-90`: the «Все» tab - the site administrator's own site-wide list, a third segment of the
+        same control rather than a screen of its own. Every word below is read off the approved mockup's
+        own «Новая вкладка»/«фильтр по статусам» frames, not invented here.
+    -->
+    <string name="conversation_list_tab_all">Все</string>
+    <string name="conversation_list_all_empty">Ничего не найдено. Измените фильтр по статусам.</string>
+    <string name="conversation_list_filter_chip">Статус</string>
+    <!--
+        The one line the approved frames do not draw. Opening a conversation from this tab is not
+        possible server-side (`OperatorHub.JoinConversationAsync` assigns rather than reads, and
+        `Conversation.AssignTo` accepts only a Waiting conversation), exactly as `ago-console`'s own
+        administrator page is read-only for the same reason. Without this line every tap here would
+        simply do nothing and read as a broken row.
+    -->
+    <string name="conversation_list_all_read_only_note">Список только для просмотра: открыть чужой диалог пока нельзя.</string>
+    <string name="conversation_list_filter_heading">Показывать</string>
+
+    <!--
+        The three checkboxes, and the three status pills, are deliberately the same three words: the
+        filter says what it will show, and the row says what it is, so one vocabulary rather than two
+        near-synonyms an operator has to map onto each other. «Назначен: %1$s» carries the operator's
+        display name; the bare form is what a row whose holder has no name recorded renders instead -
+        never a placeholder name.
+    -->
+    <string name="conversation_list_state_not_started">Не начат</string>
+    <string name="conversation_list_state_assigned">Назначен</string>
+    <string name="conversation_list_state_assigned_to">Назначен: %1$s</string>
+    <string name="conversation_list_state_closed">Закрыт</string>
+    <string name="conversation_list_message_count">Сообщений: %1$d</string>
+
+    <!--
+        The swipe-revealed destructive action. Two lines, «Удалить» over «диалог», exactly as the
+        mockup's own `.swipe-del` draws them - a two-line caption under a large icon, and nothing else
+        on the red.
+    -->
+    <string name="conversation_list_erase_action_line_one">Удалить</string>
+    <string name="conversation_list_erase_action_line_two">диалог</string>
+    <string name="conversation_list_erase_action_description">Удалить диалог</string>
+    <string name="conversation_list_erase_confirm_title">Удалить диалог?</string>
+    <string name="conversation_list_erase_confirm_body">Переписка, вложения и данные посетителя будут стёрты безвозвратно. Отменить это действие нельзя.</string>
+    <string name="conversation_list_erase_confirm_action">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+    <!--
+        Shown on the row itself after the server has accepted the request. The erasure happens later,
+        as a separate job, so the row stays in the list until the server stops returning it - this word
+        is what makes that wait honest instead of looking like a stuck delete.
+    -->
+    <string name="conversation_list_erasing_label">Стирается…</string>
+
+    <!--
         `26-30`: the mockup's own short form - «4 ч» / «20 мин» / «2 д», no «Открыт»/«Ждёт» prefix of
         any kind. Plain formatted strings, not `<plurals>`: unlike the full words these replaced
         («час»/«часа»/«часов»), a short unit abbreviation does not inflect by count in Russian - «1 мин»

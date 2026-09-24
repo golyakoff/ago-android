@@ -1,10 +1,12 @@
 package ago.chat.android.conversations
 
+import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.conversations.oldestFirst
 import ago.chat.android.core.network.realtime.MessageDto
@@ -78,7 +80,31 @@ public class ConversationListViewModel
         private var claimingIds: Set<String> = emptySet()
         private var claimErrors: Map<String, ClaimErrorUi> = emptyMap()
 
+        /** `26-90`: the «Все» tab's own accumulated rows, in server order (newest first), appended to
+         * one page at a time. A plain `List`, not a `Map` - this list is *ordered* and the order is the
+         * server's keyset order, which no client-side re-sort is allowed to second-guess. */
+        private var allRows: List<ConversationSummary> = emptyList()
+        private var allNextBeforeId: String? = null
+
+        /**
+         * `26-90`: conversations whose erasure has been requested and which the server is still
+         * returning. In memory only, never written to [cache] - a held "erasing" row is a fact about
+         * *this* screen's last few seconds, not about the conversation, and a restored-from-disk row
+         * marked erasing after a process death would be asserting something this app never verified.
+         *
+         * Cleared for any id a fresh *first* page no longer contains (see [reloadAll]) - which is the
+         * whole mechanism: the row leaves because the server stopped sending it, not because this class
+         * decided it was gone.
+         */
+        private var erasingIds: Set<String> = emptySet()
+
         private var waitingPollJob: Job? = null
+
+        /** `26-90`: the second, narrower poll - see [startErasurePollIfNeeded]. Kept as its own job
+         * rather than folded into [waitingPollJob] because the two have different conditions and
+         * different targets, and one variable holding whichever poll happened to start last would make
+         * "«Ожидают» is showing" silently cancel an erasure watch that is still needed. */
+        private var erasurePollJob: Job? = null
 
         /** `26-75`: a one-shot event — a successful [claim] takes the operator straight into the thread,
          * matching `ago-console`'s own primary-workspace behaviour (`23-04`, `ConversationList.tsx`'s
@@ -131,6 +157,13 @@ public class ConversationListViewModel
         public fun onTabSelected(tab: ConversationListTab) {
             mutableState.update { it.copy(selectedTab = tab) }
             startWaitingPollIfNeeded()
+            startErasurePollIfNeeded()
+            // `26-90`: «Все» is fetched lazily - the first time it is actually selected, never on
+            // screen start. An operator who never opens this tab never pays for the site-wide read,
+            // which on a real site is the expensive one.
+            if (tab == ConversationListTab.All && !mutableState.value.allHasData && !mutableState.value.isLoadingAll) {
+                reloadAll()
+            }
         }
 
         /** Called from the screen's own `DisposableEffect`/`LifecycleEventObserver` on `ON_START` —
@@ -138,6 +171,7 @@ public class ConversationListViewModel
          * relevant" gate [onTabSelected] applies. */
         public fun onScreenStarted() {
             startWaitingPollIfNeeded()
+            startErasurePollIfNeeded()
         }
 
         /** The `ON_STOP` half of the pair above. Idempotent — cancelling a job that is not running is
@@ -146,6 +180,8 @@ public class ConversationListViewModel
         public fun onScreenStopped() {
             waitingPollJob?.cancel()
             waitingPollJob = null
+            erasurePollJob?.cancel()
+            erasurePollJob = null
         }
 
         /** The row was tapped. `26-15` is what this eventually opens; this item's own job is only the
@@ -267,6 +303,125 @@ public class ConversationListViewModel
             }
         }
 
+        /**
+         * `26-90`: told which permissions this operator actually holds, by the one caller
+         * ([ConversationListRoute]) that already has them in hand - the same "the caller who already
+         * has the permission set computes the Boolean" split `AppShellScreen`'s own `teamTab`/
+         * `bookingsTab` slots already draw, rather than a second
+         * [ago.chat.android.core.domain.permissions.OperatorPermissionsApi] read from this class.
+         *
+         * Only `conversation:erase` reaches this class at all. `site:configure` - the one that decides
+         * whether «Все» exists - never does: a tab this operator cannot see is one this class must
+         * never fetch for, and the cleanest way to guarantee that is for the screen simply not to offer
+         * the segment ([visibleConversationListTabs]) and for [onTabSelected] to be the only thing that
+         * ever starts the fetch.
+         */
+        public fun onEraseCapabilityChanged(canErase: Boolean) {
+            if (mutableState.value.canErase == canErase) return
+            mutableState.update { it.copy(canErase = canErase) }
+        }
+
+        /**
+         * `26-90`: ticks or unticks one status checkbox and re-asks the server. **Re-asks** - the
+         * filter is a request parameter, not a predicate over rows already in hand: this list is
+         * keyset-paginated, so narrowing a page that was already cut would show an empty tab while more
+         * matching rows sat one page further down, with no way for the operator to tell that apart from
+         * "there are none" (`IConversationReadStore.GetAllForSiteAsync`'s own remarks).
+         *
+         * Unticking the **last** ticked box is refused rather than allowed through. An empty set means
+         * "unfiltered" to the server (`GetAllConversationsForSiteHandler`: no states is not a filter
+         * that matches nothing), so letting the operator clear every box would answer with *every*
+         * conversation - the exact opposite of what clearing a filter looks like it should do.
+         */
+        public fun onStateFilterToggled(filter: ConversationStateFilter) {
+            val current = mutableState.value.allFilter
+            val next = if (filter in current) current - filter else current + filter
+            if (next.isEmpty()) return
+
+            mutableState.update { it.copy(allFilter = next) }
+            reloadAll()
+        }
+
+        /**
+         * `26-90`: the next keyset page, asked for when the list scrolls near its end. Guarded on both
+         * [ConversationListUiState.isLoadingAll] and [ConversationListUiState.allHasMore], because the
+         * scroll trigger fires on composition and can fire again during the same fetch - without the
+         * first guard that would put two identical requests in flight and append the same page twice.
+         */
+        public fun loadMoreAll() {
+            val current = mutableState.value
+            if (current.isLoadingAll || !current.allHasMore || allNextBeforeId == null) return
+            fetchAllPage(beforeId = allNextBeforeId)
+        }
+
+        /** `26-90`: re-reads the «Все» tab from its first page, discarding whatever was accumulated.
+         * The one entry point for "the answer this tab is showing may be wrong now" - a filter change,
+         * a manual refresh, and the erasure poll all go through it rather than each inventing its own
+         * reset. */
+        public fun reloadAll() {
+            allNextBeforeId = null
+            fetchAllPage(beforeId = null)
+        }
+
+        /**
+         * `26-90`: asks the server to erase one conversation, after the screen's own confirmation
+         * dialog has already been accepted. **The row is not removed.**
+         *
+         * `POST /api/v1/conversations/{id}/erase` answers `202 Accepted`
+         * (`RequestConversationErasureHandler`): the request is *recorded*, and a separate job carries
+         * the erasure out later. So an optimistic removal here would be a lie with a visible
+         * consequence - the row comes back on the next page load, and an operator who watched it vanish
+         * reads its return as a bug in the product rather than as the truth about an asynchronous job.
+         *
+         * What happens instead, and why this is the shape rather than a spinner or a toast:
+         *  1. the id joins [erasingIds], and the row renders in a held "стирается" state - visibly not
+         *     gone, visibly not ordinary, and no longer openable;
+         *  2. the list is re-read immediately, and then every [WAITING_POLL_INTERVAL_MILLIS] while the
+         *     tab is showing and at least one row is still held ([startErasurePollIfNeeded]);
+         *  3. the row leaves the list on the first answer that no longer contains it - i.e. **when the
+         *     server stops returning it**, which is the only moment at which "erased" is actually true.
+         *
+         * A refusal or a transport failure clears the held state again and surfaces
+         * [ConversationListUiState.eraseFailure]; nothing is retried automatically, the same posture
+         * [claim] takes for the identical reason.
+         */
+        public fun confirmErasure(conversationId: String) {
+            if (conversationId in erasingIds) return
+            erasingIds = erasingIds + conversationId
+            mutableState.update { it.copy(eraseFailure = null) }
+            renderAll()
+            startErasurePollIfNeeded()
+
+            viewModelScope.launch {
+                when (val result = withContext(ioDispatcher) { api.requestErasure(conversationId) }) {
+                    ErasureResult.Accepted -> reloadAll()
+
+                    is ErasureResult.Refused -> {
+                        erasingIds = erasingIds - conversationId
+                        mutableState.update { it.copy(eraseFailure = EraseFailureUi.ServerRefusal(result.detail)) }
+                        renderAll()
+                    }
+
+                    is ErasureResult.Failed -> {
+                        // The request may or may not have reached the server - but holding the row as
+                        // "erasing" on an answer this app never got would be asserting more than it
+                        // knows. Released, and the operator is told; the next list answer is the truth
+                        // either way.
+                        erasingIds = erasingIds - conversationId
+                        mutableState.update { it.copy(eraseFailure = EraseFailureUi.Unavailable(result.reason)) }
+                        renderAll()
+                    }
+                }
+            }
+        }
+
+        /** Dismisses a shown erasure failure. A plain acknowledgement, never a retry - the same rule
+         * [dismissClaimError] states for its own half. */
+        public fun dismissEraseFailure() {
+            if (mutableState.value.eraseFailure == null) return
+            mutableState.update { it.copy(eraseFailure = null) }
+        }
+
         /** Dismisses a shown claim refusal without attempting the claim again — a plain acknowledgement,
          * never a retry trigger. */
         public fun dismissClaimError(conversationId: String) {
@@ -322,6 +477,70 @@ public class ConversationListViewModel
             }
         }
 
+        /**
+         * `26-90`: one page of `GET /api/v1/conversations/all`. [beforeId] `null` means the first page,
+         * which *replaces* [allRows]; any other value appends.
+         *
+         * The first-page branch is also where a held "erasing" row is released: every id in
+         * [erasingIds] that this answer no longer contains has actually been erased, so it stops being
+         * held at the same moment it stops being in the list. Deliberately only on the first page - a
+         * *later* page not containing an id says nothing at all about that id (it may simply be on an
+         * earlier one), and intersecting against a partial answer would release a row that is still
+         * very much there.
+         */
+        private fun fetchAllPage(beforeId: String?) {
+            mutableState.update { it.copy(isLoadingAll = true) }
+            val states = mutableState.value.allFilter.map { it.wireState }
+
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        api.fetchAllConversations(beforeId = beforeId, pageSize = ALL_PAGE_SIZE, states = states)
+                    }
+
+                when (result) {
+                    is AllConversationsResult.Loaded -> {
+                        allRows =
+                            if (beforeId == null) {
+                                result.page.conversations
+                            } else {
+                                allRows + result.page.conversations
+                            }
+                        allNextBeforeId = result.page.nextBeforeId
+                        if (beforeId == null) {
+                            val stillListed =
+                                result.page.conversations
+                                    .map { it.conversationId }
+                                    .toSet()
+                            erasingIds = erasingIds.intersect(stillListed)
+                        }
+                        mutableState.update {
+                            it.copy(
+                                isLoadingAll = false,
+                                allHasData = true,
+                                allHasMore = result.page.nextBeforeId != null,
+                                allLoadError = null,
+                            )
+                        }
+                        renderAll()
+                        startErasurePollIfNeeded()
+                    }
+
+                    is AllConversationsResult.Failed ->
+                        // Whatever is already on screen stays there, exactly as `refresh()` above keeps
+                        // a queue that failed to re-read - a network blip must not empty a real list.
+                        mutableState.update { it.copy(isLoadingAll = false, allLoadError = result.reason) }
+                }
+            }
+        }
+
+        /** `26-90`: the «Все» list's own projection, kept apart from [render] because the two lists
+         * are refreshed by different answers - folding them into one function would make every queue
+         * answer re-render a site-wide list it knows nothing about, and vice versa. */
+        private fun renderAll() {
+            mutableState.update { current -> current.copy(all = allRows.map { it.toRowUi() }) }
+        }
+
         private fun ConversationSummary.toRowUi() =
             ConversationRowUi(
                 conversationId = conversationId,
@@ -339,6 +558,9 @@ public class ConversationListViewModel
                 lastMessageAt = lastMessageAt,
                 state = state,
                 lastMessageContentKind = lastMessageContentKind,
+                messageCount = messageCount,
+                operatorName = operatorName,
+                isErasing = conversationId in erasingIds,
             )
 
         /**
@@ -379,8 +601,48 @@ public class ConversationListViewModel
                 }
         }
 
+        /**
+         * `26-90`: the only poll this item adds, and it is deliberately the narrowest one that can
+         * keep [confirmErasure]'s promise. It runs **only** while all three of these hold: «Все» is the
+         * selected tab, the screen is in the foreground ([onScreenStarted]/[onScreenStopped]), and at
+         * least one row is actually held in the erasing state. The moment the last held row leaves the
+         * list, this job stops on its own - there is nothing left to watch for.
+         *
+         * That is a strictly smaller footprint than [startWaitingPollIfNeeded]'s, which is already the
+         * deliberately-narrow one (that method's own doc comment on why a phone does not get the
+         * console's always-on timer): this one additionally needs a pending erasure to exist at all,
+         * which in ordinary use is a few seconds a few times a day. Same 15-second cadence, reusing
+         * that constant rather than choosing a second number - nothing about an erasure job argues for
+         * a different one, and two unexplained intervals would be two things to keep in step.
+         */
+        private fun startErasurePollIfNeeded() {
+            val shouldPoll =
+                mutableState.value.selectedTab == ConversationListTab.All && erasingIds.isNotEmpty()
+            if (!shouldPoll) {
+                erasurePollJob?.cancel()
+                erasurePollJob = null
+                return
+            }
+            if (erasurePollJob?.isActive == true) return
+
+            erasurePollJob =
+                viewModelScope.launch {
+                    while (isActive && erasingIds.isNotEmpty()) {
+                        delay(WAITING_POLL_INTERVAL_MILLIS)
+                        reloadAll()
+                    }
+                    erasurePollJob = null
+                }
+        }
+
         private companion object {
             const val WAITING_POLL_INTERVAL_MILLIS = 15_000L
             const val VISITOR_AUTHOR_KIND = "Visitor"
+
+            /** `26-90`: the same page size `GET /api/v1/conversations/all` defaults to server-side
+             * (`ConversationsEndpoints.HandleGetAllForSiteAsync`'s own `pageSize ?? 50`) - sent
+             * explicitly rather than left to that default, so this client's own paging arithmetic and
+             * the server's agree by construction rather than by a default nobody here can see. */
+            const val ALL_PAGE_SIZE = 50
         }
     }

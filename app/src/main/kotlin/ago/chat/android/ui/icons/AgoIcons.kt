@@ -262,6 +262,46 @@ public object AgoIcons {
                 horizontalLineTo(9f)
             },
         )
+
+    /**
+     * `i-trash-forever` — the «Все» tab's own swipe-revealed destructive action (`26-90`). Material
+     * Symbols' `delete_forever` **in shape** — a bin carrying a large X rather than the three vertical
+     * rules of the ordinary `delete` — and **redrawn**, not imported: Material ships that glyph as a
+     * filled path, and dropping a solid shape into a set whose whole identity is one 1.8-width
+     * round-capped stroke family would read as a different icon from a different app, which is the same
+     * reasoning this file's own header already gives for not taking `material-icons-extended`.
+     *
+     * Four primitives, three subpaths, transcribed from the mockup sprite's own
+     * `<symbol id="i-trash-forever">` exactly as every other icon here is: the lid rule and the handle
+     * and the tapering body are one continuous stroke (they meet at corners the round join is meant to
+     * soften), and the X is a second — a separate `<path>` in the sprite too, because a cross drawn as
+     * part of the body outline would join its two strokes at the crossing point instead of letting them
+     * pass over each other.
+     */
+    public val TrashForever: ImageVector =
+        strokeIcon(
+            "AgoTrashForever",
+            // M4 7h16M10 7V4.5h4V7M6 7l1 13h10l1-13
+            {
+                moveTo(4f, 7f)
+                horizontalLineToRelative(16f)
+                moveTo(10f, 7f)
+                verticalLineTo(4.5f)
+                horizontalLineToRelative(4f)
+                verticalLineTo(7f)
+                moveTo(6f, 7f)
+                lineToRelative(1f, 13f)
+                horizontalLineToRelative(10f)
+                lineToRelative(1f, -13f)
+            },
+            // M9.6 11.1l4.8 4.8M14.4 11.1l-4.8 4.8
+            {
+                moveTo(9.6f, 11.1f)
+                lineToRelative(4.8f, 4.8f)
+                moveTo(14.4f, 11.1f)
+                lineToRelative(-4.8f, 4.8f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */

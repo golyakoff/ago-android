@@ -57,6 +57,85 @@ public interface ConversationsApi {
         conversationId: String,
         upToSequence: Int,
     ): Boolean
+
+    /**
+     * `26-90`: `GET /api/v1/conversations/all` — the site administrator's own site-wide list, gated
+     * server-side by `site:configure` (not `conversation:read`, which every operator holds and which
+     * only ever unlocks their own queue — `GetAllConversationsForSiteHandler`'s own remarks). The
+     * «Все» tab's only read.
+     *
+     * **Keyset-paginated, not offset-paginated**: [beforeId] is the id of the last row of the previous
+     * page and `null` means "the newest page". That is also why [states] is a *request* parameter
+     * rather than something the caller filters the answer with — a page of 50 narrowed on this side can
+     * legitimately come back empty while more matching rows sit one page further down, with no way to
+     * tell that apart from "there are no more" (that endpoint's own remarks state the same rule from
+     * the server's side).
+     *
+     * [states] carries `Ago.Chat.Domain.ConversationState`'s own member names verbatim
+     * (`"Waiting"`/`"Assigned"`/`"Closed"`) — the same unparsed wire spelling [ConversationSummary.state]
+     * already travels as, so this app never owns a second vocabulary for the same set. Empty means
+     * unfiltered, which the server treats identically to sending none at all.
+     */
+    public suspend fun fetchAllConversations(
+        beforeId: String?,
+        pageSize: Int,
+        states: List<String>,
+    ): AllConversationsResult
+
+    /**
+     * `26-90`: `POST /api/v1/conversations/{id}/erase` — no request body, the same "the route already
+     * names the conversation and the token already names the caller" shape [claim] documents, gated
+     * server-side by `conversation:erase`.
+     *
+     * **`202 Accepted`, and that is the whole point of this method having its own result type.** The
+     * server stamps `erasure_requested_at` and returns immediately; the conversation is erased later, by
+     * a separate job (`RequestConversationErasureHandler`). So [ErasureResult.Accepted] means "the
+     * request was recorded", never "the conversation is gone" — a caller that removed the row on this
+     * answer would watch it reappear on the next page and read that as a bug. What the caller does
+     * instead is `26-90`'s own decision, written down in [ConversationListViewModel]: hold the row in a
+     * visible "erasing" state and let it disappear only when the server stops returning it.
+     */
+    public suspend fun requestErasure(conversationId: String): ErasureResult
+}
+
+/** `26-90`: one page of `GET /api/v1/conversations/all`
+ * (`Ago.Chat.Contracts.AllConversationsForSiteResponse`). [nextBeforeId] is `null` on the last page —
+ * the server sends it only when the page it just cut was full, so "null" genuinely means "there is no
+ * next page", not "ask again and find out". */
+public data class AllConversationsPage(
+    public val conversations: List<ConversationSummary>,
+    public val nextBeforeId: String?,
+)
+
+/** What reading one page of the site-wide list came back with — the identical two arms, for the
+ * identical reasons, [QueueResult] already has (that type's own doc comment: every cause of "the read
+ * failed" renders as the same one banner, so the type splits no further than the value it carries). */
+public sealed interface AllConversationsResult {
+    public data class Loaded(
+        val page: AllConversationsPage,
+    ) : AllConversationsResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : AllConversationsResult
+}
+
+/** What asking for one conversation to be erased came back with — the same three arms [ClaimResult]
+ * has, for the same reasons: a genuine server refusal carries its own `detail` and is shown verbatim,
+ * anything that kept the call from being a genuine answer is a classification instead of a fabricated
+ * sentence, and neither is ever retried automatically. */
+public sealed interface ErasureResult {
+    /** `202 Accepted` — recorded, **not** carried out. See [ConversationsApi.requestErasure]'s own doc
+     * comment for why that distinction is the whole design of this tab's delete affordance. */
+    public data object Accepted : ErasureResult
+
+    public data class Refused(
+        val detail: String,
+    ) : ErasureResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : ErasureResult
 }
 
 /** What answering "what's waiting, what's mine" came back with. */
