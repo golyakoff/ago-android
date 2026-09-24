@@ -9,16 +9,20 @@ import ago.chat.android.core.domain.identity.RoutingStep
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.PushAvailability
+import ago.chat.android.presence.OperatorPresenceController
 import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -264,6 +268,27 @@ class SignInViewModelTest {
             assertEquals(1, session.signOuts)
         }
 
+    /** `26-85`: sign-out is also the one signal that stops `OperatorPresenceService` and lowers
+     * `OperatorPresenceGate` - an identity with no session left has no permission set worth a background
+     * connection for. */
+    @Test
+    fun `signing out also stops OperatorPresenceController - 26-85's own cleanup`() =
+        runTest(dispatcher) {
+            val presenceController = FakeOperatorPresenceController()
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    session = FakeSession(hasSession = true),
+                    presenceController = presenceController,
+                )
+            advanceUntilIdle()
+
+            viewModel.signOut()
+            advanceUntilIdle()
+
+            assertEquals(1, presenceController.signOutCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -272,6 +297,7 @@ class SignInViewModelTest {
         session: SignInSession = FakeSession(hasSession = true),
         deviceRegistrar: DeviceRegistrar = FakeDeviceRegistrar(),
         registrationScheduler: DeviceRegistrationScheduler = FakeDeviceRegistrationScheduler(),
+        presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
     ): SignInViewModel =
         SignInViewModel(
             session = session,
@@ -279,6 +305,7 @@ class SignInViewModelTest {
             activeSite = activeSite,
             deviceRegistrar = deviceRegistrar,
             registrationScheduler = registrationScheduler,
+            presenceController = presenceController,
             // `26-13`/`26-17`'s own connect-on-sign-in fix: `routeNow()` now really does call
             // `connect()` on this instance. A real `OperatorHubConnection` over a deliberately
             // unreachable host (`example.invalid`, RFC 2606) is still simpler than a second port just
@@ -376,6 +403,24 @@ class SignInViewModelTest {
 
         override fun schedulePeriodicRegistration() {
             scheduleCalls++
+        }
+    }
+
+    /** `26-85`: [SignInViewModel.signOut]'s own new call - a plain fake with no `Service`, no
+     * `Context`, and no gating logic in play, the identical "test through a narrow interface" reasoning
+     * every other fake in this file already follows. */
+    private class FakeOperatorPresenceController : OperatorPresenceController {
+        var signOutCalls: Int = 0
+            private set
+
+        override val requestBatteryOptimizationExemptionEvents: Flow<Unit> = emptyFlow()
+
+        override fun onPermissionsLoaded(permissions: OperatorPermissions) {
+            error("not exercised here - SignInViewModel never calls this")
+        }
+
+        override fun onSignedOut() {
+            signOutCalls++
         }
     }
 }

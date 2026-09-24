@@ -88,7 +88,8 @@ public class OperatorHubConnection(
     private val accessTokens: AccessTokenProvider,
     private val activeSite: ActiveSiteSelection,
     private val backoff: HubReconnectBackoff = HubReconnectBackoff(),
-) : OperatorHubEvents {
+) : OperatorHubEvents,
+    HubConnectionControl {
     private val buildLock = Mutex()
     private val subscription = MessageSubscription()
     private val reconnectAttempt = AtomicInteger(0)
@@ -151,8 +152,12 @@ public class OperatorHubConnection(
     /** Idempotent: a second call while already connecting/connected is a no-op, which is what makes
      * it safe for [OperatorHubConnectionLifecycle] (or a rotation re-observing this singleton) to call
      * this on every foreground transition without risking a second connection or a "HubConnection
-     * already active" exception from the library itself. */
-    public suspend fun connect() {
+     * already active" exception from the library itself.
+     *
+     * `26-85`: also [HubConnectionControl.connect] — [OperatorPresenceService][ago.chat.android.presence.OperatorPresenceService]
+     * calls this exact override, the same idempotent guarantee making it safe for two independent
+     * owners (the process-foreground lifecycle and the presence service) to both call it around a sign-in. */
+    override suspend fun connect() {
         val hub = buildLock.withLock { ensureConnection() }
         if (hub.connectionState != HubConnectionState.DISCONNECTED) {
             return
@@ -170,8 +175,13 @@ public class OperatorHubConnection(
      * stop as deliberate first, so the `onClosed` callback this triggers does not start a reconnect
      * loop for a connection the app itself chose to let go of (`docs/architecture.md`: "Android will
      * suspend a background socket... the app connects when it is in front and lets go when it is
-     * not"). */
-    public suspend fun disconnect() {
+     * not").
+     *
+     * `26-85`: also [HubConnectionControl.disconnect]. `OperatorHubConnectionLifecycle.onStop` now
+     * skips calling this while `OperatorPresenceService` is the one keeping this session online in the
+     * background — see that function's own doc comment — so in the steady state this override runs
+     * from exactly one caller at a time: whichever component currently owns the connection's lifecycle. */
+    override suspend fun disconnect() {
         stopRequested = true
         callbackScope.cancel()
         callbackScope = newCallbackScope()

@@ -2,6 +2,7 @@ package ago.chat.android
 
 import ago.chat.android.devices.ProcessLifecycleForegroundTracker
 import ago.chat.android.devices.ensureChannelsCreated
+import ago.chat.android.presence.ensurePresenceChannelCreated
 import ago.chat.android.realtime.OperatorHubConnectionLifecycle
 import android.app.ActivityManager
 import android.app.Application
@@ -33,6 +34,12 @@ import javax.inject.Inject
  * [ensureChannelsCreated] runs - eagerly, on every process start, for the reason that function's own
  * doc comment gives (idempotent by construction, so "eagerly" costs nothing measurable).
  *
+ * `26-85`: also where [ensurePresenceChannelCreated] runs, eagerly, for the identical reason
+ * [ensureChannelsCreated] immediately above it already does - `OperatorPresenceService` itself is
+ * started later and conditionally (`OperatorPresenceController`, gated on `conversation:send`), but its
+ * notification channel is cheap to create unconditionally on every process start, the same "idempotent,
+ * so eager costs nothing" reasoning both functions' own doc comments state.
+ *
  * `26-06`/`adr/0180`: also where `RuStorePushClient.init` runs — **manual**, not the manifest
  * meta-data path RuStore's own docs also offer, so the project id can be a `BuildConfig` field
  * (`agoProperty`'s own pattern every other deployment value in `app/build.gradle.kts` already follows)
@@ -59,6 +66,9 @@ public class AgoChatApplication : Application() {
         hubConnectionLifecycle.start()
         appForegroundTracker.start()
         ensureChannelsCreated(this)
+        // `26-85`: `OperatorPresenceService`'s own third channel - see that function's own doc comment
+        // for why it is not one more arm on `ensureChannelsCreated` above.
+        ensurePresenceChannelCreated(this)
 
         if (isMainProcess()) {
             RuStorePushClient.init(

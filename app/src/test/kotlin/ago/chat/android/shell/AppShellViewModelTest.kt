@@ -4,10 +4,13 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OperatorIdentity
 import ago.chat.android.session.OperatorIdentityProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -99,6 +102,38 @@ class AppShellViewModelTest {
             assertNull(viewModel.loadError.value)
         }
 
+    /** `26-85`: `OperatorPresenceController` decides whether `OperatorPresenceService` runs from
+     * exactly the permission set this view model already fetched - never a second, independent read of
+     * the same endpoint. */
+    @Test
+    fun `a successful fetch hands the exact granted set to OperatorPresenceController`() =
+        runTest(dispatcher) {
+            val granted = setOf("conversation:send")
+            val presenceController = FakeOperatorPresenceController()
+            viewModelWith(FakeOperatorPermissionsApi(result = PermissionsFetch.Loaded(granted)), presenceController = presenceController)
+
+            advanceUntilIdle()
+
+            assertEquals(listOf(OperatorPermissions.Known(granted)), presenceController.permissionsLoadedCalls)
+        }
+
+    /** A failed fetch never resolves `permissions` past `Unknown` (the test above this one already
+     * proves that) - and it must not tell `OperatorPresenceController` anything either, since there is
+     * no real answer yet to gate a foreground service on. */
+    @Test
+    fun `a failed fetch never calls OperatorPresenceController at all`() =
+        runTest(dispatcher) {
+            val presenceController = FakeOperatorPresenceController()
+            viewModelWith(
+                FakeOperatorPermissionsApi(result = PermissionsFetch.Failed(NetworkFailure.NoConnection)),
+                presenceController = presenceController,
+            )
+
+            advanceUntilIdle()
+
+            assertEquals(emptyList<OperatorPermissions>(), presenceController.permissionsLoadedCalls)
+        }
+
     @Test
     fun `identity starts null and resolves to whatever the identity provider answers`() =
         runTest(dispatcher) {
@@ -134,7 +169,14 @@ class AppShellViewModelTest {
     private fun viewModelWith(
         api: OperatorPermissionsApi,
         identityProvider: OperatorIdentityProvider = FakeOperatorIdentityProvider(null),
-    ): AppShellViewModel = AppShellViewModel(api = api, identityProvider = identityProvider, ioDispatcher = dispatcher)
+        presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
+    ): AppShellViewModel =
+        AppShellViewModel(
+            api = api,
+            identityProvider = identityProvider,
+            presenceController = presenceController,
+            ioDispatcher = dispatcher,
+        )
 
     private class FakeOperatorPermissionsApi(
         var result: PermissionsFetch = PermissionsFetch.Loaded(emptySet()),
@@ -150,5 +192,22 @@ class AppShellViewModelTest {
         private val identity: OperatorIdentity?,
     ) : OperatorIdentityProvider {
         override suspend fun currentIdentity(): OperatorIdentity? = identity
+    }
+
+    /** `26-85`: records every [OperatorPermissions] this view model hands to
+     * [ago.chat.android.presence.OperatorPresenceController] - the one thing `AppShellViewModelTest`
+     * needs to prove about the new wiring, with no `Service`, no `Context`, and no real gating logic
+     * (`DefaultOperatorPresenceControllerTest`'s own job) in play at all. */
+    private class FakeOperatorPresenceController : OperatorPresenceController {
+        val permissionsLoadedCalls = mutableListOf<OperatorPermissions>()
+        override val requestBatteryOptimizationExemptionEvents: Flow<Unit> = emptyFlow()
+
+        override fun onPermissionsLoaded(permissions: OperatorPermissions) {
+            permissionsLoadedCalls += permissions
+        }
+
+        override fun onSignedOut() {
+            error("not exercised here - AppShellViewModel never calls this")
+        }
     }
 }

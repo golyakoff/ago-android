@@ -1,6 +1,7 @@
 package ago.chat.android
 
 import ago.chat.android.devices.EXTRA_OPEN_CONVERSATION_ID
+import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInHost
@@ -14,6 +15,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -56,6 +58,14 @@ import javax.inject.Inject
  * 5. **The `POST_NOTIFICATIONS` runtime permission request itself** - `ActivityResultContracts
  *    .RequestPermission()` needs an `Activity`, and [SignInViewModel.requestNotificationPermissionEvents]'s
  *    own doc comment states why the *decision* to ask still lives in the view model rather than here.
+ *
+ * `26-85` adds a sixth, the identical "only an `Activity` can launch this" shape as (5):
+ *
+ * 6. **The battery-optimisation exemption request.** `Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+ *    is launched here, from [presenceController]'s own event, on the identical
+ *    `registerForActivityResult`/`repeatOnLifecycle` shape the notification-permission launcher above
+ *    already establishes - see [OperatorPresenceController.requestBatteryOptimizationExemptionEvents]'s
+ *    own doc comment for why the *decision* to ask lives in `OperatorPresenceController` instead.
  */
 @AndroidEntryPoint
 public class MainActivity : ComponentActivity() {
@@ -76,8 +86,15 @@ public class MainActivity : ComponentActivity() {
     @Inject
     public lateinit var pendingConversationOpener: PendingConversationOpener
 
+    /** `26-85`: this `Activity`'s own side of the battery-optimisation request - see
+     * [OperatorPresenceController.requestBatteryOptimizationExemptionEvents]'s own doc comment for the
+     * decision that fires it. */
+    @Inject
+    public lateinit var presenceController: OperatorPresenceController
+
     private lateinit var authorizationLauncher: ActivityResultLauncher<Intent>
     private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
+    private lateinit var batteryOptimizationLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +114,14 @@ public class MainActivity : ComponentActivity() {
         notificationPermissionLauncher =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+        // `26-85`: the identical "discard the result, re-read live system truth elsewhere if it ever
+        // matters" shape [notificationPermissionLauncher] above already takes -
+        // `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` gives no dependable result to read anyway
+        // (`BatteryOptimizationGate`'s own doc comment), and nothing in this app currently re-checks
+        // `PowerManager.isIgnoringBatteryOptimizations` after the fact.
+        batteryOptimizationLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.authorizationRequests.collect { intent -> authorizationLauncher.launch(intent) }
@@ -112,6 +137,20 @@ public class MainActivity : ComponentActivity() {
                     // reason to know an API level at all.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                presenceController.requestBatteryOptimizationExemptionEvents.collect {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+                    try {
+                        batteryOptimizationLauncher.launch(intent)
+                    } catch (missing: ActivityNotFoundException) {
+                        // A build with no Settings screen for this action at all - the identical
+                        // "no crash, no loop" contract [openInBrowser]'s own catch already applies, for
+                        // the identical reason: a missing system screen is not this app's bug to retry.
                     }
                 }
             }

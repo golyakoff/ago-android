@@ -449,6 +449,14 @@
     <string name="push_channel_visitor_message_name">Сообщение от посетителя</string>
     <string name="push_channel_visitor_message_description">Уведомления о новых сообщениях в назначенных вам диалогах</string>
 
+    <!-- `26-85`: `OperatorPresenceService`'s own third channel and its persistent notification -
+         silent, `IMPORTANCE_LOW`, deliberately not one more `push_channel_*` string above (this is not
+         a push - see `OPERATOR_PRESENCE_CHANNEL_ID`'s own doc comment). -->
+    <string name="operator_presence_channel_name">Статус подключения</string>
+    <string name="operator_presence_channel_description">Показывает, что приложение остаётся на связи ради входящих диалогов</string>
+    <string name="operator_presence_notification_title">AGO Chat</string>
+    <string name="operator_presence_notification_body">Приложение остаётся на связи, чтобы вы не пропустили новый диалог</string>
+
     <!-- `26-19`: the real, dedicated notification-settings screen - "the switches on this screen are
          true" (`docs/backlog/26-19-*.md`). Reuses `push_channel_*_name` above for each row's own title
          rather than a second copy of the same two names. -->

@@ -40,6 +40,17 @@ public object Permission {
      * Named here for the same forward-looking reason as [SITE_MANAGE_OPERATORS] — Аналитика's admin
      * items and Ещё's Администрирование section both gate on it once their real screens exist. */
     public const val SITE_CONFIGURE: String = "site:configure"
+
+    /** `26-85`: "has a conversation to be pushed about" — the fact `OperatorPresenceController`
+     * (`:app`) gates [ago.chat.android.presence.OperatorPresenceService] on, copied verbatim from
+     * `ago-chat`'s own `Ago.Chat.Domain.Permission.ConversationSend` (`docs/backlog/26-85-*.md`).
+     * Distinct from `ConversationAssign` (claiming a conversation from the queue) — an identity holding
+     * neither is a pure administrator with no operator seat and no conversation this service could ever
+     * be woken up about, so it is this permission, not merely "signed in", that decides whether the
+     * foreground service ever starts. Not consumed by [OperatorPermissions.holds] anywhere in
+     * `:core:domain` itself (no navigation destination gates on it), which is why it was not already
+     * named here before this item needed it. */
+    public const val CONVERSATION_SEND: String = "conversation:send"
 }
 
 /** Every permission [Permission.CALENDAR_CONFIGURE]'s own destination can be earned through, per

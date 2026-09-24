@@ -21,6 +21,7 @@ import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
 import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
+import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
@@ -55,6 +56,14 @@ import ago.chat.android.devices.RuStorePushGateway
 import ago.chat.android.devices.SystemLocalClock
 import ago.chat.android.devices.SystemPushNotificationPresenter
 import ago.chat.android.devices.WorkManagerDeviceRegistrationScheduler
+import ago.chat.android.presence.AndroidBatteryOptimizationGate
+import ago.chat.android.presence.AndroidForegroundServiceLauncher
+import ago.chat.android.presence.BatteryOptimizationGate
+import ago.chat.android.presence.DefaultOperatorPresenceController
+import ago.chat.android.presence.DefaultOperatorPresenceGate
+import ago.chat.android.presence.ForegroundServiceLauncher
+import ago.chat.android.presence.OperatorPresenceController
+import ago.chat.android.presence.OperatorPresenceGate
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.DataStoreThemePreferences
@@ -228,6 +237,39 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideOperatorHubEvents(connection: OperatorHubConnection): OperatorHubEvents = connection
+
+    /**
+     * `26-85`: [ago.chat.android.realtime.OperatorHubConnectionLifecycle]'s own port — the identical
+     * "second view onto the one `@Singleton` graph node" shape [provideOperatorHubEvents] above already
+     * establishes, restated for the connect/disconnect half instead of the read half.
+     */
+    @Provides
+    @Singleton
+    public fun provideHubConnectionControl(connection: OperatorHubConnection): HubConnectionControl = connection
+
+    // `26-85`: everything `OperatorPresenceService`'s own gating needs, each a small `@Singleton` seam
+    // for the identical reason [providePushRegistrationGateway] below already is one - see each
+    // interface's own doc comment for what a plain-JVM test substitutes it with.
+
+    @Provides
+    @Singleton
+    public fun provideOperatorPresenceGate(gate: DefaultOperatorPresenceGate): OperatorPresenceGate = gate
+
+    /** `26-85`: the one binding that *does* carry a `Context` - [AndroidForegroundServiceLauncher]'s own
+     * doc comment states why it is a separate class from [ago.chat.android.presence.OperatorPresenceController]
+     * rather than one more method on it, the identical split [provideDeviceRegistrationScheduler] below
+     * already draws for [WorkManagerDeviceRegistrationScheduler]. */
+    @Provides
+    @Singleton
+    public fun provideForegroundServiceLauncher(launcher: AndroidForegroundServiceLauncher): ForegroundServiceLauncher = launcher
+
+    @Provides
+    @Singleton
+    public fun provideBatteryOptimizationGate(gate: AndroidBatteryOptimizationGate): BatteryOptimizationGate = gate
+
+    @Provides
+    @Singleton
+    public fun provideOperatorPresenceController(controller: DefaultOperatorPresenceController): OperatorPresenceController = controller
 
     @Provides
     public fun provideConversationsApi(
