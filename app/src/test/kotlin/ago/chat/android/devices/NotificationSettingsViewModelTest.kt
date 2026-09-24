@@ -120,16 +120,49 @@ class NotificationSettingsViewModelTest {
             )
         }
 
+    @Test
+    fun `pushAvailability starts at null - nothing has asked yet`() =
+        runTest(dispatcher) {
+            val viewModel = viewModelWith()
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.pushAvailability.value)
+        }
+
+    @Test
+    fun `pushAvailability relays DeviceRegistrar's own value, including a critical warning`() =
+        runTest(dispatcher) {
+            val registrar =
+                FakeDeviceRegistrar(PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled))
+            val viewModel = viewModelWith(deviceRegistrar = registrar)
+            advanceUntilIdle()
+
+            assertEquals(
+                PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled),
+                viewModel.pushAvailability.value,
+            )
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
         channelStateReader: NotificationChannelStateReader = FakeChannelStateReader(emptyMap()),
         quietHoursPreferences: QuietHoursPreferences = FakeQuietHoursPreferences(),
+        deviceRegistrar: DeviceRegistrar = FakeDeviceRegistrar(),
     ): NotificationSettingsViewModel =
         NotificationSettingsViewModel(
             channelStateReader = channelStateReader,
             quietHoursPreferences = quietHoursPreferences,
+            deviceRegistrar = deviceRegistrar,
         )
+
+    private class FakeDeviceRegistrar(
+        initialAvailability: PushAvailability? = null,
+    ) : DeviceRegistrar {
+        override val pushAvailability: MutableStateFlow<PushAvailability?> = MutableStateFlow(initialAvailability)
+
+        override suspend fun registerThisDevice(): Boolean = true
+    }
 
     private class FakeChannelStateReader(
         initial: Map<String, Int>,

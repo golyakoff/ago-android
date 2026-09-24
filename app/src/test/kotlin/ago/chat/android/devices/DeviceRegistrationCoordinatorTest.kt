@@ -38,10 +38,79 @@ class DeviceRegistrationCoordinatorTest {
     fun `registerThisDevice with no token available is still a success, and never calls register`() =
         runTest {
             val api = FakeDeviceRegistrationApi()
-            val coordinator = coordinatorFor(token = PushTokenResult.Unavailable, api = api)
+            val coordinator =
+                coordinatorFor(
+                    token = PushTokenResult.Unavailable(PushUnavailableReason.Unknown, critical = false),
+                    api = api,
+                )
 
             assertTrue(coordinator.registerThisDevice())
             assertTrue(api.registerCalls.isEmpty())
+        }
+
+    @Test
+    fun `registerThisDevice raises a warning when the token failure is critical - no host, an IPC failure`() =
+        runTest {
+            val gateway =
+                FakeGateway(
+                    availability = PushAvailability.Available,
+                    token = PushTokenResult.Unavailable(PushUnavailableReason.HostAppNotInstalled, critical = true),
+                )
+            val coordinator = coordinatorFor(gateway = gateway)
+
+            // `checkPushAvailability()` itself said `Available` - exactly the disagreement `26-101`'s own
+            // Scope calls out ("`checkPushAvailability()` may not always be raised even when it applies").
+            // `getToken()` failing critically must still surface, not be shadowed by the earlier `Available`.
+            assertTrue(coordinator.registerThisDevice())
+            assertEquals(
+                PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled),
+                coordinator.pushAvailability.value,
+            )
+        }
+
+    @Test
+    fun `registerThisDevice stays quiet when the token failure is merely transient`() =
+        runTest {
+            val gateway =
+                FakeGateway(
+                    availability = PushAvailability.Available,
+                    token = PushTokenResult.Unavailable(PushUnavailableReason.Unknown, critical = false),
+                )
+            val coordinator = coordinatorFor(gateway = gateway)
+
+            // A blip talking to RuStore's own backend while minting a token - `docs/backlog/26-101-*.md`'s
+            // own Done-when: "a transient network failure does not raise that warning".
+            assertTrue(coordinator.registerThisDevice())
+            assertEquals(PushAvailability.Available, coordinator.pushAvailability.value)
+        }
+
+    @Test
+    fun `reportTokenFailure ignores a transient cause - AgoPushMessagingService onError's own hook`() =
+        runTest {
+            val coordinator = coordinatorFor(gateway = FakeGateway(availability = PushAvailability.Available))
+            coordinator.registerThisDevice()
+            assertEquals(PushAvailability.Available, coordinator.pushAvailability.value)
+
+            coordinator.reportTokenFailure(PushUnavailableReason.HostAppBackgroundWorkNotGranted, critical = false)
+
+            assertEquals(PushAvailability.Available, coordinator.pushAvailability.value)
+        }
+
+    @Test
+    fun `reportTokenFailure raises the warning for a critical cause with no registerThisDevice call nearby`() =
+        runTest {
+            val coordinator = coordinatorFor(gateway = FakeGateway(availability = PushAvailability.Available))
+            coordinator.registerThisDevice()
+            assertEquals(PushAvailability.Available, coordinator.pushAvailability.value)
+
+            // `AgoPushMessagingService.onError`'s own shape: a distributor failure reported with no
+            // `registerThisDevice` call anywhere nearby (a background token refresh, for instance).
+            coordinator.reportTokenFailure(PushUnavailableReason.HostAppNotInstalled, critical = true)
+
+            assertEquals(
+                PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled),
+                coordinator.pushAvailability.value,
+            )
         }
 
     @Test
@@ -120,7 +189,8 @@ class DeviceRegistrationCoordinatorTest {
                 }
             val gateway =
                 object : PushRegistrationGateway {
-                    override suspend fun currentToken(): PushTokenResult = PushTokenResult.Unavailable
+                    override suspend fun currentToken(): PushTokenResult =
+                        PushTokenResult.Unavailable(PushUnavailableReason.Unknown, critical = false)
 
                     override suspend fun deleteToken() {
                         order += "deleteToken"

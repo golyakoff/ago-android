@@ -55,6 +55,15 @@ public class DeviceRegistrationCoordinator
          * current token and upserts this installation's row. `true` only when the write itself
          * succeeded; a device the SDK cannot answer for at all is not a failure worth retrying
          * (nothing this app does would change that), so it reports success and moves on.
+         *
+         * `26-101`: `checkPushAvailability()` and `getToken()` are two separate SDK calls that can
+         * disagree - RuStore's own docs already admit `checkPushAvailability()` "may not always be
+         * raised even when it applies" for [PushUnavailableReason.Unauthorized], and nothing stops
+         * `getToken()` failing for a reason the availability check missed entirely. So [reportTokenFailure]
+         * runs *after* the assignment above, and only overwrites [pushAvailability] - never clears an
+         * `Unavailable` the check itself already found, and never fires for the ordinary shape of a
+         * transient network blip ([PushTokenResult.Unavailable.critical] is `false`) that the next
+         * `registerThisDevice()` (the periodic worker's own retry) may simply resolve on its own.
          */
         override suspend fun registerThisDevice(): Boolean =
             withContext(ioDispatcher) {
@@ -67,9 +76,35 @@ public class DeviceRegistrationCoordinator
                 when (val token = pushGateway.currentToken()) {
                     is PushTokenResult.Token ->
                         deviceRegistrationApi.register(installationIdProvider.installationId(), token.value)
-                    PushTokenResult.Unavailable -> true
+                    is PushTokenResult.Unavailable -> {
+                        reportTokenFailure(token.reason, token.critical)
+                        true
+                    }
                 }
             }
+
+        /**
+         * `26-101`: the one place a non-transient push failure ever gets to set [pushAvailability] from
+         * outside `checkAvailability()`'s own answer - shared between [registerThisDevice]'s own
+         * `currentToken()` failure branch above and [AgoPushMessagingService.onError], which reports the
+         * identical port-level classification from a second SDK callback that runs with no
+         * `registerThisDevice` call anywhere nearby. `internal`, not `private`: [AgoPushMessagingService]
+         * is a real `Service` Hilt constructs outside this class, not a fake in a test, so it needs actual
+         * module visibility rather than a narrower interface - the same reasoning [onNewToken] itself
+         * already is `public` for.
+         *
+         * A transient (`critical == false`) failure is deliberately a no-op: nagging the operator over
+         * one bad connection is exactly the behaviour `docs/backlog/26-101-*.md`'s own Scope rules out
+         * ("do not nag on a blip").
+         */
+        internal fun reportTokenFailure(
+            reason: PushUnavailableReason,
+            critical: Boolean,
+        ) {
+            if (!critical) return
+            Log.w(TAG, "push token unavailable, non-transient: $reason")
+            mutablePushAvailability.value = PushAvailability.Unavailable(reason)
+        }
 
         /** [AgoPushMessagingService.onNewToken]'s own call - the identical write [registerThisDevice]
          * makes, with the token the rotation callback already handed over rather than asking the SDK

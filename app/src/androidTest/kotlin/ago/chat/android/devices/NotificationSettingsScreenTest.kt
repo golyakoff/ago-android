@@ -180,6 +180,43 @@ class NotificationSettingsScreenTest {
     }
 
     @Test
+    fun aCriticalPushFailureShowsTheWarningAndItsReason() {
+        composeTestRule.setContent {
+            NotificationSettingsScreen(
+                channelStates = bothChannelsOn,
+                onOpenChannelSettings = {},
+                quietHours = QuietHoursSettings(),
+                onQuietHoursEnabledChanged = {},
+                onQuietHoursRangeChanged = { _, _ -> },
+                onBack = {},
+                pushAvailability = PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Push-уведомления не работают на этом устройстве").assertExists()
+        composeTestRule
+            .onNodeWithText("На телефоне не установлено приложение RuStore, через которое приходят уведомления.")
+            .assertExists()
+    }
+
+    @Test
+    fun noWarningWhenPushAvailabilityIsAvailableOrUnknown() {
+        composeTestRule.setContent {
+            NotificationSettingsScreen(
+                channelStates = bothChannelsOn,
+                onOpenChannelSettings = {},
+                quietHours = QuietHoursSettings(),
+                onQuietHoursEnabledChanged = {},
+                onQuietHoursRangeChanged = { _, _ -> },
+                onBack = {},
+                pushAvailability = PushAvailability.Available,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Push-уведомления не работают на этом устройстве").assertDoesNotExist()
+    }
+
+    @Test
     fun backArrowCallsOnBack() {
         var backCalls = 0
         composeTestRule.setContent {

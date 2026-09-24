@@ -689,6 +689,12 @@
          true" (`docs/backlog/26-19-*.md`). Reuses `push_channel_*_name` above for each row's own title
          rather than a second copy of the same two names. -->
     <string name="notification_settings_title">Уведомления</string>
+
+    <!-- `26-101`: a persistent-until-resolved warning at the top of this screen - the operator's own
+         first clue, on the screen they came to specifically to manage notifications, that the switches
+         below may mean nothing on this device. Reuses `push_unavailable_*` above for the reason line
+         rather than a second copy of the same four sentences. -->
+    <string name="notification_settings_push_warning_title">Push-уведомления не работают на этом устройстве</string>
     <string name="notification_settings_channels_section">Каналы</string>
     <string name="notification_settings_channel_state_on">Включены</string>
     <string name="notification_settings_channel_state_off">Отключены в настройках телефона</string>

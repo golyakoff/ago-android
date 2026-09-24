@@ -70,6 +70,7 @@ internal fun NotificationSettingsRoute(
 ) {
     val channelStates by viewModel.channelStates.collectAsStateWithLifecycle()
     val quietHours by viewModel.quietHours.collectAsStateWithLifecycle()
+    val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
 
     // `SettingsRoute`'s own identical `ON_RESUME` observer, for the identical reason -
     // [NotificationSettingsViewModel.refreshChannelStates]'s own doc comment states it in full: an
@@ -88,6 +89,7 @@ internal fun NotificationSettingsRoute(
     val context = LocalContext.current
     NotificationSettingsScreen(
         channelStates = channelStates,
+        pushAvailability = pushAvailability,
         onOpenChannelSettings = { channel ->
             // `26-19`'s own Scope: "the row deep-links into the system channel settings rather than
             // keeping a second, disagreeing copy of it" - `Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS`
@@ -118,6 +120,7 @@ internal fun NotificationSettingsScreen(
     onQuietHoursEnabledChanged: (Boolean) -> Unit,
     onQuietHoursRangeChanged: (Int, Int) -> Unit,
     onBack: () -> Unit,
+    pushAvailability: PushAvailability? = null,
 ) {
     var editingBoundary by remember { mutableStateOf<QuietHoursBoundary?>(null) }
 
@@ -135,6 +138,32 @@ internal fun NotificationSettingsScreen(
             },
         ) { padding ->
             LazyColumn(modifier = Modifier.fillMaxWidth().padding(padding)) {
+                // `26-101`: a persistent-until-resolved warning, drawn first - the operator reached this
+                // screen specifically to manage notifications, so whether they can arrive at all on this
+                // device is the one fact worth stating before any switch. Hidden entirely while
+                // [pushAvailability] is `Available` or still `null` (nothing has asked yet, or the last
+                // answer was "this device is fine") - the identical "hidden, not shown-disabled"
+                // convention this app's own `SettingsScreen` already applies to the same port.
+                val pushUnavailable = pushAvailability as? PushAvailability.Unavailable
+                if (pushUnavailable != null) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(
+                                text = stringResource(R.string.notification_settings_push_warning_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Text(
+                                text = pushUnavailableReasonText(pushUnavailable.reason),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    item { HorizontalDivider() }
+                }
+
                 // `26-19`'s own Scope, in full: "A switch per notification channel that actually exists -
                 // the ones the fan-out sends and no others." `26-86` grew that set from two to three;
                 // this row-per-entry loop needed no change at all to pick up the third, because
@@ -238,6 +267,21 @@ internal fun NotificationSettingsScreen(
 }
 
 private enum class QuietHoursBoundary { Start, End }
+
+/** `26-101`: [PushUnavailableReason]'s own four values, each named - the identical mapping
+ * [ago.chat.android.shell.SettingsScreen]'s own `pushUnavailableReasonText` already is for the same
+ * port, restated here rather than shared across files: that function is `private` to a screen this item
+ * does not touch, and the four strings it reads ([R.string.push_unavailable_host_app_not_installed] and
+ * its three siblings) are already public resource ids meant to be read from wherever a reason needs
+ * naming, not a copy owned by one screen. */
+@Composable
+private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
+    when (reason) {
+        PushUnavailableReason.HostAppNotInstalled -> stringResource(R.string.push_unavailable_host_app_not_installed)
+        PushUnavailableReason.HostAppBackgroundWorkNotGranted -> stringResource(R.string.push_unavailable_background_work_not_granted)
+        PushUnavailableReason.Unauthorized -> stringResource(R.string.push_unavailable_unauthorized)
+        PushUnavailableReason.Unknown -> stringResource(R.string.push_unavailable_unknown)
+    }
 
 @Composable
 private fun channelLabel(channel: PushNotificationChannel): String =
