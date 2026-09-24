@@ -1,6 +1,7 @@
 package ago.chat.android.analytics
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.analytics.CountComparison
 import ago.chat.android.core.domain.analytics.formatDurationSeconds
 import ago.chat.android.ui.components.SectionLabel
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -22,7 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 /*
  * `26-70`: the pieces every Аналитика report is built from - a card, a key/value row, an empty note, a
@@ -163,3 +168,80 @@ internal fun AnalyticsRefusalBody(
 @Composable
 internal fun durationOrNoAverage(seconds: Double?): String =
     seconds?.let { formatDurationSeconds(it) } ?: stringResource(R.string.analytics_no_data_value)
+
+/**
+ * Three renderings for three genuinely different situations, chosen by [CountComparison]'s own answer
+ * rather than re-derived here: nothing moved, something moved against a window that was empty (so
+ * there is no percentage of it), and something moved against a real count. The signs come from
+ * `%+d`/`%+.1f`, never from concatenating a literal `"+"`, so a negative delta cannot end up with two
+ * signs.
+ *
+ * `26-71`: promoted out of `SiteAnalyticsScreen` once [ago.chat.android.analytics.ConversionReportScreen]
+ * needed the identical three renderings for a second bucket shape — the same "a second report needing
+ * it is what earns a composable a place in this shared file" rule this file's own header comment
+ * states for its other five pieces.
+ */
+@Composable
+internal fun comparisonText(comparison: CountComparison): String {
+    val signedDelta = String.format(Locale.US, "%+d", comparison.delta)
+    val percent = comparison.relativePercent
+    return when {
+        comparison.isUnchanged -> stringResource(R.string.analytics_comparison_no_change, comparison.previous)
+        percent == null -> stringResource(R.string.analytics_comparison_absolute, comparison.previous, signedDelta)
+        else ->
+            stringResource(
+                R.string.analytics_comparison_relative,
+                comparison.previous,
+                signedDelta,
+                String.format(Locale.US, "%+.1f", percent),
+            )
+    }
+}
+
+/**
+ * The breakdown-table header cell every report's per-dimension table shares — bold, softer ink, up to
+ * two lines before ellipsis. `26-71`: promoted out of `SiteAnalyticsScreen` once
+ * [ago.chat.android.analytics.ConversionReportScreen] needed the identical shape for a table over a
+ * different bucket type.
+ */
+@Composable
+internal fun AnalyticsTableHeaderCell(
+    text: String,
+    width: Dp,
+    alignEnd: Boolean = true,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 10.dp),
+    )
+}
+
+/** The breakdown-table body cell every report's per-dimension table shares — see
+ * [AnalyticsTableHeaderCell]'s own doc comment for why this is shared rather than restated. */
+@Composable
+internal fun AnalyticsTableBodyCell(
+    text: String,
+    width: Dp,
+    alignEnd: Boolean = true,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 10.dp),
+    )
+}
+
+/** Wide enough for a real operator name or a referrer host at this type size; narrow enough that the
+ * first numeric column is already visible before any scrolling, so the table reads as a table rather
+ * than as a list of names. Shared for the identical reason [AnalyticsTableHeaderCell] is. */
+internal val AnalyticsTableLabelColumnWidth = 132.dp
+internal val AnalyticsTableNumberColumnWidth = 104.dp

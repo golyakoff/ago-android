@@ -97,4 +97,5 @@ internal fun AnalyticsReportsOverflowMenu(
 internal fun AnalyticsReport.labelRes(): Int =
     when (this) {
         AnalyticsReport.Site -> R.string.analytics_report_site
+        AnalyticsReport.Conversion -> R.string.analytics_report_conversion
     }

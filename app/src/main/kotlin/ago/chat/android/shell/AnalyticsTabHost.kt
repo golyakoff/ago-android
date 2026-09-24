@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.analytics.AnalyticsRoute
+import ago.chat.android.analytics.ConversionReportRoute
 import ago.chat.android.analytics.SiteAnalyticsRoute
 import ago.chat.android.core.domain.navigation.AnalyticsReport
 import ago.chat.android.core.domain.navigation.visibleAnalyticsReports
@@ -101,5 +102,6 @@ private fun reportScreen(
 ) {
     when (report) {
         AnalyticsReport.Site -> SiteAnalyticsRoute(onBack = onBack)
+        AnalyticsReport.Conversion -> ConversionReportRoute(onBack = onBack)
     }
 }

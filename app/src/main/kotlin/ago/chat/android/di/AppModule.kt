@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.bookings.BookingsApi
@@ -15,6 +16,7 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
@@ -320,6 +322,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): SiteAnalyticsApi = KtorSiteAnalyticsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same
+     * `config.apiBaseUrl` [provideSiteAnalyticsApi] above reads, since
+     * `GET /api/v1/conversations/conversion-report` is one more endpoint on that same origin. A third
+     * `@Provides` rather than a third method behind one binding, for the identical reason
+     * [provideSiteAnalyticsApi]'s own doc comment gives for keeping the site report separate from the
+     * personal one ([ConversionReportApi]'s own doc comment).
+     */
+    @Provides
+    public fun provideConversionReportApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): ConversionReportApi = KtorConversionReportApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is
