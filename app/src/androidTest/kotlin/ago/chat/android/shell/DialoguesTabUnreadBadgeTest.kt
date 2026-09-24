@@ -41,7 +41,11 @@ class DialoguesTabUnreadBadgeTest {
         // The icon's own contentDescription is still the bare label - never a numeral, and never a
         // sentence built around one, for a total this app does not have an answer for yet
         // (`docs/backlog/26-46-*.md`'s own "no `0` that really means unknown" rule).
-        composeTestRule.onNodeWithContentDescription("Диалоги").assertExists()
+        // `useUnmergedTree`: `NavigationBarItem` merges its icon and label into one semantics node, so
+        // the icon's own `contentDescription` is only visible as its own node before that merge runs -
+        // the merged tree's own node is what the mockup asks a screen reader to hear, not what this test
+        // is checking, which is that `AppShellScreen` set the *icon's own* description correctly.
+        composeTestRule.onNodeWithContentDescription("Диалоги", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -50,7 +54,7 @@ class DialoguesTabUnreadBadgeTest {
 
         // A real, loaded `0` renders exactly like "not loaded yet" - no badge either way - but for a
         // different reason: there is genuinely nothing to announce.
-        composeTestRule.onNodeWithContentDescription("Диалоги").assertExists()
+        composeTestRule.onNodeWithContentDescription("Диалоги", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -59,18 +63,22 @@ class DialoguesTabUnreadBadgeTest {
 
         // The bare label alone no longer describes this node - proves the badge branch actually ran,
         // not just that it compiles.
-        composeTestRule.onNodeWithContentDescription("Диалоги").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Диалоги", useUnmergedTree = true).assertDoesNotExist()
         // The full sentence: the tab's own name, then the count in words (`conversation_row_unread_few`,
         // reused verbatim from the row's own identical clause) - never a bare "3" a screen reader would
         // announce with no idea what it counts.
-        composeTestRule.onNodeWithContentDescription("Диалоги. 3 непрочитанных сообщения").assertExists()
+        composeTestRule
+            .onNodeWithContentDescription("Диалоги. 3 непрочитанных сообщения", useUnmergedTree = true)
+            .assertExists()
     }
 
     @Test
     fun theBadgeIsSingularlyWordedForOneUnreadMessage() {
         setContentWith(unreadConversationsTotal = 1)
 
-        composeTestRule.onNodeWithContentDescription("Диалоги. 1 непрочитанное сообщение").assertExists()
+        composeTestRule
+            .onNodeWithContentDescription("Диалоги. 1 непрочитанное сообщение", useUnmergedTree = true)
+            .assertExists()
     }
 
     private fun setContentWith(unreadConversationsTotal: Int?) {
