@@ -708,4 +708,42 @@
     <string name="network_failure_no_connection">Нет соединения. Проверьте подключение к интернету и попробуйте ещё раз.</string>
     <string name="network_failure_server_status">Сервер ответил ошибкой (код %1$d). Попробуйте ещё раз.</string>
     <string name="network_failure_unexpected">Что-то пошло не так. Попробуйте ещё раз.</string>
+
+    <!--
+        `26-97`: Записи's own «Часы» segment - the working-hours rules a tenant has, with the Edit and
+        Delete this product did not have until that item (`Ago.Calendar.Api` mapped exactly one
+        working-hours verb, POST, so a mistyped 09:00-for-19:00 was permanent and deleting the whole
+        master was the only remedy anywhere). Gated on `calendar:configure`.
+    -->
+    <string name="working_hours_tab">Часы</string>
+    <string name="working_hours_empty">Рабочих часов пока нет.</string>
+    <string name="working_hours_load_failed_unexpected">Не удалось загрузить рабочие часы. Попробуйте ещё раз.</string>
+    <string name="working_hours_edit_title">Изменить рабочие часы</string>
+    <string name="working_hours_day_label">День недели</string>
+    <string name="working_hours_opens_label">Начало</string>
+    <string name="working_hours_closes_label">Конец</string>
+    <string name="working_hours_save">Сохранить</string>
+    <string name="working_hours_edit">Изменить</string>
+    <string name="working_hours_delete">Удалить</string>
+    <string name="working_hours_delete_title">Удалить рабочие часы?</string>
+    <string name="working_hours_delete_message">Дни, уже нарезанные по этим часам, сохранят свои слоты - вместе со всеми записями на них. Изменятся только дни, которые будут нарезаны дальше.</string>
+    <!-- `26-97`: the reconciliation. A correction is always allowed - it cannot damage a booking,
+         because the materialiser only ever inserts into days with no rows at all - so what is owed to
+         the operator is not a refusal but this: which days still carry the old hours, how many live
+         bookings sit on them, and the date to re-cut the schedule from. -->
+    <string name="working_hours_recut_notice">Сохранено. Дни, уже нарезанные по старым часам, сохраняют прежнюю сетку: %1$s. Записей на этих днях: %2$d. Чтобы изменение применилось и к ним, пересчитайте расписание с %3$s.</string>
+    <string name="working_hours_recut_notice_no_bookings">Сохранено. Дни, уже нарезанные по старым часам, сохраняют прежнюю сетку: %1$s. Записей на этих днях нет. Чтобы изменение применилось и к ним, пересчитайте расписание с %2$s.</string>
+    <!-- Full weekday names for the correction picker, index 0 = Sunday - the identical convention
+         `bookings_weekday_short` above already uses, so a rule's own `dayOfWeek` indexes this array
+         directly with no remapping at the call site. -->
+    <string-array name="working_hours_weekday">
+        <item>Воскресенье</item>
+        <item>Понедельник</item>
+        <item>Вторник</item>
+        <item>Среда</item>
+        <item>Четверг</item>
+        <item>Пятница</item>
+        <item>Суббота</item>
+    </string-array>
+
 </resources>

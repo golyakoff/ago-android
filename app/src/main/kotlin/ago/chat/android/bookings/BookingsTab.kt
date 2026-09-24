@@ -1,7 +1,7 @@
 package ago.chat.android.bookings
 
-/** Записи's own four segments — Ожидают (`26-48`), Утверждены (`26-51`), Клиенты (`26-52`) и Услуги
- * (`26-96`). A plain UI-layer enum, not a `:core:domain` type: unlike
+/** Записи's own five segments — Ожидают (`26-48`), Утверждены (`26-51`), Клиенты (`26-52`), Услуги
+ * (`26-96`) и Часы (`26-97`). A plain UI-layer enum, not a `:core:domain` type: unlike
  * [ago.chat.android.core.domain.permissions.Permission], nothing outside this screen's own composables
  * and view models needs to know these names exist. */
 internal enum class BookingsTab {
@@ -9,6 +9,12 @@ internal enum class BookingsTab {
     Confirmed,
     Clients,
     Services,
+
+    /** `26-97`: the working-hours rules, with the Edit and Delete this product did not have until that
+     * item. Placed here rather than behind «График мастера» (the `26-90` pass's item **E**, which does
+     * not exist in this repository yet) because a correction nobody can reach is not a correction —
+     * see [ago.chat.android.schedule.WorkingHoursBody]'s own doc comment. */
+    Hours,
 }
 
 /**
@@ -46,10 +52,16 @@ internal fun visibleBookingsTabs(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
     showServicesSegment: Boolean,
+    // `26-97`: a fifth, independently computed gate - `calendar:configure` alone, which is what
+    // `PUT`/`DELETE /working-hours/{ruleId}` check server-side. Narrower than Клиенты's own
+    // `calendar:configure` OR `customer:read`, so it genuinely has to be its own boolean rather
+    // than reuse either sibling's.
+    showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
         add(BookingsTab.Pending)
         if (showConfirmedSegment) add(BookingsTab.Confirmed)
         if (showClientsSegment) add(BookingsTab.Clients)
         if (showServicesSegment) add(BookingsTab.Services)
+        if (showHoursSegment) add(BookingsTab.Hours)
     }

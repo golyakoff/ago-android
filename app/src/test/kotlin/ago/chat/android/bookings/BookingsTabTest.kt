@@ -20,7 +20,12 @@ class BookingsTabTest {
     fun `only Pending is drawn with no segment earned`() {
         assertEquals(
             listOf(BookingsTab.Pending),
-            visibleBookingsTabs(showConfirmedSegment = false, showClientsSegment = false, showServicesSegment = false),
+            visibleBookingsTabs(
+                showConfirmedSegment = false,
+                showClientsSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -28,7 +33,12 @@ class BookingsTabTest {
     fun `Pending and Confirmed are drawn, the rest withheld`() {
         assertEquals(
             listOf(BookingsTab.Pending, BookingsTab.Confirmed),
-            visibleBookingsTabs(showConfirmedSegment = true, showClientsSegment = false, showServicesSegment = false),
+            visibleBookingsTabs(
+                showConfirmedSegment = true,
+                showClientsSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -36,7 +46,12 @@ class BookingsTabTest {
     fun `Pending and Clients are drawn, the rest withheld`() {
         assertEquals(
             listOf(BookingsTab.Pending, BookingsTab.Clients),
-            visibleBookingsTabs(showConfirmedSegment = false, showClientsSegment = true, showServicesSegment = false),
+            visibleBookingsTabs(
+                showConfirmedSegment = false,
+                showClientsSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -46,7 +61,12 @@ class BookingsTabTest {
     fun `Clients without Services is a real combination, not a rounding of one flag`() {
         assertEquals(
             listOf(BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients),
-            visibleBookingsTabs(showConfirmedSegment = true, showClientsSegment = true, showServicesSegment = false),
+            visibleBookingsTabs(
+                showConfirmedSegment = true,
+                showClientsSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -55,15 +75,72 @@ class BookingsTabTest {
     fun `Services without Confirmed is a real combination too`() {
         assertEquals(
             listOf(BookingsTab.Pending, BookingsTab.Clients, BookingsTab.Services),
-            visibleBookingsTabs(showConfirmedSegment = false, showClientsSegment = true, showServicesSegment = true),
+            visibleBookingsTabs(
+                showConfirmedSegment = false,
+                showClientsSegment = true,
+                showServicesSegment = true,
+                showHoursSegment = false,
+            ),
         )
     }
 
     @Test
-    fun `all four segments are drawn, in Pending, Confirmed, Clients, Services order`() {
+    fun `all five segments are drawn, in Pending, Confirmed, Clients, Services, Hours order`() {
         assertEquals(
-            listOf(BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients, BookingsTab.Services),
-            visibleBookingsTabs(showConfirmedSegment = true, showClientsSegment = true, showServicesSegment = true),
+            listOf(BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients, BookingsTab.Services, BookingsTab.Hours),
+            visibleBookingsTabs(
+                showConfirmedSegment = true,
+                showClientsSegment = true,
+                showServicesSegment = true,
+                showHoursSegment = true,
+            ),
+        )
+    }
+
+    /**
+     * `26-97`: Часы is a fourth, independently computed gate — `calendar:configure` alone, which is
+     * what the two working-hours writes check server-side. Reusing Клиенты's own flag
+     * (`calendar:configure` **or** `customer:read`) would offer an Edit to an operator holding only
+     * `customer:read`, which the server then refuses: an affordance that exists purely to fail.
+     */
+    @Test
+    fun `Clients without Hours - customer read alone earns the one and not the other`() {
+        assertEquals(
+            listOf(BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients),
+            visibleBookingsTabs(
+                showConfirmedSegment = true,
+                showClientsSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `Hours is drawn last, after every segment that earns its place before it`() {
+        assertEquals(
+            listOf(BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients, BookingsTab.Hours),
+            visibleBookingsTabs(
+                showConfirmedSegment = true,
+                showClientsSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `Hours can be the only earned segment`() {
+        // `calendar:configure` without `customer:read` - a real shape: it earns Клиенты (the wider
+        // gate) and Часы, but not Утверждены.
+        assertEquals(
+            listOf(BookingsTab.Pending, BookingsTab.Clients, BookingsTab.Hours),
+            visibleBookingsTabs(
+                showConfirmedSegment = false,
+                showClientsSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = true,
+            ),
         )
     }
 }
