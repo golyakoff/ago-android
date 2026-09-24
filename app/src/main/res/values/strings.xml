@@ -546,6 +546,21 @@
     <string name="analytics_preset_last_30_days">Последние 30 дней</string>
     <string name="analytics_conversion_by_operator_empty">В этом периоде нет результатов, отнесённых к оператору.</string>
 
+    <!-- `26-72`: «По меткам», the third of the five - wording copied verbatim from `ago-console`'s own
+         `ru.ts` (`tagBreakdown*`), except the menu/screen title itself, which follows the mockup's own
+         naming rather than the console's page title («Отчёт по меткам») - `docs/backlog/26-72-*.md`'s
+         own Found section quotes the mockup naming this destination «По меткам». Presets and menu action
+         are the identical strings `26-71` already declared above. -->
+    <string name="analytics_report_tag_breakdown">По меткам</string>
+    <string name="analytics_tag_breakdown_empty">В этом периоде нет диалогов.</string>
+    <string name="analytics_coverage_heading">Охват метками</string>
+    <string name="analytics_tagged_label">С меткой</string>
+    <string name="analytics_coverage_label">Доля с меткой</string>
+    <string name="analytics_percentage_value">%1$s%%</string>
+    <string name="analytics_tag_column">Метка</string>
+    <string name="analytics_by_tag_empty">В этом периоде ни один диалог не помечен меткой.</string>
+    <string name="analytics_multi_tag_note">Диалог с несколькими метками учитывается в каждой из них, поэтому сумма по этому столбцу не совпадёт с общим числом диалогов выше — так и должно быть, это не ошибка.</string>
+
     <string name="analytics_overall_heading">Всего за период</string>
     <string name="analytics_previous_period_heading">Предыдущий период</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>

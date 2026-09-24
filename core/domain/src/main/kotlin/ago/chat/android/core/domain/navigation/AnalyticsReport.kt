@@ -11,9 +11,9 @@ import ago.chat.android.core.domain.permissions.holds
  * ## Why an enum, and why it is the extension point for `26-71`..`26-74`
  *
  * `26-58` decided all five administrator reports port to Android as destinations behind one overflow
- * rather than as tabs or a picker. `26-71` («Конверсия») is the second of those five; three more
- * (`26-72` метки, `26-73` воронка записи, `26-74` показы телефонов) are not built yet, and this enum
- * deliberately does not name them. That is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`),
+ * rather than as tabs or a picker. `26-71` («Конверсия») and `26-72` («По меткам») are the second and
+ * third of those five; two more (`26-73` воронка записи, `26-74` показы телефонов) are not built yet,
+ * and this enum deliberately does not name them. That is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`),
  * restated for this menu: **a row exists for a screen that exists.** An overflow that opens onto a name
  * with nothing behind it is the same inert-control shape `26-15`/`26-40` refused twice.
  *
@@ -43,6 +43,11 @@ public enum class AnalyticsReport(
      * shared constant for the reason this enum's own doc comment gives — the mockup already draws a
      * sibling report on a different permission. */
     Conversion(Permission.SITE_CONFIGURE),
+
+    /** `26-72`: «По меткам» — `GET /api/v1/conversations/tag-breakdown-report`, the console's own
+     * `/analytics/tags`. Gated identically to [Site]/[Conversion] today, for the identical "a field of
+     * its own anyway" reason [Conversion]'s own doc comment gives. */
+    TagBreakdown(Permission.SITE_CONFIGURE),
 }
 
 /**

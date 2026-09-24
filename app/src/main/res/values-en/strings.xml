@@ -325,6 +325,19 @@
     <string name="analytics_preset_last_30_days">Last 30 days</string>
     <string name="analytics_conversion_by_operator_empty">No recorded outcomes attribute to an operator in this range.</string>
 
+    <!-- `26-72`: «По меткам», the third of the five - wording copied verbatim from `ago-console`'s own
+         `en.ts` (`tagBreakdown*`), except the menu/screen title itself - see `values/strings.xml` for why
+         it follows the mockup's own naming rather than the console's page title. -->
+    <string name="analytics_report_tag_breakdown">By tag</string>
+    <string name="analytics_tag_breakdown_empty">No conversations in this range.</string>
+    <string name="analytics_coverage_heading">Tag coverage</string>
+    <string name="analytics_tagged_label">Tagged</string>
+    <string name="analytics_coverage_label">Coverage</string>
+    <string name="analytics_percentage_value">%1$s%%</string>
+    <string name="analytics_tag_column">Tag</string>
+    <string name="analytics_by_tag_empty">No conversation in this range carries a tag.</string>
+    <string name="analytics_multi_tag_note">A conversation with more than one tag counts once per tag it holds, so this column will not sum to the total conversation count above - that is expected, not an error.</string>
+
     <string name="analytics_overall_heading">Total for the period</string>
     <string name="analytics_previous_period_heading">Previous period</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>
