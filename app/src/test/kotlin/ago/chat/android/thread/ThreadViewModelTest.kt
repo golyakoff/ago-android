@@ -865,6 +865,16 @@ class ThreadViewModelTest {
 
         override suspend fun claim(conversationId: String) = error("not used by this screen")
 
+        // `26-90`: the site-wide list and its erase action belong to the conversation list's own «Все»
+        // tab - the same "not used by this screen" shape every other unused member of this fake takes.
+        override suspend fun fetchAllConversations(
+            beforeId: String?,
+            pageSize: Int,
+            states: List<String>,
+        ) = error("not used by this screen")
+
+        override suspend fun requestErasure(conversationId: String) = error("not used by this screen")
+
         override suspend fun markRead(
             conversationId: String,
             upToSequence: Int,

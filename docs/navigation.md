@@ -58,14 +58,12 @@ flowchart TD
     Canned["Готовые ответы"]
     CloseSheet["Итог закрытия"]
     Search["Поиск по диалогам"]
-    AllConv["Все диалоги"]
     Restricted["Ограниченные посетители"]
   end
 
   ConvList -- "тап по строке" --> Thread
   ConvList -- "чип фильтра" --> TagSheet
   ConvList -- "лупа" --> Search
-  ConvList -- "⋮ · site:configure" --> AllConv
   ConvList -- "⋮ · site:configure" --> Restricted
   Search -- "тап по находке" --> Thread
   Thread -- "назад" --> ConvList
@@ -354,9 +352,23 @@ Five decisions in that picture are worth stating rather than leaving to be infer
   conversation a navigation act rather than a decision.
 - **Диалоги carries four console routes, not one.** `/` is the list, `/conversations/:id` is the
   thread, `/conversations/search` is the app bar's own search field rather than a destination, and
-  the two `site:configure`-gated screens (`/conversations/all`, `/conversations/restricted`) sit in
-  the app bar's overflow menu. An operator who does not hold that permission has a two-item overflow,
-  not a disabled one — the same hide-when-lacking rule the console's rail applies.
+  `/conversations/restricted` sits in the app bar's overflow menu, gated on `site:configure`. An
+  operator who does not hold that permission has a shorter overflow, not a disabled one — the same
+  hide-when-lacking rule the console's rail applies.
+- **`/conversations/all` is a third segment of the list, not an overflow item** (`26-90`). This used
+  to be drawn beside `/conversations/restricted` in the overflow, and the approved mockup's own
+  transition graph moved it: on a phone, a separate destination would mean an administrator *leaves*
+  their own list to look at everybody's, where the control that already separates «Мои» from
+  «Ожидают» separates this too. It is gated on `site:configure` — the permission
+  `GetAllConversationsForSiteHandler` actually enforces, **not** `conversation:read`, which every
+  operator holds — and an operator without it has a two-segment control, never a greyed-out third
+  (`visibleConversationListTabs`).
+- **A row on that third segment does not open a thread, and this is a server fact.** The hub's own
+  `JoinConversationAsync` *assigns* before it reads, and `Conversation.AssignTo` accepts only a
+  `Waiting` conversation — so a tap would claim a queued conversation, or throw for one that is
+  assigned elsewhere or closed. `ago-console`'s own `AdminConversationsPage` is read-only for exactly
+  this reason. The tab says so in one line rather than offering a tap that cannot work; making an
+  administrator able to *read* any conversation's history is a server change nobody has funded yet.
 - **The visitor context is a bottom sheet, not a route.** Everything in it — notes, tags, contact
   details, visitor history, channel identities, the block and upload-grant controls — is read *while*
   composing. A route would unmount the composer and lose the draft, which is exactly the loss the

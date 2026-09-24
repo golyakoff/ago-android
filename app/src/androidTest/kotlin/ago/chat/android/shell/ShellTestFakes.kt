@@ -1,10 +1,13 @@
 package ago.chat.android.shell
 
+import ago.chat.android.core.domain.conversations.AllConversationsPage
+import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
@@ -59,6 +62,26 @@ internal class FakeConversationsApi(
     ): Boolean {
         markReadCalls.add(conversationId to upToSequence)
         return true
+    }
+
+    // `26-90`: answers an empty, last page by default. The back-contract tests that use this fake
+    // never open the «Все» tab (they have no `site:configure` to be offered it with), so a real
+    // page here would be data no assertion reads - but an `error(...)` would turn a future test that
+    // does visit that tab into a crash instead of an empty list, which is the wrong failure.
+    var allConversationsResult: AllConversationsResult =
+        AllConversationsResult.Loaded(AllConversationsPage(conversations = emptyList(), nextBeforeId = null))
+
+    val erasureRequests: MutableList<String> = mutableListOf()
+
+    override suspend fun fetchAllConversations(
+        beforeId: String?,
+        pageSize: Int,
+        states: List<String>,
+    ): AllConversationsResult = allConversationsResult
+
+    override suspend fun requestErasure(conversationId: String): ErasureResult {
+        erasureRequests.add(conversationId)
+        return ErasureResult.Accepted
     }
 }
 

@@ -51,6 +51,16 @@ public object Permission {
      * `:core:domain` itself (no navigation destination gates on it), which is why it was not already
      * named here before this item needed it. */
     public const val CONVERSATION_SEND: String = "conversation:send"
+
+    /** `26-90`: "may permanently erase one conversation" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationErase`. Bundled into the administrator set by
+     * `RegisterSiteHandler`/`MintDemoTenantHandler` alongside `site:erase`/`site:export` and never
+     * granted to an operator separately (`26-90`'s own Out of scope), so in practice it travels with
+     * [SITE_CONFIGURE] — but it is checked on its own here rather than folded into that one, because
+     * "may see every conversation on the site" and "may destroy one" are two different capabilities
+     * and the server checks them separately too. Gates the swipe-to-erase action on the «Все» tab, and
+     * nothing else. */
+    public const val CONVERSATION_ERASE: String = "conversation:erase"
 }
 
 /** Every permission [Permission.CALENDAR_CONFIGURE]'s own destination can be earned through, per

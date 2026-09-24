@@ -1,14 +1,18 @@
 package ago.chat.android.core.network.conversations
 
+import ago.chat.android.core.domain.conversations.AllConversationsPage
+import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -128,6 +132,89 @@ public class KtorConversationsApi(
 
         return response.status.isSuccess()
     }
+
+    /**
+     * `26-90`: `GET /api/v1/conversations/all?beforeId=…&pageSize=…&state=…&state=…` — the site-wide
+     * admin list, gated server-side by `site:configure`.
+     *
+     * `state` is sent as a **repeated** query key rather than one comma-joined value, because that is
+     * what the server binds (`ConversationsEndpoints.HandleGetAllForSiteAsync`'s own `string[]? state`,
+     * ASP.NET Core's own repeatable-key binding). Ktor's [io.ktor.client.request.parameter] appends one
+     * key per call, which is exactly that shape; a joined string would arrive as a single unparseable
+     * state name and be refused by the handler's own vocabulary check.
+     *
+     * A `403` here is a real, expected answer rather than a bug: the whole tab is hidden from an
+     * operator without `site:configure` (`ConversationListUiState`'s own gate), so reaching this method
+     * without the permission should not happen — but it renders as an ordinary
+     * [AllConversationsResult.Failed] if it ever does, never as an empty list, the identical
+     * "a bad status is not an empty answer" rule [fetchQueue] above already states.
+     */
+    override suspend fun fetchAllConversations(
+        beforeId: String?,
+        pageSize: Int,
+        states: List<String>,
+    ): AllConversationsResult {
+        val response =
+            try {
+                client.get("$apiBaseUrl/api/v1/conversations/all") {
+                    parameter("pageSize", pageSize)
+                    beforeId?.let { parameter("beforeId", it) }
+                    states.forEach { state -> parameter("state", state) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return AllConversationsResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return AllConversationsResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+
+        return try {
+            AllConversationsResult.Loaded(response.body<AllConversationsForSiteResponseWireDto>().toDomain())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            AllConversationsResult.Failed(NetworkFailure.from(failure))
+        }
+    }
+
+    /**
+     * `26-90`: `POST /api/v1/conversations/{id}/erase` — `202 Accepted` on success, which this method
+     * reports as [ErasureResult.Accepted] and nothing more. It deliberately does **not** check for
+     * `202` specifically: any 2xx is "the request was recorded", and pinning the client to one exact
+     * success code would make a future `200`-with-a-body look like a failure for no gain.
+     *
+     * The refusal path is [claim]'s, verbatim: an RFC 7807 `detail` becomes [ErasureResult.Refused]
+     * shown to the operator as-is, and a transport failure or a bare non-2xx becomes
+     * [ErasureResult.Failed] carrying a classification this class never fabricates a sentence for.
+     */
+    override suspend fun requestErasure(conversationId: String): ErasureResult {
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/conversations/$conversationId/erase")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ErasureResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return ErasureResult.Accepted
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { ErasureResult.Refused(it) } ?: ErasureResult.Failed(NetworkFailure.ServerError(response.status.value))
+    }
 }
 
 /** `Ago.Chat.Api.Conversations.ConversationsEndpoints.MarkConversationReadRequest` - the one field
@@ -172,6 +259,13 @@ private data class ConversationSummaryWireDto(
     // field. `Ago.Chat.Contracts.ConversationSummaryDto.LastMessageContentKind`'s own raw wire value,
     // unparsed here - [ConversationSummary]'s own doc comment carries the reasoning.
     val lastMessageContentKind: String? = null,
+    // `26-90`: additive the identical way — `0` for the queue read, which does not populate it, and for
+    // a row that predates the field. A total, never an unread count
+    // (`Ago.Chat.Contracts.ConversationSummaryDto.MessageCount`'s own remarks).
+    val messageCount: Int = 0,
+    // `26-90`: additive the identical way — `null` for a Waiting row (no operator by definition) and
+    // for the queue read, which does not join `operators` in at all.
+    val operatorName: String? = null,
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -179,6 +273,14 @@ private data class ConversationSummaryWireDto(
 private data class OperatorQueueResponseWireDto(
     val waiting: List<ConversationSummaryWireDto>,
     val assignedToMe: List<ConversationSummaryWireDto>,
+)
+
+/** `26-90`: `Ago.Chat.Contracts.AllConversationsForSiteResponse` — the same row shape as the queue's
+ * two lists, plus the keyset cursor. */
+@Serializable
+private data class AllConversationsForSiteResponseWireDto(
+    val conversations: List<ConversationSummaryWireDto>,
+    val nextBeforeId: String? = null,
 )
 
 private fun ConversationSummaryWireDto.toDomain() =
@@ -195,10 +297,18 @@ private fun ConversationSummaryWireDto.toDomain() =
         lastMessageAt = lastMessageAt,
         state = state,
         lastMessageContentKind = lastMessageContentKind,
+        messageCount = messageCount,
+        operatorName = operatorName,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =
     ConversationQueue(
         waiting = waiting.map { it.toDomain() },
         assignedToMe = assignedToMe.map { it.toDomain() },
+    )
+
+private fun AllConversationsForSiteResponseWireDto.toDomain() =
+    AllConversationsPage(
+        conversations = conversations.map { it.toDomain() },
+        nextBeforeId = nextBeforeId,
     )

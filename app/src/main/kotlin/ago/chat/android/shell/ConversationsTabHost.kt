@@ -48,6 +48,12 @@ public fun ConversationsTabHost(
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
+    // `26-90`: the two permission-derived facts the Диалоги destination needs, computed by
+    // [AppShellScreen]'s own `conversationsTab` default from the permission set it already holds - the
+    // identical split its `teamTab`/`bookingsTab` slots already use. Defaulted to `false` so every
+    // back-contract test that constructs this composable directly compiles and behaves unchanged.
+    canSeeAllConversations: Boolean = false,
+    canEraseConversations: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -85,9 +91,15 @@ public fun ConversationsTabHost(
                 operatorDisplayName = operatorDisplayName,
                 operatorEmail = operatorEmail,
                 onOpenSettings = onOpenSettings,
+                canSeeAllConversations = canSeeAllConversations,
+                canEraseConversations = canEraseConversations,
             )
         }
     } else {
+        // `26-90`: deliberately still the two queue lists, not `listState.all` as well - a row on the
+        // «Все» tab cannot be opened at all (`ConversationListScreen.AllRow`'s own doc comment: the
+        // hub's own join assigns rather than reads), so searching that list here would be searching it
+        // for a conversation id it can never be asked about.
         val row = (listState.mine + listState.waiting).firstOrNull { it.conversationId == currentlyOpen }
         // `26-68`: the old fallback here (`row?.visitorId ?: currentlyOpen`) substituted the
         // conversation's own id into the visitor-id slot whenever `row` was not found yet - a restored

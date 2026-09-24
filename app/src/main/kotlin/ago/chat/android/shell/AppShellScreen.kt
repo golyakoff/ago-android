@@ -179,6 +179,16 @@ internal fun AppShellScreen(
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
             onOpenSettings = onOpenSettings,
+            // `26-90`: the same "read [permissions] directly in the default" shape `teamTab` below
+            // already uses, and safe for the identical reason it states there - [OperatorPermissions
+            // .holds] answers `false` for [OperatorPermissions.Unknown], and this default is only ever
+            // drawn once `AppShellScreen`'s own `when` has already matched [OperatorPermissions.Known].
+            // Two separate checks, not one: `site:configure` decides whether the «Все» segment exists
+            // at all, `conversation:erase` decides whether its rows swipe - the server checks them
+            // separately too, and folding them here would hand the erase gesture to an administrator
+            // who was never granted it.
+            canSeeAllConversations = permissions.holds(Permission.SITE_CONFIGURE),
+            canEraseConversations = permissions.holds(Permission.CONVERSATION_ERASE),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for

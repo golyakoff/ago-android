@@ -1,10 +1,13 @@
 package ago.chat.android.conversations
 
+import ago.chat.android.core.domain.conversations.AllConversationsPage
+import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
@@ -601,6 +604,257 @@ class ConversationListViewModelTest {
 
     // ------------------------------------------------------------------------------------- fakes
 
+    // --------------------------------------------------------------- `26-90`: the «Все» tab
+
+    @Test
+    fun `the site-wide list is not fetched until the tab is actually selected`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+
+            assertEquals("nothing asks for the site-wide list on screen start", 0, api.allCalls.size)
+
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            assertEquals(1, api.allCalls.size)
+        }
+
+    @Test
+    fun `the default filter asks the server for Waiting and Assigned, never Closed`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            val call = api.allCalls.single()
+            assertNull("the first page carries no cursor", call.first)
+            assertEquals(setOf("Waiting", "Assigned"), call.third.toSet())
+        }
+
+    @Test
+    fun `ticking Closed re-asks the server rather than filtering the page already in hand`() =
+        runTest(dispatcher) {
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    allPages = { allPageOf(listOf(summary("c1")), nextBeforeId = null) },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            viewModel.onStateFilterToggled(ConversationStateFilter.Closed)
+            advanceUntilIdle()
+
+            assertEquals("a second request, not a client-side filter", 2, api.allCalls.size)
+            assertEquals(
+                setOf("Waiting", "Assigned", "Closed"),
+                api.allCalls
+                    .last()
+                    .third
+                    .toSet(),
+            )
+        }
+
+    @Test
+    fun `unticking the last remaining status is refused, because an empty filter means unfiltered`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            viewModel.onStateFilterToggled(ConversationStateFilter.NotStarted)
+            advanceUntilIdle()
+            viewModel.onStateFilterToggled(ConversationStateFilter.Assigned)
+            advanceUntilIdle()
+
+            assertEquals(
+                "one box stays ticked",
+                setOf(ConversationStateFilter.Assigned),
+                viewModel.state.value.allFilter,
+            )
+            assertEquals("and no third request went out", 2, api.allCalls.size)
+        }
+
+    @Test
+    fun `scrolling to the end pages with the server's own cursor and appends, never replaces`() =
+        runTest(dispatcher) {
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    allPages = { beforeId ->
+                        if (beforeId == null) {
+                            allPageOf(listOf(summary("c1")), nextBeforeId = "c1")
+                        } else {
+                            allPageOf(listOf(summary("c2")), nextBeforeId = null)
+                        }
+                    },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.allHasMore)
+            viewModel.loadMoreAll()
+            advanceUntilIdle()
+
+            assertEquals("c1", api.allCalls.last().first)
+            assertEquals(
+                listOf("c1", "c2"),
+                viewModel.state.value.all
+                    .map { it.conversationId },
+            )
+            assertFalse("a null cursor is the last page", viewModel.state.value.allHasMore)
+        }
+
+    @Test
+    fun `a 202 holds the row in an erasing state instead of removing it`() =
+        runTest(dispatcher) {
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    // The server keeps returning the row after accepting the request - which is the
+                    // whole point: erasure is a job, not a deletion this call performed.
+                    allPages = { allPageOf(listOf(summary("c1")), nextBeforeId = null) },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            // `runCurrent()`, not `advanceUntilIdle()`, from here down: `confirmErasure` starts
+            // `startErasurePollIfNeeded`'s own `while (…) { delay(15s); reloadAll() }` loop, and
+            // `advanceUntilIdle()` fast-forwards through every one of that loop's delays for ever -
+            // the identical trap the claim-navigation test above already documents for the «Ожидают»
+            // poll. `runCurrent()` drains only what is runnable now, including the nested launches
+            // this call makes, and never touches a future-scheduled delay.
+            viewModel.confirmErasure("c1")
+            runCurrent()
+
+            assertEquals(listOf("c1"), api.erasureCalls)
+            val row =
+                viewModel.state.value.all
+                    .single()
+            assertEquals("c1", row.conversationId)
+            assertTrue("the row is still listed, visibly erasing", row.isErasing)
+
+            // The erasure poll this test started is still parked on its own `delay` - stopped
+            // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's
+            // own tests already follow. `runTest` waits for every coroutine on its scheduler after the
+            // body returns; an endless poll left running does not merely linger, it exhausts the test
+            // JVM's heap (found the hard way - `OutOfMemoryError` in `Gradle Test Executor`).
+            viewModel.onScreenStopped()
+        }
+
+    @Test
+    fun `the erasing row leaves only when the server stops returning it`() =
+        runTest(dispatcher) {
+            var stillListed = true
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    allPages = {
+                        if (stillListed) {
+                            allPageOf(listOf(summary("c1")), nextBeforeId = null)
+                        } else {
+                            allPageOf(emptyList(), nextBeforeId = null)
+                        }
+                    },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+            // `runCurrent()`, not `advanceUntilIdle()`, from here down: `confirmErasure` starts
+            // `startErasurePollIfNeeded`'s own `while (…) { delay(15s); reloadAll() }` loop, and
+            // `advanceUntilIdle()` fast-forwards through every one of that loop's delays for ever -
+            // the identical trap the claim-navigation test above already documents for the «Ожидают»
+            // poll. `runCurrent()` drains only what is runnable now, including the nested launches
+            // this call makes, and never touches a future-scheduled delay.
+            viewModel.confirmErasure("c1")
+            runCurrent()
+            assertTrue(
+                viewModel.state.value.all
+                    .single()
+                    .isErasing,
+            )
+
+            // The erasure job has now run server-side; the held row's own poll is what notices.
+            stillListed = false
+            advanceTimeBy(15_001)
+            runCurrent()
+
+            assertTrue(
+                "gone, because the server stopped sending it",
+                viewModel.state.value.all
+                    .isEmpty(),
+            )
+
+            // The erasure poll this test started is still parked on its own `delay` - stopped
+            // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's
+            // own tests already follow. `runTest` waits for every coroutine on its scheduler after the
+            // body returns; an endless poll left running does not merely linger, it exhausts the test
+            // JVM's heap (found the hard way - `OutOfMemoryError` in `Gradle Test Executor`).
+            viewModel.onScreenStopped()
+        }
+
+    @Test
+    fun `a refused erasure releases the held row and says so, and never retries`() =
+        runTest(dispatcher) {
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    allPages = { allPageOf(listOf(summary("c1")), nextBeforeId = null) },
+                    erasureResult = { ErasureResult.Refused("Operator does not have permission to erase.") },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            // `runCurrent()`, not `advanceUntilIdle()`, from here down: `confirmErasure` starts
+            // `startErasurePollIfNeeded`'s own `while (…) { delay(15s); reloadAll() }` loop, and
+            // `advanceUntilIdle()` fast-forwards through every one of that loop's delays for ever -
+            // the identical trap the claim-navigation test above already documents for the «Ожидают»
+            // poll. `runCurrent()` drains only what is runnable now, including the nested launches
+            // this call makes, and never touches a future-scheduled delay.
+            viewModel.confirmErasure("c1")
+            runCurrent()
+
+            assertFalse(
+                "the hold is released",
+                viewModel.state.value.all
+                    .single()
+                    .isErasing,
+            )
+            assertEquals(
+                EraseFailureUi.ServerRefusal("Operator does not have permission to erase."),
+                viewModel.state.value.eraseFailure,
+            )
+
+            // The refusal already released the hold, so the poll started by the swipe stops at its
+            // own first wake-up rather than running on - and nothing re-sends the request meanwhile.
+            advanceTimeBy(60_000)
+            runCurrent()
+            assertEquals("never retried on its own", 1, api.erasureCalls.size)
+
+            // The erasure poll this test started is still parked on its own `delay` - stopped
+            // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's
+            // own tests already follow. `runTest` waits for every coroutine on its scheduler after the
+            // body returns; an endless poll left running does not merely linger, it exhausts the test
+            // JVM's heap (found the hard way - `OutOfMemoryError` in `Gradle Test Executor`).
+            viewModel.onScreenStopped()
+        }
+
     private fun viewModelWith(
         api: ConversationsApi,
         cache: ConversationListCache = FakeConversationListCache(),
@@ -628,6 +882,28 @@ class ConversationListViewModelTest {
         operatorUnreadCount = unread,
     )
 
+    /** `26-90`: one row of the site-wide list, with the two fields that list alone populates. */
+    private fun summary(
+        id: String,
+        state: String = "Waiting",
+        messageCount: Int = 3,
+    ) = ConversationSummary(
+        conversationId = id,
+        visitorId = "visitor-$id",
+        emojiCreature = "🦊",
+        emojiFood = "🍕",
+        visitorName = null,
+        createdAt = "2026-09-22T09:00:00Z",
+        operatorUnreadCount = 0,
+        state = state,
+        messageCount = messageCount,
+    )
+
+    private fun allPageOf(
+        rows: List<ConversationSummary>,
+        nextBeforeId: String?,
+    ) = AllConversationsResult.Loaded(AllConversationsPage(conversations = rows, nextBeforeId = nextBeforeId))
+
     private fun queueOf(
         waiting: List<ConversationSummary> = emptyList(),
         mine: List<ConversationSummary> = emptyList(),
@@ -639,10 +915,22 @@ class ConversationListViewModelTest {
          * with the network call genuinely still pending rather than merely fast. */
         var hangQueueFetch: Boolean = false,
         var claimResult: (String) -> ClaimResult = { ClaimResult.Claimed },
+        /** `26-90`: keyed by the `beforeId` the caller sent, so one fake can answer a first page and a
+         * second page differently and a test can prove the cursor was actually used rather than
+         * merely that two calls happened. */
+        var allPages: (String?) -> AllConversationsResult = {
+            AllConversationsResult.Loaded(AllConversationsPage(conversations = emptyList(), nextBeforeId = null))
+        },
+        var erasureResult: (String) -> ErasureResult = { ErasureResult.Accepted },
     ) : ConversationsApi {
         var fetchCalls: Int = 0
             private set
         val claimCalls: MutableList<String> = mutableListOf()
+
+        /** `26-90`: every argument triple the «Все» tab asked with - what proves the state filter is a
+         * *request* parameter rather than something applied to an answer already in hand. */
+        val allCalls: MutableList<Triple<String?, Int, List<String>>> = mutableListOf()
+        val erasureCalls: MutableList<String> = mutableListOf()
 
         override suspend fun fetchQueue(): QueueResult {
             fetchCalls++
@@ -659,6 +947,20 @@ class ConversationListViewModelTest {
             conversationId: String,
             upToSequence: Int,
         ): Boolean = error("not used by this screen")
+
+        override suspend fun fetchAllConversations(
+            beforeId: String?,
+            pageSize: Int,
+            states: List<String>,
+        ): AllConversationsResult {
+            allCalls.add(Triple(beforeId, pageSize, states))
+            return allPages(beforeId)
+        }
+
+        override suspend fun requestErasure(conversationId: String): ErasureResult {
+            erasureCalls.add(conversationId)
+            return erasureResult(conversationId)
+        }
     }
 
     private class FakeConversationListCache(

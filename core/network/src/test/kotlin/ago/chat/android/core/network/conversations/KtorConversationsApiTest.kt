@@ -1,8 +1,10 @@
 package ago.chat.android.core.network.conversations
 
+import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
+import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.InMemoryActiveSite
@@ -355,6 +357,128 @@ class KtorConversationsApiTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
             assertEquals(false, api.markRead("c1", 42))
+        }
+
+    // ---------------------------------------------------------------- `26-90`: GET /conversations/all
+
+    @Test
+    fun `the state filter is sent as a repeated query key, which is what the server binds`() =
+        runTest {
+            val requested = mutableListOf<Pair<HttpMethod, String>>()
+            val api =
+                apiFor(recordTo = requested) {
+                    respond(
+                        """{"conversations":[],"nextBeforeId":null}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            api.fetchAllConversations(beforeId = "c9", pageSize = 50, states = listOf("Waiting", "Assigned"))
+
+            val url = requested.single().second
+            // One `state=` per value, not a comma-joined one - `HandleGetAllForSiteAsync`'s own
+            // `string[]? state` binds a repeated key, and a joined value would arrive as a single
+            // unparseable state name the handler refuses outright.
+            assertTrue(url, url.contains("state=Waiting"))
+            assertTrue(url, url.contains("state=Assigned"))
+            assertTrue(url, url.contains("beforeId=c9"))
+            assertTrue(url, url.contains("pageSize=50"))
+        }
+
+    @Test
+    fun `a page maps its rows and its keyset cursor, including 26-90's own two new fields`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "conversations": [
+                            {
+                              "conversationId":"c1","visitorId":"v1","createdAt":"2026-09-22T09:00:00Z",
+                              "operatorUnreadCount":0,"state":"Assigned","operatorName":"Мария П.",
+                              "messageCount":9,"lastMessagePreview":"Спасибо!","lastMessageAt":"2026-09-22T09:06:00Z"
+                            },
+                            {
+                              "conversationId":"c2","visitorId":"v2","createdAt":"2026-09-22T08:00:00Z",
+                              "operatorUnreadCount":0,"state":"Waiting"
+                            }
+                          ],
+                          "nextBeforeId":"c2"
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val page = (api.fetchAllConversations(null, 50, listOf("Waiting")) as AllConversationsResult.Loaded).page
+
+            assertEquals("c2", page.nextBeforeId)
+            val first = page.conversations.first()
+            assertEquals(9, first.messageCount)
+            assertEquals("Мария П.", first.operatorName)
+            assertEquals("Спасибо!", first.lastMessagePreview)
+            // A row with neither field on the wire defaults rather than failing the whole read - the
+            // additive-contract rule every other field on this DTO already follows.
+            assertEquals(0, page.conversations[1].messageCount)
+            assertEquals(null, page.conversations[1].operatorName)
+        }
+
+    @Test
+    fun `a 403 on the site-wide list is a failed read, never an empty site`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(
+                AllConversationsResult.Failed(NetworkFailure.ServerError(403)),
+                api.fetchAllConversations(null, 50, listOf("Waiting")),
+            )
+        }
+
+    // --------------------------------------------------------------- `26-90`: POST /{id}/erase
+
+    @Test
+    fun `a 202 is an accepted request, not a completed deletion`() =
+        runTest {
+            val requested = mutableListOf<Pair<HttpMethod, String>>()
+            val api = apiFor(recordTo = requested) { respond("", HttpStatusCode.Accepted) }
+
+            assertEquals(ErasureResult.Accepted, api.requestErasure("c1"))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/conversations/c1/erase", requested.single())
+        }
+
+    @Test
+    fun `a refused erasure carries the server's own words, never a fabricated sentence`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"Conversation.Forbidden","detail":"Operator does not have permission to erase."}""",
+                        HttpStatusCode.Forbidden,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            assertEquals(
+                ErasureResult.Refused("Operator does not have permission to erase."),
+                api.requestErasure("c1"),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on erase is a transport failure, not a silently repeated write`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor {
+                    calls++
+                    throw IOException("unexpected end of stream")
+                }
+
+            assertEquals(ErasureResult.Failed(NetworkFailure.NoConnection), api.requestErasure("c1"))
+            assertEquals("exactly one attempt - an irreversible write is never retried by this adapter", 1, calls)
         }
 
     private fun apiFor(
