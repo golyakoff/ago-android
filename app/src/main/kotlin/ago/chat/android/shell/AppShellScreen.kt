@@ -12,6 +12,7 @@ import ago.chat.android.core.domain.permissions.holds
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.team.TeamRoute
 import ago.chat.android.ui.components.networkFailureText
+import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -43,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -105,6 +109,7 @@ public fun AppShellRoute(
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val identity by viewModel.identity.collectAsStateWithLifecycle()
+    val unreadConversationsTotal by viewModel.unreadConversationsTotal.collectAsStateWithLifecycle()
 
     // `26-17`: the Settings screen's own site switcher writes a new site *through* `ActiveSiteSelection`
     // (`di/AppModule`'s single source of truth) rather than through this value, so this local override
@@ -120,6 +125,7 @@ public fun AppShellRoute(
         hubConnectionState = hubConnectionState,
         operatorDisplayName = identity?.displayName,
         operatorEmail = identity?.email,
+        unreadConversationsTotal = unreadConversationsTotal,
         onRetry = viewModel::retry,
         onSignOut = onSignOut,
         onSiteSwitched = { newSiteId -> currentActiveSiteId = newSiteId },
@@ -160,6 +166,10 @@ internal fun AppShellScreen(
     onSignOut: () -> Unit,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
+    // `26-46`: `null` (the default every back-contract test above still gets, unchanged) means "not
+    // loaded yet" - no badge - the identical distinction `AppShellViewModel.unreadConversationsTotal`'s
+    // own doc comment draws. Read by `AppShellContent` below, alone; no tab slot needs it.
+    unreadConversationsTotal: Int? = null,
     onSiteSwitched: (String) -> Unit = {},
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit = { onOpenSettings ->
         ConversationsTabHost(
@@ -249,6 +259,7 @@ internal fun AppShellScreen(
                 hubConnectionState = hubConnectionState,
                 operatorDisplayName = operatorDisplayName,
                 operatorEmail = operatorEmail,
+                unreadConversationsTotal = unreadConversationsTotal,
                 onSignOut = onSignOut,
                 conversationsTab = conversationsTab,
                 bookingsTab = bookingsTab,
@@ -294,6 +305,7 @@ private fun AppShellContent(
     hubConnectionState: OperatorHubConnectionState,
     operatorDisplayName: String?,
     operatorEmail: String?,
+    unreadConversationsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     bookingsTab: @Composable (Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
@@ -389,13 +401,76 @@ private fun AppShellContent(
                             }
                         },
                         icon = {
-                            Icon(
-                                imageVector = destination.icon(),
-                                // The tab's own visible label, reused rather than duplicated as a
-                                // second string: an icon and a label that name the same destination
-                                // differently is a translation bug waiting to happen.
-                                contentDescription = stringResource(destination.labelRes()),
-                            )
+                            // `26-46`: the mockup's `.nb` — drawn only on Диалоги, only once a real
+                            // total has arrived ([unreadConversationsTotal] `null` means "not loaded
+                            // yet", `AppShellViewModel.unreadConversationsTotal`'s own doc comment), and
+                            // never for a genuine `0` (`docs/backlog/26-39-*.md`'s own "no count is
+                            // invented, and none is drawn for a real zero either" rule, restated for a
+                            // badge instead of a label).
+                            val unreadCount =
+                                unreadConversationsTotal
+                                    ?.takeIf { it > 0 && destination == BottomDestination.Conversations }
+                            if (unreadCount != null) {
+                                // `unreadCount` (a fresh local `val`) is smart-cast non-null for the
+                                // rest of this branch - `unreadConversationsTotal` itself, a captured
+                                // parameter, would not be, which is why this is read through it rather
+                                // than through that parameter directly from here on.
+                                val label = stringResource(destination.labelRes())
+                                val unreadClause =
+                                    russianPluralStringResource(
+                                        count = unreadCount.toLong(),
+                                        // Reused, not duplicated: the identical clause
+                                        // `ConversationListScreen`'s own `conversationRowContentDescription`
+                                        // already speaks for one row's own unread count - the same
+                                        // number, worded the same way, whether it is heard here or
+                                        // there.
+                                        one = R.string.conversation_row_unread_one,
+                                        few = R.string.conversation_row_unread_few,
+                                        many = R.string.conversation_row_unread_many,
+                                    )
+                                BadgedBox(
+                                    badge = {
+                                        // No explicit colours: `Badge`'s own default container/content
+                                        // colours already are `colorScheme.error`/`onError` (confirmed
+                                        // against the resolved `material3` artifact's own `BadgeTokens`,
+                                        // not assumed - the same verification habit
+                                        // `NavigationBarItemDefaults` above already follows), which is
+                                        // exactly the mockup's `--danger`/`--on-danger` fill this badge
+                                        // asks for.
+                                        Badge(
+                                            // The badge's own bare digit never becomes a second,
+                                            // separately-announced TalkBack node - `VisitorAvatar`'s own
+                                            // `clearAndSetSemantics {}` precedent
+                                            // (`ConversationListScreen`'s doc comment on
+                                            // `ConversationRow`), applied here for the identical reason:
+                                            // the one sentence this whole icon speaks is set on the
+                                            // `Icon` below instead.
+                                            modifier = Modifier.clearAndSetSemantics {},
+                                        ) {
+                                            Text(text = unreadCount.toString())
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = destination.icon(),
+                                        // A bare numeral announced after a tab name would be
+                                        // meaningless (`docs/backlog/26-46-*.md`'s own Scope, part 4) -
+                                        // one sentence naming both the tab and what the count means,
+                                        // the same "state the number in words" rule
+                                        // `conversationRowContentDescription` already applies to the
+                                        // row's own badge.
+                                        contentDescription = "$label. $unreadClause",
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = destination.icon(),
+                                    // The tab's own visible label, reused rather than duplicated as a
+                                    // second string: an icon and a label that name the same destination
+                                    // differently is a translation bug waiting to happen.
+                                    contentDescription = stringResource(destination.labelRes()),
+                                )
+                            }
                         },
                         label = { Text(text = stringResource(destination.labelRes())) },
                         colors = itemColors,

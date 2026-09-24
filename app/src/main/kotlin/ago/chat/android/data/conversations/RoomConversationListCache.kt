@@ -3,6 +3,8 @@ package ago.chat.android.data.conversations
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationQueue
 import ago.chat.android.core.domain.conversations.ConversationSummary
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,13 +14,21 @@ import javax.inject.Singleton
  * `EncryptedSharedPreferences`. Every translation between `:core:domain`'s wire-shaped
  * [ConversationSummary] and this module's `@Entity` lives here and nowhere else, so a Room annotation
  * never has to appear on a `:core:domain` type.
+ *
+ * `26-46`: also [ConversationsUnreadTotal] — the identical class, a second small interface, rather than
+ * a second class wrapping the same [dao]. `@Singleton` already makes this the one instance Hilt ever
+ * builds ([ago.chat.android.di.AppModule.provideConversationListCache]'s own binding), so a second
+ * `@Singleton` class here would just be a second handle onto the same [ConversationRowDao] for no
+ * reason - one class, two ports, is the plainer shape when both already share every dependency they
+ * have.
  */
 @Singleton
 internal class RoomConversationListCache
     @Inject
     constructor(
         private val dao: ConversationRowDao,
-    ) : ConversationListCache {
+    ) : ConversationListCache,
+        ConversationsUnreadTotal {
         override suspend fun read(): ConversationQueue? {
             if (dao.hasEverBeenWritten() == 0) {
                 // Never written at all - `ConversationListCache.read`'s own doc comment: this is the
@@ -38,6 +48,16 @@ internal class RoomConversationListCache
                     queue.assignedToMe.map { it.toEntity(ConversationBucket.ASSIGNED_TO_ME) }
             dao.replaceAll(rows)
         }
+
+        /** [ConversationsUnreadTotal.observeTotal]'s own contract: `null` until [write] has ever run,
+         * the sum of «Мои»'s own `operatorUnreadCount` column after that - never [read]'s own
+         * once-only snapshot, because this has to keep emitting for as long as
+         * [ago.chat.android.shell.AppShellViewModel] is collecting it. */
+        override fun observeTotal(): Flow<Int?> =
+            combine(
+                dao.observeHasEverBeenWritten(),
+                dao.observeTotalUnreadIn(ConversationBucket.ASSIGNED_TO_ME),
+            ) { everWritten, total -> if (everWritten == 0) null else total }
     }
 
 private fun ConversationRowEntity.toDomain() =

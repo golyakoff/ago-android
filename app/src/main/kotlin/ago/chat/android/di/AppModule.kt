@@ -27,6 +27,7 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
+import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
@@ -354,6 +355,14 @@ public object AppModule {
     // narrower than what Hilt actually needs to see.
     @Provides
     internal fun provideConversationListCache(cache: RoomConversationListCache): ConversationListCache = cache
+
+    // `26-46`: the identical `RoomConversationListCache` singleton, bound to its second, `:app`-level
+    // port - see [ConversationsUnreadTotal]'s own doc comment for why this one is not declared in
+    // `:core:domain` beside [ConversationListCache] above. `internal`, for the identical reason
+    // [provideConversationListCache] above already is: the parameter type (`RoomConversationListCache`)
+    // is itself `internal`, regardless of [ConversationsUnreadTotal] (the return type) being `public`.
+    @Provides
+    internal fun provideConversationsUnreadTotal(cache: RoomConversationListCache): ConversationsUnreadTotal = cache
 
     @Provides
     internal fun provideComposerDraftDao(database: AgoChatDatabase): ComposerDraftDao = database.composerDraftDao()
