@@ -11,11 +11,11 @@ import ago.chat.android.core.domain.permissions.holds
  * ## Why an enum, and why it is the extension point for `26-71`..`26-74`
  *
  * `26-58` decided all five administrator reports port to Android as destinations behind one overflow
- * rather than as tabs or a picker. Four of them (`26-71` конверсия, `26-72` метки, `26-73` воронка
- * записи, `26-74` показы телефонов) are not built yet, and this enum deliberately does not name them.
- * That is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`), restated for this menu: **a
- * row exists for a screen that exists.** An overflow that opens onto a name with nothing behind it is
- * the same inert-control shape `26-15`/`26-40` refused twice.
+ * rather than as tabs or a picker. `26-71` («Конверсия») is the second of those five; three more
+ * (`26-72` метки, `26-73` воронка записи, `26-74` показы телефонов) are not built yet, and this enum
+ * deliberately does not name them. That is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`),
+ * restated for this menu: **a row exists for a screen that exists.** An overflow that opens onto a name
+ * with nothing behind it is the same inert-control shape `26-15`/`26-40` refused twice.
  *
  * Adding the next one is therefore mechanical and, importantly, *not silently incomplete*: a new member
  * here breaks the two exhaustive `when`s in `:app` that map a report to its label and to its screen
@@ -37,6 +37,12 @@ public enum class AnalyticsReport(
 ) {
     /** `26-70`: «По сайту» — `GET /api/v1/conversations/analytics`, the console's own `/analytics`. */
     Site(Permission.SITE_CONFIGURE),
+
+    /** `26-71`: «Конверсия» — `GET /api/v1/conversations/conversion-report`, the console's own
+     * `/analytics/conversion`. Gated identically to [Site] today; a field of its own rather than a
+     * shared constant for the reason this enum's own doc comment gives — the mockup already draws a
+     * sibling report on a different permission. */
+    Conversion(Permission.SITE_CONFIGURE),
 }
 
 /**

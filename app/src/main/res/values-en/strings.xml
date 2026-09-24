@@ -319,6 +319,14 @@
     <string name="analytics_reports_menu_action">Reports</string>
     <string name="analytics_report_site">Site report</string>
 
+    <!-- `26-71`: «Конверсия», the second of the five - wording copied verbatim from `ago-console`'s own
+         `en.ts` (`navConversionReport`, `conversionReportPreset*`, `conversionReportByOperatorEmpty`). -->
+    <string name="analytics_report_conversion">Conversion</string>
+    <string name="analytics_preset_this_month">This month</string>
+    <string name="analytics_preset_last_month">Last month</string>
+    <string name="analytics_preset_last_30_days">Last 30 days</string>
+    <string name="analytics_conversion_by_operator_empty">No recorded outcomes attribute to an operator in this range.</string>
+
     <string name="analytics_overall_heading">Total for the period</string>
     <string name="analytics_previous_period_heading">Previous period</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>

@@ -1,13 +1,19 @@
 package ago.chat.android.analytics
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.analytics.currentCalendarMonth
 import ago.chat.android.core.domain.analytics.endOfDayIso
+import ago.chat.android.core.domain.analytics.last30Days
+import ago.chat.android.core.domain.analytics.previousCalendarMonth
 import ago.chat.android.core.domain.analytics.startOfDayIso
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -30,6 +36,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -120,6 +127,52 @@ internal fun AnalyticsDateRangeControl(
         ) {
             DatePicker(state = pickerState)
         }
+    }
+}
+
+/**
+ * `26-71`: the three date-range presets `docs/backlog/26-71-*.md`'s own Scope item 7 names — «этот
+ * месяц» / «прошлый месяц» / «последние 30 дней» — as a scrollable chip row above
+ * [AnalyticsDateRangeControl], the identical "presets resolved client-side, sent through the same
+ * `from`/`to` the free-form fields use" shape `ago-console`'s own `ConversionReportPage` establishes.
+ * [onSelect] receives the already-resolved bound pair — [currentCalendarMonth] and its two siblings
+ * live in `:core:domain` precisely so this composable has no date arithmetic of its own to get wrong.
+ *
+ * A row of [AssistChip], not [OutlinedButton] like the field pair below it: three short labels with no
+ * state of their own (unlike the from/to fields, a tapped preset is not "remembered selected" — the
+ * next real state is whatever the response reports) is exactly what an assist chip is for, and reads
+ * as a row of quick actions rather than a second control competing with the manual fields.
+ */
+@Composable
+internal fun AnalyticsPresetChipRow(
+    zone: ZoneId,
+    onSelect: (from: String, to: String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AssistChip(
+            onClick = {
+                val preset = currentCalendarMonth(ZonedDateTime.now(zone))
+                onSelect(preset.from, preset.to)
+            },
+            label = { Text(text = stringResource(R.string.analytics_preset_this_month)) },
+        )
+        AssistChip(
+            onClick = {
+                val preset = previousCalendarMonth(ZonedDateTime.now(zone))
+                onSelect(preset.from, preset.to)
+            },
+            label = { Text(text = stringResource(R.string.analytics_preset_last_month)) },
+        )
+        AssistChip(
+            onClick = {
+                val preset = last30Days(ZonedDateTime.now(zone))
+                onSelect(preset.from, preset.to)
+            },
+            label = { Text(text = stringResource(R.string.analytics_preset_last_30_days)) },
+        )
     }
 }
 

@@ -13,10 +13,10 @@ import org.junit.Test
  */
 class AnalyticsReportTest {
     @Test
-    fun `an operator holding site configure reaches the site report`() {
+    fun `an operator holding site configure reaches the site report and the conversion report`() {
         val permissions = OperatorPermissions.Known(setOf(Permission.SITE_CONFIGURE))
 
-        assertEquals(listOf(AnalyticsReport.Site), visibleAnalyticsReports(permissions))
+        assertEquals(listOf(AnalyticsReport.Site, AnalyticsReport.Conversion), visibleAnalyticsReports(permissions))
     }
 
     @Test
@@ -37,12 +37,12 @@ class AnalyticsReportTest {
     }
 
     /** The menu's own founding rule (`26-58`, restated by [AnalyticsReport]'s doc comment): an entry
-     * exists for a screen that exists. `26-71`..`26-74` each add one; until then this enum holds
-     * exactly one member, and an accidental placeholder added here would show as a name with nothing
-     * behind it — the inert control `26-15`/`26-40` refused twice. */
+     * exists for a screen that exists. `26-72`..`26-74` each add one more; until then this enum holds
+     * exactly these two members, and an accidental placeholder added here would show as a name with
+     * nothing behind it — the inert control `26-15`/`26-40` refused twice. */
     @Test
     fun `only reports whose screen exists are named at all`() {
-        assertEquals(listOf(AnalyticsReport.Site), AnalyticsReport.entries.toList())
+        assertEquals(listOf(AnalyticsReport.Site, AnalyticsReport.Conversion), AnalyticsReport.entries.toList())
     }
 
     /** Every report is gated on a permission this app names rather than a string invented here —

@@ -2,7 +2,6 @@ package ago.chat.android.analytics
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.analytics.AnalyticsBucket
-import ago.chat.android.core.domain.analytics.CountComparison
 import ago.chat.android.core.domain.analytics.OperatorLoadSummary
 import ago.chat.android.core.domain.analytics.SiteAnalytics
 import ago.chat.android.core.domain.analytics.SiteAnalyticsFailure
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ElevatedCard
@@ -35,15 +33,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
-import java.util.Locale
 
 /**
  * `26-70`: «Аналитика сайта» — the first of the five administrator reports behind Аналитика's own
@@ -276,30 +269,6 @@ private fun PreviousWindowCard(
     }
 }
 
-/**
- * Three renderings for three genuinely different situations, chosen by
- * [ago.chat.android.core.domain.analytics.compareCounts]' own answer rather than re-derived here:
- * nothing moved, something moved against a window that was empty (so there is no percentage of it), and
- * something moved against a real count. The signs come from `%+d`/`%+.1f`, never from concatenating a
- * literal `"+"`, so a negative delta cannot end up with two signs.
- */
-@Composable
-private fun comparisonText(comparison: CountComparison): String {
-    val signedDelta = String.format(Locale.US, "%+d", comparison.delta)
-    val percent = comparison.relativePercent
-    return when {
-        comparison.isUnchanged -> stringResource(R.string.analytics_comparison_no_change, comparison.previous)
-        percent == null -> stringResource(R.string.analytics_comparison_absolute, comparison.previous, signedDelta)
-        else ->
-            stringResource(
-                R.string.analytics_comparison_relative,
-                comparison.previous,
-                signedDelta,
-                String.format(Locale.US, "%+.1f", percent),
-            )
-    }
-}
-
 // --------------------------------------------------------------------------------- the breakdown table
 
 /**
@@ -347,34 +316,37 @@ private fun BreakdownTable(
         ElevatedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 Row {
-                    HeaderCell(firstColumnHeader, LabelColumnWidth, alignEnd = false)
-                    HeaderCell(stringResource(R.string.analytics_conversation_count_label), NumberColumnWidth)
-                    HeaderCell(stringResource(R.string.analytics_average_first_response_label), NumberColumnWidth)
-                    HeaderCell(stringResource(R.string.analytics_average_duration_label), NumberColumnWidth)
-                    HeaderCell(stringResource(R.string.analytics_missed_count_label), NumberColumnWidth)
+                    AnalyticsTableHeaderCell(firstColumnHeader, AnalyticsTableLabelColumnWidth, alignEnd = false)
+                    AnalyticsTableHeaderCell(stringResource(R.string.analytics_conversation_count_label), AnalyticsTableNumberColumnWidth)
+                    AnalyticsTableHeaderCell(
+                        stringResource(R.string.analytics_average_first_response_label),
+                        AnalyticsTableNumberColumnWidth,
+                    )
+                    AnalyticsTableHeaderCell(stringResource(R.string.analytics_average_duration_label), AnalyticsTableNumberColumnWidth)
+                    AnalyticsTableHeaderCell(stringResource(R.string.analytics_missed_count_label), AnalyticsTableNumberColumnWidth)
                     if (showLoadColumns) {
-                        HeaderCell(stringResource(R.string.analytics_held_label), NumberColumnWidth)
-                        HeaderCell(stringResource(R.string.analytics_standard_label), NumberColumnWidth)
-                        HeaderCell(stringResource(R.string.analytics_additional_label), NumberColumnWidth)
+                        AnalyticsTableHeaderCell(stringResource(R.string.analytics_held_label), AnalyticsTableNumberColumnWidth)
+                        AnalyticsTableHeaderCell(stringResource(R.string.analytics_standard_label), AnalyticsTableNumberColumnWidth)
+                        AnalyticsTableHeaderCell(stringResource(R.string.analytics_additional_label), AnalyticsTableNumberColumnWidth)
                     }
                 }
                 HorizontalDivider()
                 rows.forEach { row ->
                     Row {
-                        BodyCell(row.label, LabelColumnWidth, alignEnd = false)
-                        BodyCell(row.bucket.conversationCount.toString(), NumberColumnWidth)
-                        BodyCell(durationOrNoAverage(row.bucket.averageFirstResponseSeconds), NumberColumnWidth)
-                        BodyCell(durationOrNoAverage(row.bucket.averageDurationSeconds), NumberColumnWidth)
-                        BodyCell(row.bucket.missedCount.toString(), NumberColumnWidth)
+                        AnalyticsTableBodyCell(row.label, AnalyticsTableLabelColumnWidth, alignEnd = false)
+                        AnalyticsTableBodyCell(row.bucket.conversationCount.toString(), AnalyticsTableNumberColumnWidth)
+                        AnalyticsTableBodyCell(durationOrNoAverage(row.bucket.averageFirstResponseSeconds), AnalyticsTableNumberColumnWidth)
+                        AnalyticsTableBodyCell(durationOrNoAverage(row.bucket.averageDurationSeconds), AnalyticsTableNumberColumnWidth)
+                        AnalyticsTableBodyCell(row.bucket.missedCount.toString(), AnalyticsTableNumberColumnWidth)
                         if (showLoadColumns) {
-                            BodyCell(loadCellValue(row.load) { it.conversationsHeld }, NumberColumnWidth)
-                            BodyCell(loadCellValue(row.load) { it.standardIntervals }, NumberColumnWidth)
+                            AnalyticsTableBodyCell(loadCellValue(row.load) { it.conversationsHeld }, AnalyticsTableNumberColumnWidth)
+                            AnalyticsTableBodyCell(loadCellValue(row.load) { it.standardIntervals }, AnalyticsTableNumberColumnWidth)
                             // Deliberately the same plain cell every other number gets - an operator
                             // whose "сверх нормы" is `0` renders as the digit `0`, with no colour and
                             // no icon, because a zero here is a fact and not a criticism
                             // (`docs/design/decisions.md` §2, and `23-17`'s own Done-when said so
                             // explicitly for the console).
-                            BodyCell(loadCellValue(row.load) { it.additionalIntervals }, NumberColumnWidth)
+                            AnalyticsTableBodyCell(loadCellValue(row.load) { it.additionalIntervals }, AnalyticsTableNumberColumnWidth)
                         }
                     }
                     HorizontalDivider()
@@ -396,46 +368,6 @@ private fun loadCellValue(
     load: OperatorLoadSummary?,
     select: (OperatorLoadSummary) -> Int,
 ): String = load?.let { select(it).toString() } ?: stringResource(R.string.analytics_load_no_data_value)
-
-@Composable
-private fun HeaderCell(
-    text: String,
-    width: Dp,
-    alignEnd: Boolean = true,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 10.dp),
-    )
-}
-
-@Composable
-private fun BodyCell(
-    text: String,
-    width: Dp,
-    alignEnd: Boolean = true,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 10.dp),
-    )
-}
-
-/** Wide enough for a real operator name or a referrer host at this type size; narrow enough that the
- * first numeric column is already visible before any scrolling, so the table reads as a table rather
- * than as a list of names. */
-private val LabelColumnWidth = 132.dp
-private val NumberColumnWidth = 104.dp
 
 /**
  * `Ago.Chat.Domain.ChannelKind`'s own member names, plus the read-time `"Widget"` label — the wire value
