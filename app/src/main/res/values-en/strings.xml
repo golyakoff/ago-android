@@ -196,6 +196,24 @@
     <string name="people_role_operator">Operator</string>
     <string name="people_role_admin">Administrator</string>
 
+    <string name="people_invite_button">Invite</string>
+    <string name="people_invite_dialog_title">Invite a colleague</string>
+    <string name="people_invite_email_label">Email address</string>
+    <string name="people_invite_role_label">Role</string>
+    <string name="people_invite_submit">Send invitation</string>
+    <string name="people_invite_sending">Sending…</string>
+    <string name="people_invite_cancel">Cancel</string>
+    <string name="people_invite_email_required">Enter your colleague\'s email.</string>
+    <!-- `%1$s` - the role's own display name (Operator/Administrator); `%2$d` - that role's seat limit. -->
+    <string name="people_invite_at_capacity">The %1$s role already has all %2$d seats taken. Free a seat or raise the limit before inviting another colleague.</string>
+    <string name="people_invite_send_failed_warning">The invite was created, but the email could not be delivered. Share the link with your colleague yourself.</string>
+    <string name="people_invite_success_title">Invite created</string>
+    <string name="people_invite_success_body">Share this link with your colleague - it is only shown once.</string>
+    <string name="people_invite_share_button">Share link</string>
+    <string name="people_invite_copy_button">Copy link</string>
+    <string name="people_invite_copied_label">Copied to clipboard.</string>
+    <string name="people_invite_done_button">Done</string>
+
     <string name="bookings_tab_pending">Waiting</string>
     <string name="bookings_queue_empty">Nothing\'s waiting.</string>
     <string name="bookings_not_configured">The calendar backend isn\'t set up for this environment yet, so this screen isn\'t available here.</string>

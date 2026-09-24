@@ -1,6 +1,8 @@
 package ago.chat.android.core.network.team
 
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
@@ -11,6 +13,10 @@ import ago.chat.android.core.domain.team.SeatSummaryResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -96,6 +102,64 @@ public class KtorOperatorTeamApi(
             SeatSummaryResult.Failed(classify(failure))
         }
     }
+
+    /**
+     * `POST /api/v1/sites/{siteId}/operator-invites` — `26-56`. [NetworkFailure] rather than
+     * [OperatorTeamFailure] for this method's own [CreateInviteResult.Failed] arm: the identical
+     * [ago.chat.android.core.network.conversations.KtorConversationsApi.claim] shape for a write that can
+     * be genuinely refused with an RFC 7807 `detail`, which [OperatorTeamFailure] (predating `26-59`) has
+     * no arm for at all — this is a new call, not a place migrating the two existing reads is this item's
+     * job.
+     */
+    override suspend fun createInvite(
+        roleName: String,
+        email: String,
+    ): CreateInviteResult {
+        val siteId = activeSite.currentSiteId() ?: return CreateInviteResult.Failed(NetworkFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/sites/$siteId/operator-invites") {
+                    contentType(ContentType.Application.Json)
+                    setBody(CreateOperatorInviteRequestWireDto(roleName = roleName, email = email))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return CreateInviteResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            val detail =
+                try {
+                    response.body<ProblemDetailsWireDto>().detail
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (failure: Exception) {
+                    null
+                }
+            return detail?.let { CreateInviteResult.Refused(it) }
+                ?: CreateInviteResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+
+        return try {
+            response.body<CreateOperatorInviteResponseWireDto>().let {
+                CreateInviteResult.Created(
+                    operatorInviteId = it.operatorInviteId,
+                    code = it.code,
+                    expiresAt = it.expiresAt,
+                    sendFailed = it.sendFailed,
+                )
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `2xx` whose body is not the promised shape is not "created with defaults" - the
+            // identical `fetchTeam`/`fetchSeatSummary` lesson, read onto a write whose whole point is a
+            // one-shot `code` this adapter must never fabricate.
+            CreateInviteResult.Failed(NetworkFailure.from(failure))
+        }
+    }
 }
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. */
@@ -143,6 +207,32 @@ private data class RoleSeatAssignmentSummaryWireDto(
 @Serializable
 private data class SeatAssignmentSummaryWireDto(
     val roles: List<RoleSeatAssignmentSummaryWireDto>,
+)
+
+/** `operatorTeamApi.ts`'s own `createOperatorInvite` request body — `{roleName, email}`. */
+@Serializable
+private data class CreateOperatorInviteRequestWireDto(
+    val roleName: String,
+    val email: String,
+)
+
+/** `operatorTeamApi.ts`'s own `CreateOperatorInviteResponseDto`, mirrored field for field — [code] is
+ * the plaintext invite code, present in this one response only. */
+@Serializable
+private data class CreateOperatorInviteResponseWireDto(
+    val operatorInviteId: String,
+    val code: String,
+    val expiresAt: String,
+    val sendFailed: Boolean,
+)
+
+/** RFC 7807, read for exactly the one field a refusal needs — the identical
+ * `KtorConversationsApi.ProblemDetailsWireDto` shape, restated here rather than shared: each adapter in
+ * `:core:network` keeps its own private copy today (`KtorOwnAnalyticsApi`'s own copy is the other
+ * precedent), so this file can be read end to end without a jump to a shared type. */
+@Serializable
+private data class ProblemDetailsWireDto(
+    val detail: String? = null,
 )
 
 private fun OperatorRoleSeatWireDto.toDomain() = OperatorRoleSeat(roleName = roleName, holdsSeat = holdsSeat)

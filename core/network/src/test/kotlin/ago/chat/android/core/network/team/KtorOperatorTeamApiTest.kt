@@ -1,5 +1,7 @@
 package ago.chat.android.core.network.team
 
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
@@ -15,10 +17,13 @@ import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -200,6 +205,133 @@ class KtorOperatorTeamApiTest {
             val api = apiFor(siteId) { respondError(HttpStatusCode.ServiceUnavailable) }
 
             assertEquals(SeatSummaryResult.Failed(OperatorTeamFailure.Unexpected), api.fetchSeatSummary())
+        }
+
+    // ------------------------------------------------- POST .../sites/{siteId}/operator-invites
+
+    @Test
+    fun `a 201 is Created, carrying the one-shot code verbatim`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            var sentBody = ""
+            val api =
+                apiFor(siteId) { request ->
+                    requested = request.method to request.url.toString()
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond(
+                        """
+                        {"operatorInviteId":"inv-1","code":"secret-code","expiresAt":"2026-10-01T00:00:00Z","sendFailed":false}
+                        """.trimIndent(),
+                        HttpStatusCode.Created,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleName = "Operator", email = "kolya@example.com")
+
+            assertEquals(
+                CreateInviteResult.Created(
+                    operatorInviteId = "inv-1",
+                    code = "secret-code",
+                    expiresAt = "2026-10-01T00:00:00Z",
+                    sendFailed = false,
+                ),
+                result,
+            )
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operator-invites", requested)
+            assertTrue(sentBody.contains("\"roleName\":\"Operator\""))
+            assertTrue(sentBody.contains("\"email\":\"kolya@example.com\""))
+        }
+
+    @Test
+    fun `sendFailed round-trips as true - the invite still exists, this is not treated as a failure`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"operatorInviteId":"inv-2","code":"c2","expiresAt":"2026-10-01T00:00:00Z","sendFailed":true}""",
+                        HttpStatusCode.Created,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleName = "Admin", email = "admin@example.com") as CreateInviteResult.Created
+
+            assertEquals(true, result.sendFailed)
+        }
+
+    @Test
+    fun `a 400 with a problem-details body is rendered as that exact refusal, InvalidEmail among them`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"OperatorInvite.InvalidEmail","detail":"Укажите корректный email."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleName = "Operator", email = "not-an-email")
+
+            assertEquals(CreateInviteResult.Refused("Укажите корректный email."), result)
+        }
+
+    @Test
+    fun `a refusal with no problem-details body classifies as a server error, never a fabricated string`() =
+        runTest {
+            val api = apiFor(siteId) { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(
+                CreateInviteResult.Failed(NetworkFailure.ServerError(403)),
+                api.createInvite(roleName = "Operator", email = "any@example.com"),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on create-invite is a transport failure, not a silently retried write`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                CreateInviteResult.Failed(NetworkFailure.NoConnection),
+                api.createInvite(roleName = "Operator", email = "any@example.com"),
+            )
+        }
+
+    @Test
+    fun `a 201 that dropped the shape is Failed, never a fabricated code`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"somethingElseEntirely":true}""",
+                        HttpStatusCode.Created,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(
+                CreateInviteResult.Failed(NetworkFailure.Unexpected),
+                api.createInvite(roleName = "Operator", email = "any@example.com"),
+            )
+        }
+
+    @Test
+    fun `no active site selected is Failed, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(
+                CreateInviteResult.Failed(NetworkFailure.Unexpected),
+                api.createInvite(roleName = "Operator", email = "any@example.com"),
+            )
+            assertEquals("no active site must never reach the network", 0, calls)
         }
 
     private fun apiFor(
