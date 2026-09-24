@@ -1,7 +1,6 @@
 package ago.chat.android.conversations
 
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
-import ago.chat.android.testing.FlakyOnCi
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -29,10 +28,9 @@ import org.junit.runner.RunWith
  * this app follows, and the reason that function is `internal` rather than private.
  */
 @OptIn(ExperimentalTestApi::class)
-// `26-91`: this class asserts Russian text as a literal; the CI emulator boots English and cannot be
-// forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment has the detail). `26-94`
-// tracks the real fix.
-@FlakyOnCi
+// `26-91`/`26-94`: this class's assertions are plain Russian literals - safe because
+// `LocaleForcingTestRunner` pins every instrumented test's own locale to `ru` before any of them run
+// (`docs/architecture.md`, "Pinning the locale instrumented UI tests render against").
 @RunWith(AndroidJUnit4::class)
 class ConversationListTopBarTest {
     // `25-214`: the v2 rule — see `BackContractBottomBarTest` for why the original is no longer usable

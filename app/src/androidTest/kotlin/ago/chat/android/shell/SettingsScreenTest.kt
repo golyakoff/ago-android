@@ -4,7 +4,6 @@ import ago.chat.android.BuildConfig
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.domain.net.NetworkFailure
-import ago.chat.android.testing.FlakyOnCi
 import ago.chat.android.ui.theme.ThemeMode
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.Role
@@ -32,11 +31,10 @@ import org.junit.runner.RunWith
  * `IdentityApi`/`OperatorHubEvents` — what actually renders for a given state — is what this file proves
  * instead; [SettingsViewModelTest] (a plain JVM test) proves the state transitions themselves.
  *
- * `26-91`: this class asserts Russian text as a literal; the CI emulator boots English and cannot be
- * forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment has the detail). `26-94`
- * tracks the real fix.
+ * `26-91`/`26-94`: this class's assertions are plain Russian literals - safe because
+ * `LocaleForcingTestRunner` pins every instrumented test's own locale to `ru` before any of them run
+ * (`docs/architecture.md`, "Pinning the locale instrumented UI tests render against").
  */
-@FlakyOnCi
 @RunWith(AndroidJUnit4::class)
 class SettingsScreenTest {
     @get:Rule

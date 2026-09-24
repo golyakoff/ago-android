@@ -459,6 +459,59 @@ different OEM skin or a different screen density would pass this gate and still 
 `26-22`'s own by-hand verification to close, not something a green CI run may be read as already
 covering.
 
+### Pinning the locale instrumented UI tests render against (`26-94`)
+
+`26-91` gave the app a real `values-en/strings.xml` next to the default `values/` (Russian) set — and
+the moment a real alternative existed, any English-*locale* device (including the CI emulator above,
+which boots `en-US`) genuinely renders English, where it used to fall back to `values/` for lack of
+anything else to resolve to. Fourteen instrumented test classes assert Russian text as a literal, so the
+two only ever agreed by accident before `26-91`. Three mechanisms to force the CI *emulator's own*
+locale were tried and each failed for a different, real reason (`.github/workflows/ci.yml`'s own comment
+on the `instrumented-tests` job has the exact errors): a runtime `settings put system system_locales`
+plus `LOCALE_CHANGED` broadcast is inert even under `adb root`, because nothing short of the framework's
+own `LocaleManager`/`LocalePicker` reconfiguration call actually re-resolves resources; and a boot-time
+`-prop persist.sys.locale=...` is rejected outright by the emulator image.
+
+**The fix forces the *app's* own locale inside the test process instead of the device's.**
+`ago.chat.android.testing.LocaleForcingTestRunner` (`app/src/androidTest/kotlin/.../testing/`), wired in
+as `app/build.gradle.kts`'s `testInstrumentationRunner`, calls the platform `LocaleManager` (API 33+)
+directly in its `onCreate` — before `super.onCreate()` lets `Instrumentation` create the target
+`Application` or any `Activity` — so the very first `Configuration` the process ever resolves resources
+against is already `ru`, for every test in every class, with no per-class code beyond removing
+`@FlakyOnCi`. Since neither `values-ru/` nor `values-en-rRU/` exists, `ru` resolves straight to the
+default `values/` set — the exact Russian text these tests already assert.
+
+**Not `AppCompatDelegate.setApplicationLocales`**, this item's own first-suggested API, despite this
+project already depending on `androidx.appcompat` transitively (`net.openid:appauth`'s own
+`AppCompatActivity`-based redirect screens): decompiling `androidx.appcompat:appcompat:1.8.0` shows that
+method only reaches `LocaleManager` by walking a static set of *already-created* `AppCompatDelegate`
+instances for one with a usable `Context` — populated exclusively by `AppCompatActivity`,
+`AppCompatDialog`, or an explicit `Activity`/`Dialog`-bound `AppCompatDelegate.create(...)` call, none of
+which exists anywhere in this suite (every screen under test is a plain
+`androidx.activity.ComponentActivity`, via `createAndroidComposeRule<ComponentActivity>()`). Calling it
+before any such delegate exists — which is the process's exact state when a test run starts — silently
+falls through to a branch that never reaches `LocaleManager` at all. Calling the platform API directly
+sidesteps that dead end entirely and needed no new dependency, since `android.app.LocaleManager` is part
+of the SDK itself; `LocaleForcingTestRunner`'s own doc comment has the full, decompiled account.
+
+**Stated limit, not silently assumed:** this mechanism is exact and unconditional on API 33+, which is
+what CI's own emulator runs (`api-level: 34`, matching this app's `targetSdk`) and what every
+currently-supported real device runs. Below 33, the runner falls back to a plain `Locale`/`Configuration`
+override that changes `Locale.getDefault()` immediately but cannot reach a freshly created `Activity`'s
+own `Configuration` without an `AppCompatActivity` to hook — a real gap on that range, recorded rather
+than hidden, and one this item's own real target (CI) never exercises.
+
+The next instrumented test added to this suite needs nothing of its own for this: any class asserting
+Russian resource text is already covered by `LocaleForcingTestRunner`, the same way every existing one
+now is. This is scoped to the *test* process only and decides nothing about `26-92` (the in-app language
+*toggle* a real operator can reach in Settings, unstarted) — but the same investigation surfaced a real
+risk for whoever picks that item up: `MainActivity`
+(`app/src/main/kotlin/ago/chat/android/MainActivity.kt`) is itself a plain `ComponentActivity`, exactly
+like every screen this test suite drives, so `AppCompatDelegate.setApplicationLocales` is likely to hit
+the identical dead end described above in production too — no `AppCompatDelegate` exists there either,
+today. `26-94` does not fix or re-scope `26-92` — that is a separate promise this item has no mandate to
+touch — but leaves this finding here rather than let `26-92` re-discover it the hard way.
+
 ## What this document deliberately does not decide
 
 - **Whether iOS shares any of this Kotlin.** `adr/0178` states why that is not decidable yet and
