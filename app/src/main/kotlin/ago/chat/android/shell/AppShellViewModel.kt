@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OperatorIdentity
@@ -13,8 +14,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -35,6 +38,13 @@ import javax.inject.Inject
  * this view model's own call site sits on top of - so this fetch runs exactly once for as long as that
  * entry survives (`AppShellScreen`'s own doc comment on why that entry, unlike every bottom-tab
  * destination's, is never actually popped-and-recreated).
+ *
+ * `26-46`: that identical scope - one instance for the whole shell's lifetime, never torn down by a
+ * bottom-tab switch - is also exactly what the Диалоги tab's own unread badge needs: "observable from
+ * `AppShellContent` without hoisting `ConversationListViewModel` out of its own nav entry"
+ * (`docs/backlog/26-46-*.md`'s own Scope). [unreadConversationsTotal] is that badge's one source, read
+ * from [unreadTotal] — [ConversationsUnreadTotal]'s own doc comment states why that port, not a second
+ * fetch of anything `ConversationListViewModel` already holds, is what backs it.
  *
  * ## The three states this class ever publishes, and what each one renders
  *
@@ -58,10 +68,19 @@ public class AppShellViewModel
         private val api: OperatorPermissionsApi,
         private val identityProvider: OperatorIdentityProvider,
         private val presenceController: OperatorPresenceController,
+        private val unreadTotal: ConversationsUnreadTotal,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
         public val permissions: StateFlow<OperatorPermissions> = mutablePermissions.asStateFlow()
+
+        /** `26-46`: the Диалоги tab's own badge count - `null` before the conversation cache has ever
+         * been written (no badge, never a `0` that really means "unknown"), the live sum after that.
+         * [SharingStarted.Eagerly], not `WhileSubscribed`: the bottom bar reads this for as long as the
+         * shell is on screen, including while a *different* tab is showing, so there is no "nobody is
+         * collecting" window in which it would be correct to let this go cold. */
+        public val unreadConversationsTotal: StateFlow<Int?> =
+            unreadTotal.observeTotal().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
         private val mutableLoadError = MutableStateFlow<NetworkFailure?>(null)
 

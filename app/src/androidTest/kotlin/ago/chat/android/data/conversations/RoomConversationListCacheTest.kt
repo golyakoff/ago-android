@@ -6,6 +6,7 @@ import ago.chat.android.data.AgoChatDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -87,14 +88,59 @@ class RoomConversationListCacheTest {
             assertEquals(listOf("c1"), read?.assignedToMe?.map { it.conversationId })
         }
 
-    private fun summary(id: String) =
-        ConversationSummary(
-            conversationId = id,
-            visitorId = "visitor-$id",
-            emojiCreature = "🦊",
-            emojiFood = "🍕",
-            visitorName = null,
-            createdAt = "2026-09-22T09:00:00Z",
-            operatorUnreadCount = 0,
-        )
+    // ------------------------------------------------------------- `26-46`: observeTotal (the badge)
+
+    @Test
+    fun observeTotalIsNullBeforeAnythingHasEverBeenWritten() =
+        runTest {
+            assertNull(cache.observeTotal().first())
+        }
+
+    @Test
+    fun observeTotalSumsOnlyAssignedToMeUnreadCounts_waitingNeverContributes() =
+        runTest {
+            cache.write(
+                ConversationQueue(
+                    waiting = listOf(summary("w1", unread = 5)),
+                    assignedToMe = listOf(summary("a1", unread = 2), summary("a2", unread = 3)),
+                ),
+            )
+
+            assertEquals(5, cache.observeTotal().first())
+        }
+
+    @Test
+    fun observeTotalIsARealZero_notReRenderedAsUnknown_onceEverythingIsRead() =
+        runTest {
+            cache.write(ConversationQueue(waiting = emptyList(), assignedToMe = listOf(summary("a1", unread = 0))))
+
+            assertEquals(0, cache.observeTotal().first())
+        }
+
+    @Test
+    fun observeTotalUpdatesLiveWhenTheCacheIsWrittenAgain_noRestartNeeded() =
+        runTest {
+            cache.write(ConversationQueue(waiting = emptyList(), assignedToMe = listOf(summary("a1", unread = 1))))
+            assertEquals(1, cache.observeTotal().first())
+
+            // `26-46`'s own Done-when: a hub push (`ConversationListViewModel.refresh` rewriting the
+            // cache with a fresh queue) must bump this without anything re-subscribing - collecting the
+            // identical `Flow` a second time after a second `write` is exactly that, since Room's own
+            // `InvalidationTracker` is what re-runs the query, not a fresh subscription starting it.
+            cache.write(ConversationQueue(waiting = emptyList(), assignedToMe = listOf(summary("a1", unread = 4))))
+            assertEquals(4, cache.observeTotal().first())
+        }
+
+    private fun summary(
+        id: String,
+        unread: Int = 0,
+    ) = ConversationSummary(
+        conversationId = id,
+        visitorId = "visitor-$id",
+        emojiCreature = "🦊",
+        emojiFood = "🍕",
+        visitorName = null,
+        createdAt = "2026-09-22T09:00:00Z",
+        operatorUnreadCount = unread,
+    )
 }

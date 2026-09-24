@@ -4,12 +4,14 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OperatorIdentity
 import ago.chat.android.session.OperatorIdentityProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -166,15 +168,59 @@ class AppShellViewModelTest {
             assertNull(viewModel.identity.value)
         }
 
+    // -------------------------------------------------------------------- `26-46`: unread total badge
+
+    @Test
+    fun `unreadConversationsTotal starts at whatever the source already holds`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    unreadTotal = FakeConversationsUnreadTotal(initial = null),
+                )
+
+            assertNull(viewModel.unreadConversationsTotal.value)
+        }
+
+    @Test
+    fun `unreadConversationsTotal relays a live update from the source, without a restart`() =
+        runTest(dispatcher) {
+            val unreadTotal = FakeConversationsUnreadTotal(initial = null)
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true), unreadTotal = unreadTotal)
+            advanceUntilIdle()
+            assertNull(viewModel.unreadConversationsTotal.value)
+
+            unreadTotal.emit(3)
+            advanceUntilIdle()
+
+            assertEquals(3, viewModel.unreadConversationsTotal.value)
+        }
+
+    @Test
+    fun `unreadConversationsTotal can go back to zero - a real answer, never re-rendered as unknown`() =
+        runTest(dispatcher) {
+            val unreadTotal = FakeConversationsUnreadTotal(initial = 2)
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true), unreadTotal = unreadTotal)
+            advanceUntilIdle()
+            assertEquals(2, viewModel.unreadConversationsTotal.value)
+
+            unreadTotal.emit(0)
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.unreadConversationsTotal.value)
+        }
+
     private fun viewModelWith(
         api: OperatorPermissionsApi,
         identityProvider: OperatorIdentityProvider = FakeOperatorIdentityProvider(null),
         presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
+        unreadTotal: ConversationsUnreadTotal = FakeConversationsUnreadTotal(),
     ): AppShellViewModel =
         AppShellViewModel(
             api = api,
             identityProvider = identityProvider,
             presenceController = presenceController,
+            unreadTotal = unreadTotal,
             ioDispatcher = dispatcher,
         )
 
@@ -209,5 +255,21 @@ class AppShellViewModelTest {
         override fun onSignedOut() {
             error("not exercised here - AppShellViewModel never calls this")
         }
+    }
+
+    /** `26-46`: a plain [MutableStateFlow] rather than a fake Room database - this class's own job is
+     * proving [AppShellViewModel.unreadConversationsTotal] relays whatever [ConversationsUnreadTotal]
+     * says, live, into a `StateFlow` a Compose caller can collect; `RoomConversationListCacheTest`
+     * (androidTest) is what proves the real `SUM`/`InvalidationTracker` mechanics behind it. */
+    private class FakeConversationsUnreadTotal(
+        initial: Int? = null,
+    ) : ConversationsUnreadTotal {
+        private val total = MutableStateFlow(initial)
+
+        fun emit(value: Int?) {
+            total.value = value
+        }
+
+        override fun observeTotal(): Flow<Int?> = total
     }
 }
