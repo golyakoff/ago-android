@@ -167,10 +167,21 @@ jobs:
           # choose English yet; that is `26-92`'s own unstarted toggle) and keeps this suite testing
           # the product as it actually behaves for them, rather than becoming a referendum on whatever
           # locale `ubuntu-latest` happens to boot.
+          #
+          # Setting the locale *after* boot (`adb shell settings put system system_locales` plus a
+          # manual `LOCALE_CHANGED` broadcast) was tried first and does not work on this image: the
+          # broadcast alone does not run the actual reconfiguration `LocalePicker.updateLocales()`
+          # performs internally (an `IActivityManager.updateConfiguration()` call, not reachable from a
+          # shell broadcast) - two full CI runs still rendered English after "succeeding". Boot-time
+          # `-prop` locale flags are read by `SystemServer` while composing the device's very first
+          # `Configuration`, before any app (including the test's own) ever reads a resource, which is
+          # why this is the reliable mechanism and the broadcast was not. `emulator-options` replaces
+          # the action's own default flags rather than adding to them, so the usual headless-CI set
+          # (`disableAnimations` aside, which has its own input above) is repeated here explicitly.
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+            -prop persist.sys.locale=ru-RU -prop persist.sys.language=ru -prop persist.sys.country=RU
           script: >-
-            adb root &&
-            adb shell settings put system system_locales ru-RU &&
-            adb shell am broadcast -a android.intent.action.LOCALE_CHANGED &&
             ./gradlew connectedDebugAndroidTest --no-daemon
             -Pandroid.testInstrumentationRunnerArguments.notAnnotation=ago.chat.android.testing.FlakyOnCi
 
