@@ -10,19 +10,30 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import java.io.File
 
 /**
- * `26-92`: the one place `language.preferences_pb`'s file path and its one key are spelled out, so
- * [ago.chat.android.di.AppModule]'s own Hilt-provided singleton and [ago.chat.android.MainActivity]'s
- * own `attachBaseContext` bootstrap read build the identical [DataStore] rather than the path being typed
- * twice and risking the two drifting apart. `MainActivity` needs its own, separately-constructed instance
- * rather than an injected one because Hilt's field injection only runs from `onCreate` onward — see that
- * override's own doc comment — and a second `DataStore` instance built from the same file is exactly as
- * safe as the first: `androidx.datastore` serialises every reader/writer against one file through its own
- * internal file lock, regardless of how many [DataStore] objects a process happens to have open on it.
+ * `26-92`: the one place `language.preferences_pb`'s file path and its one key are spelled out, shared
+ * by [ago.chat.android.di.AppModule]'s Hilt provider and [ago.chat.android.MainActivity]'s own
+ * `attachBaseContext` bootstrap read.
+ *
+ * `26-92` follow-up (crash fix): this used to build the [DataStore] with a bare
+ * `PreferenceDataStoreFactory.create` on every call. Both `attachBaseContext` (at activity creation) and
+ * the Hilt provider (when [SettingsViewModel] is created — i.e. opening Settings) call it for the *same*
+ * file, so a **second active `DataStore` for one file** was created and androidx.datastore threw
+ * `IllegalStateException: There are multiple DataStores active for the same file` — crashing the app the
+ * moment Настройки opened (`0.25.0`). androidx forbids more than one active instance per file per
+ * process; the earlier "a second instance is exactly as safe as the first" note was wrong. The
+ * process-wide, double-checked singleton below hands every caller — whatever `Context` it holds — the
+ * one instance, built from `applicationContext.filesDir` so the path never depends on the caller.
  */
+@Volatile
+private var appLanguageDataStoreInstance: DataStore<Preferences>? = null
+private val appLanguageDataStoreLock = Any()
+
 internal fun appLanguageDataStore(context: Context): DataStore<Preferences> =
-    PreferenceDataStoreFactory.create(
-        produceFile = { File(context.filesDir, "language.preferences_pb") },
-    )
+    appLanguageDataStoreInstance ?: synchronized(appLanguageDataStoreLock) {
+        appLanguageDataStoreInstance ?: PreferenceDataStoreFactory
+            .create(produceFile = { File(context.applicationContext.filesDir, "language.preferences_pb") })
+            .also { appLanguageDataStoreInstance = it }
+    }
 
 private val APP_LANGUAGE_KEY: Preferences.Key<String> = stringPreferencesKey("app_language")
 
