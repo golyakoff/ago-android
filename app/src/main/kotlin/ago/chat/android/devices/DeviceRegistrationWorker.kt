@@ -36,26 +36,39 @@ import dagger.hilt.components.SingletonComponent
  * this app has exactly one of. If a second worker arrives, that is the point to revisit this choice,
  * not before.
  */
-public class DeviceRegistrationWorker(
-    context: Context,
-    params: WorkerParameters,
-    // `26-06`: the one seam `DeviceRegistrationWorkerTest` needs - `null` in every real path (the
-    // 2-arg constructor `WorkManager` itself calls reflectively can never supply a third argument), a
-    // fake in the test's own hand-rolled `WorkerFactory`. Without this, proving "does `doWork()` map a
-    // successful write to `Result.success()`" would mean running this test against the app's real Hilt
-    // graph - a real network call and a real RuStore SDK call this test has no business making.
-    private val deviceRegistrarOverride: DeviceRegistrar? = null,
-) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val coordinator =
-            deviceRegistrarOverride
-                ?: EntryPointAccessors
-                    .fromApplication(applicationContext, DeviceRegistrationWorkerEntryPoint::class.java)
-                    .deviceRegistrationCoordinator()
+public class DeviceRegistrationWorker
+    @JvmOverloads
+    constructor(
+        context: Context,
+        params: WorkerParameters,
+        // `26-06`: the one seam `DeviceRegistrationWorkerTest` needs - `null` in every real path (the
+        // 2-arg constructor `WorkManager` itself calls reflectively can never supply a third argument), a
+        // fake in the test's own hand-rolled `WorkerFactory`. Without this, proving "does `doWork()` map a
+        // successful write to `Result.success()`" would mean running this test against the app's real Hilt
+        // graph - a real network call and a real RuStore SDK call this test has no business making.
+        //
+        // `26-102`: that "2-arg constructor `WorkManager` itself calls reflectively" was the intent this
+        // comment already stated - and never actually existed. A Kotlin constructor with a default value
+        // on its last parameter compiles to exactly one real constructor, taking all three arguments, plus
+        // a synthetic bitmask overload usable only from other Kotlin call sites; neither is the bare
+        // `(Context, WorkerParameters)` signature WorkManager's own default `WorkerFactory` reflects for
+        // by declared parameter types. That lookup threw `NoSuchMethodException`, which `WorkerFactory`
+        // turns into exactly this item's own symptom: `WM-WorkerWrapper` logging "Could not create Worker
+        // ago.chat.android.devices.DeviceRegistrationWorker" and the periodic job never running - in every
+        // build type, not only a minified one, since this is a Kotlin/Java interop gap R8 never touches.
+        // `@JvmOverloads` above is what actually generates the missing two-argument constructor.
+        private val deviceRegistrarOverride: DeviceRegistrar? = null,
+    ) : CoroutineWorker(context, params) {
+        override suspend fun doWork(): Result {
+            val coordinator =
+                deviceRegistrarOverride
+                    ?: EntryPointAccessors
+                        .fromApplication(applicationContext, DeviceRegistrationWorkerEntryPoint::class.java)
+                        .deviceRegistrationCoordinator()
 
-        return if (coordinator.registerThisDevice()) Result.success() else Result.retry()
+            return if (coordinator.registerThisDevice()) Result.success() else Result.retry()
+        }
     }
-}
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
