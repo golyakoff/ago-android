@@ -13,6 +13,7 @@ import ago.chat.android.schedule.WorkingHoursViewModel
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
+import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +26,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -39,6 +44,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -209,10 +215,15 @@ public fun BookingsRoute(
  *
  * **The segmented control is built from [showConfirmedSegment]/[showClientsSegment], never drawn with a
  * fixed shape.** `26-48` shipped this with exactly one hard-coded [SegmentedButton]; `26-51` replaced
- * that with [visibleBookingsTabs] for Утверждены — the same "compute the list, don't draw a fixed
+ * that with [visibleBookingsSegments] for Утверждены — the same "compute the list, don't draw a fixed
  * shape" correction `visibleBottomDestinations` already models one level up; `26-52` lands the mockup's
  * third segment, Клиенты, as a third entry in that same function, computed from its own independent
  * gate rather than a third hand-written [SegmentedButton] here.
+ *
+ * `26-103`: [visibleBookingsSegments] never returns more than three entries any more — five wrapped on a
+ * real device once `26-96`/`26-97` each added one. [showServicesSegment]/[showHoursSegment] still arrive
+ * here unchanged, but now feed [visibleBookingsConfigMenuEntries] instead, drawn beside the segmented
+ * row by [BookingsConfigMenu] rather than as a fourth/fifth [SegmentedButton].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -255,8 +266,8 @@ internal fun BookingsScreen(
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
     // `rememberTickingNow`).
     val now = rememberTickingNow()
-    val tabs =
-        visibleBookingsTabs(showConfirmedSegment, showClientsSegment, showServicesSegment, showHoursSegment)
+    val segments = visibleBookingsSegments(showConfirmedSegment, showClientsSegment)
+    val configMenuEntries = visibleBookingsConfigMenuEntries(showServicesSegment, showHoursSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -279,18 +290,30 @@ internal fun BookingsScreen(
             },
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                SingleChoiceSegmentedButtonRow(
+                Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    tabs.forEachIndexed { index, tab ->
-                        SegmentedButton(
-                            selected = selectedTab == tab,
-                            onClick = { onTabSelected(tab) },
-                            shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
-                            label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
-                            icon = {},
-                        )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+                        segments.forEachIndexed { index, tab ->
+                            SegmentedButton(
+                                selected = selectedTab == tab,
+                                onClick = { onTabSelected(tab) },
+                                shape = SegmentedButtonDefaults.itemShape(index, segments.size),
+                                label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
+                                icon = {},
+                            )
+                        }
                     }
+                    // `26-103`: Услуги/Часы no longer earn a fourth/fifth segment - they are reached from
+                    // here instead, and this control itself is absent whenever [configMenuEntries] is
+                    // empty (`BookingsConfigMenu`'s own doc comment: "hide, don't disable").
+                    BookingsConfigMenu(
+                        entries = configMenuEntries,
+                        labelFor = { tab -> bookingsTabLabel(tab = tab, pendingState = state) },
+                        onSelect = onTabSelected,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
                 }
 
                 when (selectedTab) {
@@ -340,8 +363,8 @@ internal fun BookingsScreen(
                         }
 
                     // `confirmedState` is non-null exactly when `showConfirmedSegment` is true - the only
-                    // condition under which this tab even appears in `tabs` for `onTabSelected` to have
-                    // been able to select it in the first place.
+                    // condition under which this tab even appears in `segments` for `onTabSelected` to
+                    // have been able to select it in the first place.
                     BookingsTab.Confirmed ->
                         confirmedState?.let {
                             ConfirmedBookingsBody(state = it, onSelectDay = onSelectDay, onRetry = onRetryConfirmed)
@@ -384,6 +407,53 @@ internal fun BookingsScreen(
                         }
                 }
             }
+        }
+    }
+}
+
+/**
+ * `26-103`: the Записи segmented control's own `⋮` — [entries] is
+ * [visibleBookingsConfigMenuEntries]'s own result, already filtered by `calendar:configure`, so this
+ * composable's whole gate is its first line: nothing to open, nothing to tap. The identical "hide, don't
+ * disable" shape [ago.chat.android.analytics.AnalyticsReportsOverflowMenu] already draws for Аналитика's
+ * own `⋮` — a plain `remember` for `expanded` (a menu left open across process death is not state worth
+ * restoring), and the menu closed before [onSelect] runs rather than after: [onSelect] here sets
+ * [BookingsScreen]'s own `selectedTab`, and a `setExpanded` sequenced after it would be redundant at
+ * best, since selecting a tab does not navigate away from this composition the way opening a report
+ * does.
+ *
+ * [labelFor] is a slot rather than a direct call to [bookingsTabLabel] so this file's one existing
+ * labelling function is reused verbatim for both the segmented row and this menu — a fourth Услуги/Часы
+ * label worded differently between the two surfaces is exactly the kind of drift a shared function
+ * exists to rule out.
+ */
+@Composable
+private fun BookingsConfigMenu(
+    entries: List<BookingsTab>,
+    labelFor: @Composable (BookingsTab) -> AnnotatedString,
+    onSelect: (BookingsTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (entries.isEmpty()) return
+
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { expanded = true }, modifier = modifier) {
+        Icon(
+            imageVector = AgoIcons.MoreVertical,
+            contentDescription = stringResource(R.string.bookings_config_menu_action),
+        )
+    }
+
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        entries.forEach { entry ->
+            DropdownMenuItem(
+                text = { Text(text = labelFor(entry)) },
+                onClick = {
+                    expanded = false
+                    onSelect(entry)
+                },
+            )
         }
     }
 }

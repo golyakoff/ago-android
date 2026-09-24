@@ -1,9 +1,17 @@
 package ago.chat.android.bookings
 
-/** Записи's own five segments — Ожидают (`26-48`), Утверждены (`26-51`), Клиенты (`26-52`), Услуги
+/** Записи's own five sub-screens — Ожидают (`26-48`), Утверждены (`26-51`), Клиенты (`26-52`), Услуги
  * (`26-96`) и Часы (`26-97`). A plain UI-layer enum, not a `:core:domain` type: unlike
  * [ago.chat.android.core.domain.permissions.Permission], nothing outside this screen's own composables
- * and view models needs to know these names exist. */
+ * and view models needs to know these names exist.
+ *
+ * `26-103`: this enum no longer means "one segment of the segmented control" for every member. Five
+ * segments wrapped on a real device once `26-96`/`26-97` each added one (`docs/backlog/26-103-*.md`'s
+ * own "Found"), so [visibleBookingsSegments] now draws only [Pending]/[Confirmed]/[Clients] as segments,
+ * and [visibleBookingsConfigMenuEntries] offers [Services]/[Hours] from a `⋮` menu beside them instead
+ * (`BookingsScreen`'s own `BookingsConfigMenu`). [BookingsTab] itself is unchanged — it is still just
+ * "which body is selected" — only *how a member becomes selected* now differs by member.
+ */
 internal enum class BookingsTab {
     Pending,
     Confirmed,
@@ -25,18 +33,6 @@ internal enum class BookingsTab {
  * reach Записи at all (`canSeeBookings`) may see the pending queue, since a `booking:confirm`/`reject`/
  * `cancel` holder's whole reason to be here is that queue.
  *
- * `26-96` adds a fourth, [showServicesSegment], on
- * [Permission.CALENDAR_CONFIGURE][ago.chat.android.core.domain.permissions.Permission.CALENDAR_CONFIGURE]
- * **alone** - a fourth independent gate, not [showClientsSegment] reused: that one is
- * `calendar:configure` *or* `customer:read`, and an operator holding only `customer:read` may read the
- * customer base without being allowed to rewrite the tenant's own service dictionary
- * (`ago-console`'s own `CalendarServicesPage.tsx` gates on `calendar:configure` alone, and the server
- * refuses anything else regardless).
- *
- * `26-96` also makes this the app's interim home for Услуги: `docs/navigation.md` designs one under a
- * «Настройка записи» hub that does not exist in this app yet, and a segment beside Клиенты reaches the
- * screen today without inventing that hub ahead of the item that scopes it.
- *
  * [showConfirmedSegment] is [Permission.CUSTOMER_READ][ago.chat.android.core.domain.permissions.Permission.CUSTOMER_READ]
  * alone. [showClientsSegment] is [Permission.CALENDAR_CONFIGURE][ago.chat.android.core.domain.permissions.Permission.CALENDAR_CONFIGURE]
  * **or** [Permission.CUSTOMER_READ][ago.chat.android.core.domain.permissions.Permission.CUSTOMER_READ] —
@@ -47,21 +43,53 @@ internal enum class BookingsTab {
  * [ago.chat.android.core.domain.permissions.OperatorPermissions.Known] rather than re-fetched here — a
  * plain function over two `Boolean`s is what makes this list buildable from a unit test with no Hilt
  * component and no second network call.
+ *
+ * `26-103`: this function used to also take `showServicesSegment`/`showHoursSegment` and add
+ * [BookingsTab.Services]/[BookingsTab.Hours] as a fourth and fifth segment. That is what wrapped at five
+ * segments on a real device (`docs/backlog/26-103-*.md`'s own "Found") — the approved fix is a
+ * segmented control that never holds more than three, with the configuration pair reached from
+ * [visibleBookingsConfigMenuEntries] instead, so those two booleans moved there and this function only
+ * ever returns at most three entries now.
  */
-internal fun visibleBookingsTabs(
+internal fun visibleBookingsSegments(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
-    showServicesSegment: Boolean,
-    // `26-97`: a fifth, independently computed gate - `calendar:configure` alone, which is what
-    // `PUT`/`DELETE /working-hours/{ruleId}` check server-side. Narrower than Клиенты's own
-    // `calendar:configure` OR `customer:read`, so it genuinely has to be its own boolean rather
-    // than reuse either sibling's.
-    showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
         add(BookingsTab.Pending)
         if (showConfirmedSegment) add(BookingsTab.Confirmed)
         if (showClientsSegment) add(BookingsTab.Clients)
+    }
+
+/**
+ * `26-103`: the `⋮` control's own entries — the configuration pair the segmented control used to carry
+ * as its fourth and fifth segment. Both gates are unchanged from before this item, `calendar:configure`
+ * alone, each independently computed and passed in exactly as [visibleBookingsSegments]'s own booleans
+ * are — see [BookingsScreen]'s call site for why each stays its own parameter rather than one shared
+ * flag (`26-96`/`26-97` each check the permission at their own endpoint, server-side).
+ *
+ * `26-96`: [showServicesSegment] is
+ * [Permission.CALENDAR_CONFIGURE][ago.chat.android.core.domain.permissions.Permission.CALENDAR_CONFIGURE]
+ * **alone** — a fourth independent gate, not [showClientsSegment] reused: that one is
+ * `calendar:configure` *or* `customer:read`, and an operator holding only `customer:read` may read the
+ * customer base without being allowed to rewrite the tenant's own service dictionary
+ * (`ago-console`'s own `CalendarServicesPage.tsx` gates on `calendar:configure` alone, and the server
+ * refuses anything else regardless).
+ *
+ * `26-97`: [showHoursSegment] is the identical gate, for the two working-hours endpoints
+ * (`PUT`/`DELETE /working-hours/{ruleId}`) — kept as its own parameter rather than reusing
+ * [showServicesSegment], since the two writes check the permission independently server-side, not
+ * because either reuses the other's boolean.
+ *
+ * **"Hide, don't disable" one level up.** An empty result here is what makes `BookingsConfigMenu` draw
+ * no `⋮` at all when neither entry applies (`docs/backlog/26-103-*.md`'s own Done-when) — the same rule
+ * [ago.chat.android.analytics.AnalyticsReportsOverflowMenu] already follows for Аналитика's own `⋮`.
+ */
+internal fun visibleBookingsConfigMenuEntries(
+    showServicesSegment: Boolean,
+    showHoursSegment: Boolean,
+): List<BookingsTab> =
+    buildList {
         if (showServicesSegment) add(BookingsTab.Services)
         if (showHoursSegment) add(BookingsTab.Hours)
     }

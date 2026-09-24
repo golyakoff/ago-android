@@ -257,6 +257,7 @@
     <string name="bookings_contacts_revealing_phone">Showing…</string>
 
     <string name="bookings_tab_services">Services</string>
+    <string name="bookings_config_menu_action">Configuration</string>
     <string name="services_empty">This tenant has no services yet.</string>
     <string name="services_load_failed_unexpected">Couldn\'t load services. Try again.</string>
     <string name="services_status_withdrawn">Withdrawn</string>
