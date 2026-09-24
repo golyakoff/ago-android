@@ -14,7 +14,21 @@
     android:height="24dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+    <!--
+        `26-104`: the glyph filled only ~37% of the 108 viewport, so once Android's own small-icon
+        padding was added on top the «A» read as a tiny mark in the notification's tinted circle. The
+        first attempt at 26-104 wrongly enlarged the *launcher* icon (`ic_launcher_foreground`); that
+        was reverted, and the real fix is here — the notification's own small icon. Scale the glyph 1.7×
+        about the (54,54) viewport centre (its bbox is already centred there), taking cap-height from
+        36.7% to ~62% of the 108 viewport so it dominates the tinted circle. Shape/path unchanged.
+    -->
+    <group
+        android:scaleX="1.7"
+        android:scaleY="1.7"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+    </group>
 </vector>
