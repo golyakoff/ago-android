@@ -16,6 +16,14 @@ import javax.inject.Singleton
  * comment states for the opposite direction (a `Service` telling a `ViewModel` something, rather than a
  * `ViewModel` telling a `Service`).
  *
+ * `26-61`: a second, unrelated producer -
+ * [ConversationListForegroundRefreshTrigger][ago.chat.android.conversations.ConversationListForegroundRefreshTrigger]
+ * requests a refresh on a genuine return from the background, for the identical reason: it has no
+ * reference to [ConversationListViewModel][ago.chat.android.conversations.ConversationListViewModel]
+ * either, only to this same port. Both producers say "something changed outside this screen's own view
+ * of the world, re-ask for the truth" - the one event this `SharedFlow` was always meant to carry, never
+ * widened to say which of the two happened.
+ *
  * A `SharedFlow` **event**, not a `StateFlow`, because "refresh now" is an instruction to run an action
  * once, not a value to hold: a `StateFlow`'s own replay-to-every-new-collector semantics would replay a
  * *previous* request to a `ConversationListViewModel` created fresh long after the push already happened -
