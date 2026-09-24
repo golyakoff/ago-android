@@ -16,6 +16,7 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
+import ago.chat.android.devices.ConversationRefreshSignal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -581,18 +582,37 @@ class ConversationListViewModelTest {
             assertEquals(fetchesBeforeSwitch + 1, api.fetchCalls)
         }
 
+    @Test
+    fun `26-18 AgoPushMessagingService's onDeletedMessages hook re-fetches the queue`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val refreshSignal = FakeConversationRefreshSignal()
+            val viewModel = viewModelWith(api = api, refreshSignal = refreshSignal)
+            advanceUntilIdle()
+            val fetchesBeforeSignal = api.fetchCalls
+
+            // `IncomingPushRouter.handleDeletedMessages`'s own call, restated as a plain fake emission -
+            // this class has no reference to any `Service` or `RemoteMessage`.
+            refreshSignal.requestRefresh()
+            advanceUntilIdle()
+
+            assertEquals(fetchesBeforeSignal + 1, api.fetchCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
         api: ConversationsApi,
         cache: ConversationListCache = FakeConversationListCache(),
         hubEvents: FakeOperatorHubEvents = FakeOperatorHubEvents(),
+        refreshSignal: ConversationRefreshSignal = FakeConversationRefreshSignal(),
     ): ConversationListViewModel =
         ConversationListViewModel(
             api = api,
             cache = cache,
             hubEvents = hubEvents,
             ioDispatcher = dispatcher,
+            refreshSignal = refreshSignal,
         )
 
     private fun waiting(
@@ -695,5 +715,17 @@ class ConversationListViewModelTest {
         ): SendMessageResult = error("not used by this screen")
 
         override suspend fun removeTeamMessage(teamMessageId: String) = error("not used by this screen")
+    }
+
+    /** `26-18`: a plain `MutableSharedFlow`-backed fake - real enough for [requestRefresh] to actually
+     * reach this class's own [init] collector, unlike a fake that merely records the call and never
+     * emits anything. */
+    private class FakeConversationRefreshSignal : ConversationRefreshSignal {
+        private val mutableRefreshRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        override val refreshRequests = mutableRefreshRequests
+
+        override fun requestRefresh() {
+            mutableRefreshRequests.tryEmit(Unit)
+        }
     }
 }

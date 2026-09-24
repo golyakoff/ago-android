@@ -11,6 +11,8 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
+import ago.chat.android.devices.OpenConversationTracker
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -610,18 +612,82 @@ class ThreadViewModelTest {
             assertEquals(emptyList<Pair<String, Int>>(), api.markReadCalls)
         }
 
+    @Test
+    fun `open records the conversation as open on the tracker - decideAlert's own input`() =
+        runTest(dispatcher) {
+            val tracker = FakeOpenConversationTracker()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(), openConversationTracker = tracker)
+
+            viewModel.open("conv-1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("conv-1"), tracker.openedCalls)
+            assertEquals("conv-1", tracker.currentConversationId)
+        }
+
+    @Test
+    fun `close clears the conversation from the tracker`() =
+        runTest(dispatcher) {
+            val tracker = FakeOpenConversationTracker()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(), openConversationTracker = tracker)
+            viewModel.open("conv-1")
+            advanceUntilIdle()
+
+            viewModel.close()
+
+            assertEquals(listOf("conv-1"), tracker.closedCalls)
+            assertNull(tracker.currentConversationId)
+        }
+
+    @Test
+    fun `opening a second conversation closes the first on the tracker before opening the second`() =
+        runTest(dispatcher) {
+            val tracker = FakeOpenConversationTracker()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(), openConversationTracker = tracker)
+            viewModel.open("conv-1")
+            advanceUntilIdle()
+
+            viewModel.open("conv-2")
+            advanceUntilIdle()
+
+            assertEquals(listOf("conv-1"), tracker.closedCalls)
+            assertEquals(listOf("conv-1", "conv-2"), tracker.openedCalls)
+            assertEquals("conv-2", tracker.currentConversationId)
+        }
+
+    @Test
+    fun `onCleared is a backstop that also clears the tracker`() =
+        runTest(dispatcher) {
+            val tracker = FakeOpenConversationTracker()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(), openConversationTracker = tracker)
+            viewModel.open("conv-1")
+            advanceUntilIdle()
+
+            // `onCleared()` is `protected` - a real `ViewModelStore` is the ordinary, public way to
+            // trigger it from outside the class, the same mechanism Android itself uses when a
+            // `ViewModelStoreOwner` (an `Activity`, a `NavBackStackEntry`) is actually destroyed.
+            ViewModelStore().apply {
+                put("thread", viewModel)
+                clear()
+            }
+
+            assertEquals(listOf("conv-1"), tracker.closedCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
         hub: OperatorHubEvents,
         draftStore: ComposerDraftStore = FakeComposerDraftStore(),
         conversationsApi: ConversationsApi = FakeConversationsApi(),
+        openConversationTracker: OpenConversationTracker = FakeOpenConversationTracker(),
     ): ThreadViewModel =
         ThreadViewModel(
             hubEvents = hub,
             draftStore = draftStore,
             conversationsApi = conversationsApi,
             ioDispatcher = dispatcher,
+            openConversationTracker = openConversationTracker,
         )
 
     /** `26-80`: records every call rather than branching on outcome - [ThreadViewModel.markReadUpTo]'s
@@ -749,6 +815,27 @@ class ThreadViewModelTest {
 
         override suspend fun clear(conversationId: String) {
             drafts.remove(conversationId)
+        }
+    }
+
+    /** `26-18`: records every call rather than only the current answer - this class's own new tests
+     * assert on the exact sequence [ThreadViewModel.open]/[ThreadViewModel.close] produce, the same
+     * "call order, not merely presence" proof `DeviceRegistrationCoordinatorTest`'s own revoke-then-
+     * delete case already establishes for a different class. */
+    private class FakeOpenConversationTracker : OpenConversationTracker {
+        val openedCalls = mutableListOf<String>()
+        val closedCalls = mutableListOf<String>()
+        override var currentConversationId: String? = null
+            private set
+
+        override fun conversationOpened(conversationId: String) {
+            openedCalls += conversationId
+            currentConversationId = conversationId
+        }
+
+        override fun conversationClosed(conversationId: String) {
+            closedCalls += conversationId
+            if (currentConversationId == conversationId) currentConversationId = null
         }
     }
 }

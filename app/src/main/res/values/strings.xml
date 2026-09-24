@@ -420,6 +420,38 @@
     <string name="settings_about_build_label">Сборка</string>
     <string name="settings_about_version_label">Версия</string>
 
+    <!-- `26-18`: "checkPushAvailability() returning Unavailable produces a state the operator can act
+         on" / "denying POST_NOTIFICATIONS leaves the app usable and states what it can no longer do" -
+         both surfaced here rather than on `26-19`'s own dedicated Notifications screen, which does not
+         exist yet. The section itself is hidden entirely when there is nothing to report
+         (`SettingsScreen`'s own doc comment on this block). -->
+    <string name="settings_notifications_section">Push-уведомления</string>
+    <string name="settings_notifications_disabled_text">Уведомления для приложения отключены в настройках телефона. Вы не узнаете о новых диалогах, пока экран открыт.</string>
+    <string name="settings_notifications_open_settings_action">Открыть настройки уведомлений</string>
+
+    <!-- `26-18`: `PushUnavailableReason`'s own four values - `RuStorePushClient.checkPushAvailability()`'s
+         real, named causes (`docs/architecture/push-notifications.md`'s own "What the operator's phone
+         has to satisfy"), never a single generic "push doesn't work" sentence. -->
+    <string name="push_unavailable_host_app_not_installed">На телефоне не установлено приложение RuStore, через которое приходят уведомления.</string>
+    <string name="push_unavailable_background_work_not_granted">RuStore не разрешено работать в фоне, поэтому уведомления могут приходить с задержкой.</string>
+    <string name="push_unavailable_unauthorized">На телефоне нет входа в аккаунт RuStore, поэтому уведомления не приходят.</string>
+    <string name="push_unavailable_unknown">Не удалось проверить, могут ли приходить push-уведомления на этот телефон.</string>
+
+    <!-- `26-18`: the two notification channels `26-05`'s own fan-out actually sends - only these two,
+         `PushNotificationChannel`'s own doc comment states why a third is never created. -->
+    <string name="push_channel_assignment_name">Новый диалог назначен</string>
+    <string name="push_channel_assignment_description">Уведомления о диалогах, назначенных вам</string>
+    <string name="push_channel_visitor_message_name">Сообщение от посетителя</string>
+    <string name="push_channel_visitor_message_description">Уведомления о новых сообщениях в назначенных вам диалогах</string>
+
+    <!-- `26-18`: the notification's own title/text - never the message body and never the visitor's own
+         identity (`PushNotificationPresenter`'s own doc comment states why in full), only the kind of
+         event. -->
+    <string name="push_title_assigned">Новый диалог назначен вам</string>
+    <string name="push_text_assigned">Откройте приложение, чтобы посмотреть диалог</string>
+    <string name="push_title_message">Новое сообщение</string>
+    <string name="push_text_message">Посетитель написал в назначенном вам диалоге</string>
+
     <!-- `26-16`: the one-time "which permissions does this operator hold" read the whole bottom bar is
          computed from - see `AppShellViewModel`'s own doc comment for why "still loading" renders
          neither the bar nor a guess at it. -->

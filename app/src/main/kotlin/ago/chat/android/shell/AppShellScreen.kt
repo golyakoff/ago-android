@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -304,6 +305,28 @@ private fun AppShellContent(
     val destinations = remember(permissions) { visibleBottomDestinations(permissions) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // `26-18`: "A tap opens the thread, never the list" - the half of that promise this function alone
+    // can keep. [ConversationsTabHost]'s own matching collector (further down this same `NavHost`, at
+    // the `Conversations` route) is what actually opens the thread; this one only makes sure Диалоги is
+    // the tab actually on screen when it does, in case a different tab was showing at the moment the
+    // push arrived. The identical `popUpTo`/`launchSingleTop`/`restoreState` recipe the bottom bar's own
+    // `onClick` below uses, so this is indistinguishable from the operator having tapped Диалоги
+    // themselves - never a special-cased navigation path. A `LaunchedEffect` that never completes
+    // (`collect` suspends for ever), so a *second* push arriving after this composable has been showing
+    // for a while is still caught, not just the first one this composition ever saw.
+    val pendingConversationOpener = rememberPendingConversationOpener()
+    LaunchedEffect(pendingConversationOpener) {
+        pendingConversationOpener.pendingConversationId.collect { pendingConversationId ->
+            if (pendingConversationId != null) {
+                navController.navigate(BottomDestination.Conversations.route()) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+    }
 
     Scaffold(
         // `26-28`: **this `Scaffold` owns the bottom edge and the horizontal edges; every destination

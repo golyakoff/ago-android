@@ -1,14 +1,18 @@
 package ago.chat.android
 
+import ago.chat.android.devices.EXTRA_OPEN_CONVERSATION_ID
 import ago.chat.android.session.OidcConfig
+import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInHost
 import ago.chat.android.signin.SignInViewModel
 import ago.chat.android.ui.theme.AgoChatTheme
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,6 +46,16 @@ import javax.inject.Inject
  *    `ActivityResultLauncher`. There is no callback *screen* — `scope-inventory.md`'s own reading of
  *    `/callback` as "a mechanism, not a screen" ports exactly.
  * 3. **Leaving the app** for the web console, which is an `ACTION_VIEW` and therefore a `Context`.
+ *
+ * `26-18` adds two more, both real Android jobs no `ViewModel` can do either:
+ *
+ * 4. **Receiving a notification tap.** [handleIntent] reads [EXTRA_OPEN_CONVERSATION_ID] out of
+ *    whichever `Intent` this `Activity` was started or resumed with and hands the id to
+ *    [pendingConversationOpener] - see [onNewIntent]'s own doc comment for why both `onCreate` and
+ *    `onNewIntent` have to call it.
+ * 5. **The `POST_NOTIFICATIONS` runtime permission request itself** - `ActivityResultContracts
+ *    .RequestPermission()` needs an `Activity`, and [SignInViewModel.requestNotificationPermissionEvents]'s
+ *    own doc comment states why the *decision* to ask still lives in the view model rather than here.
  */
 @AndroidEntryPoint
 public class MainActivity : ComponentActivity() {
@@ -57,7 +71,13 @@ public class MainActivity : ComponentActivity() {
     @Inject
     public lateinit var themePreferences: ThemePreferences
 
+    /** `26-18`: this `Activity`'s own side of [PendingConversationOpener] - see that interface's own doc
+     * comment for the two other places that read the value this class writes. */
+    @Inject
+    public lateinit var pendingConversationOpener: PendingConversationOpener
+
     private lateinit var authorizationLauncher: ActivityResultLauncher<Intent>
+    private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,11 +90,34 @@ public class MainActivity : ComponentActivity() {
                 viewModel.onAuthorizationResult(result.data)
             }
 
+        // `26-18`: the result itself needs no handling here - `SettingsScreen` re-reads the live system
+        // truth through `NotificationManagerCompat.areNotificationsEnabled()` on its own next resume
+        // ([NotificationPermissionChecker]'s own doc comment on why a cached copy of this particular
+        // answer would go stale), rather than this class remembering what the dialog returned.
+        notificationPermissionLauncher =
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.authorizationRequests.collect { intent -> authorizationLauncher.launch(intent) }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.requestNotificationPermissionEvents.collect {
+                    // The permission (and the runtime prompt) only exist from API 33 - a no-op launch
+                    // on an older phone would ask the system for a permission string it does not
+                    // recognise, harmless but meaningless, so this class is the one place that checks
+                    // the SDK level rather than pushing that check into the view model, which has no
+                    // reason to know an API level at all.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
+        }
+
+        handleIntent(intent)
 
         setContent {
             // `26-17`: read fresh, every recomposition - a `setMode` call from the Settings screen
@@ -106,6 +149,32 @@ public class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * `26-18`: the manifest's own `android:launchMode="singleTop"` is what makes this override fire at
+     * all for a second notification tap while this `Activity` is already the top of its task - without
+     * it, `standard` launch mode (this app's default until now) would create a fresh `MainActivity`
+     * instance instead, and this override would simply never run for that tap. `setIntent(intent)` keeps
+     * `this.intent` in step with the one actually delivered, matching the platform's own documented
+     * contract for `onNewIntent` (a future `getIntent()` call, or a configuration-change recreation,
+     * must see the new `Intent`, not the one this instance launched with).
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** `EXTRA_OPEN_CONVERSATION_ID`'s only reader - a plain extra, no deep-link `<intent-filter>` of any
+     * kind (`PushNotificationPresenter.openConversationPendingIntent`'s own doc comment states why an
+     * explicit `Intent` naming this class is the right shape for a notification this app itself posts,
+     * as opposed to a link opened from outside it). Absent for every other way this `Activity` starts -
+     * the launcher icon, the AppAuth redirect - so a blank/missing extra is the ordinary case, not an
+     * error. */
+    private fun handleIntent(intent: Intent) {
+        val conversationId = intent.getStringExtra(EXTRA_OPEN_CONVERSATION_ID) ?: return
+        pendingConversationOpener.open(conversationId)
     }
 
     private fun openInBrowser(url: String) {

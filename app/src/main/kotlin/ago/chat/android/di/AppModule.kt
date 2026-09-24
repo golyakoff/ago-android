@@ -29,19 +29,33 @@ import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.devices.AndroidNotificationPermissionChecker
+import ago.chat.android.devices.AppForegroundTracker
+import ago.chat.android.devices.ConversationRefreshSignal
 import ago.chat.android.devices.DataStoreInstallationId
+import ago.chat.android.devices.DataStorePushMessageDedupeStore
+import ago.chat.android.devices.DefaultConversationRefreshSignal
+import ago.chat.android.devices.DefaultOpenConversationTracker
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationCoordinator
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.DeviceRevocation
+import ago.chat.android.devices.NotificationPermissionChecker
+import ago.chat.android.devices.OpenConversationTracker
+import ago.chat.android.devices.ProcessLifecycleForegroundTracker
+import ago.chat.android.devices.PushMessageDedupeStore
+import ago.chat.android.devices.PushNotificationPresenter
 import ago.chat.android.devices.PushRegistrationGateway
 import ago.chat.android.devices.RuStorePushGateway
+import ago.chat.android.devices.SystemPushNotificationPresenter
 import ago.chat.android.devices.WorkManagerDeviceRegistrationScheduler
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.DataStoreThemePreferences
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.session.OperatorIdentityProvider
+import ago.chat.android.shell.DefaultPendingConversationOpener
+import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInSession
 import ago.chat.android.ui.theme.ThemePreferences
 import android.content.Context
@@ -382,4 +396,42 @@ public object AppModule {
     @Singleton
     public fun provideDeviceRegistrationScheduler(scheduler: WorkManagerDeviceRegistrationScheduler): DeviceRegistrationScheduler =
         scheduler
+
+    // `26-18`: everything the receive path needs, each a small `@Singleton` seam for the identical
+    // reason [providePushRegistrationGateway] above already is one - see each interface's own doc
+    // comment for what a plain-JVM test substitutes it with.
+
+    @Provides
+    @Singleton
+    public fun provideAppForegroundTracker(tracker: ProcessLifecycleForegroundTracker): AppForegroundTracker = tracker
+
+    @Provides
+    @Singleton
+    public fun provideOpenConversationTracker(tracker: DefaultOpenConversationTracker): OpenConversationTracker = tracker
+
+    @Provides
+    @Singleton
+    public fun provideConversationRefreshSignal(signal: DefaultConversationRefreshSignal): ConversationRefreshSignal = signal
+
+    /** `26-18`: [DataStorePushMessageDedupeStore]'s own file - [provideDeviceDataStore] above, the
+     * identical `device.preferences_pb` [DataStoreInstallationId] already writes to - see that class's
+     * own doc comment for why a dedicated third file is not worth it for this value either. */
+    @Provides
+    @Singleton
+    public fun providePushMessageDedupeStore(store: DataStorePushMessageDedupeStore): PushMessageDedupeStore = store
+
+    @Provides
+    @Singleton
+    public fun providePushNotificationPresenter(presenter: SystemPushNotificationPresenter): PushNotificationPresenter = presenter
+
+    @Provides
+    @Singleton
+    public fun provideNotificationPermissionChecker(checker: AndroidNotificationPermissionChecker): NotificationPermissionChecker = checker
+
+    /** `26-18`: [MainActivity][ago.chat.android.MainActivity]'s own bridge onto the navigation graph -
+     * see [PendingConversationOpener]'s own doc comment for why this is a `StateFlow`-backed singleton
+     * rather than a one-shot event. */
+    @Provides
+    @Singleton
+    public fun providePendingConversationOpener(opener: DefaultPendingConversationOpener): PendingConversationOpener = opener
 }

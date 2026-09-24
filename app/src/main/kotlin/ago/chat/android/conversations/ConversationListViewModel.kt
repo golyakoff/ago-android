@@ -9,6 +9,8 @@ import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.conversations.oldestFirst
 import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.devices.ConversationRefreshSignal
+import ago.chat.android.devices.NoOpConversationRefreshSignal
 import ago.chat.android.di.IoDispatcher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -59,6 +61,13 @@ public class ConversationListViewModel
         private val cache: ConversationListCache,
         private val hubEvents: OperatorHubEvents,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+        // `26-18`: `onDeletedMessages()`'s own recovery hook - see [ConversationRefreshSignal]'s own
+        // doc comment for why a `Service` reaches this class through a singleton event rather than a
+        // direct reference. Defaulted to [NoOpConversationRefreshSignal] for the identical
+        // "this app's own back-contract instrumented tests construct this class directly, for reasons
+        // unrelated to push" reason [ThreadViewModel][ago.chat.android.thread.ThreadViewModel]'s own
+        // `openConversationTracker` parameter states in full.
+        private val refreshSignal: ConversationRefreshSignal = NoOpConversationRefreshSignal,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ConversationListUiState())
         public val state: StateFlow<ConversationListUiState> = mutableState.asStateFlow()
@@ -103,6 +112,12 @@ public class ConversationListViewModel
             }
             viewModelScope.launch {
                 hubEvents.allMessages.collect { dto -> onMessage(dto) }
+            }
+            // `26-18`: `AgoPushMessagingService.onDeletedMessages()`'s own recovery hook, wired to this
+            // class's own established "something changed, re-ask for the truth" answer - the identical
+            // `refresh()` call [onAssigned]/[onMessage] above already make for a live hub push.
+            viewModelScope.launch {
+                refreshSignal.refreshRequests.collect { refresh() }
             }
         }
 

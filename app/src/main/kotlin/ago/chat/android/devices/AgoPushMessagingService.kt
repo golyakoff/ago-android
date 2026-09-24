@@ -13,13 +13,9 @@ import ru.rustore.sdk.pushclient.messaging.service.RuStoreMessagingService
 import javax.inject.Inject
 
 /**
- * `26-06`/`adr/0180`: the service the manifest's `ru.rustore.sdk.pushclient.MESSAGING_EVENT`
- * intent-filter starts - the second of the three call sites, and the only one this SDK itself drives:
- * `onNewToken`'s own documentation says in so many words that after it fires the app is responsible
- * for delivering the new token to its own server. `onMessageReceived`/`onDeletedMessages` are
- * deliberately no-ops - **rendering or suppressing anything is `26-18`'s job, not this item's**
- * (`docs/backlog/26-06-*.md`'s own Out of scope), and this class exists so that item has a real
- * service to extend rather than one it has to create from nothing.
+ * `26-06`/`26-18`/`adr/0180`: the service the manifest's `ru.rustore.sdk.pushclient.MESSAGING_EVENT`
+ * intent-filter starts - the second of the three registration call sites `26-06` named, and now also
+ * the one and only receive path `26-18` adds: `onMessageReceived`/`onDeletedMessages` below.
  *
  * **`@AndroidEntryPoint` on a plain `Service`, no extra dependency.** Hilt supports `Service` as a
  * first-class entry point with nothing beyond the `hilt-android`/Hilt Gradle plugin this app already
@@ -28,13 +24,25 @@ import javax.inject.Inject
  * starts through the manifest does not have that problem).
  *
  * **Every method here runs on a background thread already** (RuStore's own documentation, confirmed
- * against `RuStoreMessagingService.class`'s own `serviceScope`/dispatcher fields) - so [onNewToken]
- * launches onto this class's own scope rather than blocking the caller, and never onto `Dispatchers.Main`.
+ * against `RuStoreMessagingService.class`'s own `serviceScope`/dispatcher fields) - so every override
+ * below launches onto this class's own scope rather than blocking the caller, and never onto
+ * `Dispatchers.Main`.
+ *
+ * **This class holds no decision of its own for the receive path.** Every override here does nothing
+ * but translate an SDK type into a plain value and hand it to [IncomingPushRouter] - the identical
+ * "the `Service`/consumer deserializes, scopes, calls, acks; a plain class holds the decision" split
+ * `NotifyOperatorDevicesHandler`'s own doc comment states for its own two consumers, restated here for
+ * the client's own receive path. That split is what makes [IncomingPushRouter] - the actual dedupe,
+ * suppress, and present sequence - testable on a plain JVM with fakes and no `Service`, no
+ * `RemoteMessage`, and no real `NotificationManager` anywhere in the test.
  */
 @AndroidEntryPoint
 public class AgoPushMessagingService : RuStoreMessagingService() {
     @Inject
     internal lateinit var coordinator: DeviceRegistrationCoordinator
+
+    @Inject
+    internal lateinit var router: IncomingPushRouter
 
     @Inject
     @IoDispatcher
@@ -54,12 +62,36 @@ public class AgoPushMessagingService : RuStoreMessagingService() {
         }
     }
 
-    /** `26-18`'s job. Intentionally empty - see this class's own doc comment. */
+    /**
+     * `26-18`: a data-only message ("in any case", RuStore's own documentation - this fires whether or
+     * not the app ends up rendering anything). [message.data][RemoteMessage.getData] is nullable on the
+     * SDK's own type despite its documentation describing the field as always present, so `.orEmpty()`-
+     * style handling lives inside [IncomingPushRouter.handleMessage] itself rather than here, alongside
+     * the rest of that class's own parsing.
+     *
+     * Launched onto this class's own scope, never awaited - `onMessageReceived` itself returns
+     * immediately either way, and the real deadline is RuStore's own **20-second** handling window
+     * (this class's own doc comment), which the launched coroutine - not this method - has to finish
+     * inside. Building and showing a notification is well within that; there is no network call
+     * anywhere on this path (`IncomingPush`'s own doc comment: the payload already carries what the
+     * notification needs).
+     */
     override fun onMessageReceived(message: RemoteMessage) {
+        scope.launch {
+            runCatching { router.handleMessage(message.messageId, message.data) }
+        }
     }
 
-    /** `26-18`'s job. Intentionally empty. */
+    /**
+     * `26-18`: RuStore's own recovery hook for pushes that were **not** delivered (TTL expiry being its
+     * documented example) - wired to [IncomingPushRouter.handleDeletedMessages], which asks
+     * [ConversationListViewModel][ago.chat.android.conversations.ConversationListViewModel] to refresh
+     * rather than leaving the operator with a silent gap. Synchronous, not launched: the call itself is
+     * a non-suspending `tryEmit` all the way down ([DefaultConversationRefreshSignal]'s own doc comment),
+     * so there is nothing here that needs this class's own background scope.
+     */
     override fun onDeletedMessages() {
+        router.handleDeletedMessages()
     }
 
     /**

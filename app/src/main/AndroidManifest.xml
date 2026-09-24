@@ -44,9 +44,22 @@
             `26-07` deliberately left out of scope - the brandbook's gradient tile and its glyph
             are a separate source from the screen inventory.
         -->
+        <!--
+            `26-18`: `android:launchMode="singleTop"` - a notification tap while the app is already
+            running builds an explicit `Intent` naming this `Activity` directly
+            (`PushNotificationPresenter.openConversationPendingIntent`), with
+            `FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP` set on it. Without this manifest
+            attribute those flags would still bring the existing task to the front, but a *new*
+            `MainActivity` instance would be pushed onto it (`standard`, this app's launch-mode
+            default until now, always creates a fresh instance), stacking a second `NavController` and
+            a second copy of every screen's own state rather than delivering to the one that is already
+            there through `onNewIntent` - see that override's own doc comment for the back-stack
+            consequence this exists to avoid.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.AgoChat">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

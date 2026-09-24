@@ -79,6 +79,27 @@ public class SignInViewModel
         private val authorizationIntents = Channel<Intent>(Channel.BUFFERED)
         public val authorizationRequests: Flow<Intent> = authorizationIntents.receiveAsFlow()
 
+        /**
+         * `26-18`: "asked at the moment it means something rather than at first launch"
+         * (`docs/backlog/26-18-*.md`'s own Scope). **The moment chosen is every sign-in that resolves to
+         * [SignInDestination.Operator]** - the identical moment [routeNow] already registers this device
+         * for push at all: an operator who has just been told "you can receive visitor conversations on
+         * this phone" is being asked about the one permission that makes that promise real, which is a
+         * stronger connection to the benefit than "first app launch" (before any session, any site, or
+         * any conversation exists) could ever state. Fired on **every** such sign-in rather than once ever,
+         * which is deliberately harmless rather than merely tolerated: `ActivityResultContracts
+         * .RequestPermission()` on an already-granted permission resolves instantly with no dialog shown
+         * (`MainActivity`'s own doc comment on its launcher), and a permission the operator has explicitly
+         * denied shows nothing either past Android's own "don't ask again" state - so the only real
+         * prompt an operator ever sees from this is the first one.
+         *
+         * A `Channel`, the identical "an event, not a state, or a rotation replays it" reasoning
+         * [authorizationRequests] above already states, restated for a system permission dialog instead
+         * of a Custom Tab.
+         */
+        private val notificationPermissionRequests = Channel<Unit>(Channel.BUFFERED)
+        public val requestNotificationPermissionEvents: Flow<Unit> = notificationPermissionRequests.receiveAsFlow()
+
         init {
             resumeSession()
         }
@@ -187,6 +208,10 @@ public class SignInViewModel
                     viewModelScope.launch(ioDispatcher) {
                         runCatching { deviceRegistrar.registerThisDevice() }
                     }
+                    // `26-18`: fire-and-forget, the identical shape as the two calls immediately above -
+                    // `notificationPermissionRequests`'s own doc comment states why every sign-in is the
+                    // right moment rather than only the first one ever.
+                    notificationPermissionRequests.trySend(Unit)
                     SignInUiState.SignedIn(destination.activeSiteId)
                 }
                 is SignInDestination.ChooseSite -> SignInUiState.ChooseSite(destination.tenancies)
