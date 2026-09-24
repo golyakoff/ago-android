@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import kotlinx.coroutines.Dispatchers
@@ -336,6 +337,13 @@ class ContactsViewModelTest {
             if (hangReveal) awaitCancellation()
             return revealResult
         }
+
+        // `26-74` widened `BookingsApi` with the reveal audit trail - `ContactsViewModel` performs a
+        // reveal, it never reads the trail of ones already performed.
+        override suspend fun fetchPhoneReveals(
+            before: String?,
+            limit: Int?,
+        ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
 
         // `26-96` widened `BookingsApi` with the service dictionary and its edit - neither of which
         // this class reads or writes.

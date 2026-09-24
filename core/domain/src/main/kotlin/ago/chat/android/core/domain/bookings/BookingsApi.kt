@@ -134,6 +134,29 @@ public interface BookingsApi {
         description: String?,
         isActive: Boolean,
     ): BookingActionResult
+
+    /**
+     * `26-74`: `GET /api/v1/console/contacts/phone-reveals` — the tenant's own reveal audit trail, read
+     * back rather than performed: `revealCustomerPhone` above is the write this reads the history of.
+     * Gated server-side on `calendar:configure`, **not** `customer:read` — deliberately wider than the
+     * reveal action itself (`GetPhoneRevealsForTenantHandler`'s own doc comment, `ago-calendar`: revealing
+     * one number does not entitle somebody to the whole tenant's own reveal history), so this is the one
+     * read on this port whose gate is not implied by any other method already on it.
+     *
+     * A sixth method on this same port rather than a sixth adapter class — [KtorBookingsApi]'s own class
+     * doc comment already states why a fourth/fifth read earned no separate adapter, and this read shares
+     * every one of those properties too (`docs/backlog/26-74-*.md`'s own Scope item 1: "no new base URL,
+     * no new adapter class if the existing one fits").
+     *
+     * [before] is the keyset cursor — the last [PhoneReveal.id] from the previous page, or `null` for the
+     * first one; [limit] is `null` to take the server's own default
+     * (`GetPhoneRevealsForTenantHandler.DefaultLimit`, `ago-calendar`). Both travel as query parameters,
+     * the identical shape [fetchConfirmedBookings]'s own `from`/`to` already establish for this port.
+     */
+    public suspend fun fetchPhoneReveals(
+        before: String?,
+        limit: Int?,
+    ): PhoneRevealsResult
 }
 
 /**
@@ -286,6 +309,33 @@ public sealed interface ContactsResult {
     public data class Failed(
         val reason: BookingsQueueFailure,
     ) : ContactsResult
+}
+
+/**
+ * `26-74`: what asking for one page of this tenant's own reveal audit trail came back with — the
+ * identical three-arm shape [ContactsResult]/[ConfirmedBookingsResult] already establish, restated rather
+ * than shared for the same reason those two are restated from one another: [Loaded] carries [PhoneReveal],
+ * a type with no field in common with either sibling worth generalising over — and, unique among this
+ * port's reads, [Loaded] itself carries paging state ([nextBefore]) neither sibling's own `Loaded` needs.
+ */
+public sealed interface PhoneRevealsResult {
+    public data class Loaded(
+        val reveals: List<PhoneReveal>,
+        /** `ContactPhoneRevealPageResponse.NextBefore` verbatim — the keyset cursor for the next page,
+         * `null` once the oldest row has been reached. */
+        val nextBefore: String?,
+    ) : PhoneRevealsResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact [PendingBookingsResult.NotConfigured]'s
+     * own doc comment explains. */
+    public data object NotConfigured : PhoneRevealsResult
+
+    /** [BookingsQueueFailure] is reused again here, for the identical reason
+     * [ConfirmedBookingsResult.Failed]'s own doc comment gives: this read reduces to the same
+     * "is it me, or is it broken" two-way question the other reads on this port already answer with it. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : PhoneRevealsResult
 }
 
 /**

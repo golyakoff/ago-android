@@ -100,4 +100,5 @@ internal fun AnalyticsReport.labelRes(): Int =
         AnalyticsReport.Conversion -> R.string.analytics_report_conversion
         AnalyticsReport.TagBreakdown -> R.string.analytics_report_tag_breakdown
         AnalyticsReport.BookingFunnel -> R.string.analytics_report_booking_funnel
+        AnalyticsReport.PhoneReveals -> R.string.analytics_report_phone_reveals
     }

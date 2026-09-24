@@ -10,6 +10,8 @@ import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneReveal
+import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import io.ktor.client.HttpClient
@@ -354,6 +356,49 @@ public class KtorBookingsApi(
 
         return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-74`: `GET /api/v1/console/contacts/phone-reveals?before=&limit=` — the identical
+     * check-base-URL-first, classify-never-invent shape every read above establishes, restated for this
+     * sixth endpoint for the same reason [fetchConfirmedBookings]'s own doc comment gives for not
+     * factoring the reads on this port into one shared helper. [before]/[limit] are only sent when
+     * non-null — an omitted query parameter, not a literal `"null"` string, is what asks the server for
+     * its own default on either bound (the identical `parameter(...)` shape [fetchConfirmedBookings] uses
+     * for its own two, always-present bounds; here both are optional instead).
+     */
+    override suspend fun fetchPhoneReveals(
+        before: String?,
+        limit: Int?,
+    ): PhoneRevealsResult {
+        val baseUrl = calendarApiBaseUrl ?: return PhoneRevealsResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/contacts/phone-reveals") {
+                    before?.let { parameter("before", it) }
+                    limit?.let { parameter("limit", it) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return PhoneRevealsResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return PhoneRevealsResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            val page = response.body<ContactPhoneRevealPageWireDto>()
+            PhoneRevealsResult.Loaded(page.items.map { it.toDomain() }, page.nextBefore)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `200` whose body is not the promised shape is not an empty page - the identical
+            // `fetchPendingQueue`/`shapeGuard.ts` lesson, read onto this endpoint.
+            PhoneRevealsResult.Failed(classify(failure))
+        }
+    }
 }
 
 /** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
@@ -521,3 +566,33 @@ private fun ContactWireDto.toDomain() =
         phoneVerifiedAt = phoneVerifiedAt,
         phoneConfirmedByOperatorAt = phoneConfirmedByOperatorAt,
     )
+
+/** `Ago.Calendar.Contracts.ContactPhoneRevealResponse`, field for field — see [PhoneReveal]'s own doc
+ * comment for why every field here is one this app already renders and none is a name invented for
+ * either id. */
+@Serializable
+private data class ContactPhoneRevealWireDto(
+    val id: String,
+    val occurredAt: String,
+    val customerId: String,
+    val operatorId: String,
+    val surface: String,
+)
+
+private fun ContactPhoneRevealWireDto.toDomain() =
+    PhoneReveal(
+        id = id,
+        occurredAt = occurredAt,
+        customerId = customerId,
+        operatorId = operatorId,
+        surface = surface,
+    )
+
+/** `Ago.Calendar.Contracts.ContactPhoneRevealPageResponse` — `NextBefore` is `null` once the oldest row
+ * has been reached, the identical keyset-page shape [ConfirmedBookingWireDto]'s own sibling reads have no
+ * need of (none of this port's other reads page at all). */
+@Serializable
+private data class ContactPhoneRevealPageWireDto(
+    val items: List<ContactPhoneRevealWireDto>,
+    val nextBefore: String? = null,
+)

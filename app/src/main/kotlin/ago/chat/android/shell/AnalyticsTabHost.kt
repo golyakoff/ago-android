@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.analytics.AnalyticsRoute
 import ago.chat.android.analytics.BookingFunnelReportRoute
 import ago.chat.android.analytics.ConversionReportRoute
+import ago.chat.android.analytics.PhoneRevealsReportRoute
 import ago.chat.android.analytics.SiteAnalyticsRoute
 import ago.chat.android.analytics.TagBreakdownReportRoute
 import ago.chat.android.core.domain.navigation.AnalyticsReport
@@ -107,5 +108,6 @@ private fun reportScreen(
         AnalyticsReport.Conversion -> ConversionReportRoute(onBack = onBack)
         AnalyticsReport.TagBreakdown -> TagBreakdownReportRoute(onBack = onBack)
         AnalyticsReport.BookingFunnel -> BookingFunnelReportRoute(onBack = onBack)
+        AnalyticsReport.PhoneReveals -> PhoneRevealsReportRoute(onBack = onBack)
     }
 }

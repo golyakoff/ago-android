@@ -577,6 +577,23 @@
     <string name="analytics_booking_funnel_empty">В этом периоде сценарий записи не запускался.</string>
     <string name="analytics_booking_funnel_invalid_range_error">Начало периода должно быть раньше его конца.</string>
 
+    <!-- `26-74`: «Показы телефонов», the fifth and last of the five - the tenant's own reveal audit
+         trail, gated on `calendar:configure` rather than `site:configure`
+         (`AnalyticsReport.PhoneReveals`'s own doc comment). Wording for the title, the empty state, the
+         column labels and the paging control is copied verbatim from `ago-console`'s own `ru.ts`
+         (`navCalendarPhoneReveals`, `calendarPhoneReveals*`) - the identical trail read back on both
+         surfaces. `bookings_not_configured` is reused as-is for the "calendar not configured" state,
+         since it is the identical fact Записи already renders that sentence for. -->
+    <string name="analytics_report_phone_reveals">Показы телефонов</string>
+    <string name="analytics_phone_reveals_empty">Пока никто не показывал номер телефона.</string>
+    <string name="analytics_phone_reveals_load_failed_unexpected">Не удалось загрузить журнал показов телефонов. Попробуйте ещё раз.</string>
+    <string name="analytics_phone_reveals_when_label">Когда</string>
+    <string name="analytics_phone_reveals_customer_label">Клиент</string>
+    <string name="analytics_phone_reveals_operator_label">Оператор</string>
+    <string name="analytics_phone_reveals_surface_label">Экран</string>
+    <string name="analytics_phone_reveals_load_more">Загрузить ещё</string>
+    <string name="analytics_phone_reveals_loading_more">Загрузка…</string>
+
     <string name="analytics_overall_heading">Всего за период</string>
     <string name="analytics_previous_period_heading">Предыдущий период</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>

@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import kotlinx.coroutines.Dispatchers
@@ -321,5 +322,10 @@ class ServicesViewModelTest {
             customerId: String,
             surface: String,
         ): RevealPhoneResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun fetchPhoneReveals(
+            before: String?,
+            limit: Int?,
+        ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
     }
 }

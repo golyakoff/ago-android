@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import kotlinx.coroutines.Dispatchers
@@ -316,5 +317,12 @@ class BookingsViewModelTest {
             description: String?,
             isActive: Boolean,
         ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
+
+        // `26-74` widened `BookingsApi` with the reveal audit trail - `BookingsViewModel` reads and
+        // vetoes the pending queue alone; it never reads that trail.
+        override suspend fun fetchPhoneReveals(
+            before: String?,
+            limit: Int?,
+        ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
     }
 }
