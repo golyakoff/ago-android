@@ -184,9 +184,12 @@
         own plural rule has three buckets (one/few/many) where English has two — selected in code
         (`russianPluralStringResource`, `ElapsedText.kt`) rather than via `<plurals>`, for the same reason
         `conversation_list_elapsed_*_short`'s own comment gives for skipping `<plurals>` one step further:
-        `<plurals>` picks its bucket from the *device's* locale, and this app ships one locale
-        (`26-10`) with no `setApplicationLocales` override, so a device set to English would pick English's
-        two-bucket rule and hand back the wrong Russian ending for "2" or "5".
+        `<plurals>` picks its bucket from the *device's* locale rather than the resource file actually in
+        play.
+        `26-105`: `ElapsedText.kt`'s `localePluralResourceId` now branches the selection itself on the
+        active locale (Russian's own mod-10/mod-100 rule here, unchanged; English's one/other rule when
+        `26-92`'s language switch is set to English) rather than always applying Russian's grammar, so this
+        file's own Russian forms below keep reading exactly as they did before this item.
     -->
     <string name="conversation_row_elapsed_minutes_one">%1$d минута</string>
     <string name="conversation_row_elapsed_minutes_few">%1$d минуты</string>
