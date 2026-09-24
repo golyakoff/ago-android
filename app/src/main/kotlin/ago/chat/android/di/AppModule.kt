@@ -4,6 +4,7 @@ import ago.chat.android.BuildConfig
 import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
+import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
@@ -19,6 +20,7 @@ import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
+import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
@@ -336,6 +338,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversionReportApi = KtorConversionReportApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-72`: [ago.chat.android.analytics.TagBreakdownReportViewModel]'s own port — the same
+     * `config.apiBaseUrl` [provideConversionReportApi] above reads, since
+     * `GET /api/v1/conversations/tag-breakdown-report` is one more endpoint on that same origin. A
+     * fourth `@Provides` rather than a fourth method behind one binding, for the identical reason
+     * [provideConversionReportApi]'s own doc comment gives for keeping each report's port separate
+     * ([TagBreakdownReportApi]'s own doc comment).
+     */
+    @Provides
+    public fun provideTagBreakdownReportApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): TagBreakdownReportApi = KtorTagBreakdownReportApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is

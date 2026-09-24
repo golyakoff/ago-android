@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.analytics.AnalyticsRoute
 import ago.chat.android.analytics.ConversionReportRoute
 import ago.chat.android.analytics.SiteAnalyticsRoute
+import ago.chat.android.analytics.TagBreakdownReportRoute
 import ago.chat.android.core.domain.navigation.AnalyticsReport
 import ago.chat.android.core.domain.navigation.visibleAnalyticsReports
 import ago.chat.android.core.domain.permissions.OperatorPermissions
@@ -103,5 +104,6 @@ private fun reportScreen(
     when (report) {
         AnalyticsReport.Site -> SiteAnalyticsRoute(onBack = onBack)
         AnalyticsReport.Conversion -> ConversionReportRoute(onBack = onBack)
+        AnalyticsReport.TagBreakdown -> TagBreakdownReportRoute(onBack = onBack)
     }
 }
