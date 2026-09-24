@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.Permission
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.testing.FlakyOnCi
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -22,7 +23,13 @@ import org.junit.runner.RunWith
  * `AppShellViewModel` itself does with it is `AppShellViewModelTest`'s (plain JVM) - this class is the
  * one layer neither of those two reaches: does the bottom bar actually *draw* the right thing for each
  * of the three values that `Int?` can be.
+ *
+ * `26-91`/`26-94`: this class asserts Russian text as a literal (`contentDescription`); the CI emulator
+ * boots English and cannot be forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment on
+ * `instrumented-tests` has the detail). `26-94` tracks the real fix, applied to the classes it landed
+ * against - this one was written after that landing started and needs the identical exclusion.
  */
+@FlakyOnCi
 @RunWith(AndroidJUnit4::class)
 class DialoguesTabUnreadBadgeTest {
     @get:Rule
