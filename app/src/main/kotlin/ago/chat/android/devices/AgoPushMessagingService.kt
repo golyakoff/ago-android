@@ -99,9 +99,21 @@ public class AgoPushMessagingService : RuStoreMessagingService() {
      * exception's own class name is logged, never its `message` (`NetworkFailure`'s own doc comment
      * states why an exception's own text is not trusted onto a log line in this app), and there is no
      * token anywhere in a [RuStorePushClientException] for this line to risk printing.
+     *
+     * `26-101`: this is RuStore's own recovery/diagnostic channel for a distributor failure that happens
+     * with **no [registerThisDevice][DeviceRegistrationCoordinator.registerThisDevice] call anywhere
+     * nearby** - a background token refresh, for instance - so it is the third feed into
+     * [DeviceRegistrationCoordinator.reportTokenFailure], alongside `registerThisDevice`'s own
+     * `currentToken()` branch. Translated through the identical [toPushUnavailableReason]/`isCritical`
+     * pair `RuStorePushGateway.kt`'s own `toTokenFailure` uses, so a raw SDK exception type still never
+     * reaches [DeviceRegistrationCoordinator] itself - that class stays free of any RuStore import,
+     * exactly as its own doc comment states.
      */
     override fun onError(errors: List<RuStorePushClientException>) {
-        errors.forEach { error -> Log.w(TAG, "RuStore push onError: ${error::class.simpleName}") }
+        errors.forEach { error ->
+            Log.w(TAG, "RuStore push onError: ${error::class.simpleName}")
+            coordinator.reportTokenFailure(error.toPushUnavailableReason(), error.isCritical)
+        }
     }
 
     private companion object {

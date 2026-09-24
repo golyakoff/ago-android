@@ -12,11 +12,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * `26-19`: the notification settings screen's own state — two genuinely separate concerns sharing one
- * view model because they share one screen, the identical reasoning [ago.chat.android.shell
+ * `26-19`/`26-101`: the notification settings screen's own state — three genuinely separate concerns
+ * sharing one view model because they share one screen, the identical reasoning [ago.chat.android.shell
  * .SettingsViewModel]'s own doc comment states for its three: [channelStates] (a live read of Android's
- * own truth, refreshed on demand) and [quietHours] (this app's own persisted preference, read and
- * written through [QuietHoursPreferences]).
+ * own truth, refreshed on demand), [quietHours] (this app's own persisted preference, read and written
+ * through [QuietHoursPreferences]), and [pushAvailability] (`26-101`'s own addition - whether push can
+ * work on this device at all).
+ *
+ * **[pushAvailability] is a plain relay onto [DeviceRegistrar.pushAvailability]** - the identical shape
+ * [ago.chat.android.shell.SettingsViewModel.pushAvailability] and
+ * [ago.chat.android.signin.SignInViewModel.pushAvailability] already establish for the same port,
+ * restated here so this screen - reached specifically to manage notifications - states the one fact an
+ * operator arriving here most needs: whether the switches below actually mean anything on this device.
  *
  * **`internal`, not `public`.** [channelStates]' own type mentions [PushNotificationChannel], which is
  * itself `internal` — the Kotlin compiler's own `EXPOSED_PROPERTY_TYPE` rule forbids a `public` member
@@ -32,6 +39,7 @@ internal class NotificationSettingsViewModel
     constructor(
         private val channelStateReader: NotificationChannelStateReader,
         private val quietHoursPreferences: QuietHoursPreferences,
+        private val deviceRegistrar: DeviceRegistrar,
     ) : ViewModel() {
         private val mutableChannelStates = MutableStateFlow(readChannelStates())
 
@@ -44,6 +52,13 @@ internal class NotificationSettingsViewModel
 
         val quietHours: StateFlow<QuietHoursSettings> =
             quietHoursPreferences.settings.stateIn(viewModelScope, SharingStarted.Eagerly, QuietHoursSettings())
+
+        /** `26-101`: `null` until [DeviceRegistrationCoordinator.registerThisDevice] (sign-in, the
+         * periodic worker) or [AgoPushMessagingService.onError] have actually reported something - this
+         * screen draws no warning at all until then, the identical "nothing to say yet" reading
+         * [ago.chat.android.shell.SettingsViewModel.pushAvailability]'s own doc comment already gives that
+         * `null`. */
+        val pushAvailability: StateFlow<PushAvailability?> = deviceRegistrar.pushAvailability
 
         /** [ago.chat.android.shell.SettingsViewModel.refreshNotificationPermission]'s own `ON_RESUME`
          * shape, applied to channel importance instead of the app-wide permission: an operator who left

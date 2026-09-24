@@ -38,9 +38,24 @@ public sealed interface PushTokenResult {
         val value: String,
     ) : PushTokenResult
 
-    /** The SDK could not answer at all - a distributor problem, a transport failure, anything
-     * `Task.addOnFailureListener` reports. Never a reason to crash a sign-in or a periodic job. */
-    public data object Unavailable : PushTokenResult
+    /**
+     * The SDK could not answer at all - a distributor problem, a transport failure, anything
+     * `Task.addOnFailureListener` reports. Never a reason to crash a sign-in or a periodic job.
+     *
+     * `26-101`: this used to be a bare `data object`, discarding *why* - which is exactly what let a
+     * device with no push host installed sail through [DeviceRegistrationCoordinator.registerThisDevice]
+     * as a quiet success. [reason] is the same classification [PushAvailability.Unavailable] already
+     * carries for `checkPushAvailability()`, and [critical] mirrors the real SDK's own
+     * `RuStorePushClientException.isCritical` (`RuStorePushGateway`'s own doc comment on its token-failure
+     * classifier states which exceptions set it and why) - `true` for a device that genuinely cannot
+     * receive push (no host, an unrecognised failure talking to the host app) and never for the ordinary
+     * shape of a transient network blip, which [DeviceRegistrationCoordinator] retries quietly rather
+     * than nags about.
+     */
+    public data class Unavailable(
+        val reason: PushUnavailableReason,
+        val critical: Boolean,
+    ) : PushTokenResult
 }
 
 /**

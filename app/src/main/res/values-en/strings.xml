@@ -417,6 +417,10 @@
     <string name="operator_presence_notification_body">The app is staying connected so you don\'t miss a new conversation</string>
 
     <string name="notification_settings_title">Notifications</string>
+
+    <!-- `26-101`: a persistent-until-resolved warning at the top of this screen - see `values/strings.xml`
+         for the full reasoning. Reuses `push_unavailable_*` above for the reason line. -->
+    <string name="notification_settings_push_warning_title">Push notifications don\'t work on this device</string>
     <string name="notification_settings_channels_section">Channels</string>
     <string name="notification_settings_channel_state_on">On</string>
     <string name="notification_settings_channel_state_off">Turned off in phone settings</string>
