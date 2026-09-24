@@ -6,6 +6,7 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.thread.ThreadRoute
 import ago.chat.android.thread.ThreadViewModel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,6 +54,24 @@ public fun ConversationsTabHost(
     val listState by viewModel.state.collectAsStateWithLifecycle()
     var openConversationId by rememberSaveable { mutableStateOf<String?>(null) }
     val stateHolder = rememberSaveableStateHolder()
+
+    // `26-18`: the other half of "a tap opens the thread, never the list" -
+    // [AppShellScreen]'s own `AppShellContent` makes sure Диалоги is the tab on screen; this is what
+    // actually opens the thread once it is. A `LaunchedEffect` that never completes (`collect` suspends
+    // for ever), the identical reasoning that function's own doc comment gives for its matching
+    // collector, so a second push arriving while this tab is already showing is caught too, not only the
+    // first one this composition ever saw. [PendingConversationOpener.consume] is what stops a later,
+    // unrelated recomposition (a rotation, a tab revisit) from re-opening the identical conversation a
+    // second time.
+    val pendingConversationOpener = rememberPendingConversationOpener()
+    LaunchedEffect(pendingConversationOpener) {
+        pendingConversationOpener.pendingConversationId.collect { pendingConversationId ->
+            if (pendingConversationId != null) {
+                openConversationId = pendingConversationId
+                pendingConversationOpener.consume()
+            }
+        }
+    }
 
     val currentlyOpen = openConversationId
     if (currentlyOpen == null) {

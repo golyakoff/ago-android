@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `26-18`: the status-bar small icon `PushNotificationPresenter` sets on every notification this app
+    ever posts. `ic_launcher_monochrome.xml`'s own "A" glyph, at the size a `NotificationCompat.Builder
+    .setSmallIcon` icon actually needs - Android's own notification tray renders `setSmallIcon` as a
+    flat, single-color alpha mask on every API level this app supports (`minSdk = 26`), so only the
+    shape's alpha coverage is ever drawn; the identical path data already is exactly that. A dedicated
+    file rather than pointing `setSmallIcon` straight at `R.drawable.ic_launcher_monochrome`: that
+    resource's own doc comment ties it to the adaptive-icon system's Android 13+ themed-icon layer, a
+    different role from a notification's small icon even though today's artwork happens to be identical.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+</vector>

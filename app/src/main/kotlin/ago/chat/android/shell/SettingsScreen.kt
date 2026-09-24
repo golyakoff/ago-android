@@ -4,10 +4,14 @@ import ago.chat.android.BuildConfig
 import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.devices.PushAvailability
+import ago.chat.android.devices.PushUnavailableReason
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.ThemeMode
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -29,15 +34,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
@@ -61,11 +71,29 @@ public fun SettingsRoute(
     val tenancies by viewModel.tenancies.collectAsStateWithLifecycle()
     val currentSiteId by viewModel.currentSiteId.collectAsStateWithLifecycle()
     val switching by viewModel.switching.collectAsStateWithLifecycle()
+    val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel) {
         viewModel.siteSwitched.collect { newSiteId -> onSiteSwitched(newSiteId) }
     }
 
+    // `26-18`: [SettingsViewModel.notificationsEnabled]'s own doc comment states why `ON_RESUME` - the
+    // identical `LifecycleEventObserver` shape `ThreadRoute`'s own `ON_STOP` draft-flush already
+    // establishes, on the opposite event: an operator who left this screen, flipped the system switch,
+    // and came straight back must see the current truth, not the answer this screen happened to read
+    // when it first composed.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshNotificationPermission()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val context = LocalContext.current
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeSelected = viewModel::setThemeMode,
@@ -73,6 +101,14 @@ public fun SettingsRoute(
         currentSiteId = currentSiteId,
         switching = switching,
         onSwitchSite = viewModel::switchSite,
+        pushAvailability = pushAvailability,
+        notificationsEnabled = notificationsEnabled,
+        onOpenNotificationSettings = {
+            context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+            )
+        },
         onBack = onBack,
     )
 }
@@ -101,6 +137,9 @@ internal fun SettingsScreen(
     switching: Boolean,
     onSwitchSite: (String) -> Unit,
     onBack: () -> Unit,
+    pushAvailability: PushAvailability? = null,
+    notificationsEnabled: Boolean = true,
+    onOpenNotificationSettings: () -> Unit = {},
 ) {
     val switchableSites = (tenancies as? TenancyListing.Known)?.tenancies.orEmpty()
 
@@ -175,6 +214,41 @@ internal fun SettingsScreen(
                     }
                 }
 
+                // `26-18`: "checkPushAvailability() returning Unavailable produces a state the operator
+                // can act on, naming which condition failed" / "denying POST_NOTIFICATIONS leaves the
+                // app usable and states what it can no longer do". Hidden entirely rather than shown as
+                // a reassuring "everything is fine" row - the identical "hidden, not shown-disabled"
+                // convention this screen's own `switchableSites.size > 1` guard above already follows:
+                // a row with nothing wrong to report is not a row an operator needs to read.
+                val pushUnavailable = pushAvailability as? PushAvailability.Unavailable
+                if (pushUnavailable != null || !notificationsEnabled) {
+                    item { SectionLabel(stringResource(R.string.settings_notifications_section)) }
+                    if (pushUnavailable != null) {
+                        item {
+                            Text(
+                                text = pushUnavailableReasonText(pushUnavailable.reason),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                    if (!notificationsEnabled) {
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.settings_notifications_disabled_text),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                OutlinedButton(onClick = onOpenNotificationSettings, modifier = Modifier.padding(top = 8.dp)) {
+                                    Text(text = stringResource(R.string.settings_notifications_open_settings_action))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item { SectionLabel(stringResource(R.string.settings_about_section)) }
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -186,6 +260,18 @@ internal fun SettingsScreen(
         }
     }
 }
+
+/** `26-18`: `PushUnavailableReason`'s own four values, each named rather than a single generic
+ * "push is unavailable" sentence - `docs/backlog/26-18-*.md`'s own Done-when asks explicitly for
+ * "naming which condition failed". */
+@Composable
+private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
+    when (reason) {
+        PushUnavailableReason.HostAppNotInstalled -> stringResource(R.string.push_unavailable_host_app_not_installed)
+        PushUnavailableReason.HostAppBackgroundWorkNotGranted -> stringResource(R.string.push_unavailable_background_work_not_granted)
+        PushUnavailableReason.Unauthorized -> stringResource(R.string.push_unavailable_unauthorized)
+        PushUnavailableReason.Unknown -> stringResource(R.string.push_unavailable_unknown)
+    }
 
 @Composable
 private fun themeModeLabel(mode: ThemeMode): String =

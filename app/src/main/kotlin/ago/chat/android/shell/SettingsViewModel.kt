@@ -4,6 +4,9 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.devices.DeviceRegistrar
+import ago.chat.android.devices.NotificationPermissionChecker
+import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
@@ -51,10 +54,31 @@ public class SettingsViewModel
         private val activeSite: ActiveSiteSelection,
         private val hubConnection: OperatorHubEvents,
         private val themePreferences: ThemePreferences,
+        private val deviceRegistrar: DeviceRegistrar,
+        private val notificationPermissionChecker: NotificationPermissionChecker,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         public val themeMode: StateFlow<ThemeMode> =
             themePreferences.mode.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+
+        /** `26-18`: "`checkPushAvailability()` returning `Unavailable` produces a state the operator can
+         * act on" - a plain relay onto [DeviceRegistrar.pushAvailability], the identical shape
+         * [ago.chat.android.signin.SignInViewModel.pushAvailability] already establishes for the same
+         * port; that class's own doc comment named this exact screen ("a future screen (`26-19`)") as
+         * where a real binding would eventually land - it lands here instead, one item early, because
+         * `26-18`'s own Scope asks for "a banner or a Settings row" now rather than waiting for `26-19`'s
+         * dedicated screen. */
+        public val pushAvailability: StateFlow<PushAvailability?> = deviceRegistrar.pushAvailability
+
+        private val mutableNotificationsEnabled = MutableStateFlow(notificationPermissionChecker.areNotificationsEnabled())
+
+        /** `26-18`: "Denying `POST_NOTIFICATIONS` leaves the app usable and states what it can no longer
+         * do" - read once at construction and again on every [refreshNotificationPermission] call
+         * (`SettingsRoute`'s own `ON_RESUME` observer), never cached beyond that: the one fact this
+         * reports can change from outside the app entirely (system Settings), so a value read once at
+         * `init` and never again would go stale the moment an operator backgrounds this screen, changes
+         * it, and comes back. */
+        public val notificationsEnabled: StateFlow<Boolean> = mutableNotificationsEnabled.asStateFlow()
 
         private val mutableTenancies = MutableStateFlow<TenancyListing>(TenancyListing.Known(emptyList()))
         public val tenancies: StateFlow<TenancyListing> = mutableTenancies.asStateFlow()
@@ -85,6 +109,12 @@ public class SettingsViewModel
 
         public fun setThemeMode(mode: ThemeMode) {
             viewModelScope.launch { themePreferences.setMode(mode) }
+        }
+
+        /** `SettingsRoute`'s own `ON_RESUME` call - see [notificationsEnabled]'s own doc comment for why
+         * this needs re-reading rather than trusting the value [init] captured once. */
+        public fun refreshNotificationPermission() {
+            mutableNotificationsEnabled.value = notificationPermissionChecker.areNotificationsEnabled()
         }
 
         private fun loadTenancies() {

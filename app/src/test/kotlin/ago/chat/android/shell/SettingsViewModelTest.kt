@@ -14,6 +14,10 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
+import ago.chat.android.devices.DeviceRegistrar
+import ago.chat.android.devices.NotificationPermissionChecker
+import ago.chat.android.devices.PushAvailability
+import ago.chat.android.devices.PushUnavailableReason
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
 import kotlinx.coroutines.CoroutineScope
@@ -166,6 +170,46 @@ class SettingsViewModelTest {
             assertEquals(siteA.siteId, viewModel.currentSiteId.value)
         }
 
+    @Test
+    fun `pushAvailability relays DeviceRegistrar's own value, Unavailable included`() =
+        runTest(dispatcher) {
+            val registrar =
+                FakeSettingsDeviceRegistrar(availability = PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled))
+            val viewModel = viewModelWith(deviceRegistrar = registrar)
+            advanceUntilIdle()
+
+            assertEquals(
+                PushAvailability.Unavailable(PushUnavailableReason.HostAppNotInstalled),
+                viewModel.pushAvailability.value,
+            )
+        }
+
+    @Test
+    fun `notificationsEnabled starts at the checker's own live answer`() =
+        runTest(dispatcher) {
+            val checker = FakeNotificationPermissionChecker(initial = false)
+            val viewModel = viewModelWith(notificationPermissionChecker = checker)
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.notificationsEnabled.value)
+        }
+
+    @Test
+    fun `refreshNotificationPermission re-reads the live system truth rather than trusting the cached value`() =
+        runTest(dispatcher) {
+            val checker = FakeNotificationPermissionChecker(initial = true)
+            val viewModel = viewModelWith(notificationPermissionChecker = checker)
+            advanceUntilIdle()
+            assertEquals(true, viewModel.notificationsEnabled.value)
+
+            // The operator left this screen, disabled notifications in system Settings, and came back -
+            // simulated here by flipping the fake's own answer and asking this class to look again.
+            checker.answer = false
+            viewModel.refreshNotificationPermission()
+
+            assertEquals(false, viewModel.notificationsEnabled.value)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -173,14 +217,44 @@ class SettingsViewModelTest {
         activeSite: ActiveSiteSelection = InMemoryActiveSite(),
         hubEvents: OperatorHubEvents = FakeHubEvents(),
         themePreferences: ThemePreferences = FakeThemePreferences(),
+        deviceRegistrar: DeviceRegistrar = FakeSettingsDeviceRegistrar(),
+        notificationPermissionChecker: NotificationPermissionChecker = FakeNotificationPermissionChecker(),
     ): SettingsViewModel =
         SettingsViewModel(
             identity = identity,
             activeSite = activeSite,
             hubConnection = hubEvents,
             themePreferences = themePreferences,
+            deviceRegistrar = deviceRegistrar,
+            notificationPermissionChecker = notificationPermissionChecker,
             ioDispatcher = dispatcher,
         )
+
+    /** `26-18`: [SignInViewModelTest][ago.chat.android.signin.SignInViewModelTest]'s own
+     * `FakeDeviceRegistrar`, restated - this file's own name for it, since a `private class` cannot be
+     * shared across two test files without widening its visibility for no other reason. */
+    private class FakeSettingsDeviceRegistrar(
+        availability: PushAvailability? = null,
+    ) : DeviceRegistrar {
+        override val pushAvailability = MutableStateFlow(availability)
+
+        override suspend fun registerThisDevice(): Boolean = true
+    }
+
+    /** Starts at whatever [initial] says, and only ever changes when [SettingsViewModel
+     * .refreshNotificationPermission] asks again - proving that class never re-reads on its own. */
+    private class FakeNotificationPermissionChecker(
+        var initial: Boolean = true,
+    ) : NotificationPermissionChecker {
+        var answer: Boolean = initial
+        var calls: Int = 0
+            private set
+
+        override fun areNotificationsEnabled(): Boolean {
+            calls++
+            return answer
+        }
+    }
 
     private class InMemoryActiveSite(
         private var siteId: String? = null,

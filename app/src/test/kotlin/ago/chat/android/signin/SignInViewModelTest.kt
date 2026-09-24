@@ -127,6 +127,21 @@ class SignInViewModelTest {
         }
 
     @Test
+    fun `landing signed in also asks MainActivity to request POST_NOTIFICATIONS - 26-18's own trigger`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted))
+
+            val received = mutableListOf<Unit>()
+            val collector = launch { viewModel.requestNotificationPermissionEvents.toList(received) }
+
+            advanceUntilIdle()
+            collector.cancel()
+
+            assertEquals(1, received.size)
+        }
+
+    @Test
     fun `several tenancies ask before the app opens, and the answer is what opens it`() =
         runTest(dispatcher) {
             val activeSite = InMemoryActiveSite()

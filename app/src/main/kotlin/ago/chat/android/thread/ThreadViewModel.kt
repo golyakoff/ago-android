@@ -8,6 +8,8 @@ import ago.chat.android.core.network.realtime.MessageDto
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.newClientMessageId
+import ago.chat.android.devices.NoOpOpenConversationTracker
+import ago.chat.android.devices.OpenConversationTracker
 import ago.chat.android.di.IoDispatcher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -72,6 +74,16 @@ public class ThreadViewModel
         private val draftStore: ComposerDraftStore,
         private val conversationsApi: ConversationsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+        // `26-18`: [ago.chat.android.devices.decideAlert]'s own `openConversationId` input - see
+        // [OpenConversationTracker]'s own doc comment for why this class, rather than a `Service`,
+        // is the one that writes it. Defaulted to [NoOpOpenConversationTracker] so this app's own
+        // back-contract instrumented tests (`AssignmentNeverNavigatesTest`, `BackContractDialogsTabTest`,
+        // `ClaimNavigatesToThreadTest`), which construct this class directly for reasons unrelated to
+        // push, need no change - production wiring always resolves the real tracker through
+        // `di/AppModule`'s own `@Provides`, since Hilt's generated factory supplies every parameter
+        // explicitly regardless of a Kotlin default. `ThreadViewModelTest`'s own suite exercises the
+        // real interaction with an explicit fake instead of relying on this default.
+        private val openConversationTracker: OpenConversationTracker = NoOpOpenConversationTracker,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ThreadUiState())
         public val state: StateFlow<ThreadUiState> = mutableState.asStateFlow()
@@ -116,9 +128,13 @@ public class ThreadViewModel
          */
         public fun open(conversationId: String) {
             if (openConversationId == conversationId) return
-            if (openConversationId != null) hubEvents.leaveConversation()
+            openConversationId?.let { previous ->
+                hubEvents.leaveConversation()
+                openConversationTracker.conversationClosed(previous)
+            }
 
             openConversationId = conversationId
+            openConversationTracker.conversationOpened(conversationId)
             byId.clear()
             nextBeforeSequence = null
             failedSend = null
@@ -203,6 +219,7 @@ public class ThreadViewModel
             markReadJob?.cancel()
             markReadJob = null
             hubEvents.leaveConversation()
+            openConversationId?.let { openConversationTracker.conversationClosed(it) }
             openConversationId = null
         }
 
@@ -434,6 +451,7 @@ public class ThreadViewModel
             messagesJob?.cancel()
             deliveryJob?.cancel()
             hubEvents.leaveConversation()
+            openConversationId?.let { openConversationTracker.conversationClosed(it) }
         }
 
         private data class FailedSend(

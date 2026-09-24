@@ -1,5 +1,7 @@
 package ago.chat.android
 
+import ago.chat.android.devices.ProcessLifecycleForegroundTracker
+import ago.chat.android.devices.ensureChannelsCreated
 import ago.chat.android.realtime.OperatorHubConnectionLifecycle
 import android.app.ActivityManager
 import android.app.Application
@@ -26,6 +28,11 @@ import javax.inject.Inject
  * supports field injection the same way an `@AndroidEntryPoint` `Activity` does, injected before this
  * `onCreate` body runs.
  *
+ * `26-18`: also where [ProcessLifecycleForegroundTracker] is started, the identical "once, here,
+ * never per-screen" reasoning applied to a second `ProcessLifecycleOwner` observer, and where
+ * [ensureChannelsCreated] runs - eagerly, on every process start, for the reason that function's own
+ * doc comment gives (idempotent by construction, so "eagerly" costs nothing measurable).
+ *
  * `26-06`/`adr/0180`: also where `RuStorePushClient.init` runs — **manual**, not the manifest
  * meta-data path RuStore's own docs also offer, so the project id can be a `BuildConfig` field
  * (`agoProperty`'s own pattern every other deployment value in `app/build.gradle.kts` already follows)
@@ -44,9 +51,14 @@ public class AgoChatApplication : Application() {
     @Inject
     public lateinit var hubConnectionLifecycle: OperatorHubConnectionLifecycle
 
+    @Inject
+    public lateinit var appForegroundTracker: ProcessLifecycleForegroundTracker
+
     override fun onCreate() {
         super.onCreate()
         hubConnectionLifecycle.start()
+        appForegroundTracker.start()
+        ensureChannelsCreated(this)
 
         if (isMainProcess()) {
             RuStorePushClient.init(
