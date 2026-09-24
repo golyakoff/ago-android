@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        `26-91`: the English translation of `values/strings.xml` — nothing reads this file yet
+        (`26-92` wires `AppCompatDelegate.setApplicationLocales`); it exists so that item has
+        somewhere correct to point to. Every key here has a matching key in `values/strings.xml`,
+        and every value is a natural English sentence, not a literal rendering.
+
+        Terminology carried over from `ago-console`'s own `en.ts`/`ru.ts` (the same facts, worded the
+        same way on both surfaces, the same rule this app's own Russian strings already follow for
+        `ago-console` parity):
+          - «магазин» → "shop" (`ago-console/src/i18n/en.ts`'s own `installKeyPanelDescription`:
+            "This key tells the chat widget which shop it belongs to"), never "site" — "site" is
+            reserved for `tenancySwitcherLabel`'s own formal "Site" (not used in this app's own
+            Russian strings, which all say «магазин»).
+          - «Мастер» → "Master", not "Worker" — `ago-console`'s own `navCalendarWorkers` is "Masters"
+            and `calendarBookingsDescription` reads "Confirmed bookings, by day and by master"; "Worker"
+            is that console's own back-office/setup term (`calendarWorkerFieldLabel`), a different
+            screen's register than this app's operator-facing booking card.
+          - «Оператор»/«Посетитель» → "Operator"/"Visitor", `docs/vision.md`'s own actor names.
+
+        Two flagged judgement calls with no settled precedent found in `ago-console` or `docs/vision.md`,
+        left here rather than guessed silently (both are placeholder rows behind
+        `PlaceholderDestinationScreen` today, so getting either wrong costs nothing to fix):
+          - `more_administration_billing_row` ("Тариф и оплата") → "Plan & billing" — `ago-console`
+            only has a bare "Billing" (`billingTitle`), with no equivalent that also names "тариф"
+            (tier/plan); this adds "Plan" to keep both halves of the Russian compound.
+          - `team_chat_admin_badge` ("Владелец") → "Owner" — literal, no console equivalent for this
+            specific badge (`operatorsTeamRoleAdmin` is "Administrator", a different role than "Владелец"
+            here).
+
+        Plural forms (`conversation_row_elapsed_*_one/_few/_many`, `conversation_row_unread_*`):
+        `ElapsedText.kt`'s own `russianPluralStringResource` hand-picks one of the three resource ids
+        by Russian's mod-10/mod-100 grammar (CLDR "ru": one/few/many), not through Android's own
+        `<plurals>` — deliberately, per that function's doc comment, because `<plurals>` would pick its
+        bucket from the *device's* locale rather than the resource file actually in play. English only
+        has a one/other rule, so `_few` and `_many` hold the identical English plural text below (there
+        is no third form to distinguish). This does **not** make the pair correct once a locale switch
+        exists: the selection function's own Russian "one" bucket also fires for 21, 31, 101… (any count
+        ending in 1 except 11), and English wants the plural there ("21 minutes", not "21 minute").
+        Nothing reads this file today (`26-91`'s own scope excludes any language switch), so this is
+        latent, not live - but `26-92` or a follow-up must adapt the selection itself (a real
+        `<plurals>` per locale, or a locale-aware wrapper) before ever pointing it at these strings;
+        translating the text alone cannot fix a selection-function bug. Flagged for the author rather
+        than silently patched, since fixing the algorithm is out of this item's own declared scope.
+    -->
+    <string name="app_name">AGO Chat</string>
+
+    <string name="sign_in_wordmark">AGO</string>
+    <string name="sign_in_tagline">Chat and bookings for your website</string>
+    <string name="sign_in_action">Sign in</string>
+    <string name="sign_in_working">Signing in…</string>
+
+    <string name="sign_in_failed_title">Couldn\'t sign in</string>
+    <string name="sign_in_failed_hint">Check your connection and try again.</string>
+
+    <string name="routing_unavailable_title">Signed in, but your data didn\'t load</string>
+    <string name="routing_unavailable_tenancies">Couldn\'t fetch the list of your shops.</string>
+    <string name="routing_unavailable_operator">Couldn\'t check whether you have an operator seat.</string>
+    <string name="routing_unavailable_owner">Couldn\'t check for platform-owner permissions.</string>
+    <string name="routing_unavailable_contradiction">The server is showing your shop and refusing access to it at the same time. That doesn\'t add up, so we\'re not assuming anything.</string>
+    <string name="routing_unavailable_status">Response code: %1$d</string>
+    <string name="routing_unavailable_transport">No connection to the server.</string>
+    <string name="routing_unavailable_malformed">The server responded in an unexpected format.</string>
+    <string name="action_retry">Retry</string>
+
+    <string name="site_picker_title">Choose a shop</string>
+    <string name="site_picker_hint">You have a seat at more than one shop. You can change your choice later in settings.</string>
+
+    <string name="owner_terminal_title">Platform-owner console — web only</string>
+    <string name="owner_terminal_body">Platform-owner screens weren\'t brought into the app: some of those actions have no place on a phone. Open the web console.</string>
+    <string name="owner_terminal_open_console">Open web console</string>
+
+    <string name="registration_title">You don\'t have a shop yet</string>
+    <string name="registration_body">Shop registration is still done from the web console. Once your shop exists, sign in here again — the app will pick it up on its own.</string>
+    <string name="registration_open_console">Open web console</string>
+
+    <string name="hub_connection_label">Connection</string>
+    <string name="hub_connection_disconnected">Disconnected</string>
+    <string name="hub_connection_connecting">Connecting…</string>
+    <string name="hub_connection_connected">Connected</string>
+    <string name="hub_connection_reconnecting">Reconnecting…</string>
+
+    <string name="action_sign_out">Sign out</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_back">Back</string>
+
+    <string name="conversation_list_title">Conversations</string>
+    <string name="conversation_list_tab_mine">Mine</string>
+    <string name="conversation_list_tab_waiting">Waiting</string>
+    <string name="conversation_list_stale_banner">Data may be out of date</string>
+    <string name="conversation_list_refresh_action">Refresh</string>
+    <string name="conversation_list_mine_empty">Nothing assigned yet. New conversations show up here automatically.</string>
+    <string name="conversation_list_waiting_empty">Nobody\'s waiting.</string>
+    <string name="conversation_list_new_badge">New</string>
+    <string name="conversation_list_claim_action">Take</string>
+    <string name="conversation_list_claiming_label">Taking…</string>
+    <string name="conversation_list_elapsed_unknown">time unknown</string>
+
+    <string name="conversation_list_elapsed_minutes_short">%dm</string>
+    <string name="conversation_list_elapsed_hours_short">%dh</string>
+    <string name="conversation_list_elapsed_days_short">%dd</string>
+
+    <string name="conversation_row_elapsed_minutes_one">%1$d minute</string>
+    <string name="conversation_row_elapsed_minutes_few">%1$d minutes</string>
+    <string name="conversation_row_elapsed_minutes_many">%1$d minutes</string>
+    <string name="conversation_row_elapsed_hours_one">%1$d hour</string>
+    <string name="conversation_row_elapsed_hours_few">%1$d hours</string>
+    <string name="conversation_row_elapsed_hours_many">%1$d hours</string>
+    <string name="conversation_row_elapsed_days_one">%1$d day</string>
+    <string name="conversation_row_elapsed_days_few">%1$d days</string>
+    <string name="conversation_row_elapsed_days_many">%1$d days</string>
+
+    <string name="conversation_row_opened_ago">opened %1$s ago</string>
+    <string name="conversation_row_opened_unknown">opening time unknown</string>
+    <string name="conversation_row_last_message_ago">last message %1$s ago</string>
+    <string name="conversation_row_last_message_unknown">last-message time unknown</string>
+
+    <string name="conversation_row_unread_one">%1$d unread message</string>
+    <string name="conversation_row_unread_few">%1$d unread messages</string>
+    <string name="conversation_row_unread_many">%1$d unread messages</string>
+
+    <string name="conversation_list_open_action">open conversation</string>
+
+    <string name="conversation_state_waiting">waiting</string>
+    <string name="conversation_state_assigned">in progress</string>
+    <string name="conversation_state_closed">closed</string>
+    <string name="conversation_state_pending">not started</string>
+
+    <string name="thread_composer_placeholder">Message…</string>
+    <string name="thread_composer_send">Send</string>
+    <string name="thread_composer_attach">Attach a file</string>
+    <string name="thread_send_pending_retry">Message not confirmed. Retry sending?</string>
+    <string name="thread_join_failed_title">Couldn\'t open the conversation</string>
+    <string name="thread_load_older_action">Load older messages</string>
+
+    <string name="message_bubble_author_operator">Operator</string>
+    <string name="message_bubble_author_visitor">Visitor</string>
+    <string name="message_bubble_author_system">System</string>
+    <string name="message_bubble_time">at %1$s</string>
+
+    <string name="nav_conversations">Conversations</string>
+    <string name="nav_bookings">Bookings</string>
+    <string name="nav_team">Team</string>
+    <string name="nav_analytics">Analytics</string>
+    <string name="nav_more">More</string>
+
+    <string name="team_chat_loading_label">Loading the team chat…</string>
+    <string name="team_chat_load_failed_title">Couldn\'t load the chat</string>
+    <string name="team_chat_load_error">Couldn\'t load the team chat. Try again.</string>
+    <string name="team_chat_empty_state">Nobody\'s written anything here yet.</string>
+    <string name="team_chat_composer_placeholder">Message the team…</string>
+    <string name="team_chat_composer_send">Send</string>
+    <string name="team_chat_admin_badge">Owner</string>
+    <string name="team_chat_unnamed_author">Colleague</string>
+    <string name="team_chat_removed_placeholder">Message deleted</string>
+
+    <!-- `26-91`: "Chat", not the literal "Communication" — a shorter tab label to sit beside "People",
+         matching `ago-console`'s own `navTeamChat` ("Team chat") register rather than a stiffer noun. -->
+    <string name="team_tab_communication">Chat</string>
+    <string name="team_tab_people">People</string>
+
+    <string name="people_empty">This shop has no operators yet.</string>
+    <string name="people_load_failed_transport">Couldn\'t reach the server. Check your connection and try again.</string>
+    <string name="people_load_failed_unexpected">Couldn\'t load the team. Try again.</string>
+    <string name="people_seats_summary_value">%1$d/%2$d</string>
+    <string name="people_over_limit_label">Over the limit</string>
+    <string name="people_seat_held">Holds a seat</string>
+    <string name="people_seat_not_held">No seat</string>
+    <string name="people_role_operator">Operator</string>
+    <string name="people_role_admin">Administrator</string>
+
+    <string name="bookings_tab_pending">Waiting</string>
+    <string name="bookings_queue_empty">Nothing\'s waiting.</string>
+    <string name="bookings_not_configured">The calendar backend isn\'t set up for this environment yet, so this screen isn\'t available here.</string>
+    <string name="bookings_load_failed_transport">Couldn\'t reach AGO Calendar. Check your connection and try again.</string>
+    <string name="bookings_load_failed_unexpected">Couldn\'t load the booking queue. Try again.</string>
+    <string name="bookings_confirms_in_hours">Confirms in %d h</string>
+    <string name="bookings_deadline_unknown">deadline unknown</string>
+    <string name="bookings_duration_minutes">%d min</string>
+    <string name="bookings_card_service_label">Service</string>
+    <string name="bookings_card_when_label">When</string>
+    <!-- `26-91`: "Master", not "Worker" — see the file-level note above. -->
+    <string name="bookings_card_worker_label">Master</string>
+    <string name="bookings_card_calendar_label">Calendar</string>
+
+    <string name="bookings_tab_confirmed">Confirmed</string>
+    <string name="bookings_confirmed_day_empty">Nothing\'s booked on this day.</string>
+    <string name="bookings_confirmed_load_failed_unexpected">Couldn\'t load bookings for this period. Try again.</string>
+    <string-array name="bookings_weekday_short">
+        <item>Sun</item>
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+        <item>Thu</item>
+        <item>Fri</item>
+        <item>Sat</item>
+    </string-array>
+
+    <string name="bookings_tab_clients">Clients</string>
+    <string name="bookings_contacts_empty">This tenant has no customers yet.</string>
+    <string name="bookings_contacts_load_failed_unexpected">Couldn\'t load customers. Try again.</string>
+    <string name="bookings_contacts_noshow_label">No-shows</string>
+    <string name="bookings_contacts_phone_verified_yes">Verified by code</string>
+    <string name="bookings_contacts_phone_verified_no">Not verified by code</string>
+    <string name="bookings_contacts_phone_confirmed_yes">Confirmed by operator</string>
+    <string name="bookings_contacts_phone_confirmed_no">Not confirmed by operator</string>
+
+    <string name="analytics_from_field_label">From</string>
+    <string name="analytics_to_field_label">To</string>
+    <string name="analytics_apply_button">Apply</string>
+    <string name="analytics_dialog_confirm">OK</string>
+    <string name="analytics_dialog_cancel">Cancel</string>
+    <string name="analytics_range_label">Report for %1$s – %2$s</string>
+    <string name="analytics_invalid_range_error">The start of the period must be before its end.</string>
+    <string name="analytics_load_failed_transport">Couldn\'t reach the server. Check your connection and try again.</string>
+    <string name="analytics_load_failed_unexpected">Couldn\'t load analytics. Try again.</string>
+    <string name="analytics_no_data_value">—</string>
+
+    <string name="analytics_bucket_heading">Your conversations</string>
+    <string name="analytics_conversation_count_label">Conversations</string>
+    <string name="analytics_average_first_response_label">Avg. response time</string>
+    <string name="analytics_average_duration_label">Avg. duration</string>
+    <string name="analytics_missed_count_label">No response</string>
+
+    <string name="analytics_load_heading">Your workload</string>
+    <string name="analytics_load_empty">No assignment data for this period yet.</string>
+    <string name="analytics_held_label">Total handled</string>
+    <string name="analytics_standard_label">Standard</string>
+    <string name="analytics_additional_label">Over standard</string>
+
+    <string name="analytics_conversion_heading">Your conversion</string>
+    <string name="analytics_conversion_empty">Nothing you\'ve handled has a marked outcome in this period yet.</string>
+    <string name="analytics_conversion_not_verified_banner">This figure is built from what operators reported, not from a confirmed sale or order — it\'s a real, useful number, but it isn\'t the same as "N% of conversations ended in a confirmed sale."</string>
+    <string name="analytics_converted_label">Sale made</string>
+    <string name="analytics_not_converted_label">No sale made</string>
+    <string name="analytics_follow_up_needed_label">Needs follow-up</string>
+    <string name="analytics_unset_label">Not set</string>
+    <string name="analytics_rate_label">Conversion</string>
+    <string name="analytics_rate_value">%1$s%% (%2$d of %3$d)</string>
+
+    <string name="more_section_channels">Channels</string>
+    <string name="more_section_automation">Automation</string>
+    <string name="more_section_administration">Administration</string>
+    <string name="more_settings_row">Settings</string>
+
+    <string name="more_automation_quick_replies_row">Canned responses</string>
+    <string name="more_automation_after_hours_row">Offline auto-reply</string>
+    <string name="more_administration_operators_row">Operators &amp; roles</string>
+    <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
+    <string name="more_administration_billing_row">Plan &amp; billing</string>
+    <string name="more_placeholder_body">Coming in a future version.</string>
+
+    <string name="account_menu_open_action">Account menu</string>
+    <string name="account_menu_unknown_name">Operator</string>
+    <string name="account_menu_fallback_initial">?</string>
+
+    <string name="settings_theme_section">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_site_section">Current shop</string>
+    <string name="settings_site_switching">Switching…</string>
+    <string name="settings_about_section">About</string>
+    <string name="settings_about_build_label">Build</string>
+    <string name="settings_about_version_label">Version</string>
+
+    <string name="settings_notifications_section">Push notifications</string>
+    <string name="settings_notifications_disabled_text">Notifications for this app are turned off in your phone\'s settings. You won\'t know about new conversations while the screen is closed.</string>
+    <string name="settings_notifications_open_settings_action">Open notification settings</string>
+    <string name="settings_notifications_manage_action">Manage notifications</string>
+
+    <string name="push_unavailable_host_app_not_installed">RuStore, which notifications come through, isn\'t installed on this phone.</string>
+    <string name="push_unavailable_background_work_not_granted">RuStore isn\'t allowed to run in the background, so notifications may arrive late.</string>
+    <string name="push_unavailable_unauthorized">This phone isn\'t signed in to a RuStore account, so notifications can\'t arrive.</string>
+    <string name="push_unavailable_unknown">Couldn\'t check whether push notifications can reach this phone.</string>
+
+    <string name="push_channel_assignment_name">New conversation assigned</string>
+    <string name="push_channel_assignment_description">Notifications for conversations assigned to you</string>
+    <string name="push_channel_visitor_message_name">Message from a visitor</string>
+    <string name="push_channel_visitor_message_description">Notifications for new messages in conversations assigned to you</string>
+    <string name="push_channel_waiting_name">New conversation in the queue</string>
+    <string name="push_channel_waiting_description">Notifications for new conversations waiting for an operator</string>
+
+    <string name="operator_presence_channel_name">Connection status</string>
+    <string name="operator_presence_channel_description">Shows that the app is staying connected for incoming conversations</string>
+    <string name="operator_presence_notification_title">AGO Chat</string>
+    <string name="operator_presence_notification_body">The app is staying connected so you don\'t miss a new conversation</string>
+
+    <string name="notification_settings_title">Notifications</string>
+    <string name="notification_settings_channels_section">Channels</string>
+    <string name="notification_settings_channel_state_on">On</string>
+    <string name="notification_settings_channel_state_off">Turned off in phone settings</string>
+    <string name="notification_settings_channel_hint">Change this from your system notification settings</string>
+
+    <string name="notification_settings_quiet_hours_section">Quiet hours</string>
+    <string name="notification_settings_quiet_hours_switch">Turn on quiet hours</string>
+    <string name="notification_settings_quiet_hours_start_label">From</string>
+    <string name="notification_settings_quiet_hours_end_label">To</string>
+    <string name="notification_settings_quiet_hours_note">During this time, push notifications aren\'t shown at all — no sound, no icon, no new entry in the shade.</string>
+    <string name="notification_settings_time_picker_confirm">Done</string>
+    <string name="notification_settings_time_picker_cancel">Cancel</string>
+
+    <string name="notification_settings_away_section">"Away" status</string>
+    <string name="notification_settings_away_note">"Away" status belongs to the operator, not this phone — it\'s the same across every one of your devices, including the web console. It can\'t be managed from this screen.</string>
+
+    <string name="push_title_assigned">New conversation assigned to you</string>
+    <string name="push_text_assigned">Open the app to view the conversation</string>
+    <string name="push_title_message">New message</string>
+    <string name="push_text_message">A visitor wrote in a conversation assigned to you</string>
+    <string name="push_title_waiting">A new conversation is waiting for an operator</string>
+    <string name="push_text_waiting">Open the app to view the queue</string>
+
+    <string name="app_shell_permissions_loading">Loading your permissions…</string>
+    <string name="app_shell_permissions_load_failed_title">Couldn\'t load your permissions</string>
+
+    <string name="network_failure_no_connection">No connection. Check your internet connection and try again.</string>
+    <string name="network_failure_server_status">The server returned an error (code %1$d). Try again.</string>
+    <string name="network_failure_unexpected">Something went wrong. Try again.</string>
+</resources>
