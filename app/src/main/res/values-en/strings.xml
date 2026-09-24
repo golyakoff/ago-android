@@ -30,19 +30,17 @@
             here).
 
         Plural forms (`conversation_row_elapsed_*_one/_few/_many`, `conversation_row_unread_*`):
-        `ElapsedText.kt`'s own `russianPluralStringResource` hand-picks one of the three resource ids
-        by Russian's mod-10/mod-100 grammar (CLDR "ru": one/few/many), not through Android's own
-        `<plurals>` — deliberately, per that function's doc comment, because `<plurals>` would pick its
-        bucket from the *device's* locale rather than the resource file actually in play. English only
-        has a one/other rule, so `_few` and `_many` hold the identical English plural text below (there
-        is no third form to distinguish). This does **not** make the pair correct once a locale switch
-        exists: the selection function's own Russian "one" bucket also fires for 21, 31, 101… (any count
-        ending in 1 except 11), and English wants the plural there ("21 minutes", not "21 minute").
-        Nothing reads this file today (`26-91`'s own scope excludes any language switch), so this is
-        latent, not live - but `26-92` or a follow-up must adapt the selection itself (a real
-        `<plurals>` per locale, or a locale-aware wrapper) before ever pointing it at these strings;
-        translating the text alone cannot fix a selection-function bug. Flagged for the author rather
-        than silently patched, since fixing the algorithm is out of this item's own declared scope.
+        `ElapsedText.kt`'s own `russianPluralStringResource` hand-picks one of the three resource ids,
+        not through Android's own `<plurals>` — deliberately, per that function's doc comment, because
+        `<plurals>` would pick its bucket from the *device's* locale rather than the resource file
+        actually in play. English only has a one/other rule, so `_few` and `_many` hold the identical
+        English plural text below (there is no third form to distinguish).
+        `26-105`: the selection used to apply Russian's mod-10/mod-100 grammar unconditionally, which was
+        latent-but-wrong for this file the whole time it went unread (Russian's own "one" bucket also
+        fires for 21, 31, 101… — any count ending in 1 except 11 — where English wants the plural, "21
+        minutes" not "21 minute"). `ElapsedText.kt`'s `localePluralResourceId` now branches on the active
+        locale instead, so a bare 1 is the only count that reads `_one` once English is active; every
+        other language ships here (Russian) is unaffected — its own mod-10/mod-100 branch is unchanged.
     -->
     <string name="app_name">AGO Chat</string>
 

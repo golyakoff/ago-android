@@ -10,9 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import java.time.OffsetDateTime
+import java.util.Locale
 
 /**
  * `26-30`: the mockup's own short elapsed form — «4 ч» / «20 мин» / «2 д», no «Открыт»/«Ждёт» prefix of
@@ -69,10 +71,16 @@ private const val ELAPSED_TICK_MILLIS = 30_000L
 /**
  * `26-64`: Russian's own three-bucket plural rule (CLDR "ru": one/few/many), applied by hand rather than
  * through Android's `<plurals>` resource type. `<plurals>` selects its bucket from the *device's current
- * locale*'s own plural rules, not from which values folder happened to supply the string — and this app
- * ships exactly one locale (`docs/backlog/26-10-*.md`) with no `AppCompatDelegate.setApplicationLocales`
- * override, so a device set to, say, English would pick English's own two-bucket rule (one/other) and
- * hand back the "other" (many-form) string for a count like 2 or 3, which is the wrong Russian ending.
+ * locale*'s own plural rules, not from which values folder happened to supply the string — and at the
+ * time this app shipped exactly one locale (`docs/backlog/26-10-*.md`) with no
+ * `AppCompatDelegate.setApplicationLocales` override, so `<plurals>` would have had nothing but Russian's
+ * own device locale to read anyway.
+ *
+ * `26-92` lets an operator pick English at runtime, which broke that premise: the selection used to apply
+ * Russian's mod-10/mod-100 grammar unconditionally, so an English "21 minutes" was chosen as if it were
+ * Russian's "21 минута" (singular). `26-105` is the fix — see [localePluralResourceId] for why this stays
+ * a hand-rolled branch on the active locale rather than a migration to real `<plurals>` resources.
+ *
  * Doing the arithmetic here is `conversation_list_elapsed_minutes_short`'s own reasoning (see
  * [shortElapsedText]'s doc comment) taken one step further: those short units don't inflect at all, so
  * that call site got to skip this question; the full words this function serves — spoken elapsed phrases,
@@ -91,14 +99,60 @@ public fun russianPluralStringResource(
     @StringRes many: Int,
 ): String {
     val formatArg = count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
+    val locale = LocalConfiguration.current.locales[0]
+    val resId = localePluralResourceId(count, locale, one, few, many)
+    return stringResource(resId, formatArg)
+}
+
+/**
+ * `26-105`: the plain-Kotlin half of [russianPluralStringResource]'s bucket selection, pulled out of the
+ * `@Composable` so a plain JVM `test` can drive it directly against an explicit [Locale] — this project's
+ * own convention (see e.g. `SignInViewModelTest`'s doc comment) is a real assertion on a plain JVM, never
+ * a Robolectric host stood up just to read `LocalConfiguration`.
+ *
+ * Branches on the active [locale]'s own language rather than reaching for `android.icu.text.PluralRules`
+ * (bundled with the platform since API 24, comfortably under this app's own `minSdk 26` — the obvious
+ * "ask the platform" alternative): that class is still an `android.*` framework type, stubbed out under
+ * this module's plain-JVM `test` source set the exact same way `android.util.Log` is
+ * (`app/build.gradle.kts`'s own `isReturnDefaultValues` doc comment) — a genuine plural-selection
+ * assertion through it would need Robolectric, a dependency this codebase has deliberately done without
+ * everywhere else. `26-91`/`26-92` ship exactly two locales, Russian and English, so hand-branching both
+ * of their CLDR rules costs nothing a general library would have bought back, and this keeps the fix (and
+ * its test) dependency-free.
+ *
+ * Migrating to real `<plurals>` resources — Android's own CLDR-correct mechanism, and this item's stated
+ * preference — was rejected for a narrower reason than "a hand-rolled path is fine": every call site of
+ * [russianPluralStringResource] passes three *already-named* resource ids
+ * (`conversation_row_elapsed_minutes_one/_few/_many`, `conversation_row_unread_one/_few/_many`) from
+ * outside `ui/components` (`ConversationListScreen.kt`, `AppShellScreen.kt`), and a `<plurals>` migration
+ * would change this function's shape to a single resource id — meaning every one of those call sites would
+ * need editing too, in files this item has no mandate to touch while other work is in flight there. The
+ * backlog item's own Scope names this fallback explicitly: "If a hand-rolled path must stay, branch it on
+ * the active locale."
+ *
+ * Russian (CLDR "ru"): one/few/many by the mod-10/mod-100 rule already in force before this item — the
+ * "Russian output is unchanged" half of `docs/backlog/26-105-*.md`'s own Done-when. Every other supported
+ * language (English) uses CLDR's own one/other rule: [one] only for a bare count of 1, [many] for
+ * everything else, including 21/31/101… where Russian's rule would (correctly, for Russian) say "one".
+ * Routing English's "other" through [many] rather than [few] loses nothing: `values-en/strings.xml` already
+ * carries the identical English text in both, precisely because English has no third form to distinguish.
+ */
+internal fun localePluralResourceId(
+    count: Long,
+    locale: Locale,
+    @StringRes one: Int,
+    @StringRes few: Int,
+    @StringRes many: Int,
+): Int {
+    if (locale.language != "ru") {
+        return if (count == 1L) one else many
+    }
     val mod10 = count % 10
     val mod100 = count % 100
-    val resId =
-        when {
-            mod100 in 11..14 -> many
-            mod10 == 1L -> one
-            mod10 in 2..4 -> few
-            else -> many
-        }
-    return stringResource(resId, formatArg)
+    return when {
+        mod100 in 11..14 -> many
+        mod10 == 1L -> one
+        mod10 in 2..4 -> few
+        else -> many
+    }
 }

@@ -270,19 +270,15 @@ Two things a change touching strings needs to get right that a plain copy-paste 
   files allow each locale's own string to declare its placeholders in whichever order it needs; a
   hardcoded Kotlin string interpolation could never do this.
 - **Plural forms are not a copy-paste.** `russianPluralStringResource` (`ui/components/ElapsedText.kt`)
-  hand-picks one of three resource ids (`_one`/`_few`/`_many`) by Russian's own mod-10/mod-100 grammar
-  (CLDR "ru") rather than through Android's own `<plurals>` — deliberately, per that function's doc
-  comment, since `<plurals>` picks its bucket from the *device's* locale rather than from the resource
-  file actually supplying the string. English only has a one/other rule, so the `_few` and `_many`
-  English strings are written identically (there is no third form to distinguish) — but the selection
-  function itself remains Russian-specific: its "one" bucket also fires for 21, 31, 101… (anything
-  ending in 1 except 11), where English wants the plural, not the singular. Reusing this function as-is
-  once a locale switch exists would render "21 minute" — wrong. This is latent, not live, because
-  nothing reads `values-en/` yet; **`26-92` (or a dedicated companion item) must adapt the selection
-  itself — a real `<plurals>` per locale, or a locale-aware wrapper — before English plurals are ever
-  actually shown.** Translating the surrounding text cannot fix a selection-function bug, and `26-91`
-  deliberately left the function untouched rather than reach into runtime locale logic that item's own
-  scope excluded.
+  hand-picks one of three resource ids (`_one`/`_few`/`_many`) rather than through Android's own
+  `<plurals>` — deliberately, per that function's doc comment, since `<plurals>` picks its bucket from the
+  *device's* locale rather than from the resource file actually supplying the string. English only has a
+  one/other rule, so the `_few` and `_many` English strings are written identically (there is no third
+  form to distinguish). `26-105` made the selection itself locale-aware
+  (`ElapsedText.kt`'s `localePluralResourceId`): it branches on the active locale, applying Russian's own
+  mod-10/mod-100 grammar (CLDR "ru") only when Russian is active, and CLDR's one/other rule (a bare 1 is
+  the only count that reads `_one`) for every other supported language — so "21 minutes" renders correctly
+  once `26-92`'s language switch is set to English, and Russian's own output is unchanged.
 
 Android Lint's own `MissingTranslation`/`ExtraTranslation` checks are on by default (no `lint {}` block
 or `lint.xml` in this project overrides them) and now apply for the first time as of `26-91`, since a
