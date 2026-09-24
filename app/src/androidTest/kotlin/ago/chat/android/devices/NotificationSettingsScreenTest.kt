@@ -1,6 +1,5 @@
 package ago.chat.android.devices
 
-import ago.chat.android.testing.FlakyOnCi
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -29,11 +28,10 @@ import org.junit.runner.RunWith
  * the real set from two to three; this test's own reliance on `entries.size` (not a literal `2`) is what
  * kept it from silently going stale the moment that changed.
  *
- * `26-91`: this class asserts Russian text as a literal; the CI emulator boots English and cannot be
- * forced to `ru-RU` by any mechanism found so far (`ci.yml`'s own comment has the detail). `26-94`
- * tracks the real fix.
+ * `26-91`/`26-94`: this class's assertions are plain Russian literals - safe because
+ * `LocaleForcingTestRunner` pins every instrumented test's own locale to `ru` before any of them run
+ * (`docs/architecture.md`, "Pinning the locale instrumented UI tests render against").
  */
-@FlakyOnCi
 @RunWith(AndroidJUnit4::class)
 class NotificationSettingsScreenTest {
     @get:Rule

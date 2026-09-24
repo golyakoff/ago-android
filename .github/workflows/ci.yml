@@ -178,21 +178,30 @@ jobs:
           # `26-91`: adding `values-en/strings.xml` made the app's own resource resolution do exactly
           # what it always would - an English-*locale* device now genuinely renders English, where it
           # used to fall back to the default `values/` set (Russian) for lack of any alternative. This
-          # runner's emulator boots in `en-US`, and 14 test classes assert Russian text as a literal, so
-          # the two only ever agreed by there being nothing else to resolve to before this change. Three
-          # real mechanisms were tried to force the emulator's locale and none worked on this image:
-          # `adb shell settings put system system_locales` (silently inert - it never reaches the actual
-          # `IActivityManager.updateConfiguration()` reconfiguration, only a later `LOCALE_CHANGED`
-          # broadcast does that, and nothing sends one here); the same plus `adb root` and a manual
-          # broadcast (permission granted, still inert for the identical reason - a raw broadcast is not
-          # the mechanism, only `LocalePicker`'s own internal call is); and boot-time `-prop
-          # persist.sys.locale=...` (rejected outright by this emulator build: "only 'qemu.*' properties
-          # are supported"). `26-94` is the real fix - forcing the app's own locale in the test process
-          # (`AppCompatDelegate.setApplicationLocales` or equivalent), not the device's. Until it lands,
-          # `@FlakyOnCi` on the 14 classes below keeps this job from failing on a locale mismatch it
-          # cannot control today - the same reasoning `26-47` used for one real-device-timing test,
-          # applied at the scale this defect turned out to have. The other classes in this suite assert
-          # nothing locale-dependent and stay in the gate.
+          # runner's emulator boots in `en-US`, and 14 test classes asserted Russian text as a literal,
+          # so the two only ever agreed by there being nothing else to resolve to before this change.
+          # Three real mechanisms were tried to force the emulator's own locale and none worked on this
+          # image: `adb shell settings put system system_locales` (silently inert - it never reaches the
+          # actual `IActivityManager.updateConfiguration()` reconfiguration, only a later
+          # `LOCALE_CHANGED` broadcast does that, and nothing sends one here); the same plus `adb root`
+          # and a manual broadcast (permission granted, still inert for the identical reason - a raw
+          # broadcast is not the mechanism, only `LocalePicker`'s own internal call is); and boot-time
+          # `-prop persist.sys.locale=...` (rejected outright by this emulator build: "only 'qemu.*'
+          # properties are supported").
+          #
+          # `26-94` landed the real fix: `ago.chat.android.testing.LocaleForcingTestRunner`
+          # (`app/build.gradle.kts`'s own `testInstrumentationRunner`) forces the *app's* own locale to
+          # `ru` inside the test process itself, before this emulator's `en-US` boot locale ever gets a
+          # chance to resolve a single resource - not `AppCompatDelegate.setApplicationLocales`, this
+          # item's own first idea, which decompiling `androidx.appcompat` showed to be a dead end for an
+          # app with no `AppCompatActivity` anywhere in these flows (`docs/architecture.md`, "Pinning the
+          # locale instrumented UI tests render against", has the full account). All 14 classes came back
+          # into this gate with `@FlakyOnCi` removed.
+          #
+          # `BackContractSheetDismissTest` alone keeps `@FlakyOnCi` today, for the unrelated, still-live
+          # `26-47` reason (a real device-timing risk on its own second system back-key press) - it was
+          # never one of the 14 locale-broken classes above, and `notAnnotation` below excludes only it
+          # now.
           script: >-
             ./gradlew connectedDebugAndroidTest --no-daemon
             -Pandroid.testInstrumentationRunnerArguments.notAnnotation=ago.chat.android.testing.FlakyOnCi

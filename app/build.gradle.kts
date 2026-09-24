@@ -146,7 +146,13 @@ android {
         versionCode = (project.findProperty("agoVersionCode") as String?)?.toIntOrNull() ?: 1
         versionName = agoReleaseVersion + "+" + ((project.findProperty("agoVersionName") as String?) ?: "dev")
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // `26-94`: a subclass of the stock `androidx.test.runner.AndroidJUnitRunner`, not that runner
+        // itself - it pins every instrumented test's own rendered locale to `ru` before any
+        // `Application`/`Activity` in the process exists, so the suite stops depending on whatever
+        // locale the device or emulator happens to boot with
+        // (`ago/chat/android/testing/LocaleForcingTestRunner.kt`'s own doc comment has the full
+        // investigation, `docs/architecture.md` the summary).
+        testInstrumentationRunner = "ago.chat.android.testing.LocaleForcingTestRunner"
 
         // `26-12`: AppAuth's own `RedirectUriReceiverActivity` is declared in the library's manifest
         // with a placeholder-valued `android:scheme`, so the scheme is supplied here
