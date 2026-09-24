@@ -535,12 +535,18 @@ tenant who knows what they came to change. The chain is the answer to "why can n
 wizard somebody has to walk through to rename a service.
 
 **Two gaps this design meets and does not paper over**, both real and both named rather than
-designed around:
+designed around — **the first is closed as of `26-96`**:
 
-- `calendarApi.ts` exports `createService` and no `updateService`/`deleteService`, and no
-  `deleteCalendar` at all. A service typed with the wrong duration cannot be corrected anywhere in
-  this product today. The app's Услуги screen therefore has an add action and no per-row edit, the
-  same honest shape `CalendarServicesPage` already has — and this is worth its own backlog item.
+- ~~`calendarApi.ts` exports `createService` and no `updateService`/`deleteService`.~~ **Closed by
+  `26-96`.** `PUT /services/{id}` exists now, carrying the five editable fields and `isActive`, and
+  both clients have an edit plus a «Снять с продажи» affordance. There is still **no
+  `deleteService`**, and that is the answer rather than the remainder of the gap: four server-side
+  read models resolve a *past booking's* service name through the `services` row, so a delete would
+  retroactively blank the service on every booking that ever used it
+  (`Ago.Calendar.Domain.Service.IsActive`). `deleteCalendar` is still genuinely absent and unclaimed.
+  The app's own Услуги screen landed with `26-96` as a segment of Записи, not under this hub —
+  the hub this section designs does not exist yet, and the item needed a way in rather than a reason
+  to build one ahead of its own scope.
 - `PendingBooking` carries `workerId`, `serviceId` and `calendarId` and **no names for any of
   them** (`ConfirmedBooking`, by contrast, carries `workerDisplayName`, `serviceName` and
   `customerDisplayName`). The screen where a human has seconds to decide is the one with no words on

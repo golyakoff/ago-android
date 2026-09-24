@@ -432,6 +432,43 @@
     <string name="bookings_contacts_revealing_phone">Показ…</string>
 
     <!--
+        `26-96`: Записи's own «Услуги» segment - the tenant's service dictionary, with the edit and the
+        withdrawal this product had no endpoint for at all until that item (a typo in a duration or a
+        visitor-facing price was permanent). Gated on `calendar:configure` alone - a fourth, distinct
+        gate from Клиенты's own `calendar:configure`-or-`customer:read` one.
+
+        «Снять с продажи», never «Удалить», and that wording is load-bearing: the server has no delete
+        for a service and is not getting one, because four of its read models resolve a *past booking's*
+        service name through the same row (`Ago.Calendar.Domain.Service.IsActive`). A label promising
+        deletion would misdescribe what the button does.
+    -->
+    <string name="bookings_tab_services">Услуги</string>
+    <string name="services_empty">У этого тенанта пока нет услуг.</string>
+    <string name="services_load_failed_unexpected">Не удалось загрузить услуги. Попробуйте ещё раз.</string>
+    <string name="services_status_withdrawn">Снята с продажи</string>
+    <string name="services_price_unstated">Цена не указана</string>
+    <string name="services_price_exact">%s ₽</string>
+    <string name="services_price_from">от %s ₽</string>
+    <string name="services_action_edit">Изменить</string>
+    <string name="services_action_withdraw">Снять с продажи</string>
+    <string name="services_action_restore">Вернуть в продажу</string>
+    <string name="services_action_save">Сохранить</string>
+    <string name="services_field_name">Название услуги</string>
+    <string name="services_field_duration">Длительность (минуты)</string>
+    <string name="services_field_price">Цена (₽)</string>
+    <string name="services_field_price_placeholder">Цена не указана</string>
+    <string name="services_field_price_from">Цена «от» (зависит от мастера или объёма работы)</string>
+    <string name="services_field_description">Описание</string>
+    <string name="services_field_active">В продаже</string>
+    <!-- Says what withdrawing does *and* what it does not - the bookings already taken do not change.
+         Shown before the save, because that is the moment the operator can still change their mind. -->
+    <string name="services_withdrawn_note">Снятую с продажи услугу больше нельзя выбрать в виджете записи. Уже записанные визиты и карточки мастеров её сохраняют - услуга не удаляется, её можно вернуть в продажу.</string>
+    <!-- The one refusal this app makes on its own: there is no request to send without a number to put
+         in it. Every other rule about a duration belongs to the server and comes back in its own words
+         (`BookingActionErrorUi.InvalidDuration`'s own doc comment). -->
+    <string name="services_duration_invalid">Укажите длительность в целых минутах.</string>
+
+    <!--
         `26-57`: Аналитика's own «Мои показатели» - the one ungated, personal report on this app. Wording
         carried over from `ago-console`'s own `ru.ts` (`myNumbers*`/`analytics*`) where the console has an
         equivalent string, since this is the same numbers described the same way on both surfaces.

@@ -2,6 +2,7 @@ package ago.chat.android.bookings
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmationCountdown
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.confirmationCountdown
@@ -63,6 +64,7 @@ import java.time.format.DateTimeFormatter
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showServicesSegment: Boolean,
     hubConnectionState: OperatorHubConnectionState,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
@@ -112,10 +114,38 @@ public fun BookingsRoute(
         onRevealContact = {}
     }
 
+    // `26-96`: the identical Hilt-avoidance-when-ungated shape the two branches above establish,
+    // applied to [ServicesViewModel] - an operator lacking `calendar:configure` never constructs it and
+    // never triggers its `init`-time read of the tenant configuration.
+    val servicesState: ServicesUiState?
+    val onRetryServices: () -> Unit
+    val onEditService: (ConfiguredService) -> Unit
+    val onCancelServiceEdit: () -> Unit
+    val onServiceDraftChanged: (ServiceDraft) -> Unit
+    val onSubmitService: (ServiceDraft) -> Unit
+    if (showServicesSegment) {
+        val servicesViewModel: ServicesViewModel = hiltViewModel()
+        val collectedServicesState by servicesViewModel.state.collectAsStateWithLifecycle()
+        servicesState = collectedServicesState
+        onRetryServices = servicesViewModel::refresh
+        onEditService = servicesViewModel::edit
+        onCancelServiceEdit = servicesViewModel::cancelEdit
+        onServiceDraftChanged = servicesViewModel::onDraftChanged
+        onSubmitService = servicesViewModel::submit
+    } else {
+        servicesState = null
+        onRetryServices = {}
+        onEditService = {}
+        onCancelServiceEdit = {}
+        onServiceDraftChanged = {}
+        onSubmitService = {}
+    }
+
     BookingsScreen(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
+        showServicesSegment = showServicesSegment,
         selectedTab = selectedTab,
         onTabSelected = { selectedTab = it },
         onRetry = viewModel::refresh,
@@ -128,6 +158,12 @@ public fun BookingsRoute(
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
         onRevealContact = onRevealContact,
+        servicesState = servicesState,
+        onRetryServices = onRetryServices,
+        onEditService = onEditService,
+        onCancelServiceEdit = onCancelServiceEdit,
+        onServiceDraftChanged = onServiceDraftChanged,
+        onSubmitService = onSubmitService,
         hubConnectionState = hubConnectionState,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -154,6 +190,7 @@ internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showServicesSegment: Boolean,
     selectedTab: BookingsTab,
     onTabSelected: (BookingsTab) -> Unit,
     onRetry: () -> Unit,
@@ -166,6 +203,12 @@ internal fun BookingsScreen(
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
     onRevealContact: (String) -> Unit,
+    servicesState: ServicesUiState?,
+    onRetryServices: () -> Unit,
+    onEditService: (ConfiguredService) -> Unit,
+    onCancelServiceEdit: () -> Unit,
+    onServiceDraftChanged: (ServiceDraft) -> Unit,
+    onSubmitService: (ServiceDraft) -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
@@ -177,7 +220,7 @@ internal fun BookingsScreen(
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
     // `rememberTickingNow`).
     val now = rememberTickingNow()
-    val tabs = visibleBookingsTabs(showConfirmedSegment, showClientsSegment)
+    val tabs = visibleBookingsTabs(showConfirmedSegment, showClientsSegment, showServicesSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -274,6 +317,20 @@ internal fun BookingsScreen(
                         contactsState?.let {
                             ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
                         }
+
+                    // `26-96`: the identical "non-null exactly when selectable" invariant, for
+                    // `showServicesSegment`.
+                    BookingsTab.Services ->
+                        servicesState?.let {
+                            ServicesBody(
+                                state = it,
+                                onRetry = onRetryServices,
+                                onEdit = onEditService,
+                                onCancelEdit = onCancelServiceEdit,
+                                onDraftChanged = onServiceDraftChanged,
+                                onSubmit = onSubmitService,
+                            )
+                        }
                 }
             }
         }
@@ -289,6 +346,7 @@ private fun bookingsTabLabel(
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
+        BookingsTab.Services -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_services)) }
     }
 
 /** `null` before [BookingsUiState.Loaded] is known, exactly the "no digit for a count not yet known"
@@ -395,6 +453,8 @@ internal fun ActionErrorBanner(
             when (error) {
                 is BookingActionErrorUi.ServerRefusal -> error.detail
                 is BookingActionErrorUi.Unavailable -> failureMessage(error.reason, R.string.bookings_load_failed_unexpected)
+                // `26-96`: the one arm whose sentence this app owns - see [BookingActionErrorUi.InvalidDuration].
+                BookingActionErrorUi.InvalidDuration -> stringResource(R.string.services_duration_invalid)
             },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,

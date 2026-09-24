@@ -22,4 +22,16 @@ public sealed interface BookingActionErrorUi {
     public data class Unavailable(
         val reason: BookingsQueueFailure,
     ) : BookingActionErrorUi
+
+    /**
+     * `26-96`: the one refusal this app makes on its own, because there is no request to send without
+     * it — a service edit whose duration field holds nothing parseable as a whole number.
+     *
+     * Deliberately the *only* client-side validation arm. Every other rule about a duration (positive,
+     * whole minutes, no longer than a working day) lives in `Ago.Calendar.Domain.Service` and comes
+     * back as a [ServerRefusal] in the server's own words — a second, client-side copy of those rules
+     * is exactly the drift that produces a form which accepts what the server refuses, or refuses what
+     * it would have accepted.
+     */
+    public data object InvalidDuration : BookingActionErrorUi
 }

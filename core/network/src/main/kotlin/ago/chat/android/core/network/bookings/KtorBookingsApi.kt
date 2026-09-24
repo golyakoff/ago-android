@@ -3,6 +3,7 @@ package ago.chat.android.core.network.bookings
 import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
@@ -10,11 +11,13 @@ import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.bookings.ServicesResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -258,7 +261,147 @@ public class KtorBookingsApi(
 
         return detail?.let { RevealPhoneResult.Refused(it) } ?: RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-96`: `GET /api/v1/console/configuration`, projected down to its `services` array — the
+     * identical check-base-URL-first, classify-never-invent shape every read above establishes.
+     *
+     * [TenantConfigurationWireDto] declares exactly one of that response's seven fields. Everything
+     * else (`calendars`, `workers`, `allowedOrigins`, `publicKey`, `tenantName`, `workerQuota`) is
+     * simply omitted rather than declared and discarded — `agoJson`'s own `ignoreUnknownKeys`
+     * (`AgoHttpClient.kt`) is what makes that safe, the identical reason [PendingBookingWireDto] omits
+     * the fields its own screen has no use for.
+     */
+    override suspend fun fetchServices(): ServicesResult {
+        val baseUrl = calendarApiBaseUrl ?: return ServicesResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/configuration")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ServicesResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return ServicesResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            ServicesResult.Loaded(response.body<TenantConfigurationWireDto>().services.map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            ServicesResult.Failed(classify(failure))
+        }
+    }
+
+    /**
+     * `26-96`: `PUT /api/v1/console/services/{serviceId}` — the identical `204`-or-refusal shape
+     * [performBookingAction] establishes, not folded into it because this one carries a body and takes
+     * a different path shape. [contentType]/[setBody] are required for the reason
+     * [revealCustomerPhone]'s own doc comment gives.
+     *
+     * Every field travels on every call, including the ones the caller did not change: the endpoint has
+     * replace semantics, and omitting a field would clear it rather than leave it alone
+     * (`Ago.Calendar.Contracts.UpdateServiceRequest`'s own remarks).
+     */
+    override suspend fun updateService(
+        serviceId: String,
+        name: String,
+        durationMinutes: Int,
+        priceMinorUnits: Int?,
+        priceIsFrom: Boolean,
+        description: String?,
+        isActive: Boolean,
+    ): BookingActionResult {
+        val baseUrl = calendarApiBaseUrl ?: return BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.put("$baseUrl/api/v1/console/services/$serviceId") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        UpdateServiceRequestWireDto(
+                            name = name,
+                            durationMinutes = durationMinutes,
+                            priceMinorUnits = priceMinorUnits,
+                            priceIsFrom = priceIsFrom,
+                            description = description,
+                            isActive = isActive,
+                        ),
+                    )
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return BookingActionResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return BookingActionResult.Succeeded
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
+
+/** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
+ * see [KtorBookingsApi.fetchServices]'s own doc comment for why the other six are omitted rather than
+ * declared. */
+@Serializable
+private data class TenantConfigurationWireDto(
+    val services: List<ConfiguredServiceWireDto> = emptyList(),
+)
+
+/** `Ago.Calendar.Contracts.ConfiguredServiceResponse`, field for field. `isActive` carries no default:
+ * a response that somehow lacked it would be a server this app does not understand, and defaulting it
+ * to `true` would silently render every withdrawn service as though it were still on offer. */
+@Serializable
+private data class ConfiguredServiceWireDto(
+    val serviceId: String,
+    val name: String,
+    val durationMinutes: Int,
+    val priceMinorUnits: Int? = null,
+    val priceCurrencyCode: String? = null,
+    val priceIsFrom: Boolean = false,
+    val description: String? = null,
+    val isActive: Boolean,
+)
+
+private fun ConfiguredServiceWireDto.toDomain() =
+    ConfiguredService(
+        serviceId = serviceId,
+        name = name,
+        durationMinutes = durationMinutes,
+        priceMinorUnits = priceMinorUnits,
+        priceCurrencyCode = priceCurrencyCode,
+        priceIsFrom = priceIsFrom,
+        description = description,
+        isActive = isActive,
+    )
+
+/** `Ago.Calendar.Contracts.UpdateServiceRequest` - all six fields, every time
+ * ([KtorBookingsApi.updateService]'s own doc comment on replace semantics). */
+@Serializable
+private data class UpdateServiceRequestWireDto(
+    val name: String,
+    val durationMinutes: Int,
+    val priceMinorUnits: Int?,
+    val priceIsFrom: Boolean,
+    val description: String?,
+    val isActive: Boolean,
+)
 
 /** `Ago.Calendar.Contracts.RevealCustomerPhoneRequest` - the one field that endpoint's own body carries. */
 @Serializable
