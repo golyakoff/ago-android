@@ -561,6 +561,22 @@
     <string name="analytics_by_tag_empty">В этом периоде ни один диалог не помечен меткой.</string>
     <string name="analytics_multi_tag_note">Диалог с несколькими метками учитывается в каждой из них, поэтому сумма по этому столбцу не совпадёт с общим числом диалогов выше — так и должно быть, это не ошибка.</string>
 
+    <!-- `26-73`: «Воронка записи», the fourth of the five and the smallest screen in the batch - two
+         numbers and a caveat, deliberately (`docs/backlog/26-73-*.md`'s own Found section). The menu
+         label follows the mockup's own naming for this destination, the same "mockup over the console's
+         own page title" precedent `26-72`'s own comment states above. Wording for the two counts, the
+         caveat, the empty state and the invalid-range message is copied verbatim from `ago-console`'s
+         own `ru.ts` (`navBookingFlow`, `bookingFlow*`). `ModuleFlow.InvalidRange` gets its own string,
+         distinct from `analytics_invalid_range_error`, because this endpoint's invalid-range code is not
+         `Analytics.InvalidRange` and a shared string would blur that on screen even where the words
+         happen to coincide. -->
+    <string name="analytics_report_booking_funnel">Воронка записи</string>
+    <string name="analytics_booking_funnel_started_label">Начато сценариев записи</string>
+    <string name="analytics_booking_funnel_closed_label">Сценариев закрыто</string>
+    <string name="analytics_booking_funnel_caveat">Закрытый сценарий — это не то же самое, что подтверждённая запись: посетитель мог прервать сценарий, оператор мог закрыть диалог на середине шага, или сценарий мог завершиться отказом от всех предложенных вариантов времени. Здесь считаются закрытые сценарии, а не оформленные записи.</string>
+    <string name="analytics_booking_funnel_empty">В этом периоде сценарий записи не запускался.</string>
+    <string name="analytics_booking_funnel_invalid_range_error">Начало периода должно быть раньше его конца.</string>
+
     <string name="analytics_overall_heading">Всего за период</string>
     <string name="analytics_previous_period_heading">Предыдущий период</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>

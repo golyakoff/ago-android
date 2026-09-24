@@ -48,6 +48,11 @@ public enum class AnalyticsReport(
      * `/analytics/tags`. Gated identically to [Site]/[Conversion] today, for the identical "a field of
      * its own anyway" reason [Conversion]'s own doc comment gives. */
     TagBreakdown(Permission.SITE_CONFIGURE),
+
+    /** `26-73`: «Воронка записи» — `GET /api/v1/conversations/module-flow-report`, the console's own
+     * `/analytics/booking-flow`. Gated identically to [Site]/[Conversion]/[TagBreakdown] today, for the
+     * identical "a field of its own anyway" reason [Conversion]'s own doc comment gives. */
+    BookingFunnel(Permission.SITE_CONFIGURE),
 }
 
 /**

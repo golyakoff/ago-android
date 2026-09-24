@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.analytics.BookingFunnelReportApi
 import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
@@ -18,6 +19,7 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
@@ -355,6 +357,21 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): TagBreakdownReportApi = KtorTagBreakdownReportApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-73`: [ago.chat.android.analytics.BookingFunnelReportViewModel]'s own port — the same
+     * `config.apiBaseUrl` [provideTagBreakdownReportApi] above reads, since
+     * `GET /api/v1/conversations/module-flow-report` is served by `Ago.Chat`, not the calendar API
+     * [provideBookingsApi] below reads (`docs/backlog/26-73-*.md`'s own Scope item 1). A fifth
+     * `@Provides` rather than a fifth method behind one binding, for the identical reason
+     * [provideTagBreakdownReportApi]'s own doc comment gives for keeping each report's port separate
+     * ([BookingFunnelReportApi]'s own doc comment).
+     */
+    @Provides
+    public fun provideBookingFunnelReportApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): BookingFunnelReportApi = KtorBookingFunnelReportApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is
