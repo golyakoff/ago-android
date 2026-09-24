@@ -348,6 +348,19 @@
     <string name="analytics_booking_funnel_empty">No booking flow was started in this range.</string>
     <string name="analytics_booking_funnel_invalid_range_error">The start of the range must be before its end.</string>
 
+    <!-- `26-74`: «Показы телефонов», the fifth and last of the five - see `values/strings.xml` for the
+         full reasoning. Wording copied verbatim from `ago-console`'s own `en.ts`
+         (`navCalendarPhoneReveals`, `calendarPhoneReveals*`). -->
+    <string name="analytics_report_phone_reveals">Phone reveals</string>
+    <string name="analytics_phone_reveals_empty">Nobody has revealed a phone number yet.</string>
+    <string name="analytics_phone_reveals_load_failed_unexpected">Couldn\'t load the phone-reveal log. Try again.</string>
+    <string name="analytics_phone_reveals_when_label">When</string>
+    <string name="analytics_phone_reveals_customer_label">Customer</string>
+    <string name="analytics_phone_reveals_operator_label">Operator</string>
+    <string name="analytics_phone_reveals_surface_label">Surface</string>
+    <string name="analytics_phone_reveals_load_more">Load more</string>
+    <string name="analytics_phone_reveals_loading_more">Loading more…</string>
+
     <string name="analytics_overall_heading">Total for the period</string>
     <string name="analytics_previous_period_heading">Previous period</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>

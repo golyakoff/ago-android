@@ -8,6 +8,8 @@ import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneReveal
+import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
@@ -529,6 +531,145 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.revealCustomerPhone("c1", "AndroidContacts"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `phone reveals are read for the first page, newest first as the server sent them, with no query string`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond(
+                        """
+                        {
+                          "items": [
+                            {"id":"r2","occurredAt":"2026-09-24T12:00:00Z","customerId":"c1","operatorId":"op1","surface":"AndroidContacts"},
+                            {"id":"r1","occurredAt":"2026-09-23T09:00:00Z","customerId":"c2","operatorId":"op2","surface":"ConsoleQueue"}
+                          ],
+                          "nextBefore": "r1"
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchPhoneReveals(before = null, limit = null)
+
+            assertEquals(
+                PhoneRevealsResult.Loaded(
+                    reveals =
+                        listOf(
+                            PhoneReveal(
+                                id = "r2",
+                                occurredAt = "2026-09-24T12:00:00Z",
+                                customerId = "c1",
+                                operatorId = "op1",
+                                surface = "AndroidContacts",
+                            ),
+                            PhoneReveal(
+                                id = "r1",
+                                occurredAt = "2026-09-23T09:00:00Z",
+                                customerId = "c2",
+                                operatorId = "op2",
+                                surface = "ConsoleQueue",
+                            ),
+                        ),
+                    nextBefore = "r1",
+                ),
+                result,
+            )
+            assertEquals("$baseUrl/api/v1/console/contacts/phone-reveals", requestedUrl)
+        }
+
+    @Test
+    fun `phone reveals - a later page sends the cursor and limit as query parameters`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond(
+                        """{"items":[],"nextBefore":null}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchPhoneReveals(before = "r1", limit = 50)
+
+            assertEquals(PhoneRevealsResult.Loaded(emptyList(), null), result)
+            assertEquals("$baseUrl/api/v1/console/contacts/phone-reveals?before=r1&limit=50", requestedUrl)
+        }
+
+    @Test
+    fun `phone reveals - the oldest row reached is a null nextBefore, never a cursor pointing nowhere`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"items":[],"nextBefore":null}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(PhoneRevealsResult.Loaded(emptyList(), null), api.fetchPhoneReveals(before = null, limit = null))
+        }
+
+    @Test
+    fun `phone reveals - a 5xx is Unexpected, not an empty trail`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.ServiceUnavailable) }
+
+            assertEquals(
+                PhoneRevealsResult.Failed(BookingsQueueFailure.Unexpected),
+                api.fetchPhoneReveals(before = null, limit = null),
+            )
+        }
+
+    @Test
+    fun `phone reveals - a dropped connection is Transport, not an empty trail`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                PhoneRevealsResult.Failed(BookingsQueueFailure.Transport),
+                api.fetchPhoneReveals(before = null, limit = null),
+            )
+        }
+
+    @Test
+    fun `phone reveals - a 200 that dropped the shape is Unexpected, never an empty trail`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"somethingElseEntirely":true}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(
+                PhoneRevealsResult.Failed(BookingsQueueFailure.Unexpected),
+                api.fetchPhoneReveals(before = null, limit = null),
+            )
+        }
+
+    @Test
+    fun `phone reveals - no calendar base URL configured is NotConfigured, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(PhoneRevealsResult.NotConfigured, api.fetchPhoneReveals(before = null, limit = null))
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 

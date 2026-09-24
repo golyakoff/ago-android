@@ -11,9 +11,9 @@ import ago.chat.android.core.domain.permissions.holds
  * ## Why an enum, and why it is the extension point for `26-71`..`26-74`
  *
  * `26-58` decided all five administrator reports port to Android as destinations behind one overflow
- * rather than as tabs or a picker. `26-71` («Конверсия») and `26-72` («По меткам») are the second and
- * third of those five; two more (`26-73` воронка записи, `26-74` показы телефонов) are not built yet,
- * and this enum deliberately does not name them. That is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`),
+ * rather than as tabs or a picker. `26-71` («Конверсия»), `26-72` («По меткам»), `26-73` («Воронка
+ * записи») and `26-74` («Показы телефонов») are the second through fifth of those five, landed one at a
+ * time. That order-of-landing is `buildMoreRows`'s own rule (`ago.chat.android.shell.MoreScreen`),
  * restated for this menu: **a row exists for a screen that exists.** An overflow that opens onto a name
  * with nothing behind it is the same inert-control shape `26-15`/`26-40` refused twice.
  *
@@ -26,11 +26,12 @@ import ago.chat.android.core.domain.permissions.holds
  *
  * ## Why the gate is a field rather than a shared constant
  *
- * All four remaining reports are gated on `site:configure` in the console today
- * (`ago-console/src/shell/consoleNav.ts`), so a single shared constant would work *right now*. It is a
- * per-member field anyway because the mockup already draws a fifth sibling on a different permission
- * (`-- "⋮ · calendar:configure" --> Reveals`, `26-74`), and discovering that halfway through the next
- * item would mean reshaping this type rather than adding a line to it.
+ * The first four reports are all gated on `site:configure` in the console today
+ * (`ago-console/src/shell/consoleNav.ts`), so a single shared constant would have worked for them alone.
+ * It is a per-member field instead because the mockup always drew a fifth sibling on a different
+ * permission (`-- "⋮ · calendar:configure" --> Reveals`), and `26-74` below is that sibling landing on
+ * exactly the gate the mockup named — a shared constant would have needed reshaping the moment this
+ * member arrived, rather than simply adding a line to it.
  */
 public enum class AnalyticsReport(
     public val permission: String,
@@ -53,6 +54,14 @@ public enum class AnalyticsReport(
      * `/analytics/booking-flow`. Gated identically to [Site]/[Conversion]/[TagBreakdown] today, for the
      * identical "a field of its own anyway" reason [Conversion]'s own doc comment gives. */
     BookingFunnel(Permission.SITE_CONFIGURE),
+
+    /** `26-74`: «Показы телефонов» — `GET /api/v1/console/contacts/phone-reveals`, the console's own
+     * `/calendar/phone-reveals`. **The one member whose gate actually differs**: `calendar:configure`,
+     * not `site:configure` — the mockup's own sibling gate this enum's own doc comment has named since
+     * `26-70`, and the reason a shared constant was never adopted for the first four. An operator can
+     * hold this permission and none of the other four, or the reverse, and each is meant to see exactly
+     * the entries their own permission set earns (`docs/backlog/26-74-*.md`'s own Scope item 2). */
+    PhoneReveals(Permission.CALENDAR_CONFIGURE),
 }
 
 /**
