@@ -199,6 +199,69 @@ public object AgoIcons {
                 lineToRelative(-6f, 6f)
             },
         )
+
+    /** `i-sliders` — `AccountAvatarAction`'s own «Настройки» row, its leading icon (`26-89`). Four
+     * separate horizontal rules and the two circles riding on two of them, each its own subpath —
+     * the same "one SVG primitive per subpath" rule every other multi-part icon in this file follows,
+     * so a `close()`d circle can never bleed its join into an open line. */
+    public val Sliders: ImageVector =
+        strokeIcon(
+            "AgoSliders",
+            // M4 7h10
+            {
+                moveTo(4f, 7f)
+                horizontalLineToRelative(10f)
+            },
+            // M18 7h2
+            {
+                moveTo(18f, 7f)
+                horizontalLineToRelative(2f)
+            },
+            // M4 17h4
+            {
+                moveTo(4f, 17f)
+                horizontalLineToRelative(4f)
+            },
+            // M12 17h8
+            {
+                moveTo(12f, 17f)
+                horizontalLineToRelative(8f)
+            },
+            // <circle cx="16" cy="7" r="2"/>
+            { circle(centreX = 16f, centreY = 7f, radius = 2f) },
+            // <circle cx="10" cy="17" r="2"/>
+            { circle(centreX = 10f, centreY = 17f, radius = 2f) },
+        )
+
+    /** `i-logout` — `AccountAvatarAction`'s own «Выйти» row, its leading icon (`26-89`). The door (an
+     * open-sided rounded rectangle, its two corners each a quarter-arc matching the mockup's own
+     * `a2 2 0 0 1 …` radius-2, sweep-1 arcs) and the arrow (shaft plus arrowhead) as two further
+     * subpaths, exactly as the mockup's own three separate `<path>` elements are three separate
+     * strokes rather than one merged shape. */
+    public val Logout: ImageVector =
+        strokeIcon(
+            "AgoLogout",
+            // M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3
+            {
+                moveTo(9f, 21f)
+                horizontalLineTo(6f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, -2f, -2f)
+                verticalLineTo(5f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 2f, -2f)
+                horizontalLineToRelative(3f)
+            },
+            // M16 17l5-5-5-5
+            {
+                moveTo(16f, 17f)
+                lineToRelative(5f, -5f)
+                lineToRelative(-5f, -5f)
+            },
+            // M21 12H9
+            {
+                moveTo(21f, 12f)
+                horizontalLineTo(9f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */

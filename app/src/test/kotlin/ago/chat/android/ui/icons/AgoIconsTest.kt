@@ -74,6 +74,21 @@ class AgoIconsTest {
         assertTranscribed(AgoIcons.Send, 0, "M4 12l16-8-6 16-2.5-6.5L4 12z")
     }
 
+    @Test
+    fun `i-sliders' four rules are the mockup's own path data, node for node`() {
+        assertTranscribed(AgoIcons.Sliders, 0, "M4 7h10")
+        assertTranscribed(AgoIcons.Sliders, 1, "M18 7h2")
+        assertTranscribed(AgoIcons.Sliders, 2, "M4 17h4")
+        assertTranscribed(AgoIcons.Sliders, 3, "M12 17h8")
+    }
+
+    @Test
+    fun `i-logout's door and arrow are the mockup's own path data, node for node`() {
+        assertTranscribed(AgoIcons.Logout, 0, "M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3")
+        assertTranscribed(AgoIcons.Logout, 1, "M16 17l5-5-5-5")
+        assertTranscribed(AgoIcons.Logout, 2, "M21 12H9")
+    }
+
     /**
      * The weaker, structural check for the two icons whose SVG source is a primitive rather than a
      * `d` string — see this class's own doc comment for why they cannot be held to the parser.
@@ -87,6 +102,9 @@ class AgoIconsTest {
         // three <circle/>s, each traced as two half-arcs and closed
         assertEquals(3, paths(AgoIcons.More).size)
         paths(AgoIcons.More).forEach { dot -> assertEquals(4, dot.pathData.size) }
+        // four <path> rules (checked node-for-node above) + two <circle/> knobs
+        assertEquals(6, paths(AgoIcons.Sliders).size)
+        paths(AgoIcons.Sliders).drop(4).forEach { knob -> assertEquals(4, knob.pathData.size) }
     }
 
     /**
@@ -112,6 +130,8 @@ class AgoIconsTest {
                 AgoIcons.Back,
                 AgoIcons.Clip,
                 AgoIcons.Send,
+                AgoIcons.Sliders,
+                AgoIcons.Logout,
             )
         icons.forEach { icon ->
             assertEquals(icon.name, 24f, icon.viewportWidth, 0f)
