@@ -236,43 +236,128 @@ public class ConversationListViewModel
 
             viewModelScope.launch {
                 try {
-                    when (val result = withContext(ioDispatcher) { api.fetchQueue() }) {
-                        is QueueResult.Loaded -> {
-                            lastQueue = result.queue
-                            val stillMine =
-                                result.queue.assignedToMe
-                                    .map { it.conversationId }
-                                    .toSet()
-                            // `5-15`'s own reasoning, restated: a fresh snapshot already reflects every
-                            // arrival the server knows about, so the local overlay retires for anything
-                            // this snapshot actually re-read.
-                            newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
-                            unreadBumps = unreadBumps.filterKeys { it in stillMine }
-                            val stillWaiting =
-                                result.queue.waiting
-                                    .map { it.conversationId }
-                                    .toSet()
-                            claimErrors = claimErrors.filterKeys { it in stillWaiting }
-                            claimingIds = claimingIds.intersect(stillWaiting)
-                            render(stale = false)
-                            mutableState.update { it.copy(loadError = null) }
-                            withContext(ioDispatcher) { cache.write(result.queue) }
-                        }
-
-                        is QueueResult.Failed -> {
-                            // The cache (or the previous fetch's own answer) stays on screen exactly as
-                            // it was - only the error banner changes. Never cleared to empty on a
-                            // failure: a network blip must not make a real list disappear. When there
-                            // is no cache and no previous answer either, [lastQueue] stays `null` and
-                            // [render] never runs - `26-60`'s own no-data branch is what
-                            // [ConversationListScreen] draws for exactly that combination, rather than
-                            // the indefinite spinner it used to.
-                            mutableState.update { it.copy(loadError = result.reason) }
-                        }
-                    }
+                    fetchAndApplyQueue()
                 } finally {
                     isRefreshing = false
                     mutableState.update { it.copy(isRefreshing = false) }
+                }
+            }
+        }
+
+        /**
+         * `26-63`: the actual `GET /api/v1/conversations/queue` round trip and everything that happens
+         * with its answer - pulled out of [refresh] so [scheduleQueueRefresh] below can run the exact
+         * same body without duplicating it, while [refresh] keeps its own synchronous [isRefreshing]
+         * guard exactly as `26-60` shipped it (untouched - this item is explicitly not the one that
+         * unifies the manual/poll guard with the hub-push path, `docs/backlog/26-63-*.md`'s own Out of
+         * scope). A plain `private suspend fun` rather than a second class: nothing here needs its own
+         * identity, only its own callable unit of "ask, apply, cache".
+         */
+        private suspend fun fetchAndApplyQueue() {
+            when (val result = withContext(ioDispatcher) { api.fetchQueue() }) {
+                is QueueResult.Loaded -> {
+                    lastQueue = result.queue
+                    val stillMine =
+                        result.queue.assignedToMe
+                            .map { it.conversationId }
+                            .toSet()
+                    // `5-15`'s own reasoning, restated: a fresh snapshot already reflects every
+                    // arrival the server knows about, so the local overlay retires for anything
+                    // this snapshot actually re-read.
+                    newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
+                    unreadBumps = unreadBumps.filterKeys { it in stillMine }
+                    val stillWaiting =
+                        result.queue.waiting
+                            .map { it.conversationId }
+                            .toSet()
+                    claimErrors = claimErrors.filterKeys { it in stillWaiting }
+                    claimingIds = claimingIds.intersect(stillWaiting)
+                    render(stale = false)
+                    mutableState.update { it.copy(loadError = null) }
+                    withContext(ioDispatcher) { cache.write(result.queue) }
+                }
+
+                is QueueResult.Failed -> {
+                    // The cache (or the previous fetch's own answer) stays on screen exactly as
+                    // it was - only the error banner changes. Never cleared to empty on a
+                    // failure: a network blip must not make a real list disappear. When there
+                    // is no cache and no previous answer either, [lastQueue] stays `null` and
+                    // [render] never runs - `26-60`'s own no-data branch is what
+                    // [ConversationListScreen] draws for exactly that combination, rather than
+                    // the indefinite spinner it used to.
+                    mutableState.update { it.copy(loadError = result.reason) }
+                }
+            }
+        }
+
+        /** `26-63`: true from the moment a hub push schedules a coalesced re-fetch until that fetch (and
+         * every extra round the same push-burst asked for while it was running) has actually happened -
+         * see [scheduleQueueRefresh]. A plain `var`, not a `Job` reference, for the identical
+         * "single dispatcher, no concurrent body ever runs" reason this class's own class-level doc
+         * comment already gives for [claimingIds]/[unreadBumps]/etc. */
+        private var queueRefreshCoalescing = false
+
+        /** `26-63`: true only for the narrower span *inside* [queueRefreshCoalescing] where
+         * [fetchAndApplyQueue] is actually on the wire, as opposed to the coalesce window still
+         * counting down. The distinction is what keeps [queueRefreshRequestedAgain] honest: a push that
+         * lands while this screen is merely *waiting out* [QUEUE_REFRESH_COALESCE_WINDOW_MILLIS] needs
+         * nothing beyond the fetch that is already coming - forcing a second round for it as well would
+         * turn "ten messages, one fetch" into "ten messages, two fetches" for no reason. Only a push
+         * that lands once the network call itself has started genuinely cannot be folded into that
+         * call's already-in-transit request. */
+        private var queueRefreshInFlight = false
+
+        /** `26-63`: set by [scheduleQueueRefresh] whenever it is called while [queueRefreshInFlight] is
+         * already true - i.e. a push landing while [fetchAndApplyQueue] is genuinely on the wire, not
+         * merely while the coalesce window is counting down (see [queueRefreshInFlight]).
+         * [scheduleQueueRefresh]'s own loop rereads this the moment its fetch returns and, if set, goes
+         * around once more before finally clearing [queueRefreshCoalescing] - this is the whole
+         * mechanism behind `docs/backlog/26-63-*.md`'s own "the last request always wins": a trigger
+         * that arrives mid-flight is never folded into the response already in transit, it earns its
+         * own subsequent fetch instead. */
+        private var queueRefreshRequestedAgain = false
+
+        /**
+         * `26-63`: [onAssigned] and [onMessage] call this instead of [refresh] directly. Chosen shape:
+         * a plain "already scheduled" flag trio ([queueRefreshCoalescing]/[queueRefreshInFlight]/
+         * [queueRefreshRequestedAgain]) rather than a conflated channel or a
+         * `MutableSharedFlow.debounce(...)` - the scope note names all three as acceptable, and a plain
+         * flag is the one that costs this file no new import and reads the same way every other piece
+         * of local state here already does (this class's own class-level doc comment on why a plain
+         * `var` needs no lock).
+         *
+         * A burst of hub pushes collapses to exactly one fetch, fired
+         * [QUEUE_REFRESH_COALESCE_WINDOW_MILLIS] after the *first* push in the burst that finds no
+         * fetch already scheduled or running - long enough that a rapid exchange (a couple of visitor
+         * messages a few hundred milliseconds apart, an operator's own reply echoing straight back)
+         * collapses into a single request; short enough that a lone message still visibly moves the row
+         * well inside what reads as "instant" on a chat screen. Chosen, not measured - `CLAUDE.md` rule
+         * 7 does not bind here because this item makes no throughput or latency claim, only a
+         * request-count one, and the request count is what the tests below actually count.
+         */
+        private fun scheduleQueueRefresh() {
+            if (queueRefreshCoalescing) {
+                if (queueRefreshInFlight) queueRefreshRequestedAgain = true
+                // Still only waiting out the coalesce window - the fetch that is already coming will
+                // read the truth as of when it actually goes out, which is later than this push, so
+                // there is nothing more for this call to do.
+                return
+            }
+            queueRefreshCoalescing = true
+            viewModelScope.launch {
+                try {
+                    do {
+                        queueRefreshRequestedAgain = false
+                        delay(QUEUE_REFRESH_COALESCE_WINDOW_MILLIS)
+                        queueRefreshInFlight = true
+                        try {
+                            fetchAndApplyQueue()
+                        } finally {
+                            queueRefreshInFlight = false
+                        }
+                    } while (queueRefreshRequestedAgain)
+                } finally {
+                    queueRefreshCoalescing = false
                 }
             }
         }
@@ -461,11 +546,15 @@ public class ConversationListViewModel
             render(stale = mutableState.value.isStale)
             // `WorkspaceLayout.tsx`'s own `onConversationAssigned` handler: re-fetch the whole queue
             // rather than merge one row in - see this class's own doc comment for why a push alone is
-            // never enough to render a row. Deliberately **not** followed by any navigation of any
-            // kind - `docs/navigation.md`: "a new assignment arriving never navigates" - proven by
+            // never enough to render a row. `26-63`: that re-fetch now goes through
+            // [scheduleQueueRefresh] rather than [refresh] directly, so a burst of assignment/message
+            // pushes collapses to one fetch instead of one per push - [render] just above still runs
+            // synchronously on every single push, which is what keeps the badge live while the fetch
+            // itself is debounced. Deliberately **not** followed by any navigation of any kind -
+            // `docs/navigation.md`: "a new assignment arriving never navigates" - proven by
             // `ConversationListViewModelTest`'s own "never navigates" case, which asserts nothing about
             // [state] beyond the badge and the row list changes.
-            refresh()
+            scheduleQueueRefresh()
         }
 
         private fun onMessage(message: MessageDto) {
@@ -481,14 +570,19 @@ public class ConversationListViewModel
             // operator's own echoed-back send must never count as unread, `MessageDto.authorKind`'s own
             // doc comment) but wrong for the row's snippet, which has to move for *any* new message -
             // the operator's own included, exactly the way `26-29`'s backend field is defined
-            // ("the latest message", not "the latest visitor message"). `refresh()` is this class's own
+            // ("the latest message", not "the latest visitor message"). A re-fetch is this class's own
             // established answer for "something changed, re-ask for the truth" (`onAssigned`'s identical
-            // call, right above) rather than hand-rolling a client-side patch of `lastQueue` that would
-            // have to duplicate `26-29`'s own truncation/null-for-attachment rules to stay correct.
+            // reasoning, right above) rather than hand-rolling a client-side patch of `lastQueue` that
+            // would have to duplicate `26-29`'s own truncation/null-for-attachment rules to stay correct.
             if (message.authorKind == VISITOR_AUTHOR_KIND) {
                 unreadBumps = unreadBumps + (conversationId to ((unreadBumps[conversationId] ?: 0) + 1))
             }
-            refresh()
+            // `26-63`: rendered immediately, off the local [unreadBumps] overlay alone, before the
+            // (now debounced) re-fetch below ever asks the server anything - the unread badge and the
+            // snippet's own "something arrived" feel have to stay instant even though the fetch that
+            // will eventually carry the real snippet text is deliberately delayed.
+            render(stale = mutableState.value.isStale)
+            scheduleQueueRefresh()
         }
 
         private fun render(stale: Boolean) {
@@ -664,6 +758,10 @@ public class ConversationListViewModel
         private companion object {
             const val WAITING_POLL_INTERVAL_MILLIS = 15_000L
             const val VISITOR_AUTHOR_KIND = "Visitor"
+
+            /** `26-63`: [scheduleQueueRefresh]'s own coalescing window - see that function's doc comment
+             * for why 400ms and why chosen rather than measured. */
+            const val QUEUE_REFRESH_COALESCE_WINDOW_MILLIS = 400L
 
             /** `26-90`: the same page size `GET /api/v1/conversations/all` defaults to server-side
              * (`ConversationsEndpoints.HandleGetAllForSiteAsync`'s own `pageSize ?? 50`) - sent

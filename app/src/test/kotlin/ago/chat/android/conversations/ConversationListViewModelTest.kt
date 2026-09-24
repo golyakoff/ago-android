@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -265,6 +266,115 @@ class ConversationListViewModelTest {
                 viewModel.state.value.mine
                     .single()
                     .isNewlyAssigned,
+            )
+        }
+
+    // -------------------------------------------------------------- `26-63`: coalesced push refresh
+
+    @Test
+    fun `26-63 ten messages within the coalesce window produce one queue fetch, not ten`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1")))))
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+            val fetchesBeforeBurst = api.fetchCalls
+
+            // All ten land within the same coalesce window - `runCurrent()`, not `advanceTimeBy`,
+            // between them: nothing here should let virtual time cross
+            // `QUEUE_REFRESH_COALESCE_WINDOW_MILLIS` until the burst itself is over.
+            repeat(10) { i ->
+                hubEvents.allMessages.tryEmit(
+                    MessageDto(id = "m$i", sequence = i.toLong(), conversationId = "c1", authorKind = "Visitor"),
+                )
+                runCurrent()
+            }
+            advanceUntilIdle()
+
+            assertEquals(
+                "a burst of ten pushes collapses to exactly one fetch",
+                fetchesBeforeBurst + 1,
+                api.fetchCalls,
+            )
+            assertEquals(
+                "every one of the ten still bumped the live unread count",
+                10,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+        }
+
+    @Test
+    fun `26-63 the New badge and the unread bump render instantly, before the coalesced fetch they schedule ever fires`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1")))))
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+            val fetchesBeforePush = api.fetchCalls
+
+            hubEvents.assignments.tryEmit(ConversationAssignedDto("c1", "op-1", "2026-09-22T10:00:00Z"))
+            hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Visitor"))
+            runCurrent()
+
+            val row =
+                viewModel.state.value.mine
+                    .single()
+            assertTrue("the New badge is rendered off local state alone", row.isNewlyAssigned)
+            assertEquals("the unread bump is rendered off local state alone", 1, row.unreadCount)
+            assertEquals(
+                "neither push's re-fetch has gone out yet - only the coalesce window has been armed",
+                fetchesBeforePush,
+                api.fetchCalls,
+            )
+
+            advanceUntilIdle()
+            assertEquals(
+                "and the coalesced fetch does eventually go out, exactly once for the pair",
+                fetchesBeforePush + 1,
+                api.fetchCalls,
+            )
+        }
+
+    @Test
+    fun `26-63 a push landing while the coalesced fetch is already in flight still earns a follow-up fetch`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1")))),
+                    fetchDelayMillis = 1_000,
+                )
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+            val fetchesBeforeBurst = api.fetchCalls
+
+            hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Visitor"))
+            runCurrent()
+            // The coalesce window elapses and the (slow) first fetch goes out - `fetchCalls` counts
+            // the call the instant it starts, not when it answers, so this proves it is now genuinely
+            // on the wire rather than merely scheduled.
+            advanceTimeBy(401)
+            runCurrent()
+            assertEquals("the first fetch is now in flight", fetchesBeforeBurst + 1, api.fetchCalls)
+
+            // A second push lands while that fetch is still in flight.
+            hubEvents.allMessages.tryEmit(MessageDto(id = "m2", sequence = 2, conversationId = "c1", authorKind = "Visitor"))
+            runCurrent()
+            assertEquals(
+                "it does not start a second fetch concurrently - it only queues one for afterwards",
+                fetchesBeforeBurst + 1,
+                api.fetchCalls,
+            )
+
+            // The in-flight fetch finally answers, and the queued push earns its own follow-up fetch -
+            // `docs/backlog/26-63-*.md`'s own "the last request always wins".
+            advanceUntilIdle()
+            assertEquals(
+                "the push that landed mid-flight was never dropped",
+                fetchesBeforeBurst + 2,
+                api.fetchCalls,
             )
         }
 
@@ -1025,6 +1135,10 @@ class ConversationListViewModelTest {
         /** When set, [fetchQueue] never returns at all - proves a render sourced only from the cache,
          * with the network call genuinely still pending rather than merely fast. */
         var hangQueueFetch: Boolean = false,
+        /** `26-63`: a controllable (virtual-time) network delay, distinct from [hangQueueFetch] - a
+         * fetch that eventually *does* answer, but only after this many milliseconds, is what lets a
+         * test land a second push genuinely "while a fetch is in flight" rather than merely fast. */
+        var fetchDelayMillis: Long = 0,
         var claimResult: (String) -> ClaimResult = { ClaimResult.Claimed },
         /** `26-90`: keyed by the `beforeId` the caller sent, so one fake can answer a first page and a
          * second page differently and a test can prove the cursor was actually used rather than
@@ -1046,6 +1160,7 @@ class ConversationListViewModelTest {
         override suspend fun fetchQueue(): QueueResult {
             fetchCalls++
             if (hangQueueFetch) awaitCancellation()
+            if (fetchDelayMillis > 0) delay(fetchDelayMillis)
             return queueResult
         }
 
