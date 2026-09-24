@@ -287,6 +287,14 @@
     <string name="bookings_card_when_label">Когда</string>
     <string name="bookings_card_worker_label">Мастер</string>
     <string name="bookings_card_calendar_label">Календарь</string>
+    <!-- `docs/backlog/26-49-*.md`'s own Scope item 4, quoting the mockup's own caption verbatim - the
+         one sentence that explains why this screen draws no «Подтвердить» control anywhere. -->
+    <string name="bookings_auto_confirms_caption">Всё подтверждается автоматически.</string>
+    <!-- `20-04`/`CalendarQueuePage.tsx`'s own verb, restated: the queue is a veto list, not an approval
+         list - confirmation is what happens when nobody acts. -->
+    <string name="bookings_action_reject">Отклонить</string>
+    <string name="bookings_action_cancel">Отменить</string>
+    <string name="bookings_action_no_show">Не пришёл</string>
 
     <!--
         `26-51`: Записи's own «Утверждены» segment - one chosen day's confirmed bookings, grouped by

@@ -1,5 +1,6 @@
 package ago.chat.android.core.network.bookings
 
+import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
@@ -346,6 +347,101 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(ContactsResult.NotConfigured, api.fetchContacts())
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `a 204 rejects the booking, against the right path`() =
+        runTest {
+            var requestedUrl: String? = null
+            var requestedMethod: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    requestedMethod = request.method.value
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(BookingActionResult.Succeeded, api.rejectBooking("b1"))
+            assertEquals("$baseUrl/api/v1/console/bookings/b1/reject", requestedUrl)
+            assertEquals("POST", requestedMethod)
+        }
+
+    @Test
+    fun `a 204 cancels the booking, against the right path`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(BookingActionResult.Succeeded, api.cancelBooking("b1"))
+            assertEquals("$baseUrl/api/v1/console/bookings/b1/cancel", requestedUrl)
+        }
+
+    @Test
+    fun `a 204 marks the booking a no-show, against the right path`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(BookingActionResult.Succeeded, api.markNoShow("b1"))
+            assertEquals("$baseUrl/api/v1/console/bookings/b1/no-show", requestedUrl)
+        }
+
+    @Test
+    fun `a 409 with a problem-details body is rendered as that exact refusal, not retried`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(baseUrl) {
+                    calls++
+                    respond(
+                        """{"type":"Booking.InvalidState","detail":"Запись уже подтверждена."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.rejectBooking("b1")
+
+            assertEquals(BookingActionResult.Refused("Запись уже подтверждена."), result)
+            assertEquals("the client makes exactly one attempt - a refusal is never retried into a success", 1, calls)
+        }
+
+    @Test
+    fun `a refusal with no problem-details body classifies as Unexpected, never a fabricated detail`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.cancelBooking("b1"))
+        }
+
+    @Test
+    fun `a dropped connection on a booking action is Transport, not a silently retried write`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Transport), api.markNoShow("b1"))
+        }
+
+    @Test
+    fun `no calendar base URL configured fails a booking action, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.rejectBooking("b1"))
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 

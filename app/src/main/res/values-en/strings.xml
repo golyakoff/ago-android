@@ -184,6 +184,10 @@
     <!-- `26-91`: "Master", not "Worker" — see the file-level note above. -->
     <string name="bookings_card_worker_label">Master</string>
     <string name="bookings_card_calendar_label">Calendar</string>
+    <string name="bookings_auto_confirms_caption">Everything confirms automatically.</string>
+    <string name="bookings_action_reject">Reject</string>
+    <string name="bookings_action_cancel">Cancel</string>
+    <string name="bookings_action_no_show">No-show</string>
 
     <string name="bookings_tab_confirmed">Confirmed</string>
     <string name="bookings_confirmed_day_empty">Nothing\'s booked on this day.</string>

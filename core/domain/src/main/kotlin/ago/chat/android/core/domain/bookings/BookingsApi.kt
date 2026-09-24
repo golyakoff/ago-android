@@ -43,6 +43,60 @@ public interface BookingsApi {
      * (`docs/backlog/26-52-*.md`'s own Out of scope).
      */
     public suspend fun fetchContacts(): ContactsResult
+
+    /**
+     * `26-49`: `POST /api/v1/console/bookings/{bookingId}/reject` — a `204`-or-refusal write, the
+     * identical shape [ago.chat.android.core.domain.conversations.ConversationsApi.claim] already
+     * establishes for the conversation queue: a genuine server refusal (a non-2xx response whose body
+     * carried an RFC 7807 `detail`) comes back as [BookingActionResult.Refused], shown verbatim;
+     * everything else that kept the write from landing — a dropped connection, a bare non-2xx with no
+     * `detail` to show — is [BookingActionResult.Failed]. There is deliberately no confirm counterpart:
+     * the queue auto-confirms unless vetoed, so [rejectBooking]/[cancelBooking]/[markNoShow] are this
+     * port's whole write surface (`docs/backlog/26-49-*.md`'s own Out of scope: "adding a confirm
+     * endpoint... is a product decision, not an Android item").
+     */
+    public suspend fun rejectBooking(bookingId: String): BookingActionResult
+
+    /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/cancel` — the identical shape [rejectBooking]
+     * documents in full. */
+    public suspend fun cancelBooking(bookingId: String): BookingActionResult
+
+    /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/no-show` — the identical shape [rejectBooking]
+     * documents in full. */
+    public suspend fun markNoShow(bookingId: String): BookingActionResult
+}
+
+/**
+ * `26-49`: what vetoing one pending booking (reject/cancel/no-show alike — all three writes share this
+ * one result shape) came back with — restated from
+ * [ago.chat.android.core.domain.conversations.ClaimResult] rather than reused, because that type lives
+ * in a sibling package with its own [ago.chat.android.core.domain.net.NetworkFailure] classification;
+ * this port already has its own two-way "is it me, or is it broken" vocabulary in [BookingsQueueFailure],
+ * shared by every read on this same interface, and [Failed] reuses it here for the identical reason
+ * [ConfirmedBookingsResult.Failed]'s own doc comment gives for reusing it on a second read.
+ */
+public sealed interface BookingActionResult {
+    /** `204 No Content`. The caller already knows what it asked for — a fresh [BookingsApi.fetchPendingQueue]
+     * is how the row's own departure from the queue is observed, never assumed from this result alone. */
+    public data object Succeeded : BookingActionResult
+
+    /**
+     * A non-2xx whose body carried a genuine RFC 7807 `detail` — shown to the operator **as-is**, and
+     * never retried automatically. Losing a race with the confirmation sweep (the booking the operator
+     * just tried to reject already auto-confirmed, say) surfaces here, worded by the server itself,
+     * exactly the way [ago.chat.android.core.domain.conversations.ClaimResult.Refused]'s own doc
+     * comment describes for the identical situation on the conversation queue.
+     */
+    public data class Refused(
+        val detail: String,
+    ) : BookingActionResult
+
+    /** Everything that is *not* a genuine server refusal — a dropped connection, or a non-2xx whose body
+     * carried no `detail` to show verbatim. [reason] is the same [BookingsQueueFailure] two-way
+     * classification every read on this port already uses, never a fabricated `detail` string. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : BookingActionResult
 }
 
 /** What answering "what is waiting to auto-confirm" came back with. */

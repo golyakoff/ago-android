@@ -1,5 +1,6 @@
 package ago.chat.android.bookings
 
+import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
@@ -100,6 +101,133 @@ class BookingsViewModelTest {
             assertEquals(BookingsUiState.Loaded(emptyList()), viewModel.state.value)
         }
 
+    @Test
+    fun `rejecting a booking marks only that row busy, immediately, before the server answers`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val b = booking(id = "b", confirmationDeadline = "2026-09-22T12:00:00Z")
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b)), hangAction = true)
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reject("a")
+
+            assertEquals(
+                BookingsUiState.Loaded(listOf(a, b), busyBookingIds = setOf("a")),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `rapidly tapping one row's action twice sends exactly one server call`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a)), hangAction = true)
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reject("a")
+            // Lets the first tap's own coroutine actually reach the (hung) server call - the busy-set
+            // check `act` makes is synchronous, before the launch, so the second tap below is blocked by
+            // it either way; running the scheduler here only proves the first tap's own call really
+            // happened, the same `hangFetch`/`runCurrent` shape this file's own first test establishes.
+            dispatcher.scheduler.runCurrent()
+            viewModel.reject("a")
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, api.rejectCalls.size)
+        }
+
+    @Test
+    fun `a successful reject re-reads the queue and the row is gone`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val b = booking(id = "b", confirmationDeadline = "2026-09-22T12:00:00Z")
+            val api =
+                FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b))).apply {
+                    onAction = { result = PendingBookingsResult.Loaded(listOf(b)) }
+                }
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reject("a")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a"), api.rejectCalls)
+            assertEquals(2, api.fetchCalls)
+            assertEquals(BookingsUiState.Loaded(listOf(b)), viewModel.state.value)
+        }
+
+    @Test
+    fun `a refusal re-reads the queue first, then shows the server's own detail`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val api =
+                FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a))).apply {
+                    actionResult = BookingActionResult.Refused("Запись уже подтверждена сборщиком.")
+                }
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.cancel("a")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a"), api.cancelCalls)
+            // `docs/backlog/26-49-*.md`'s own Scope item 3: the queue is re-read (still one call ahead of
+            // the reject/cancel/no-show call itself) before the refusal is ever shown.
+            assertEquals(2, api.fetchCalls)
+            assertEquals(
+                BookingsUiState.Loaded(
+                    listOf(a),
+                    actionError = BookingActionErrorUi.ServerRefusal("Запись уже подтверждена сборщиком."),
+                ),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `a transport failure re-reads the queue and renders as Unavailable, never a fabricated detail`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val api =
+                FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a))).apply {
+                    actionResult = BookingActionResult.Failed(BookingsQueueFailure.Transport)
+                }
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.markNoShow("a")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a"), api.noShowCalls)
+            assertEquals(
+                BookingsUiState.Loaded(listOf(a), actionError = BookingActionErrorUi.Unavailable(BookingsQueueFailure.Transport)),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `a successful action clears a previously shown action error`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a)))
+            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            api.actionResult = BookingActionResult.Refused("на секунду опоздали")
+            viewModel.cancel("a")
+            advanceUntilIdle()
+            assertEquals(
+                BookingsUiState.Loaded(listOf(a), actionError = BookingActionErrorUi.ServerRefusal("на секунду опоздали")),
+                viewModel.state.value,
+            )
+
+            api.actionResult = BookingActionResult.Succeeded
+            viewModel.cancel("a")
+            advanceUntilIdle()
+
+            assertEquals(BookingsUiState.Loaded(listOf(a)), viewModel.state.value)
+        }
+
     private fun booking(
         id: String,
         confirmationDeadline: String,
@@ -116,9 +244,19 @@ class BookingsViewModelTest {
     private class FakeBookingsApi(
         var result: PendingBookingsResult = PendingBookingsResult.NotConfigured,
         private val hangFetch: Boolean = false,
+        var actionResult: BookingActionResult = BookingActionResult.Succeeded,
+        private val hangAction: Boolean = false,
+        /** Runs right before an action returns [actionResult] - the hook `a successful reject re-reads
+         * the queue and the row is gone` uses to make [result] reflect the server's own side effect,
+         * the same "the write happened, a fresh read is how it is observed" shape the real
+         * `KtorBookingsApi` and `BookingsViewModel.act` both already establish. */
+        var onAction: () -> Unit = {},
     ) : BookingsApi {
         var fetchCalls: Int = 0
             private set
+        val rejectCalls: MutableList<String> = mutableListOf()
+        val cancelCalls: MutableList<String> = mutableListOf()
+        val noShowCalls: MutableList<String> = mutableListOf()
 
         override suspend fun fetchPendingQueue(): PendingBookingsResult {
             fetchCalls++
@@ -134,5 +272,26 @@ class BookingsViewModelTest {
         ): ConfirmedBookingsResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
 
         override suspend fun fetchContacts(): ContactsResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
+
+        override suspend fun rejectBooking(bookingId: String): BookingActionResult {
+            rejectCalls.add(bookingId)
+            return respondToAction()
+        }
+
+        override suspend fun cancelBooking(bookingId: String): BookingActionResult {
+            cancelCalls.add(bookingId)
+            return respondToAction()
+        }
+
+        override suspend fun markNoShow(bookingId: String): BookingActionResult {
+            noShowCalls.add(bookingId)
+            return respondToAction()
+        }
+
+        private suspend fun respondToAction(): BookingActionResult {
+            if (hangAction) awaitCancellation()
+            onAction()
+            return actionResult
+        }
     }
 }
