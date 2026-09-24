@@ -11,6 +11,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // `26-06`/`adr/0180`: RuStore Push's own artifacts. **Only this address** - RuStore's docs
+        // say the older `artifactory-external.vkpartner.ru` "may stop working at some point", and
+        // `dartway/dartway#263` (a real report, not a hypothetical) says that repository was retired
+        // 2026-10-01. Nothing else on this project's dependency graph comes from RuStore, so this is
+        // its one call site.
+        maven {
+            url = uri("https://nexus-external.rustore.ru/repository/maven-rustore-exposed/")
+        }
     }
 }
 

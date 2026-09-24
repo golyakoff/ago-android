@@ -6,6 +6,8 @@ import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.devices.DeviceRegistrationApi
+import ago.chat.android.core.domain.devices.InstallationIdProvider
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
@@ -16,6 +18,7 @@ import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
+import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
 import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.OperatorHubConnection
@@ -26,6 +29,14 @@ import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.devices.DataStoreInstallationId
+import ago.chat.android.devices.DeviceRegistrar
+import ago.chat.android.devices.DeviceRegistrationCoordinator
+import ago.chat.android.devices.DeviceRegistrationScheduler
+import ago.chat.android.devices.DeviceRevocation
+import ago.chat.android.devices.PushRegistrationGateway
+import ago.chat.android.devices.RuStorePushGateway
+import ago.chat.android.devices.WorkManagerDeviceRegistrationScheduler
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.DataStoreThemePreferences
@@ -60,6 +71,16 @@ import javax.inject.Singleton
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 public annotation class IoDispatcher
+
+/**
+ * `26-06`: which `DataStore<Preferences>` binding is the installation-id file, since
+ * [provideThemeDataStore] already claims the unqualified `DataStore<Preferences>` type for `26-17`'s
+ * own preference - the identical "two providers of the same type need a qualifier" reason
+ * [IoDispatcher] states above, applied to a second `DataStore` file rather than a second dispatcher.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+public annotation class DeviceDataStore
 
 /**
  * `26-12`: the whole object graph, in the one module allowed to hold it.
@@ -300,4 +321,65 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideThemePreferences(preferences: DataStoreThemePreferences): ThemePreferences = preferences
+
+    /**
+     * `26-06`: [DataStoreInstallationId]'s own file - deliberately not [provideThemeDataStore] above
+     * (see [DataStoreInstallationId]'s own doc comment for why it needs a file `SessionStore.clear()`
+     * never touches) and deliberately not `SessionStore` itself (that store is encrypted for a
+     * credential this id is not, and `clear()`-on-sign-out is precisely the behaviour this value must
+     * not inherit).
+     */
+    @Provides
+    @Singleton
+    @DeviceDataStore
+    public fun provideDeviceDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            produceFile = { File(context.filesDir, "device.preferences_pb") },
+        )
+
+    @Provides
+    @Singleton
+    public fun provideInstallationIdProvider(installationId: DataStoreInstallationId): InstallationIdProvider = installationId
+
+    /**
+     * `26-06`: the RuStore-facing half of push registration, over the shared authenticated
+     * `HttpClient` every other `:core:network` adapter uses - `KtorDeviceRegistrationApi`'s own doc
+     * comment states why `"rustore"`/`"android"` are literals inside it rather than parameters here.
+     */
+    @Provides
+    public fun provideDeviceRegistrationApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): DeviceRegistrationApi = KtorDeviceRegistrationApi(client, config.apiBaseUrl)
+
+    @Provides
+    @Singleton
+    public fun providePushRegistrationGateway(gateway: RuStorePushGateway): PushRegistrationGateway = gateway
+
+    /**
+     * `26-06`: two bindings onto the identical `@Singleton` [DeviceRegistrationCoordinator] instance -
+     * the same "a second binding is a second *view*, not a second graph node" shape
+     * [provideOperatorHubEvents] above already establishes for [OperatorHubConnection]/`OperatorHubEvents`.
+     * [AgoAuthSession] depends on [DeviceRevocation] (as a `dagger.Lazy`, to break the injection cycle
+     * that interface's own doc comment on `AgoAuthSession`'s constructor explains); [SignInViewModel]
+     * depends on [DeviceRegistrar]. Neither depends on the concrete coordinator directly, which is
+     * what keeps both testable on a plain JVM with no Android runtime behind them.
+     */
+    @Provides
+    @Singleton
+    public fun provideDeviceRevocation(coordinator: DeviceRegistrationCoordinator): DeviceRevocation = coordinator
+
+    @Provides
+    @Singleton
+    public fun provideDeviceRegistrar(coordinator: DeviceRegistrationCoordinator): DeviceRegistrar = coordinator
+
+    /** `26-06`: the one binding that *does* carry a `Context` - [WorkManagerDeviceRegistrationScheduler]'s
+     * own doc comment states why it is a separate class from [DeviceRegistrationCoordinator] rather than
+     * one more method on it. */
+    @Provides
+    @Singleton
+    public fun provideDeviceRegistrationScheduler(scheduler: WorkManagerDeviceRegistrationScheduler): DeviceRegistrationScheduler =
+        scheduler
 }

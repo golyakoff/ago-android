@@ -166,6 +166,19 @@ room = "2.8.5"
 # the newest stable release, contemporary with this catalog's other `25-214`-generation rows.
 datastore = "1.1.7"
 
+# `26-06`/`adr/0180`: RuStore Push, not FCM (`docs/adr/0180`, `docs/architecture/push-notifications.md`).
+# 7.5.0 is the `<release>`/`<latest>` in `maven-metadata.xml` at
+# `nexus-external.rustore.ru/repository/maven-rustore-exposed/ru/rustore/sdk/pushclient/`, read
+# 2026-09-24 — newer than the 7.4.0 the backlog item recorded three days earlier on 2026-09-21, which
+# is itself the reason this is read from the metadata rather than copied from that item file.
+rustorePushClient = "7.5.0"
+
+# `26-06`: the periodic re-registration job (`docs/architecture.md`'s own "Push" section states the
+# interval and why). Not on the `lifecycleRuntimeKtx`/`26-07` generation because WorkManager versions
+# independently of it; 2.10.1 is the newest stable release compatible with this project's `minSdk = 26`
+# / `compileSdk = 37`.
+work = "2.10.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -234,6 +247,21 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 # `26-17`: the Тема preference's store — see the `datastore` version row above for why this, and not
 # Room or plain `SharedPreferences`.
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+# `26-06`: RuStore Push client — see the `rustorePushClient` version row above.
+rustore-pushclient = { group = "ru.rustore.sdk", name = "pushclient", version.ref = "rustorePushClient" }
+
+# `26-06`: the periodic device re-registration job — see the `work` version row above. `-ktx` for the
+# `suspend`-function `CoroutineWorker` this project's own coroutines-everywhere convention expects (the
+# same `-ktx`-for-suspend choice `androidx-room-ktx` above already makes).
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+# `26-06`: `TestListenableWorkerBuilder` — the real, documented way to build and run a `CoroutineWorker`
+# in a plain JVM `test` with no `WorkManager` runtime behind it, the same "test the unit, not the
+# scheduler" split `androidx-room-testing` draws for Room's own instrumented half (`work`'s own version
+# row above; `docs/backlog/26-06-*.md` names the `advanceUntilIdle()`-spins-forever trap a periodic-work
+# test can fall into, which testing the worker's `doWork()` directly and the `WorkRequest`'s own built
+# constraints separately both avoid).
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

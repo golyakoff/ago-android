@@ -1,11 +1,13 @@
 package ago.chat.android.session
 
 import ago.chat.android.core.network.auth.AccessTokenProvider
+import ago.chat.android.devices.DeviceRevocation
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.signin.SignInSession
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -77,6 +79,14 @@ public class AgoAuthSession
         private val store: SessionStore,
         private val config: OidcConfig,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+        // `26-06`: `dagger.Lazy`, not a plain `DeviceRevocation` - a real injection cycle otherwise.
+        // `DeviceRegistrationCoordinator` (the only binding for this interface) depends on the shared
+        // `HttpClient`, which depends on `AccessTokenProvider`, which `AppModule.provideAccessTokenProvider`
+        // binds to *this very class*. `dagger.Lazy<T>` is Dagger's own documented way to defer one edge
+        // of a cycle until first use, at which point the rest of the graph - `AgoAuthSession` included -
+        // has already finished constructing, so `.get()` inside `signOut()` below never re-enters this
+        // constructor.
+        private val deviceRevocation: Lazy<DeviceRevocation>,
     ) : AccessTokenProvider,
         SignInSession,
         OperatorIdentityProvider {
@@ -216,8 +226,12 @@ public class AgoAuthSession
         override suspend fun signOut(): Unit =
             withContext(ioDispatcher) {
                 mutex.withLock {
-                    // `26-06` inserts the device-revocation call HERE — the token is still valid and
-                    // still readable, and nothing below has run yet.
+                    // `26-06`: the device-revocation call, exactly here — the token is still valid and
+                    // still readable, and nothing below has run yet. `DeviceRevocation.revokeThisDevice`
+                    // never throws (that interface's own doc comment), so this is not wrapped in its own
+                    // `runCatching`: a sign-out must complete either way, and the contract already
+                    // guarantees it does not need rescuing to do so.
+                    deviceRevocation.get().revokeThisDevice()
 
                     state = AuthState()
                     store.clear()
