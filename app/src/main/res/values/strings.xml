@@ -351,6 +351,10 @@
          (`docs/backlog/26-52-*.md`'s own Scope item 3). -->
     <string name="bookings_contacts_phone_confirmed_yes">Подтверждён оператором</string>
     <string name="bookings_contacts_phone_confirmed_no">Не подтверждён оператором</string>
+    <!-- `26-53`: `ago-console`'s own `calendarRevealPhoneButton`/`calendarRevealingPhoneButton`, restated -
+         drawn exactly when `Contact.masked` is true, never guessed from the phone string's own shape. -->
+    <string name="bookings_contacts_reveal_phone">Показать</string>
+    <string name="bookings_contacts_revealing_phone">Показ…</string>
 
     <!--
         `26-57`: Аналитика's own «Мои показатели» - the one ungated, personal report on this app. Wording

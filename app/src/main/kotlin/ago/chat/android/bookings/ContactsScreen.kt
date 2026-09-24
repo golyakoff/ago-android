@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.ui.components.IdentifierText
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,43 +25,64 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * `26-52`: Клиенты's own body — a flat, read-only card list, no reveal control and no row that opens
- * anything (`docs/backlog/26-52-*.md`'s own Out of scope: "a row that opens nothing is fine, the list
- * itself is the answer"). The four-arm `when` below is the identical shape
+ * `26-52`: Клиенты's own body — a flat card list, no row that opens anything
+ * (`docs/backlog/26-52-*.md`'s own Out of scope: "a row that opens nothing is fine, the list itself is
+ * the answer"). The four-arm `when` below is the identical shape
  * [ConfirmedBookingsBody]/[BookingsScreen]'s own `Pending` branch already draw for their own state.
+ *
+ * `26-53`: no longer strictly read-only — [onReveal] is the one write this screen now offers. The
+ * `Column`/`Box(weight)` wrapper and the [ActionErrorBanner] placement are the identical shape
+ * [BookingsScreen]'s own `Pending` branch already establishes for its own veto-write errors, restated
+ * here for the same reason: a refusal is shown above the list, never in place of it.
  */
 @Composable
 internal fun ContactsBody(
     state: ContactsUiState,
     onRetry: () -> Unit,
+    onReveal: (String) -> Unit,
 ) {
-    when (state) {
-        ContactsUiState.Loading -> LoadingBody()
-        ContactsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
-        is ContactsUiState.Failed ->
-            RefusalBody(
-                reason = state.reason,
-                onRetry = onRetry,
-                unexpectedMessageRes = R.string.bookings_contacts_load_failed_unexpected,
-            )
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (state is ContactsUiState.Loaded) {
+            state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth()) }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            when (state) {
+                ContactsUiState.Loading -> LoadingBody()
+                ContactsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
+                is ContactsUiState.Failed ->
+                    RefusalBody(
+                        reason = state.reason,
+                        onRetry = onRetry,
+                        unexpectedMessageRes = R.string.bookings_contacts_load_failed_unexpected,
+                    )
 
-        is ContactsUiState.Loaded ->
-            // `docs/backlog/26-52-*.md`'s own Done-when: "an empty customer base renders a stated empty
-            // state" - the identical "empty is a state, not a blank area" rule
-            // [ago.chat.android.bookings.BookingsScreen]'s own `Pending` branch already applies.
-            if (state.contacts.isEmpty()) {
-                EmptyBody(stringResource(R.string.bookings_contacts_empty))
-            } else {
-                ContactsList(contacts = state.contacts)
+                is ContactsUiState.Loaded ->
+                    // `docs/backlog/26-52-*.md`'s own Done-when: "an empty customer base renders a stated
+                    // empty state" - the identical "empty is a state, not a blank area" rule
+                    // [ago.chat.android.bookings.BookingsScreen]'s own `Pending` branch already applies.
+                    if (state.contacts.isEmpty()) {
+                        EmptyBody(stringResource(R.string.bookings_contacts_empty))
+                    } else {
+                        ContactsList(contacts = state.contacts, revealingCustomerIds = state.revealingCustomerIds, onReveal = onReveal)
+                    }
             }
+        }
     }
 }
 
 @Composable
-private fun ContactsList(contacts: List<Contact>) {
+private fun ContactsList(
+    contacts: List<Contact>,
+    revealingCustomerIds: Set<String>,
+    onReveal: (String) -> Unit,
+) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(contacts, key = { it.customerId }) { contact ->
-            ContactCard(contact = contact)
+            ContactCard(
+                contact = contact,
+                revealing = contact.customerId in revealingCustomerIds,
+                onReveal = { onReveal(contact.customerId) },
+            )
             HorizontalDivider()
         }
     }
@@ -78,9 +101,18 @@ private fun ContactsList(contacts: List<Contact>) {
  * fixed order — **never** collapsed into one "verified" line, no matter how tempting that is on a
  * phone-width card (`Contact`'s own doc comment; `docs/backlog/26-52-*.md`'s own Scope item 3, and the
  * identical rule `scope-inventory.md` §9 states for `/account/ai`'s three controls).
+ *
+ * `26-53`: the phone row now draws Показать exactly when [Contact.masked] says so — never inferred from
+ * the string's own shape (`ago-console`'s own `renderPhone` doc comment states the identical rule this
+ * mirrors). [revealing] disables the control while this customer's own reveal is in flight, and swaps
+ * its label to say so, the identical `RevealControl`/`revealing` shape `renderPhone` already draws.
  */
 @Composable
-private fun ContactCard(contact: Contact) {
+private fun ContactCard(
+    contact: Contact,
+    revealing: Boolean,
+    onReveal: () -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         val displayName = contact.displayName
         if (displayName != null) {
@@ -94,14 +126,26 @@ private fun ContactCard(contact: Contact) {
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             )
         }
-        // The masked phone, exactly as the server sent it - never unmasked here, and no Показать
-        // control at all this item ("Masked is masked", Scope item 4; the reveal is `26-53`).
-        Text(
-            text = contact.phone,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        // The phone, exactly as the server sent it, plus Показать when `masked` says a real number is
+        // still hidden behind it - `26-52`'s own "Masked is masked, no control at all" rule is now
+        // `26-53`'s "a control exactly when the server says there is something to reveal".
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = contact.phone,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (contact.masked) {
+                TextButton(onClick = onReveal, enabled = !revealing) {
+                    Text(
+                        text =
+                            stringResource(
+                                if (revealing) R.string.bookings_contacts_revealing_phone else R.string.bookings_contacts_reveal_phone,
+                            ),
+                    )
+                }
+            }
+        }
         Text(
             text = phoneVerifiedLine(contact.phoneVerifiedAt),
             style = MaterialTheme.typography.labelMedium,

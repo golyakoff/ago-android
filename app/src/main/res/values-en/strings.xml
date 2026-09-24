@@ -210,6 +210,8 @@
     <string name="bookings_contacts_phone_verified_no">Not verified by code</string>
     <string name="bookings_contacts_phone_confirmed_yes">Confirmed by operator</string>
     <string name="bookings_contacts_phone_confirmed_no">Not confirmed by operator</string>
+    <string name="bookings_contacts_reveal_phone">Show</string>
+    <string name="bookings_contacts_revealing_phone">Showing…</string>
 
     <string name="analytics_from_field_label">From</string>
     <string name="analytics_to_field_label">To</string>
