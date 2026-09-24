@@ -99,6 +99,17 @@
     <string name="conversation_list_tab_waiting">Ожидают</string>
     <string name="conversation_list_stale_banner">Данные могут быть устаревшими</string>
     <string name="conversation_list_refresh_action">Обновить</string>
+    <!--
+        `26-60`: the cold-start failure body's own title, shown with `action_retry` beside it - the same
+        title/detail/Retry shape `thread_join_failed_title` already uses on the thread screen for the
+        identical "the one load this screen depends on failed" situation.
+    -->
+    <string name="conversation_list_load_failed_title">Не удалось загрузить диалоги</string>
+    <!--
+        `26-60`: the Retry control's own label while a retry is already out - `conversation_list_claiming_label`'s
+        own "in progress" phrasing, restated for a refresh rather than a claim.
+    -->
+    <string name="conversation_list_retrying_label">Повторяем…</string>
     <string name="conversation_list_mine_empty">Пока ничего не назначено. Новые диалоги появляются здесь автоматически.</string>
     <string name="conversation_list_waiting_empty">Никто не ждёт.</string>
     <string name="conversation_list_new_badge">Новое</string>

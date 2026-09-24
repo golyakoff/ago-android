@@ -90,6 +90,8 @@
     <string name="conversation_list_tab_waiting">Waiting</string>
     <string name="conversation_list_stale_banner">Data may be out of date</string>
     <string name="conversation_list_refresh_action">Refresh</string>
+    <string name="conversation_list_load_failed_title">Couldn\'t load your conversations</string>
+    <string name="conversation_list_retrying_label">Retrying…</string>
     <string name="conversation_list_mine_empty">Nothing assigned yet. New conversations show up here automatically.</string>
     <string name="conversation_list_waiting_empty">Nobody\'s waiting.</string>
     <string name="conversation_list_new_badge">New</string>

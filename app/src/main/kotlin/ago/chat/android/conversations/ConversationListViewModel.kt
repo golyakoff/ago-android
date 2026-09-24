@@ -214,39 +214,65 @@ public class ConversationListViewModel
             if (isRealChange) refresh()
         }
 
-        /** The manual pull-to-refresh / retry action, and also this class's own first fetch. Never
-         * throws into the caller — every [QueueResult] arm is handled completely here. */
-        public fun refresh() {
-            viewModelScope.launch {
-                when (val result = withContext(ioDispatcher) { api.fetchQueue() }) {
-                    is QueueResult.Loaded -> {
-                        lastQueue = result.queue
-                        val stillMine =
-                            result.queue.assignedToMe
-                                .map { it.conversationId }
-                                .toSet()
-                        // `5-15`'s own reasoning, restated: a fresh snapshot already reflects every
-                        // arrival the server knows about, so the local overlay retires for anything
-                        // this snapshot actually re-read.
-                        newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
-                        unreadBumps = unreadBumps.filterKeys { it in stillMine }
-                        val stillWaiting =
-                            result.queue.waiting
-                                .map { it.conversationId }
-                                .toSet()
-                        claimErrors = claimErrors.filterKeys { it in stillWaiting }
-                        claimingIds = claimingIds.intersect(stillWaiting)
-                        render(stale = false)
-                        mutableState.update { it.copy(loadError = null) }
-                        withContext(ioDispatcher) { cache.write(result.queue) }
-                    }
+        /** `26-60`: the same in-flight guard [claim] already keeps per-row in `claimingIds` - one
+         * request out at a time, checked here rather than in `claimingIds` because this call has no id
+         * of its own to key a set on. Read and written only from `viewModelScope`'s own dispatcher, the
+         * same "no lock needed" argument this class's own class-level doc comment makes for every other
+         * plain `var` here. */
+        private var isRefreshing = false
 
-                    is QueueResult.Failed -> {
-                        // The cache (or the previous fetch's own answer) stays on screen exactly as it
-                        // was - only the error banner changes. Never cleared to empty on a failure: a
-                        // network blip must not make a real list disappear.
-                        mutableState.update { it.copy(loadError = result.reason) }
+        /** The manual pull-to-refresh / retry action, and also this class's own first fetch. Never
+         * throws into the caller — every [QueueResult] arm is handled completely here.
+         *
+         * `26-60`: a no-op while a call is already out ([isRefreshing]) - without this, tapping the
+         * screen's own retry control twice in the time it takes the first request to answer sent two
+         * identical fetches, and the Done-when this item ships against says exactly one must go out.
+         * [isRefreshing] always returns to `false` - success and failure alike - in a `finally`, so a
+         * failed request never leaves the control permanently disabled. */
+        public fun refresh() {
+            if (isRefreshing) return
+            isRefreshing = true
+            mutableState.update { it.copy(isRefreshing = true) }
+
+            viewModelScope.launch {
+                try {
+                    when (val result = withContext(ioDispatcher) { api.fetchQueue() }) {
+                        is QueueResult.Loaded -> {
+                            lastQueue = result.queue
+                            val stillMine =
+                                result.queue.assignedToMe
+                                    .map { it.conversationId }
+                                    .toSet()
+                            // `5-15`'s own reasoning, restated: a fresh snapshot already reflects every
+                            // arrival the server knows about, so the local overlay retires for anything
+                            // this snapshot actually re-read.
+                            newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
+                            unreadBumps = unreadBumps.filterKeys { it in stillMine }
+                            val stillWaiting =
+                                result.queue.waiting
+                                    .map { it.conversationId }
+                                    .toSet()
+                            claimErrors = claimErrors.filterKeys { it in stillWaiting }
+                            claimingIds = claimingIds.intersect(stillWaiting)
+                            render(stale = false)
+                            mutableState.update { it.copy(loadError = null) }
+                            withContext(ioDispatcher) { cache.write(result.queue) }
+                        }
+
+                        is QueueResult.Failed -> {
+                            // The cache (or the previous fetch's own answer) stays on screen exactly as
+                            // it was - only the error banner changes. Never cleared to empty on a
+                            // failure: a network blip must not make a real list disappear. When there
+                            // is no cache and no previous answer either, [lastQueue] stays `null` and
+                            // [render] never runs - `26-60`'s own no-data branch is what
+                            // [ConversationListScreen] draws for exactly that combination, rather than
+                            // the indefinite spinner it used to.
+                            mutableState.update { it.copy(loadError = result.reason) }
+                        }
                     }
+                } finally {
+                    isRefreshing = false
+                    mutableState.update { it.copy(isRefreshing = false) }
                 }
             }
         }
