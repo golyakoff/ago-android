@@ -1,5 +1,6 @@
 package ago.chat.android
 
+import ago.chat.android.conversations.ConversationListForegroundRefreshTrigger
 import ago.chat.android.devices.ProcessLifecycleForegroundTracker
 import ago.chat.android.devices.ensureChannelsCreated
 import ago.chat.android.presence.ensurePresenceChannelCreated
@@ -34,6 +35,11 @@ import javax.inject.Inject
  * [ensureChannelsCreated] runs - eagerly, on every process start, for the reason that function's own
  * doc comment gives (idempotent by construction, so "eagerly" costs nothing measurable).
  *
+ * `26-61`: also where [ConversationListForegroundRefreshTrigger] is started - a third
+ * `ProcessLifecycleOwner` observer, for the identical "once, here, never per-screen" reason as the two
+ * above it, so a genuine return from the background re-reads the conversation queue exactly once
+ * regardless of how many screens the operator passes through on the way back in.
+ *
  * `26-85`: also where [ensurePresenceChannelCreated] runs, eagerly, for the identical reason
  * [ensureChannelsCreated] immediately above it already does - `OperatorPresenceService` itself is
  * started later and conditionally (`OperatorPresenceController`, gated on `conversation:send`), but its
@@ -61,10 +67,14 @@ public class AgoChatApplication : Application() {
     @Inject
     public lateinit var appForegroundTracker: ProcessLifecycleForegroundTracker
 
+    @Inject
+    public lateinit var conversationListForegroundRefreshTrigger: ConversationListForegroundRefreshTrigger
+
     override fun onCreate() {
         super.onCreate()
         hubConnectionLifecycle.start()
         appForegroundTracker.start()
+        conversationListForegroundRefreshTrigger.start()
         ensureChannelsCreated(this)
         // `26-85`: `OperatorPresenceService`'s own third channel - see that function's own doc comment
         // for why it is not one more arm on `ensureChannelsCreated` above.

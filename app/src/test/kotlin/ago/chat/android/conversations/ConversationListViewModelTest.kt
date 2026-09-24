@@ -687,6 +687,32 @@ class ConversationListViewModelTest {
             assertEquals(fetchesBeforeSignal + 1, api.fetchCalls)
         }
 
+    /**
+     * `26-61`'s own rotation Done-when box. `ConversationListRoute`'s own `DisposableEffect` fires
+     * `ON_START`/`ON_STOP` off the screen's `LocalLifecycleOwner`, which a device rotation also fires
+     * (`docs/backlog/26-61-*.md`'s own Scope item 2) - simulated here as [onScreenStarted]/
+     * [onScreenStopped] called with nothing else happening in between, which is indistinguishable from
+     * this class's own point of view from a real rotation. Neither method re-fetches the queue itself
+     * (`ConversationListForegroundRefreshTrigger` is the one thing that does, and it is wired to
+     * `ProcessLifecycleOwner`, never to this screen-scoped lifecycle), so this stays true by
+     * construction rather than by a guard that could be forgotten later.
+     */
+    @Test
+    fun `26-61 a rotation never re-fetches the queue`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            val fetchesAfterInit = api.fetchCalls
+
+            viewModel.onScreenStarted()
+            viewModel.onScreenStopped()
+            viewModel.onScreenStarted()
+            advanceUntilIdle()
+
+            assertEquals(fetchesAfterInit, api.fetchCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     // --------------------------------------------------------------- `26-90`: the «Все» tab
