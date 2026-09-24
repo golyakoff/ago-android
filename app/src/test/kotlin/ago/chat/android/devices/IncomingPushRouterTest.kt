@@ -16,6 +16,10 @@ import org.junit.Test
  * [DeviceRegistrationCoordinatorTest] already establishes for the registration half of this same
  * `Service`. `26-19` added the last two ([QuietHoursPreferences]/[LocalClock]) for its own fourth check.
  *
+ * `26-81`: every payload below now carries an explicit `reason` key - [parseIncomingPush] no longer
+ * infers the kind from `messageId` presence, so a map missing `reason` would simply fail to parse and
+ * every test here would silently exercise nothing at all rather than what its name claims.
+ *
  * Every Done-when box `AgoPushMessagingService.onMessageReceived` itself is not the place to prove is
  * proven here instead: the tag/dedupe mechanism (four-messages-collapse's own *logic* half), a
  * redelivery rendering nothing new, and no message body ever reaching [PushNotificationPresenter] (the
@@ -28,7 +32,7 @@ class IncomingPushRouterTest {
             val presenter = RecordingPresenter()
             val router = routerWith(presenter = presenter)
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
 
             assertEquals(listOf(IncomingPush.ConversationAssigned("conv-1")), presenter.presented)
         }
@@ -39,9 +43,22 @@ class IncomingPushRouterTest {
             val presenter = RecordingPresenter()
             val router = routerWith(presenter = presenter)
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "messageId" to "msg-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "messageId" to "msg-1", "reason" to "message"))
 
             assertEquals(listOf(IncomingPush.VisitorMessage("conv-1")), presenter.presented)
+        }
+
+    /** `26-86`: the third kind, run through this same router unchanged - it needed no code of its own
+     * here, only a payload shaped like the other two. */
+    @Test
+    fun `a fresh waiting conversation, app backgrounded, is presented`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val router = routerWith(presenter = presenter)
+
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "waiting"))
+
+            assertEquals(listOf(IncomingPush.ConversationWaiting("conv-1")), presenter.presented)
         }
 
     @Test
@@ -49,7 +66,7 @@ class IncomingPushRouterTest {
         runTest {
             val presenter = RecordingPresenter()
             val router = routerWith(presenter = presenter)
-            val data = mapOf("conversationId" to "conv-1", "messageId" to "msg-1")
+            val data = mapOf("conversationId" to "conv-1", "messageId" to "msg-1", "reason" to "message")
 
             router.handleMessage("provider-1", data)
             router.handleMessage("provider-1", data)
@@ -63,8 +80,8 @@ class IncomingPushRouterTest {
             val presenter = RecordingPresenter()
             val router = routerWith(presenter = presenter)
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "messageId" to "msg-1"))
-            router.handleMessage("provider-2", mapOf("conversationId" to "conv-1", "messageId" to "msg-2"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "messageId" to "msg-1", "reason" to "message"))
+            router.handleMessage("provider-2", mapOf("conversationId" to "conv-1", "messageId" to "msg-2", "reason" to "message"))
 
             assertEquals(2, presenter.presented.size)
         }
@@ -96,7 +113,7 @@ class IncomingPushRouterTest {
                     appForegroundTracker = FixedForegroundTracker(true),
                 )
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
 
             assertTrue(presenter.presented.isEmpty())
         }
@@ -112,7 +129,29 @@ class IncomingPushRouterTest {
                     appForegroundTracker = FixedForegroundTracker(false),
                 )
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
+
+            assertEquals(1, presenter.presented.size)
+        }
+
+    /** `26-86`: a waiting push names no assignee and is never "about" the one thread
+     * [OpenConversationTracker] can name, so [decideAlert]'s own conversation-open check can never
+     * suppress it in practice - proven directly here rather than left to be assumed from the router
+     * treating every [IncomingPush] arm identically. See this item's own report for why no *further*
+     * suppression rule (e.g. "the Ожидают tab is already showing") was added: nothing in this codebase
+     * currently tracks that fact anywhere this router could read it. */
+    @Test
+    fun `a waiting conversation is presented even while a DIFFERENT conversation is open in the foreground`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val router =
+                routerWith(
+                    presenter = presenter,
+                    openConversationTracker = FixedOpenConversationTracker("conv-1"),
+                    appForegroundTracker = FixedForegroundTracker(true),
+                )
+
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-2", "reason" to "waiting"))
 
             assertEquals(1, presenter.presented.size)
         }
@@ -122,7 +161,7 @@ class IncomingPushRouterTest {
         runTest {
             val presenter = RecordingPresenter()
             val dedupeStore = DataStoreFreeDedupeStore()
-            val data = mapOf("conversationId" to "conv-1")
+            val data = mapOf("conversationId" to "conv-1", "reason" to "assigned")
 
             // First delivery: the operator is looking at this exact conversation right now, so it is
             // suppressed - but still, per [PushMessageDedupeStore]'s own contract, marked seen.
@@ -152,7 +191,7 @@ class IncomingPushRouterTest {
             val presenter = RecordingPresenter()
             val dedupeStore = DataStoreFreeDedupeStore()
             val router = routerWith(presenter = presenter, dedupeStore = dedupeStore)
-            val data = mapOf("conversationId" to "conv-1", "messageId" to "msg-1")
+            val data = mapOf("conversationId" to "conv-1", "messageId" to "msg-1", "reason" to "message")
 
             router.handleMessage(providerMessageId = null, data = data)
             router.handleMessage(providerMessageId = null, data = data)
@@ -186,7 +225,7 @@ class IncomingPushRouterTest {
                     clock = FixedLocalClock(minuteOfDay = 12 * 60),
                 )
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
 
             assertTrue("quiet hours suppress the push entirely - no notification, silent or otherwise", presenter.presented.isEmpty())
         }
@@ -210,7 +249,7 @@ class IncomingPushRouterTest {
                     clock = FixedLocalClock(minuteOfDay = 12 * 60),
                 )
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
 
             assertEquals(1, presenter.presented.size)
         }
@@ -229,7 +268,7 @@ class IncomingPushRouterTest {
                     clock = FixedLocalClock(minuteOfDay = 12 * 60),
                 )
 
-            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1", "reason" to "assigned"))
 
             assertEquals(1, presenter.presented.size)
         }
@@ -239,7 +278,7 @@ class IncomingPushRouterTest {
         runTest {
             val presenter = RecordingPresenter()
             val dedupeStore = DataStoreFreeDedupeStore()
-            val data = mapOf("conversationId" to "conv-1")
+            val data = mapOf("conversationId" to "conv-1", "reason" to "assigned")
 
             // First delivery: quiet hours are active, so it is suppressed - but still marked seen, per
             // `PushMessageDedupeStore`'s own contract (`IncomingPushRouterTest`'s own identical case for

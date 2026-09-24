@@ -35,20 +35,25 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test
-    fun `channelStates starts with exactly the two real channels, read from the reader`() =
+    fun `channelStates starts with exactly the real channels, read from the reader`() =
         runTest(dispatcher) {
             val reader =
                 FakeChannelStateReader(
                     mapOf(
                         PushNotificationChannel.Assignment.id to NotificationManager.IMPORTANCE_DEFAULT,
                         PushNotificationChannel.VisitorMessage.id to NotificationManager.IMPORTANCE_NONE,
+                        PushNotificationChannel.Waiting.id to NotificationManager.IMPORTANCE_DEFAULT,
                     ),
                 )
             val viewModel = viewModelWith(channelStateReader = reader)
             advanceUntilIdle()
 
             assertEquals(
-                mapOf(PushNotificationChannel.Assignment to true, PushNotificationChannel.VisitorMessage to false),
+                mapOf(
+                    PushNotificationChannel.Assignment to true,
+                    PushNotificationChannel.VisitorMessage to false,
+                    PushNotificationChannel.Waiting to true,
+                ),
                 viewModel.channelStates.value,
             )
         }

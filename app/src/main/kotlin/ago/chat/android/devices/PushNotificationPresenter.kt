@@ -70,6 +70,7 @@ public class SystemPushNotificationPresenter
                 when (event) {
                     is IncomingPush.ConversationAssigned -> R.string.push_title_assigned to R.string.push_text_assigned
                     is IncomingPush.VisitorMessage -> R.string.push_title_message to R.string.push_text_message
+                    is IncomingPush.ConversationWaiting -> R.string.push_title_waiting to R.string.push_text_waiting
                 }
 
             val notification =

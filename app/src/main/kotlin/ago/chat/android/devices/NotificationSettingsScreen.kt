@@ -136,9 +136,9 @@ internal fun NotificationSettingsScreen(
         ) { padding ->
             LazyColumn(modifier = Modifier.fillMaxWidth().padding(padding)) {
                 // `26-19`'s own Scope, in full: "A switch per notification channel that actually exists -
-                // the two `26-05` sends and no others." [PushNotificationChannel.entries] is exhaustively
-                // two - there is no fifth row to accidentally draw here, because there is no fifth value
-                // to iterate.
+                // the ones the fan-out sends and no others." `26-86` grew that set from two to three;
+                // this row-per-entry loop needed no change at all to pick up the third, because
+                // [PushNotificationChannel.entries] is the one place that set is ever named.
                 item { SectionLabel(stringResource(R.string.notification_settings_channels_section)) }
                 items(PushNotificationChannel.entries, key = { it.id }) { channel ->
                     ChannelRow(
@@ -244,6 +244,7 @@ private fun channelLabel(channel: PushNotificationChannel): String =
     when (channel) {
         PushNotificationChannel.Assignment -> stringResource(R.string.push_channel_assignment_name)
         PushNotificationChannel.VisitorMessage -> stringResource(R.string.push_channel_visitor_message_name)
+        PushNotificationChannel.Waiting -> stringResource(R.string.push_channel_waiting_name)
     }
 
 @Composable

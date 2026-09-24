@@ -21,11 +21,12 @@ import org.junit.runner.RunWith
  * literal convention for every `onNodeWithText` call (the real, current Russian string, not a resource
  * lookup — `SettingsScreenTest`'s own `backArrowCallsOnBack` states why).
  *
- * The item's own hardest Done-when box is proven here directly: [namesExactlyTheTwoRealChannels] asserts
- * there are exactly two channel rows drawn, by iterating [PushNotificationChannel.entries] itself rather
- * than a hand-typed count - a third channel added to that enum without a corresponding fan-out event
- * would make this test's own row count assertion fail loudly, not silently draw a switch for something
- * nothing sends.
+ * The item's own hardest Done-when box is proven here directly: [namesExactlyTheRealChannels] asserts
+ * every channel row drawn matches [PushNotificationChannel.entries] itself rather than a hand-typed
+ * count - a channel added to that enum without a corresponding fan-out event would make this test's own
+ * row count assertion fail loudly, not silently draw a switch for something nothing sends. `26-86` grew
+ * the real set from two to three; this test's own reliance on `entries.size` (not a literal `2`) is what
+ * kept it from silently going stale the moment that changed.
  */
 @RunWith(AndroidJUnit4::class)
 class NotificationSettingsScreenTest {
@@ -33,10 +34,14 @@ class NotificationSettingsScreenTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     private val bothChannelsOn =
-        mapOf(PushNotificationChannel.Assignment to true, PushNotificationChannel.VisitorMessage to true)
+        mapOf(
+            PushNotificationChannel.Assignment to true,
+            PushNotificationChannel.VisitorMessage to true,
+            PushNotificationChannel.Waiting to true,
+        )
 
     @Test
-    fun namesExactlyTheTwoRealChannels() {
+    fun namesExactlyTheRealChannels() {
         composeTestRule.setContent {
             NotificationSettingsScreen(
                 channelStates = bothChannelsOn,
@@ -48,10 +53,12 @@ class NotificationSettingsScreenTest {
             )
         }
 
-        // `PushNotificationChannel.entries` is exhaustively two - both, and only both, must be named.
-        assertEquals(2, PushNotificationChannel.entries.size)
+        // `PushNotificationChannel.entries` is exhaustively three - all three, and only these three,
+        // must be named.
+        assertEquals(3, PushNotificationChannel.entries.size)
         composeTestRule.onNodeWithText("Новый диалог назначен").assertExists()
         composeTestRule.onNodeWithText("Сообщение от посетителя").assertExists()
+        composeTestRule.onNodeWithText("Новый диалог в очереди").assertExists()
     }
 
     @Test

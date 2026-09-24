@@ -7,15 +7,16 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 
 /**
- * `26-18`: "Notification channels for the kinds the fan-out actually sends... **only those two**."
- * `NotifyOperatorDevicesHandler` (`ago-chat`) sends exactly `HandleAssignmentAsync`/`HandleMessageAsync`
- * and nothing else - a third channel here would be, in this item's own words, "a switch that lies".
+ * `26-18`: "Notification channels for the kinds the fan-out actually sends... **only those**." Originally
+ * exactly two (`NotifyOperatorDevicesHandler.HandleAssignmentAsync`/`HandleMessageAsync`); `26-86` adds the
+ * third the fan-out gained (`HandleWaitingAsync`) - still a closed set matching the server's own arms
+ * one-for-one, never a channel with no sender behind it (this item's own words: "a switch that lies").
  * `26-19` is what will ever let an operator *configure* per-channel importance; this class only ever
- * creates the two that exist, at their platform default importance.
+ * creates the ones that exist, at their platform default importance.
  *
- * Two `internal` [PushNotificationChannel] values rather than bare string constants scattered across
- * [PushNotificationPresenter] and this file - an [IncomingPush] arm can only ever resolve to one of these
- * two, which [PushNotificationChannel.forEvent] makes exhaustive rather than a string that could silently
+ * `internal` [PushNotificationChannel] values rather than bare string constants scattered across
+ * [PushNotificationPresenter] and this file - an [IncomingPush] arm can only ever resolve to one of these,
+ * which [PushNotificationChannel.forEvent] makes exhaustive rather than a string that could silently
  * drift from what [ensureChannelsCreated] actually registered.
  */
 internal enum class PushNotificationChannel(
@@ -29,6 +30,7 @@ internal enum class PushNotificationChannel(
         R.string.push_channel_visitor_message_name,
         R.string.push_channel_visitor_message_description,
     ),
+    Waiting("ago.push.waiting", R.string.push_channel_waiting_name, R.string.push_channel_waiting_description),
     ;
 
     companion object {
@@ -36,6 +38,7 @@ internal enum class PushNotificationChannel(
             when (event) {
                 is IncomingPush.ConversationAssigned -> Assignment
                 is IncomingPush.VisitorMessage -> VisitorMessage
+                is IncomingPush.ConversationWaiting -> Waiting
             }
     }
 }

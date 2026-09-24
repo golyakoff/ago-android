@@ -35,10 +35,11 @@ internal class NotificationSettingsViewModel
     ) : ViewModel() {
         private val mutableChannelStates = MutableStateFlow(readChannelStates())
 
-        /** One entry per [PushNotificationChannel] — exactly two, never five ([PushNotificationChannel]'s
-         * own doc comment states why a third is never even declared). `true` means Android currently
-         * shows this kind of push; `false` means the operator (or a device policy) turned that channel's
-         * importance down to [android.app.NotificationManager.IMPORTANCE_NONE] from system Settings. */
+        /** One entry per [PushNotificationChannel] - a closed set matching the fan-out's own kinds
+         * one-for-one ([PushNotificationChannel]'s own doc comment states why an unmatched channel is
+         * never declared). `true` means Android currently shows this kind of push; `false` means the
+         * operator (or a device policy) turned that channel's importance down to
+         * [android.app.NotificationManager.IMPORTANCE_NONE] from system Settings. */
         val channelStates: StateFlow<Map<PushNotificationChannel, Boolean>> = mutableChannelStates.asStateFlow()
 
         val quietHours: StateFlow<QuietHoursSettings> =
