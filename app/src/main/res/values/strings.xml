@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        `26-10`: Russian as the default locale (`docs/backlog/26-10-*.md`'s own Scope) — no second
-        locale is authored here. `app_name` is the product's own brand name, kept identical in every
-        locale the same way `ago-console`/`ago-widget` never translate "AGO Chat" either.
+        `26-10`: Russian as the default locale (`docs/backlog/26-10-*.md`'s own Scope) - the one this
+        file itself holds. `app_name` is the product's own brand name, kept identical in every locale
+        the same way `ago-console`/`ago-widget` never translate "AGO Chat" either.
+
+        `26-91` backfilled a real English translation for every string here into
+        `values-en/strings.xml`; `26-68`'s own `thread_identity_unavailable` landed after that merge and
+        is translated there too, keeping the two files at parity — no `tools:ignore="MissingTranslation"`
+        needed on this element.
     -->
     <string name="app_name">AGO Chat</string>
 
@@ -183,6 +188,15 @@
     <string name="thread_send_pending_retry">Сообщение не подтверждено. Повторить отправку?</string>
     <string name="thread_join_failed_title">Не удалось открыть диалог</string>
     <string name="thread_load_older_action">Загрузить более ранние сообщения</string>
+    <!--
+        `26-68`: the app-bar title's own fallback when a restored thread's conversation has since left
+        both «Мои» and «Ожидают» for good (closed, or reassigned) - the queue lookup has confirmed there
+        is no row to read an identity from, and never will be again, so the title says that plainly
+        rather than sitting blank forever with no explanation (`docs/backlog/26-68-*.md`'s own Scope
+        item 4). Never shown for the merely-not-fetched-yet case, which still renders a blank title while
+        it waits for the queue's own answer.
+    -->
+    <string name="thread_identity_unavailable">Собеседник недоступен</string>
 
     <!--
         `26-65`: a bubble's spoken author name, `MessageDto.authorKind`'s three wire values named for a

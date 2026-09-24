@@ -8,7 +8,8 @@ import org.junit.Test
  * A plain JVM unit test — no Android test runner, no Robolectric, same reasoning as `ShortIdTest`
  * (`ago-android/docs/architecture.md`, "Testing"). Covers `26-10`'s own Done-when cases: both emoji
  * present with no name, a name present, no emoji pair at all (the pre-column visitor, short code
- * alone with no gap), and a name containing a space.
+ * alone with no gap), and a name containing a space. `26-68`'s own section below covers the
+ * newly-possible case of the *id* being the absent part instead.
  */
 public class VisitorDisplayPrefixTest {
     private val visitorId = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
@@ -48,6 +49,45 @@ public class VisitorDisplayPrefixTest {
     public fun `treats a blank name the same as an absent one`() {
         val parts = visitorDisplayPrefixParts("🦉", "🍓", "   ", visitorId)
         assertEquals("🦉🍓 $shortCode", visitorDisplayPrefixText(parts))
+    }
+
+    // ------------------------------------------------------------------------------------ `26-68`
+    // The id itself can now be the absent part - a restored thread with no matching queue row yet
+    // (`ago.chat.android.shell.ConversationsTabHost`) - joining the pair and the name, which were
+    // already nullable. `visitorId` stays `null` on `parts`, never a substituted value, and the text
+    // form drops the id with no stray trailing space where it would have gone - the identical rule
+    // every other absent part already follows above.
+
+    @Test
+    public fun `visitorId on the parts is null, never substituted, when the id is not known`() {
+        val parts = visitorDisplayPrefixParts("🦉", "🍓", "Иван Иванов", null)
+        assertNull(parts.visitorId)
+    }
+
+    @Test
+    public fun `renders the pair and the name with no trailing space when only the id is absent`() {
+        val parts = visitorDisplayPrefixParts("🦉", "🍓", "Иван Иванов", null)
+        assertEquals("🦉🍓 Иван Иванов", visitorDisplayPrefixText(parts))
+    }
+
+    @Test
+    public fun `renders the pair alone with no trailing space when the name and the id are both absent`() {
+        val parts = visitorDisplayPrefixParts("🦉", "🍓", null, null)
+        assertEquals("🦉🍓", visitorDisplayPrefixText(parts))
+    }
+
+    @Test
+    public fun `renders an empty string, never a blank placeholder, when nothing at all is known`() {
+        val parts = visitorDisplayPrefixParts(null, null, null, null)
+        assertEquals("", visitorDisplayPrefixText(parts))
+    }
+
+    @Test
+    public fun `displayName is unaffected by an absent id`() {
+        val withoutId = visitorDisplayPrefixParts("🦊", "🍊", null, null)
+        val withId = visitorDisplayPrefixParts("🦊", "🍊", null, visitorId)
+        assertEquals(withId.displayName, withoutId.displayName)
+        assertEquals("Лиса · Апельсин", withoutId.displayName)
     }
 
     @Test

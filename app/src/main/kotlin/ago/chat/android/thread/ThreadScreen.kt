@@ -101,18 +101,35 @@ import java.time.format.DateTimeFormatter
  * makes — this item's whole job here is *which conversations show the control at all*, decided
  * correctly from the row's own [ago.chat.android.core.domain.conversations.ConversationSummary.hasAttachmentUploadGrant],
  * not what happens after a tap.
+ *
+ * `26-68`: `hasAttachmentUploadGrant` is `Boolean?`, not `Boolean` — a restored thread with no matching
+ * queue row yet cannot honestly answer this either way, and the old `?: false`
+ * (`ago.chat.android.shell.ConversationsTabHost`) hid a control an operator might actually be entitled
+ * to with no sign anything was unknown. `null` and `false` both hide the paperclip — this item's own
+ * scope stops at "never invent an answer", not "tell the operator apart 'no' from 'not sure yet'" —
+ * but the type now forces every caller to say which one it means instead of a silent default doing it
+ * for them. The restored-thread case resolves itself the moment
+ * [ago.chat.android.conversations.ConversationListViewModel]'s own `refresh()` (already called
+ * unconditionally from `init`, no new network call added for this) lands a queue that contains the
+ * row — recomposition then carries the real value down with nothing further to wire.
  */
 @Composable
 public fun ThreadRoute(
     conversationId: String,
-    visitorId: String,
+    visitorId: String?,
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
     createdAt: String?,
     conversationState: String?,
-    hasAttachmentUploadGrant: Boolean,
+    hasAttachmentUploadGrant: Boolean?,
     onBack: () -> Unit,
+    /** `26-68`: `true` only when the row lookup ([ago.chat.android.shell.ConversationsTabHost]) has a
+     * *confirmed-fresh* queue answer with no match at all — the permanent case its own Found section
+     * names ("closed, or reassigned... never matches, ever"), not the merely-not-fetched-yet one. Feeds
+     * [ThreadTitleBlock]'s own fallback text so that case is named on screen rather than left as a
+     * title that stays blank forever with no explanation. */
+    identityUnavailable: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -160,6 +177,7 @@ public fun ThreadRoute(
         createdAt = createdAt,
         conversationState = conversationState,
         hasAttachmentUploadGrant = hasAttachmentUploadGrant,
+        identityUnavailable = identityUnavailable,
         onBack = leaveThread,
         onLoadOlder = viewModel::loadOlder,
         onRetryJoin = viewModel::retryJoin,
@@ -180,13 +198,13 @@ public fun ThreadRoute(
 @Composable
 internal fun ThreadScreen(
     state: ThreadUiState,
-    visitorId: String,
+    visitorId: String?,
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
     createdAt: String?,
     conversationState: String?,
-    hasAttachmentUploadGrant: Boolean,
+    hasAttachmentUploadGrant: Boolean?,
     onBack: () -> Unit,
     onLoadOlder: () -> Unit,
     onRetryJoin: () -> Unit,
@@ -195,6 +213,7 @@ internal fun ThreadScreen(
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
     onNewestVisibleSequenceChanged: (Long) -> Unit,
+    identityUnavailable: Boolean = false,
 ) {
     // `26-40`: the app-bar subtitle's own age half - the mockup's short elapsed form, ticking on the
     // identical shared clock `ConversationListScreen`'s own row ages already read
@@ -243,6 +262,7 @@ internal fun ThreadScreen(
                             emojiFood = emojiFood,
                             visitorName = visitorName,
                             visitorId = visitorId,
+                            identityUnavailable = identityUnavailable,
                             subtitle = subtitle,
                         )
                     },
@@ -252,7 +272,7 @@ internal fun ThreadScreen(
                 Composer(
                     draft = state.draft,
                     sending = state.sending,
-                    hasAttachmentUploadGrant = hasAttachmentUploadGrant,
+                    hasAttachmentUploadGrant = hasAttachmentUploadGrant == true,
                     onDraftChanged = onDraftChanged,
                     onSend = onSend,
                 )
@@ -317,18 +337,34 @@ internal fun ThreadScreen(
  * (`Лиса · Апельсин` is [VisitorDisplayPrefixParts.displayName]'s own fallback *wording*, not the emoji
  * glyphs plus that wording), and this app bar has no avatar slot for a pair to sit beside the way the
  * row's leading `VisitorAvatar` does.
+ *
+ * `26-68`: [visitorId] is nullable now, joining the other three fields this composable already treats
+ * as honestly-absent — a restored thread with no matching queue row yet no longer has the
+ * conversation's own id substituted into that slot (`ago.chat.android.shell.ConversationsTabHost`'s own
+ * fix), so `parts.visitorId` can genuinely be `null` here. That changes nothing about *this* function's
+ * own rendering, since `parts.visitorId` was never read here in the first place (only
+ * [VisitorDisplayPrefixParts.displayName] is) — the fabricated value was dead data as far as this title
+ * is concerned, never actually the eight-character string an operator saw. [identityUnavailable] is the
+ * one genuinely new case this title has to render: `parts.displayName` is `null` in exactly that case
+ * too (nothing is known about a row that was never found), so the fallback text below is what keeps a
+ * *permanently* unmatched thread from sitting with a blank title forever with no explanation
+ * (`docs/backlog/26-68-*.md`'s own Scope item 4) — never shown for the merely-not-fetched-yet case,
+ * which still renders a blank title exactly as before, correctly, while it waits for the queue to
+ * catch up.
  */
 @Composable
 private fun ThreadTitleBlock(
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
-    visitorId: String,
+    visitorId: String?,
+    identityUnavailable: Boolean,
     subtitle: String?,
 ) {
     val parts = visitorDisplayPrefixParts(emojiCreature, emojiFood, visitorName, visitorId)
+    val titleText = parts.displayName ?: stringResource(R.string.thread_identity_unavailable).takeIf { identityUnavailable }
     Column {
-        parts.displayName?.let { name ->
+        titleText?.let { name ->
             Text(
                 text = name,
                 // `.appbar .ttl.sm{font-size:17px; font-weight:700; letter-spacing:-.01em}` -
