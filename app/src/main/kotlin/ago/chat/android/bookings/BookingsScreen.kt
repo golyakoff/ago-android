@@ -30,6 +30,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -115,6 +116,9 @@ public fun BookingsRoute(
         selectedTab = selectedTab,
         onTabSelected = { selectedTab = it },
         onRetry = viewModel::refresh,
+        onReject = viewModel::reject,
+        onCancel = viewModel::cancel,
+        onMarkNoShow = viewModel::markNoShow,
         confirmedState = confirmedState,
         onSelectDay = onSelectDay,
         onRetryConfirmed = onRetryConfirmed,
@@ -149,6 +153,9 @@ internal fun BookingsScreen(
     selectedTab: BookingsTab,
     onTabSelected: (BookingsTab) -> Unit,
     onRetry: () -> Unit,
+    onReject: (String) -> Unit,
+    onCancel: (String) -> Unit,
+    onMarkNoShow: (String) -> Unit,
     confirmedState: ConfirmedBookingsUiState?,
     onSelectDay: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
@@ -203,18 +210,49 @@ internal fun BookingsScreen(
                 }
 
                 when (selectedTab) {
+                    // `26-49`: the caption is drawn once, above the list, for every arm of [state] rather
+                    // than only when [state] is [BookingsUiState.Loaded] - it explains the absence of a
+                    // «Подтвердить» control (`docs/backlog/26-49-*.md`'s own Scope item 4, quoting the
+                    // mockup's own caption), a fact true regardless of whether the queue is currently
+                    // loading, empty, loaded or refusing to load.
                     BookingsTab.Pending ->
-                        when (state) {
-                            BookingsUiState.Loading -> LoadingBody()
-                            is BookingsUiState.Loaded ->
-                                if (state.bookings.isEmpty()) {
-                                    EmptyBody(stringResource(R.string.bookings_queue_empty))
-                                } else {
-                                    PendingBookingsList(bookings = state.bookings, now = now)
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = stringResource(R.string.bookings_auto_confirms_caption),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                            // `26-49`: the one banner for a veto write that lost a race or failed outright
+                            // - drawn above the list, never in place of it, so a refusal never hides the
+                            // rows the operator was just looking at (`applyPendingResult`'s own doc
+                            // comment: the fresh rows and this error land in the same atomic state update).
+                            if (state is BookingsUiState.Loaded) {
+                                state.actionError?.let { error ->
+                                    ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth())
                                 }
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                when (state) {
+                                    BookingsUiState.Loading -> LoadingBody()
+                                    is BookingsUiState.Loaded ->
+                                        if (state.bookings.isEmpty()) {
+                                            EmptyBody(stringResource(R.string.bookings_queue_empty))
+                                        } else {
+                                            PendingBookingsList(
+                                                bookings = state.bookings,
+                                                now = now,
+                                                busyBookingIds = state.busyBookingIds,
+                                                onReject = onReject,
+                                                onCancel = onCancel,
+                                                onMarkNoShow = onMarkNoShow,
+                                            )
+                                        }
 
-                            BookingsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
-                            is BookingsUiState.Failed -> RefusalBody(reason = state.reason, onRetry = onRetry)
+                                    BookingsUiState.NotConfigured -> EmptyBody(stringResource(R.string.bookings_not_configured))
+                                    is BookingsUiState.Failed -> RefusalBody(reason = state.reason, onRetry = onRetry)
+                                }
+                            }
                         }
 
                     // `confirmedState` is non-null exactly when `showConfirmedSegment` is true - the only
@@ -333,14 +371,46 @@ private fun failureMessage(
         BookingsQueueFailure.Unexpected -> stringResource(unexpectedMessageRes)
     }
 
+/** `26-49`: the one place a failed veto write is shown - `error.detail`/`networkFailureText`'s own
+ * `ClaimErrorUi` precedent in [ago.chat.android.conversations.ConversationListScreen], restated for
+ * this port's own [BookingsQueueFailure] classification via the existing [failureMessage] helper below,
+ * rather than a second copy of that when-block. */
+@Composable
+private fun ActionErrorBanner(
+    error: BookingActionErrorUi,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text =
+            when (error) {
+                is BookingActionErrorUi.ServerRefusal -> error.detail
+                is BookingActionErrorUi.Unavailable -> failureMessage(error.reason, R.string.bookings_load_failed_unexpected)
+            },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
 @Composable
 private fun PendingBookingsList(
     bookings: List<PendingBooking>,
     now: OffsetDateTime,
+    busyBookingIds: Set<String>,
+    onReject: (String) -> Unit,
+    onCancel: (String) -> Unit,
+    onMarkNoShow: (String) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(bookings, key = { it.bookingId }) { booking ->
-            PendingBookingCard(booking = booking, now = now)
+            PendingBookingCard(
+                booking = booking,
+                now = now,
+                busy = booking.bookingId in busyBookingIds,
+                onReject = { onReject(booking.bookingId) },
+                onCancel = { onCancel(booking.bookingId) },
+                onMarkNoShow = { onMarkNoShow(booking.bookingId) },
+            )
             HorizontalDivider()
         }
     }
@@ -351,11 +421,20 @@ private fun PendingBookingsList(
  * short id (`docs/backlog/26-48-*.md`'s own Scope item 4). Every one of `serviceId`/`workerId`/
  * `calendarId` is an id, rendered through [IdentifierText] — never a name, because
  * `PendingBookingResponse` does not carry one yet (`PendingBooking`'s own doc comment).
+ *
+ * `26-49`: the three veto actions - `docs/backlog/26-49-*.md`'s own Scope item 4 draws no
+ * «Подтвердить» beside them, on purpose (this file's own [BookingsScreen]-level caption says why).
+ * [busy] disables all three at once for *this* card only - never the whole list
+ * (`CalendarQueuePage.tsx:258-266`'s own `disabled={busyId === row.bookingId}`, read per-row).
  */
 @Composable
 private fun PendingBookingCard(
     booking: PendingBooking,
     now: OffsetDateTime,
+    busy: Boolean,
+    onReject: () -> Unit,
+    onCancel: () -> Unit,
+    onMarkNoShow: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         // "Service and duration" (`docs/backlog/26-48-*.md`'s own Scope item 4) - one row.
@@ -392,6 +471,20 @@ private fun PendingBookingCard(
             modifier = Modifier.padding(top = 4.dp),
         ) {
             IdentifierText(id = booking.calendarId, style = MaterialTheme.typography.bodySmall)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TextButton(onClick = onReject, enabled = !busy) {
+                Text(text = stringResource(R.string.bookings_action_reject))
+            }
+            TextButton(onClick = onCancel, enabled = !busy) {
+                Text(text = stringResource(R.string.bookings_action_cancel))
+            }
+            TextButton(onClick = onMarkNoShow, enabled = !busy) {
+                Text(text = stringResource(R.string.bookings_action_no_show))
+            }
         }
     }
 }

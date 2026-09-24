@@ -1,5 +1,6 @@
 package ago.chat.android.bookings
 
+import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
@@ -128,5 +129,16 @@ class ContactsViewModelTest {
             if (hangFetch) awaitCancellation()
             return result
         }
+
+        // `26-49` widened `BookingsApi` with three veto-write methods this class has no test of its own
+        // for - `ContactsViewModel` reads Клиенты, never writes to Ожидают.
+        override suspend fun rejectBooking(bookingId: String): BookingActionResult =
+            throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun cancelBooking(bookingId: String): BookingActionResult =
+            throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun markNoShow(bookingId: String): BookingActionResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 }

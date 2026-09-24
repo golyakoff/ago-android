@@ -1,5 +1,6 @@
 package ago.chat.android.core.network.bookings
 
+import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
@@ -12,6 +13,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -142,7 +144,76 @@ public class KtorBookingsApi(
             ContactsResult.Failed(classify(failure))
         }
     }
+
+    /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/reject`, the first of three identically-shaped
+     * veto writes — see [performBookingAction] for the one place their shared shape actually lives. */
+    override suspend fun rejectBooking(bookingId: String): BookingActionResult = performBookingAction(bookingId, "reject")
+
+    /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/cancel` — [performBookingAction]'s own doc
+     * comment covers this and [markNoShow] too. */
+    override suspend fun cancelBooking(bookingId: String): BookingActionResult = performBookingAction(bookingId, "cancel")
+
+    /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/no-show` — [performBookingAction]'s own doc
+     * comment covers this and [cancelBooking] too. */
+    override suspend fun markNoShow(bookingId: String): BookingActionResult = performBookingAction(bookingId, "no-show")
+
+    /**
+     * `26-49`: the one place `POST /api/v1/console/bookings/{bookingId}/{verb}`'s shared shape lives —
+     * [rejectBooking]/[cancelBooking]/[markNoShow] differ only in which literal path segment they send,
+     * an argument rather than three near-identical method bodies. `204` is [BookingActionResult.Succeeded];
+     * a non-2xx is read for an RFC 7807 `detail` the identical way [fetchPendingQueue]'s own sibling
+     * write on the conversation queue does
+     * (`ago.chat.android.core.network.conversations.KtorConversationsApi.claim`'s own doc comment) —
+     * a genuine `detail` is [BookingActionResult.Refused], shown verbatim; anything else, [Failed].
+     *
+     * A `null` [calendarApiBaseUrl] here would mean this method was called for a deployment that does
+     * not run AGO Calendar at all — unreachable in practice, since the screen that calls this only ever
+     * has a row on it once [fetchPendingQueue] itself has already returned [PendingBookingsResult.Loaded]
+     * against that same non-null base URL. [BookingActionResult] has no `NotConfigured` arm of its own
+     * (unlike the three reads above) precisely because this state is not a real one for a write to
+     * reach; [BookingsQueueFailure.Unexpected] is the honest "this should not be happening" answer if it
+     * somehow did, not a fourth arm invented for a case with no way to occur.
+     */
+    private suspend fun performBookingAction(
+        bookingId: String,
+        verb: String,
+    ): BookingActionResult {
+        val baseUrl = calendarApiBaseUrl ?: return BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$baseUrl/api/v1/console/bookings/$bookingId/$verb")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return BookingActionResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return BookingActionResult.Succeeded
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
+
+/** RFC 7807, read for exactly the one field a booking-action refusal needs — the identical, deliberately
+ * un-shared copy [ago.chat.android.core.network.conversations.KtorConversationsApi]'s own private
+ * `ProblemDetailsWireDto` already establishes for the conversation queue's own claim refusal, restated
+ * here rather than imported across adapters for the same reason that copy is not shared with this one. */
+@Serializable
+private data class ProblemDetailsWireDto(
+    val detail: String? = null,
+)
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. An
  * [IOException] (no route, DNS failure, a dropped socket, a timeout — every transport-layer failure
