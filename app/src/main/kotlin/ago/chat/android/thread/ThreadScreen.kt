@@ -6,7 +6,6 @@ import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.MessageDto
-import ago.chat.android.ui.components.HubConnectionDot
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.shortElapsedText
@@ -216,11 +215,15 @@ internal fun ThreadScreen(
                 // `26-32`: no `Column` any more. This was an app bar with the retired
                 // `HubConnectionDebugRow` under it on a line of its own — the identical leftover the
                 // conversation list carried, and worse here, where every line taken from the app bar
-                // is a line taken from the conversation itself. The state moves into [actions] as a
-                // dot. Both screens put it in the same slot, for the reason `ConversationListScreen`'s
-                // own comment gives: this screen's title is a visitor identity of unbounded length
-                // that has to ellipsise, and a fixed-size indicator inside something that ellipsises
-                // is how it ends up clipped.
+                // is a line taken from the conversation itself.
+                //
+                // `26-88`: this app bar carries no `actions` block at all any more. It briefly held a
+                // bare `HubConnectionDot` here (the pre-`26-77` dot every top-level screen also drew,
+                // before `AccountAvatarAction` replaced it there) — a leftover this drill-down screen
+                // was never in scope to receive its own account menu for, so the honest fix was
+                // removing the stray dot outright rather than migrating it to a control this screen
+                // has no use for. The hub's connection state is still visible one screen back, on the
+                // conversation list's own `AccountAvatarAction`.
                 TopAppBar(
                     navigationIcon = {
                         // `26-23`: the mockup's `i-back`, a real vector - this used to be a
@@ -241,12 +244,6 @@ internal fun ThreadScreen(
                             visitorName = visitorName,
                             visitorId = visitorId,
                             subtitle = subtitle,
-                        )
-                    },
-                    actions = {
-                        HubConnectionDot(
-                            state = state.hubConnectionState,
-                            modifier = Modifier.padding(end = 16.dp),
                         )
                     },
                 )

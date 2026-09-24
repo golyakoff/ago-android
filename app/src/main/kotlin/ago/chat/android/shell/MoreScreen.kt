@@ -113,7 +113,7 @@ private fun MoreListScreen(
                             hubConnectionState = hubConnectionState,
                             onOpenSettings = onOpenSettings,
                             onSignOut = onSignOut,
-                            modifier = Modifier.padding(end = 12.dp),
+                            modifier = Modifier.padding(end = 4.dp),
                         )
                     },
                 )

@@ -133,6 +133,11 @@ public fun AccountAvatarAction(
             // screen - never a second sign-out pathway, never a colour of its own.
             DropdownMenuItem(
                 text = { Text(text = stringResource(R.string.more_settings_row)) },
+                // `26-89`: the mockup's own `#i-sliders`, leading — matching the trailing chevron's own
+                // `Icon(...)` call just below (no explicit tint/size override), since `DropdownMenuItem`
+                // already colours both slots `onSurfaceVariant` by default, the mockup's own
+                // `.pop-item svg{color:var(--ink-soft)}`.
+                leadingIcon = { Icon(imageVector = AgoIcons.Sliders, contentDescription = null) },
                 trailingIcon = { Icon(imageVector = AgoIcons.ChevronRight, contentDescription = null) },
                 onClick = {
                     // Closed before the callback, not after - `ConversationListOverflowMenu`'s own
@@ -148,6 +153,9 @@ public fun AccountAvatarAction(
             // destructive.
             DropdownMenuItem(
                 text = { Text(text = stringResource(R.string.action_sign_out)) },
+                // `26-89`: the mockup's own `#i-logout`, leading — no trailing icon here, matching the
+                // mockup exactly (the chevron above is Настройки's own, not a shape every row shares).
+                leadingIcon = { Icon(imageVector = AgoIcons.Logout, contentDescription = null) },
                 onClick = {
                     expanded = false
                     onSignOut()
