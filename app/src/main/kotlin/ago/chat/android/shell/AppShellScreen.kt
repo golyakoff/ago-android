@@ -524,9 +524,9 @@ private fun AppShellContent(
                     permissions.holds(Permission.CUSTOMER_READ),
                     permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
                     // `26-96`: `calendar:configure` alone - a fourth, independent gate, not the third
-                    // one reused (see [visibleBookingsTabs]' own doc comment: an operator holding only
-                    // `customer:read` may read the customer base without rewriting the tenant's own
-                    // service dictionary).
+                    // one reused (see [ago.chat.android.bookings.visibleBookingsConfigMenuEntries]' own
+                    // doc comment: an operator holding only `customer:read` may read the customer base
+                    // without rewriting the tenant's own service dictionary).
                     permissions.holds(Permission.CALENDAR_CONFIGURE),
                     // `26-97`: `calendar:configure` alone - the permission the working-hours writes
                     // themselves check, never the wider Клиенты gate above. Currently the same

@@ -443,6 +443,10 @@
         deletion would misdescribe what the button does.
     -->
     <string name="bookings_tab_services">Услуги</string>
+    <!-- `26-103`: Услуги/Часы stopped being a fourth/fifth segment (five wrapped on a real device) and
+         moved behind this `⋮` instead - `BookingsConfigMenu`'s own content description, read once for
+         the control regardless of which of the two entries it currently holds. -->
+    <string name="bookings_config_menu_action">Конфигурация</string>
     <string name="services_empty">У этого тенанта пока нет услуг.</string>
     <string name="services_load_failed_unexpected">Не удалось загрузить услуги. Попробуйте ещё раз.</string>
     <string name="services_status_withdrawn">Снята с продажи</string>
