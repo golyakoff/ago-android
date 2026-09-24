@@ -46,7 +46,11 @@ import javax.inject.Inject
  *    `RedirectUriReceiverActivity` (declared in the library's manifest, with the scheme supplied by
  *    `app/build.gradle.kts`'s `appAuthRedirectScheme` placeholder), which completes this
  *    `ActivityResultLauncher`. There is no callback *screen* — `scope-inventory.md`'s own reading of
- *    `/callback` as "a mechanism, not a screen" ports exactly.
+ *    `/callback` as "a mechanism, not a screen" ports exactly. `26-93`'s `ago-android://logout-callback`
+ *    is caught by the identical activity (its own filter matches the whole scheme, not one path) and
+ *    completes [signOutLauncher] instead — a second `ActivityResultLauncher` rather than a branch
+ *    inside this one, because the two round trips resolve to two different view-model calls
+ *    ([SignInViewModel.onAuthorizationResult] vs. [SignInViewModel.onSignOutResult]).
  * 3. **Leaving the app** for the web console, which is an `ACTION_VIEW` and therefore a `Context`.
  *
  * `26-18` adds two more, both real Android jobs no `ViewModel` can do either:
@@ -93,6 +97,7 @@ public class MainActivity : ComponentActivity() {
     public lateinit var presenceController: OperatorPresenceController
 
     private lateinit var authorizationLauncher: ActivityResultLauncher<Intent>
+    private lateinit var signOutLauncher: ActivityResultLauncher<Intent>
     private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
     private lateinit var batteryOptimizationLauncher: ActivityResultLauncher<Intent>
 
@@ -105,6 +110,16 @@ public class MainActivity : ComponentActivity() {
                 // `result.data` is null when the operator dismissed the Custom Tab. That is not a
                 // failure and the view model does not render it as one.
                 viewModel.onAuthorizationResult(result.data)
+            }
+
+        // `26-93`: the end-session Custom Tab's own result launcher, the identical shape as
+        // [authorizationLauncher] immediately above - `result.data` is null exactly as often here (the
+        // operator dismissing the tab, or the redirect never arriving because the realm was
+        // unreachable) and `onSignOutResult` does not treat that as a failure either, for the same
+        // reason `viewModel.signOut`'s own doc comment states.
+        signOutLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                viewModel.onSignOutResult(result.data)
             }
 
         // `26-18`: the result itself needs no handling here - `SettingsScreen` re-reads the live system
@@ -125,6 +140,11 @@ public class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.authorizationRequests.collect { intent -> authorizationLauncher.launch(intent) }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.signOutRequests.collect { intent -> signOutLauncher.launch(intent) }
             }
         }
         lifecycleScope.launch {

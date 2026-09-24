@@ -21,12 +21,19 @@ import org.junit.runner.RunWith
  * could not prove anything about the real, on-disk file.
  *
  * No real network call is exercised even now that `26-06` has added a device-revocation call to
- * `AgoAuthSession.signOut` — a no-op fake [DeviceRevocation] is supplied below, since this file's own
- * job is the encrypted store's own contents, not the revocation call itself
+ * `AgoAuthSession.completeSignOut` — a no-op fake [DeviceRevocation] is supplied below, since this
+ * file's own job is the encrypted store's own contents, not the revocation call itself
  * (`AgoAuthSessionSignOutOrderingTest` is where that call's ordering is proven). This still writes
  * directly into [SessionStore] rather than driving a real Keycloak round trip through
  * `beginAuthorization`/`completeAuthorization` — the two fields [AgoAuthSession] itself ever writes are
  * exactly the two this test seeds.
+ *
+ * `26-93`: the seeded `authStateJson` here is a bare fixture with no `AuthorizationServiceConfiguration`
+ * inside it, so [AgoAuthSession.beginSignOut] has no `end_session_endpoint` to build a request against
+ * and honestly answers `null` — proven below rather than assumed, since a `null` this test did not
+ * expect would mean the next line's `completeSignOut(null)` was not exercising the branch this test
+ * thinks it is. The Custom-Tab-driven, non-`null` branch is `AgoAuthSessionSignOutOrderingTest`'s job,
+ * against a real configuration.
  *
  * **What running this for real on a device found, that reading the source alone would not have**: the
  * raw file is not *empty* after `clear()` - `androidx.security.crypto.EncryptedSharedPreferences`
@@ -64,6 +71,7 @@ class AgoAuthSessionSignOutTest {
                             issuer = "",
                             clientId = "",
                             redirectUri = "",
+                            postLogoutRedirectUri = "",
                             apiBaseUrl = "",
                             consoleUrl = "",
                             calendarApiBaseUrl = null,
@@ -72,7 +80,9 @@ class AgoAuthSessionSignOutTest {
                     deviceRevocation = Lazy { NoOpDeviceRevocation },
                 )
 
-            session.signOut()
+            val endSessionIntent = session.beginSignOut()
+            assertNull("no configuration was ever persisted, so there is nothing to end at the IdP", endSessionIntent)
+            session.completeSignOut(endSessionIntent)
 
             // Through `SessionStore`'s own accessors first...
             assertNull("no auth state may remain", store.authStateJson)

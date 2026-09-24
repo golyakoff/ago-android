@@ -15,8 +15,10 @@ package ago.chat.android.core.domain.devices
  *
  * Survives sign-out (an install keeps its id across a sign-out/sign-in cycle - only a fresh install
  * gets a new one) - which is exactly why `:app`'s implementation must **not** share
- * `SessionStore`'s file: that file is emptied by `AgoAuthSession.signOut()`, on every sign-out, by
- * design.
+ * `SessionStore`'s file: that file is emptied by `AgoAuthSession.completeSignOut()`, on every
+ * sign-out, by design (`26-93` split what used to be one `signOut()` function into
+ * `beginSignOut()`/`completeSignOut()`, but the file is still emptied unconditionally, exactly once,
+ * by the second half).
  */
 public interface InstallationIdProvider {
     /** Generates and persists a new id on first call; every later call returns the same value. */

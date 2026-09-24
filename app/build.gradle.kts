@@ -164,6 +164,16 @@ android {
         buildConfigField("String", "AGO_KEYCLOAK_ISSUER", agoProperty("agoKeycloakIssuer", "https://auth.reserve-me.ru/realms/ago-chat"))
         buildConfigField("String", "AGO_OIDC_CLIENT_ID", agoProperty("agoOidcClientId", "ago-android"))
         buildConfigField("String", "AGO_OIDC_REDIRECT_URI", agoProperty("agoOidcRedirectUri", "ago-android://callback"))
+        // `26-93`: a second, distinct redirect under the same `appAuthRedirectScheme` above - RP-
+        // Initiated Logout's own `post_logout_redirect_uri`, which Keycloak validates against the
+        // realm client's registered list independently of `redirectUris`. No new manifest entry: see
+        // `OidcConfig.postLogoutRedirectUri`'s own doc comment for why the existing scheme-wide
+        // `RedirectUriReceiverActivity` filter already catches it.
+        buildConfigField(
+            "String",
+            "AGO_OIDC_POST_LOGOUT_REDIRECT_URI",
+            agoProperty("agoOidcPostLogoutRedirectUri", "ago-android://logout-callback"),
+        )
         buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.reserve-me.ru"))
 
         // `26-48`: a *second*, nullable deployment target — see [agoOptionalProperty]'s own doc comment

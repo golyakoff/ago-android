@@ -102,6 +102,16 @@ public class SignInViewModel
         private val notificationPermissionRequests = Channel<Unit>(Channel.BUFFERED)
         public val requestNotificationPermissionEvents: Flow<Unit> = notificationPermissionRequests.receiveAsFlow()
 
+        /**
+         * `26-93`: [authorizationRequests]'s own "an `Intent` is an event" shape, restated for the
+         * end-session Custom Tab [signOut] opens instead of the sign-in one. Only emitted when
+         * [SignInSession.beginSignOut] actually returns an `Intent` — when it returns `null` (no IdP
+         * session worth ending), [signOut] finishes locally with no Custom Tab and nothing is sent
+         * here at all.
+         */
+        private val signOutIntents = Channel<Intent>(Channel.BUFFERED)
+        public val signOutRequests: Flow<Intent> = signOutIntents.receiveAsFlow()
+
         init {
             resumeSession()
         }
@@ -168,18 +178,42 @@ public class SignInViewModel
             resumeSession()
         }
 
+        /**
+         * `26-93`: step one only. [SignInSession.beginSignOut] either has nothing to do at the IdP
+         * (`null` - [finishSignOut] runs immediately, no Custom Tab) or hands back an `Intent` this
+         * has to route to [signOutRequests] for `MainActivity` to launch, the identical split
+         * [beginSignIn] already makes for sign-in.
+         */
         public fun signOut() {
             viewModelScope.launch {
                 mutableState.value = SignInUiState.Working
-                session.signOut()
-                // `26-85`: stops `OperatorPresenceService` and lowers `OperatorPresenceGate` - a
-                // signed-out identity has no permission set worth keeping a background connection open
-                // for, and `AppShellViewModel`'s own `NavBackStackEntry` (the only other caller of
-                // `OperatorPresenceController`) is torn down by this same sign-out with nothing left to
-                // fetch permissions again on.
-                presenceController.onSignedOut()
-                mutableState.value = SignInUiState.SignedOut
+                when (val intent = session.beginSignOut()) {
+                    null -> finishSignOut(null)
+                    else -> signOutIntents.send(intent)
+                }
             }
+        }
+
+        /**
+         * The end-session Custom Tab's result, `26-93`. Unlike [onAuthorizationResult], `data` is never
+         * inspected here either - [finishSignOut] (via [SignInSession.completeSignOut]) treats a
+         * completed round trip, a Keycloak/network failure, and a dismissed Custom Tab identically,
+         * for the reason [ago.chat.android.session.AgoAuthSession.completeSignOut]'s own doc comment
+         * states: this app's local sign-out must never depend on how the browser's part of it went.
+         */
+        public fun onSignOutResult(data: Intent?) {
+            viewModelScope.launch { finishSignOut(data) }
+        }
+
+        private suspend fun finishSignOut(data: Intent?) {
+            session.completeSignOut(data)
+            // `26-85`: stops `OperatorPresenceService` and lowers `OperatorPresenceGate` - a
+            // signed-out identity has no permission set worth keeping a background connection open
+            // for, and `AppShellViewModel`'s own `NavBackStackEntry` (the only other caller of
+            // `OperatorPresenceController`) is torn down by this same sign-out with nothing left to
+            // fetch permissions again on.
+            presenceController.onSignedOut()
+            mutableState.value = SignInUiState.SignedOut
         }
 
         /**

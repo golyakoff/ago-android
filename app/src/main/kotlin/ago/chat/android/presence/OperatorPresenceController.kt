@@ -46,8 +46,11 @@ public interface OperatorPresenceController {
      * [OperatorPresenceGate] otherwise. */
     public fun onPermissionsLoaded(permissions: OperatorPermissions)
 
-    /** [ago.chat.android.signin.SignInViewModel.signOut]'s own call — stops the service and lowers
-     * [OperatorPresenceGate] unconditionally, regardless of what [onPermissionsLoaded] last decided. */
+    /** [ago.chat.android.signin.SignInViewModel]'s own call, from `finishSignOut` (`26-93` split what
+     * used to be a single `signOut()` body across [ago.chat.android.signin.SignInViewModel.signOut]
+     * and [ago.chat.android.signin.SignInViewModel.onSignOutResult], but both still end there) — stops
+     * the service and lowers [OperatorPresenceGate] unconditionally, regardless of what
+     * [onPermissionsLoaded] last decided. */
     public fun onSignedOut()
 }
 

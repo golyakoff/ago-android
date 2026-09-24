@@ -141,6 +141,7 @@ public object AppModule {
             issuer = BuildConfig.AGO_KEYCLOAK_ISSUER,
             clientId = BuildConfig.AGO_OIDC_CLIENT_ID,
             redirectUri = BuildConfig.AGO_OIDC_REDIRECT_URI,
+            postLogoutRedirectUri = BuildConfig.AGO_OIDC_POST_LOGOUT_REDIRECT_URI,
             apiBaseUrl = BuildConfig.AGO_API_BASE_URL,
             consoleUrl = BuildConfig.AGO_CONSOLE_URL,
             calendarApiBaseUrl = BuildConfig.AGO_CALENDAR_API_BASE_URL,

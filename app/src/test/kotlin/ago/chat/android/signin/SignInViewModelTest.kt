@@ -268,6 +268,45 @@ class SignInViewModelTest {
             assertEquals(1, session.signOuts)
         }
 
+    /** `26-93`: when [SignInSession.beginSignOut] does have a round trip to run, the local sign-out
+     * must wait for [SignInViewModel.onSignOutResult] rather than completing the moment the `Intent` is
+     * handed off - proven here by state still reading [SignInUiState.Working] right after [signOutRequests]
+     * received the `Intent`, and only reaching [SignInUiState.SignedOut] once the (simulated) Custom Tab
+     * result comes back. */
+    @Test
+    fun `signing out with an IdP round trip to run waits for its result before finishing locally`() =
+        runTest(dispatcher) {
+            val endSessionIntent = Intent()
+            val session = FakeSession(hasSession = true, signOutIntent = endSessionIntent)
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    session = session,
+                )
+            advanceUntilIdle()
+
+            val receivedIntents = mutableListOf<Intent>()
+            val collector = launch { viewModel.signOutRequests.toList(receivedIntents) }
+
+            viewModel.signOut()
+            advanceUntilIdle()
+
+            assertEquals(listOf(endSessionIntent), receivedIntents)
+            assertEquals(SignInUiState.Working, viewModel.state.value)
+            assertEquals(0, session.signOuts)
+
+            // `data == null` here stands for every one of the three ways the round trip can end without
+            // handing back a parsed response - a dismissed Custom Tab, or a network/Keycloak failure the
+            // browser could not redirect back from (`AgoAuthSession.completeSignOut`'s own doc comment
+            // names all three) - and every one of them must still finish the local sign-out.
+            viewModel.onSignOutResult(null)
+            advanceUntilIdle()
+            collector.cancel()
+
+            assertEquals(SignInUiState.SignedOut, viewModel.state.value)
+            assertEquals(1, session.signOuts)
+        }
+
     /** `26-85`: sign-out is also the one signal that stops `OperatorPresenceService` and lowers
      * `OperatorPresenceGate` - an identity with no session left has no permission set worth a background
      * connection for. */
@@ -321,8 +360,15 @@ class SignInViewModelTest {
             ioDispatcher = dispatcher,
         )
 
+    /** `26-93`: [beginSignOut] answers `signOutIntent`, `null` by default - this suite's own job is
+     * [SignInViewModel]'s routing/state logic around the two-step sign-out, not the end-session round
+     * trip's own content (building the real `EndSessionRequest` is `AgoAuthSessionSignOutOrderingTest`'s
+     * job, against a real `AuthorizationServiceConfiguration`). A test that only needs "there was
+     * nothing to end at the IdP" leaves this at its default; one that needs to prove the `Intent`
+     * actually reaches [SignInViewModel.signOutRequests] passes a real (if empty) one. */
     private class FakeSession(
         private val hasSession: Boolean,
+        private val signOutIntent: Intent? = null,
     ) : SignInSession {
         var signOuts: Int = 0
             private set
@@ -333,7 +379,9 @@ class SignInViewModelTest {
 
         override suspend fun completeAuthorization(data: Intent): Unit = throw UnsupportedOperationException("not exercised here")
 
-        override suspend fun signOut() {
+        override suspend fun beginSignOut(): Intent? = signOutIntent
+
+        override suspend fun completeSignOut(data: Intent?) {
             signOuts++
         }
     }

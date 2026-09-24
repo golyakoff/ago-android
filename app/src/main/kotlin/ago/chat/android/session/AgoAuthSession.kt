@@ -20,6 +20,7 @@ import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
 import net.openid.appauth.AuthorizationServiceConfiguration
+import net.openid.appauth.EndSessionRequest
 import net.openid.appauth.ResponseTypeValues
 import net.openid.appauth.TokenResponse
 import org.json.JSONException
@@ -84,7 +85,7 @@ public class AgoAuthSession
         // `HttpClient`, which depends on `AccessTokenProvider`, which `AppModule.provideAccessTokenProvider`
         // binds to *this very class*. `dagger.Lazy<T>` is Dagger's own documented way to defer one edge
         // of a cycle until first use, at which point the rest of the graph - `AgoAuthSession` included -
-        // has already finished constructing, so `.get()` inside `signOut()` below never re-enters this
+        // has already finished constructing, so `.get()` inside `completeSignOut()` below never re-enters this
         // constructor.
         private val deviceRevocation: Lazy<DeviceRevocation>,
     ) : AccessTokenProvider,
@@ -212,18 +213,79 @@ public class AgoAuthSession
             }
 
         /**
-         * Discards the session and returns the app to its launch screen.
+         * Step one of sign-out, `26-93`: the `Intent` that opens Keycloak's own RP-Initiated Logout
+         * in a Custom Tab, ending the SSO session the system browser is holding — the identical
+         * "hand back an `Intent`, the caller launches it" shape [beginAuthorization] already
+         * establishes, for the identical reason: a suspend function cannot itself start an Activity
+         * for a result, only the `Activity` that owns the result callback can.
          *
-         * **The ordering is the part that matters, and it is `26-06`'s to extend.** Device
-         * revocation — telling the backend to forget this installation's push registration — is an
-         * *authenticated* call, so it has to happen while the token is still here, at the point
-         * marked below. That is why this function suspends and why nothing is cleared before that
-         * point: a non-suspending `signOut()` would make inserting an awaited network call a
-         * signature change rippling through every caller, and clearing first would make the
-         * revocation impossible to send at all. This item does not implement the revocation — it
-         * leaves the one shape in which it can be added without moving anything.
+         * **Why this reads cached state instead of calling [discoverConfiguration] again.** The
+         * `end_session_endpoint` is part of the same discovery document [beginAuthorization] already
+         * fetched at sign-in and persisted inside [AuthState] (`AuthState.getAuthorizationServiceConfiguration()`
+         * round-trips through `jsonSerialize`/`jsonDeserialize` unchanged) — asking the network again
+         * here would spend a request sign-out has no way to fail usefully on, since [beginSignOut]
+         * itself must never throw (there is no failure state at this end of a sign-out to render).
+         *
+         * Returns `null` — "there is no round trip to run" — for either of two honestly different
+         * reasons this class does not distinguish between: no session was ever loaded (nothing to end
+         * at the IdP), or the realm's own discovery document carried no `end_session_endpoint` at all
+         * (an IdP that does not support RP-Initiated Logout, which Keycloak does, but this client does
+         * not assume). Either way the caller's own contract is the same: skip the Custom Tab and call
+         * [completeSignOut] with `null` directly.
          */
-        override suspend fun signOut(): Unit =
+        override suspend fun beginSignOut(): Intent? =
+            withContext(ioDispatcher) {
+                // Read once, under the same lock every other read of `state` uses (`currentIdentity()`'s
+                // own shape) - `configuration` and `idTokenHint` must come from the same snapshot of
+                // `state`, not from two separate locks either side of which a racing sign-in or sign-out
+                // could have replaced it.
+                val (configuration, idTokenHint) =
+                    mutex.withLock {
+                        val current = loadState()
+                        current.authorizationServiceConfiguration to current.idToken
+                    }
+                val endSessionEndpoint = configuration?.endSessionEndpoint
+
+                if (configuration == null || endSessionEndpoint == null || idTokenHint == null) {
+                    return@withContext null
+                }
+
+                val request =
+                    EndSessionRequest
+                        .Builder(configuration)
+                        .setIdTokenHint(idTokenHint)
+                        .setPostLogoutRedirectUri(Uri.parse(config.postLogoutRedirectUri))
+                        .build()
+
+                authorizationService.getEndSessionRequestIntent(request)
+            }
+
+        /**
+         * Step two, and the only step that actually signs this app out.
+         *
+         * **`data` is never inspected, and that is the point, `26-93`'s own Done-when.** A completed
+         * [EndSessionRequest] (`EndSessionResponse.fromIntent(data)` would parse it), a Keycloak or
+         * network failure the browser surfaced as an `AuthorizationException`, and the operator
+         * dismissing the Custom Tab before it redirected anywhere at all (`data == null`, the same
+         * shape [onAuthorizationResult][ago.chat.android.signin.SignInViewModel.onAuthorizationResult]
+         * already treats as ordinary rather than as failure) are three different outcomes of the same
+         * round trip — and every one of them reaches this function, because [beginSignOut]'s caller
+         * calls this unconditionally once that round trip is over. Branching on which of the three it
+         * was would mean choosing a case where a network-down logout attempt leaves the operator stuck
+         * signed in to *this app*, which is exactly the failure mode `26-93` exists to close: the
+         * round trip's job is to end the browser's own SSO cookie on a best-effort basis, and it is
+         * this app's local state — cleared below regardless — that decides whether the operator is
+         * signed in here.
+         *
+         * **The ordering below is `26-06`'s, unmoved.** Device revocation — telling the backend to
+         * forget this installation's push registration — is an *authenticated* call, so it still has
+         * to run while the token is still here, before [state] is replaced. Nothing about adding the
+         * end-session round trip *before* this function changes that: the access token this class
+         * holds is never sent to Keycloak's `end_session_endpoint` (only the already-issued
+         * `id_token_hint` is, and AppAuth reads that itself), so it is exactly as valid on entry to
+         * this function as it was when [beginSignOut] read it.
+         */
+        override suspend fun completeSignOut(data: Intent?): Unit =
             withContext(ioDispatcher) {
                 mutex.withLock {
                     // `26-06`: the device-revocation call, exactly here — the token is still valid and

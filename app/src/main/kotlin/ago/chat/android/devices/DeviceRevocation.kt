@@ -1,8 +1,9 @@
 package ago.chat.android.devices
 
 /**
- * `26-06`: the one thing `AgoAuthSession.signOut()` needs from the whole device-registration story -
- * narrowed to exactly this because a test of *that ordering* ("revoke before the token is discarded")
+ * `26-06`: the one thing `AgoAuthSession.completeSignOut()` (`signOut()` until `26-93` split it in
+ * two) needs from the whole device-registration story - narrowed to exactly this because a test of
+ * *that ordering* ("revoke before the token is discarded")
  * has no business also faking [DeviceRegistrationCoordinator]'s registration and scheduling methods,
  * the same "depend on the narrowest thing this class actually uses" reasoning
  * [ago.chat.android.session.OperatorIdentityProvider]'s own doc comment states for splitting itself
