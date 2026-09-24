@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.MessageDeliveredDto
 import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.newClientMessageId
@@ -114,9 +115,33 @@ public class ThreadViewModel
             // exists - this screen is the one place a dropped/retried send is actually observed, so
             // seeing the connection flap while a `pendingRetry` banner is up is not a coincidence an
             // operator should have to guess at.
+            //
+            // `26-62`: also the one thing standing between "the dot turned green" and "the thread
+            // actually recovers" - see [retryJoinAfterReconnect]'s own doc comment for the guard past
+            // this, and why it is [retryJoin] itself, never a second join path. `previous` starts
+            // `null` rather than [OperatorHubConnectionState.Disconnected], and a `null` previous is
+            // read as "nothing to compare against yet", never as "was disconnected" - [hubEvents.state]
+            // is a conflated `StateFlow` that replays its current value the instant this collector
+            // starts (this `init` block runs exactly once per instance, at construction, so that replay
+            // is this class's very first look at the connection, most often already `Connected`), and
+            // treating a replay as a transition would fire [retryJoinAfterReconnect] every time - the
+            // "every rotation" failure mode this item's own Scope calls out by name, since a device
+            // rotation recreates the `Activity`'s Compose tree but never this `ViewModel`
+            // (`ThreadRoute`'s own `hiltViewModel()`), so nothing here ever collects [hubEvents.state] a
+            // second time for the one instance's whole life - `ThreadViewModelTest`'s own rotation case
+            // proves the *effect* of that survival (`open` called again with the identical id) issues no
+            // extra join, since [previous] is never reset in between. Never a level check ("is currently
+            // connected") - only an edge one, on the value actually changing underneath this collector.
             viewModelScope.launch {
+                var previous: OperatorHubConnectionState? = null
                 hubEvents.state.collect { connectionState ->
                     mutableState.update { it.copy(hubConnectionState = connectionState) }
+                    val justReconnected =
+                        connectionState == OperatorHubConnectionState.Connected &&
+                            previous != null &&
+                            previous != OperatorHubConnectionState.Connected
+                    previous = connectionState
+                    if (justReconnected) retryJoinAfterReconnect()
                 }
             }
         }
@@ -180,6 +205,38 @@ public class ThreadViewModel
             if (mutableState.value.historyError == null) return
             mutableState.update { it.copy(joining = true, historyError = null) }
             launchJoin(conversationId)
+        }
+
+        /**
+         * `26-62`'s own automatic half - called only from the `hubEvents.state` collector above, on a
+         * genuine transition into `Connected`, and it does nothing but call [retryJoin]: the manual
+         * Retry button and a reconnect are two different *triggers* for the identical one join path,
+         * never two paths. [retryJoin]'s own guards ("nothing open", "nothing failed") already cover
+         * most of when this should do nothing; the one guard added here is [ThreadUiState.messages]
+         * being non-empty, which means whatever `historyError` is currently set belongs to a failed
+         * "load older" page, not the initial join - `ThreadScreen` tells the two apart the exact same
+         * way (`state.messages.isEmpty()`), and only the initial join recovers on its own
+         * (`docs/backlog/26-62-*.md`'s own Out of scope: a "load older" failure keeps its own retry
+         * banner, untouched).
+         *
+         * **Which of the two re-join mechanisms actually clears the error, and why.**
+         * `OperatorHubConnection.resumeSubscription` re-joins this same conversation on *every*
+         * reconnect on its own, from `lastKnownSequence`, entirely independent of this class, and
+         * pushes whatever it finds through [hubEvents]'s own `messages` - so by the time this function
+         * runs, a delta may already have landed in [mergeAndRender] and [ThreadUiState.messages] may
+         * already be non-empty (in which case the guard above defers to that page's own retry banner
+         * rather than doing anything here). That arrival is never what clears
+         * [ThreadUiState.historyError] - [mergeAndRender] and [applyDelivery] never touch it, on
+         * purpose, so a delta landing mid-outage is never mistaken for "the join itself is fixed".
+         * [retryJoin] is the one thing that clears it, deliberately, the instant it is called - before
+         * its own [launchJoin] has even completed - which is what makes the error body's disappearance
+         * a decision this class makes rather than an accident of `ThreadScreen`'s
+         * `state.messages.isEmpty()` render guard reacting to a message that landed for an unrelated
+         * reason.
+         */
+        private fun retryJoinAfterReconnect() {
+            if (mutableState.value.messages.isNotEmpty()) return
+            retryJoin()
         }
 
         private fun launchJoin(conversationId: String) {
