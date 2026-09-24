@@ -99,14 +99,17 @@ public fun BookingsRoute(
     // `calendar:configure` and `customer:read` never triggers this read either.
     val contactsState: ContactsUiState?
     val onRetryContacts: () -> Unit
+    val onRevealContact: (String) -> Unit
     if (showClientsSegment) {
         val contactsViewModel: ContactsViewModel = hiltViewModel()
         val collectedContactsState by contactsViewModel.state.collectAsStateWithLifecycle()
         contactsState = collectedContactsState
         onRetryContacts = contactsViewModel::refresh
+        onRevealContact = contactsViewModel::reveal
     } else {
         contactsState = null
         onRetryContacts = {}
+        onRevealContact = {}
     }
 
     BookingsScreen(
@@ -124,6 +127,7 @@ public fun BookingsRoute(
         onRetryConfirmed = onRetryConfirmed,
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
+        onRevealContact = onRevealContact,
         hubConnectionState = hubConnectionState,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -161,6 +165,7 @@ internal fun BookingsScreen(
     onRetryConfirmed: () -> Unit,
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
+    onRevealContact: (String) -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
@@ -266,7 +271,9 @@ internal fun BookingsScreen(
                     // `26-52`: the identical "non-null exactly when selectable" invariant
                     // `BookingsTab.Confirmed`'s own comment above states, for `showClientsSegment`.
                     BookingsTab.Clients ->
-                        contactsState?.let { ContactsBody(state = it, onRetry = onRetryContacts) }
+                        contactsState?.let {
+                            ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
+                        }
                 }
             }
         }
@@ -374,9 +381,12 @@ private fun failureMessage(
 /** `26-49`: the one place a failed veto write is shown - `error.detail`/`networkFailureText`'s own
  * `ClaimErrorUi` precedent in [ago.chat.android.conversations.ConversationListScreen], restated for
  * this port's own [BookingsQueueFailure] classification via the existing [failureMessage] helper below,
- * rather than a second copy of that when-block. */
+ * rather than a second copy of that when-block. `internal`, not `private`: `26-53`'s own
+ * [ContactsScreen.kt][ContactsBody] reuses this for a failed phone-reveal - the identical
+ * [BookingActionErrorUi] the pending queue's own veto writes already use, since a reveal reduces to the
+ * same "server refusal, or something else" question. */
 @Composable
-private fun ActionErrorBanner(
+internal fun ActionErrorBanner(
     error: BookingActionErrorUi,
     modifier: Modifier = Modifier,
 ) {

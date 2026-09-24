@@ -9,11 +9,15 @@ import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -204,7 +208,70 @@ public class KtorBookingsApi(
 
         return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-53`: `POST /api/v1/console/contacts/{customerId}/reveal-phone`, body `{"surface": surface}` —
+     * the identical `204`-or-refusal shape [performBookingAction] establishes, with one difference: a
+     * success here carries a body (`CustomerPhoneRevealResponse.Phone`), so this method is not folded
+     * into that one shared helper. [contentType]/[setBody] are required for the exact reason
+     * `KtorConversationsApi.markRead`'s own doc comment gives for its own first request body: Ktor's
+     * `ContentNegotiation` only serializes a body it can match against a declared `Content-Type`.
+     */
+    override suspend fun revealCustomerPhone(
+        customerId: String,
+        surface: String,
+    ): RevealPhoneResult {
+        val baseUrl = calendarApiBaseUrl ?: return RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$baseUrl/api/v1/console/contacts/$customerId/reveal-phone") {
+                    contentType(ContentType.Application.Json)
+                    setBody(RevealCustomerPhoneRequestWireDto(surface))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return RevealPhoneResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return try {
+                RevealPhoneResult.Revealed(response.body<RevealPhoneResponseWireDto>().phone)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                // A `2xx` whose body is not the promised shape is not a revealed number - the identical
+                // `fetchPendingQueue`/`shapeGuard.ts` lesson, read onto this endpoint.
+                RevealPhoneResult.Failed(classify(failure))
+            }
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { RevealPhoneResult.Refused(it) } ?: RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
+
+/** `Ago.Calendar.Contracts.RevealCustomerPhoneRequest` - the one field that endpoint's own body carries. */
+@Serializable
+private data class RevealCustomerPhoneRequestWireDto(
+    val surface: String,
+)
+
+/** `Ago.Calendar.Contracts.CustomerPhoneRevealResponse` - the one field a successful reveal's own body
+ * carries. */
+@Serializable
+private data class RevealPhoneResponseWireDto(
+    val phone: String,
+)
 
 /** RFC 7807, read for exactly the one field a booking-action refusal needs — the identical, deliberately
  * un-shared copy [ago.chat.android.core.network.conversations.KtorConversationsApi]'s own private

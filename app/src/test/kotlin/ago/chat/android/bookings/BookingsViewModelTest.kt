@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -272,6 +273,13 @@ class BookingsViewModelTest {
         ): ConfirmedBookingsResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
 
         override suspend fun fetchContacts(): ContactsResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
+
+        // `26-53` widened `BookingsApi` with a fifth method this class has no test of its own for -
+        // `BookingsViewModel` never reveals a phone; that is `ContactsViewModel`'s own job.
+        override suspend fun revealCustomerPhone(
+            customerId: String,
+            surface: String,
+        ): RevealPhoneResult = throw UnsupportedOperationException("BookingsViewModel never calls this")
 
         override suspend fun rejectBooking(bookingId: String): BookingActionResult {
             rejectCalls.add(bookingId)

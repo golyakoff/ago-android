@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
 import ago.chat.android.core.network.installAgoRestDefaults
@@ -18,6 +19,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -442,6 +444,91 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.rejectBooking("b1"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `revealing a phone posts the surface and returns the unmasked number`() =
+        runTest {
+            var requestedUrl: String? = null
+            var requestedBody: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    requestedBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond(
+                        """{"phone":"+79991234567"}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.revealCustomerPhone("c1", "AndroidContacts")
+
+            assertEquals(RevealPhoneResult.Revealed("+79991234567"), result)
+            assertEquals("$baseUrl/api/v1/console/contacts/c1/reveal-phone", requestedUrl)
+            assertEquals("""{"surface":"AndroidContacts"}""", requestedBody)
+        }
+
+    @Test
+    fun `a 403 with a problem-details body on reveal is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"Customer.NotEntitled","detail":"Недостаточно прав для просмотра номера."}""",
+                        HttpStatusCode.Forbidden,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.revealCustomerPhone("c1", "AndroidContacts")
+
+            assertEquals(RevealPhoneResult.Refused("Недостаточно прав для просмотра номера."), result)
+        }
+
+    @Test
+    fun `a reveal refusal with no problem-details body classifies as Unexpected`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.revealCustomerPhone("c1", "AndroidContacts"))
+        }
+
+    @Test
+    fun `a dropped connection on reveal is Transport`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(RevealPhoneResult.Failed(BookingsQueueFailure.Transport), api.revealCustomerPhone("c1", "AndroidContacts"))
+        }
+
+    @Test
+    fun `a 200 that dropped the shape on reveal is Unexpected, never a fabricated number`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"somethingElseEntirely":true}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.revealCustomerPhone("c1", "AndroidContacts"))
+        }
+
+    @Test
+    fun `no calendar base URL configured fails a reveal, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(RevealPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.revealCustomerPhone("c1", "AndroidContacts"))
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 

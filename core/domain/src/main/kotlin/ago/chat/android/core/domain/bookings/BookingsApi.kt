@@ -64,6 +64,54 @@ public interface BookingsApi {
     /** `26-49`: `POST /api/v1/console/bookings/{bookingId}/no-show` — the identical shape [rejectBooking]
      * documents in full. */
     public suspend fun markNoShow(bookingId: String): BookingActionResult
+
+    /**
+     * `26-53`: `POST /api/v1/console/contacts/{customerId}/reveal-phone`, body `{"surface": surface}` —
+     * the audited unmask `ago-console`'s own `revealCustomerPhone` (`calendarApi.ts:701`) already
+     * establishes, ported onto this port rather than a fourth, phone-specific adapter. [surface] is
+     * recorded server-side on the reveal's own audit row — it names *which screen* asked, never which
+     * operator (the token already carries that); [BookingRevealSurface] is this app's own closed list of
+     * values, one per screen that can reveal, so a caller never invents or borrows the console's own
+     * strings (`BookingRevealSurface`'s own doc comment explains why that borrowing would silently
+     * corrupt the one record the audit trail exists to keep straight).
+     *
+     * The identical `204`-or-refusal-or-failure three-way split this port's other writes already use,
+     * restated for a call that also has something to return on success: [RevealPhoneResult.Revealed]
+     * carries the server's own unmasked number, never one this port unmasks itself
+     * (`ago-console`'s own `renderPhone` doc comment: "never unmasked client-side").
+     */
+    public suspend fun revealCustomerPhone(
+        customerId: String,
+        surface: String,
+    ): RevealPhoneResult
+}
+
+/**
+ * `26-53`: what asking to unmask one customer's phone came back with — the identical
+ * [BookingActionResult] shape restated with one extra arm on success, since this write (unlike
+ * reject/cancel/no-show) has a value to hand back rather than a bare acknowledgement.
+ */
+public sealed interface RevealPhoneResult {
+    /** A `200` (or any `2xx`) carrying the real, unmasked number — `CustomerPhoneRevealResponse.Phone`
+     * on the wire, read and handed back verbatim, never reformatted or validated by this port. */
+    public data class Revealed(
+        val phone: String,
+    ) : RevealPhoneResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — an operator asking to reveal a number
+     * they are not entitled to must see the server's own reason, not a generic network message
+     * (`docs/backlog/26-53-*.md`'s own Scope item 5: "a reveal an operator is not entitled to must not
+     * look like a network hiccup"). The masked value stays on screen; nothing here ever guesses at an
+     * unmasked number from a failure. */
+    public data class Refused(
+        val detail: String,
+    ) : RevealPhoneResult
+
+    /** Everything that is not a genuine server refusal — the identical [BookingActionResult.Failed]
+     * classification, reused here for the identical reason. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : RevealPhoneResult
 }
 
 /**

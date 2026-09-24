@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -185,5 +186,11 @@ class ConfirmedBookingsViewModelTest {
 
         override suspend fun markNoShow(bookingId: String): BookingActionResult =
             throw UnsupportedOperationException("not used by this class")
+
+        // `26-53` widened `BookingsApi` with a fifth method this class has no test of its own for.
+        override suspend fun revealCustomerPhone(
+            customerId: String,
+            surface: String,
+        ): RevealPhoneResult = throw UnsupportedOperationException("not used by this class")
     }
 }
