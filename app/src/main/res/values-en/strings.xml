@@ -271,6 +271,43 @@
     <string name="analytics_rate_label">Conversion</string>
     <string name="analytics_rate_value">%1$s%% (%2$d of %3$d)</string>
 
+    <!-- `26-70`: Analytics' own overflow and the site report behind it - see `values/strings.xml` for
+         the reasoning; wording follows `ago-console`'s own `en.ts` wherever the console says the same
+         thing about the same number. -->
+    <string name="analytics_reports_menu_action">Reports</string>
+    <string name="analytics_report_site">Site report</string>
+
+    <string name="analytics_overall_heading">Total for the period</string>
+    <string name="analytics_previous_period_heading">Previous period</string>
+    <string name="analytics_previous_range_value">%1$s – %2$s</string>
+    <string name="analytics_comparison_no_change">%1$d (no change)</string>
+    <string name="analytics_comparison_absolute">%1$d (%2$s)</string>
+    <string name="analytics_comparison_relative">%1$d (%2$s, %3$s%%)</string>
+
+    <string name="analytics_by_channel_heading">By channel</string>
+    <string name="analytics_by_channel_empty">No conversations in this period.</string>
+    <string name="analytics_channel_column">Channel</string>
+    <string name="analytics_channel_widget">Widget</string>
+    <string name="analytics_channel_sms">SMS</string>
+    <string name="analytics_channel_max">MAX</string>
+    <string name="analytics_channel_telegram">Telegram</string>
+    <string name="analytics_channel_whatsapp">WhatsApp</string>
+
+    <string name="analytics_by_operator_heading">By operator</string>
+    <string name="analytics_by_operator_empty">No conversations in this period attribute to an operator.</string>
+    <string name="analytics_operator_column">Operator</string>
+    <string name="analytics_load_no_data_value">No data</string>
+    <string name="analytics_load_interval_note">\"Total handled\" counts a conversation once, even if this operator handled it twice (transferred away and back). \"Standard\" and \"Over standard\" count assignment intervals instead, where that same conversation counts twice.</string>
+
+    <string name="analytics_traffic_source_note">What the visitor\'s browser reported — not a fact AGO Chat has independently verified.</string>
+    <string name="analytics_by_referrer_heading">By referrer</string>
+    <string name="analytics_by_referrer_empty">No conversations in this period.</string>
+    <string name="analytics_referrer_column">Referrer</string>
+    <string name="analytics_direct_referrer_label">Direct</string>
+    <string name="analytics_by_campaign_heading">By campaign</string>
+    <string name="analytics_by_campaign_empty">No conversations in this period carry a campaign tag.</string>
+    <string name="analytics_campaign_column">Campaign</string>
+
     <string name="more_section_channels">Channels</string>
     <string name="more_section_automation">Automation</string>
     <string name="more_section_administration">Administration</string>

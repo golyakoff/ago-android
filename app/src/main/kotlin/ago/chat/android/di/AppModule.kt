@@ -2,6 +2,7 @@ package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
+import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
@@ -14,6 +15,7 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
+import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
@@ -290,6 +292,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): OwnAnalyticsApi = KtorOwnAnalyticsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-70`: [ago.chat.android.analytics.SiteAnalyticsViewModel]'s own port — the same
+     * `config.apiBaseUrl` [provideOwnAnalyticsApi] above reads, since
+     * `GET /api/v1/conversations/analytics` is the site-wide sibling of the personal endpoint on that
+     * same origin. A second `@Provides` rather than a second method behind one binding, because the two
+     * are deliberately separate ports ([SiteAnalyticsApi]'s own doc comment): the personal report needs
+     * only a real operator identity server-side, this one needs `site:configure`.
+     */
+    @Provides
+    public fun provideSiteAnalyticsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): SiteAnalyticsApi = KtorSiteAnalyticsApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is
