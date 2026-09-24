@@ -1,5 +1,7 @@
 package ago.chat.android.team
 
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
@@ -139,5 +141,13 @@ class PeopleViewModelTest {
         }
 
         override suspend fun fetchSeatSummary(): SeatSummaryResult = summaryResult
+
+        // `26-56`: never exercised from this suite — [PeopleViewModel] never calls it, only
+        // [ago.chat.android.team.InviteColleagueViewModel] does — but this fake still has to answer the
+        // interface's third method to compile.
+        override suspend fun createInvite(
+            roleName: String,
+            email: String,
+        ): CreateInviteResult = CreateInviteResult.Failed(NetworkFailure.Unexpected)
     }
 }

@@ -25,6 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -42,11 +45,36 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * Drawn only inside [ago.chat.android.team.TeamScreen]'s own segmented control, never as a standalone
  * destination — an operator lacking `site:manage_operators` never reaches this composable at all
  * ([TeamRoute]'s own doc comment).
+ *
+ * `26-56`: also this screen's own invite sheet host. [createdInvite] is the one value on this whole
+ * screen that must never be lost to a rotation or a process death — the invite's own plaintext code,
+ * shown exactly once — so it lives here, in `rememberSaveable`, one level *above*
+ * [InviteColleagueSheet]'s own composition, the identical shape [ConversationsTabHost]'s own
+ * `openConversationId`/`ThreadRoute` split already establishes for the open conversation.
+ * [showInviteSheet] gates the sheet's presence independently of [PeopleUiState] itself — the sheet, once
+ * opened, stays mounted (and so keeps [createdInvite] alive) even through a transient `Loading` tick this
+ * screen's own [PeopleViewModel] can pass through on relaunch, before `state` has a chance to answer
+ * `Loaded` again.
  */
 @Composable
 public fun PeopleRoute(viewModel: PeopleViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    PeopleScreen(state = state, onRetry = viewModel::refresh)
+    var showInviteSheet by rememberSaveable { mutableStateOf(false) }
+    var createdInvite by rememberSaveable { mutableStateOf<CreatedInviteUi?>(null) }
+
+    PeopleScreen(state = state, onRetry = viewModel::refresh, onInviteClicked = { showInviteSheet = true })
+
+    if (showInviteSheet) {
+        InviteColleagueSheet(
+            seatSummary = (state as? PeopleUiState.Loaded)?.seatSummary.orEmpty(),
+            createdInvite = createdInvite,
+            onInviteCreated = { createdInvite = it },
+            onDismiss = {
+                showInviteSheet = false
+                createdInvite = null
+            },
+        )
+    }
 }
 
 /** The stateless half — [PeopleRoute] wires the [PeopleViewModel] above it, the same "route wires,
@@ -57,16 +85,37 @@ public fun PeopleRoute(viewModel: PeopleViewModel = hiltViewModel()) {
 internal fun PeopleScreen(
     state: PeopleUiState,
     onRetry: () -> Unit,
+    onInviteClicked: () -> Unit,
 ) {
     when (state) {
         PeopleUiState.Loading -> PeopleLoadingBody()
         is PeopleUiState.Failed -> PeopleRefusalBody(reason = state.reason, onRetry = onRetry)
         is PeopleUiState.Loaded ->
-            if (state.members.isEmpty()) {
-                PeopleEmptyBody()
-            } else {
-                PeopleContent(members = state.members, seatSummary = state.seatSummary)
+            Column(modifier = Modifier.fillMaxSize()) {
+                InviteColleagueButtonRow(onInviteClicked = onInviteClicked)
+                if (state.members.isEmpty()) {
+                    PeopleEmptyBody(modifier = Modifier.weight(1f))
+                } else {
+                    PeopleContent(members = state.members, seatSummary = state.seatSummary, modifier = Modifier.weight(1f))
+                }
             }
+    }
+}
+
+/** `docs/backlog/26-56-*.md`'s own mockup graph: `People -- "Пригласить" --> InviteSheet` — a persistent
+ * header action, present once the roster has loaded regardless of whether it turned out empty (unlike
+ * `ago-console`'s own `Panel` `actions` slot, which sits *inside* the non-empty seat-summary panel, this
+ * app's own empty state has nothing to attach a header action to, so this row sits above both branches
+ * instead of inside either one). */
+@Composable
+private fun InviteColleagueButtonRow(onInviteClicked: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        Button(onClick = onInviteClicked) {
+            Text(text = stringResource(R.string.people_invite_button))
+        }
     }
 }
 
@@ -78,8 +127,8 @@ private fun PeopleLoadingBody() {
 }
 
 @Composable
-private fun PeopleEmptyBody() {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+private fun PeopleEmptyBody(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Text(
             text = stringResource(R.string.people_empty),
             style = MaterialTheme.typography.bodyMedium,
@@ -127,8 +176,9 @@ private fun failureMessage(reason: OperatorTeamFailure): String =
 private fun PeopleContent(
     members: List<OperatorTeamMember>,
     seatSummary: List<RoleSeatSummary>,
+    modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         if (seatSummary.isNotEmpty()) {
             item(key = "seat-summary") {
                 SeatSummaryPanel(seatSummary = seatSummary)
@@ -242,9 +292,11 @@ private fun SeatBadge(holdsSeat: Boolean) {
 /** `OperatorsTeamPage.tsx`'s own `roleDisplayName`, restated — every role name this deployment has ever
  * seeded is one of the two named here; a role name this app does not recognise still renders (as the
  * Operator wording) rather than crashing, the same fail-open-to-a-label posture the console's own
- * ternary already takes. */
+ * ternary already takes. `internal`, not `private` — `26-56`'s own invite sheet (`InviteColleagueSheet.kt`)
+ * reads the identical wording for its role picker and its at-capacity refusal, rather than growing a
+ * second copy of this exact `when`. */
 @Composable
-private fun roleDisplayName(roleName: String): String =
+internal fun roleDisplayName(roleName: String): String =
     when (roleName) {
         ROLE_ADMIN -> stringResource(R.string.people_role_admin)
         else -> stringResource(R.string.people_role_operator)

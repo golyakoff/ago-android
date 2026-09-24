@@ -1,5 +1,7 @@
 package ago.chat.android.core.domain.team
 
+import ago.chat.android.core.domain.net.NetworkFailure
+
 /**
  * `26-55`: the port [ago.chat.android.team.PeopleViewModel] (`:app`) reads through — declared here and
  * implemented in `:core:network` (`KtorOperatorTeamApi`), the identical split
@@ -24,6 +26,35 @@ public interface OperatorTeamApi {
      * recomputed on this side (`docs/backlog/26-55-*.md`'s own Done-when: "no client-side seat
      * arithmetic exists anywhere in the change"). */
     public suspend fun fetchSeatSummary(): SeatSummaryResult
+
+    /**
+     * `POST /api/v1/sites/{siteId}/operator-invites` — `26-56`: invites [email] into [roleName].
+     * [CreateInviteResult.Created.code] is the plaintext invite code the server will only ever hand
+     * back this once (`ago-console`'s own `CreateOperatorInviteResponseDto` doc comment, mirrored on
+     * [CreateInviteResult.Created]'s own). A genuine server refusal — `OperatorInvite.InvalidEmail`
+     * chief among them — comes back as [CreateInviteResult.Refused], carrying the RFC 7807 `detail`
+     * verbatim: the identical split
+     * [ago.chat.android.core.domain.conversations.ConversationsApi.claim]'s own
+     * [ago.chat.android.core.domain.conversations.ClaimResult] already draws between a refusal the
+     * server wrote the words for and [CreateInviteResult.Failed] (transport trouble, or a shape this
+     * port never puts words to). This method never validates [email] itself — `docs/backlog/
+     * 26-56-*.md`'s own Done-when: "no client-side email regex exists in the change" — the server's
+     * own `InvalidEmail` refusal is the only check that ever runs against it.
+     *
+     * The at-capacity pre-flight ("does this role already hold `limit` seats") is not this method's
+     * job either — [PeopleUiState.Loaded]'s own [RoleSeatSummary.heldSeats]/[RoleSeatSummary.limit],
+     * already in hand before this screen ever opens the invite sheet, is what
+     * [ago.chat.android.team.InviteColleagueViewModel] checks before ever calling this at all (`>=`,
+     * never [RoleSeatSummary.overLimit]'s own `>` — that doc comment states why the two thresholds
+     * answer different questions). This method still exists for the ordinary case and the one race the
+     * client-side check cannot close (another admin's invite landing between this screen's own load and
+     * this call) — the server's own capacity check, whatever it comes back as, is still just another
+     * [CreateInviteResult.Refused].
+     */
+    public suspend fun createInvite(
+        roleName: String,
+        email: String,
+    ): CreateInviteResult
 }
 
 /**
@@ -87,6 +118,38 @@ public sealed interface SeatSummaryResult {
     public data class Failed(
         val reason: OperatorTeamFailure,
     ) : SeatSummaryResult
+}
+
+/**
+ * `26-56`: what creating one invite came back with — the identical three-arm shape
+ * [ago.chat.android.core.domain.conversations.ClaimResult] already establishes for a write that can be
+ * genuinely refused, read onto this port's own write rather than [OperatorTeamFailure]'s older two-arm
+ * shape (this port's own two reads still carry that one — migrating them is not this item's job).
+ */
+public sealed interface CreateInviteResult {
+    /** `201`. [sendFailed] is `true` when Keycloak's own realm relay failed to deliver the invite email
+     * at the SMTP layer — the invite still exists (`ago-console`'s own `CreateOperatorInviteResponseDto`
+     * doc comment: "the invite still exists either way"), so a caller renders this as a warning on an
+     * otherwise-created invite, never as a reason to treat the create itself as having failed. */
+    public data class Created(
+        val operatorInviteId: String,
+        val code: String,
+        val expiresAt: String,
+        val sendFailed: Boolean,
+    ) : CreateInviteResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — `OperatorInvite.InvalidEmail` chief
+     * among them. Shown to the administrator **as-is**: this port never reimplements the server's own
+     * email validation, nor invents a refusal sentence of its own. */
+    public data class Refused(
+        val detail: String,
+    ) : CreateInviteResult
+
+    /** Everything else that kept this call from succeeding — a dropped connection, or a non-2xx with no
+     * `detail` to show verbatim. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : CreateInviteResult
 }
 
 /**

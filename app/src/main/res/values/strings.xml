@@ -317,6 +317,31 @@
     <string name="people_role_admin">Администратор</string>
 
     <!--
+        `26-56`: «Пригласить» - the invite bottom sheet reached from Люди. Wording follows
+        `ago-console`'s own `operatorsTeamInvite*` strings (`ru.ts`) where the same fact is said on both
+        surfaces; the share-sheet action itself has no console counterpart at all (that surface has
+        nowhere to send a link to), so `people_invite_share_button`/`people_invite_copy_button` are this
+        screen's own wording.
+    -->
+    <string name="people_invite_button">Пригласить</string>
+    <string name="people_invite_dialog_title">Пригласить коллегу</string>
+    <string name="people_invite_email_label">Электронная почта</string>
+    <string name="people_invite_role_label">Роль</string>
+    <string name="people_invite_submit">Отправить приглашение</string>
+    <string name="people_invite_sending">Отправляем…</string>
+    <string name="people_invite_cancel">Отмена</string>
+    <string name="people_invite_email_required">Укажите email коллеги.</string>
+    <!-- `%1$s` - the role's own display name (Оператор/Администратор); `%2$d` - that role's seat limit. -->
+    <string name="people_invite_at_capacity">Для роли «%1$s» уже занято максимум мест (%2$d). Освободите место или увеличьте лимит, чтобы пригласить ещё одного коллегу.</string>
+    <string name="people_invite_send_failed_warning">Приглашение создано, но письмо не удалось отправить. Передайте ссылку коллеге вручную.</string>
+    <string name="people_invite_success_title">Приглашение создано</string>
+    <string name="people_invite_success_body">Передайте эту ссылку коллеге - она показывается только один раз.</string>
+    <string name="people_invite_share_button">Поделиться ссылкой</string>
+    <string name="people_invite_copy_button">Скопировать ссылку</string>
+    <string name="people_invite_copied_label">Скопировано в буфер обмена.</string>
+    <string name="people_invite_done_button">Готово</string>
+
+    <!--
         `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
         that segment has no screen behind it yet (this file's own `BookingsScreen`/`bookings_tab_pending`
         doc comment - the identical "a row exists only for a screen that exists" rule
