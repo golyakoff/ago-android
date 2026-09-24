@@ -448,6 +448,59 @@
     <string name="analytics_rate_label">Конверсия</string>
     <string name="analytics_rate_value">%1$s%% (%2$d из %3$d)</string>
 
+    <!--
+        `26-70`: Аналитика's own overflow, and «По сайту» behind it - the first of the five
+        administrator reports `26-58` decided all port to Android (`26-71`..`26-74` each add one more
+        entry to the same menu). Wording carried over from `ago-console`'s own `ru.ts` (`analytics*`/
+        `myNumbers*`) wherever the console already says the same thing about the same number, so the two
+        surfaces cannot describe one figure two ways.
+    -->
+    <string name="analytics_reports_menu_action">Отчёты</string>
+    <string name="analytics_report_site">По сайту</string>
+
+    <string name="analytics_overall_heading">Всего за период</string>
+    <string name="analytics_previous_period_heading">Предыдущий период</string>
+    <string name="analytics_previous_range_value">%1$s – %2$s</string>
+    <!-- The three renderings of one comparison: nothing moved; something moved against a window that
+         was empty, so there is no percentage of it; something moved against a real count. `%2$s` and
+         `%3$s` already carry their own sign (`%+d`/`%+.1f`), so no plus is written here. -->
+    <string name="analytics_comparison_no_change">%1$d (без изменений)</string>
+    <string name="analytics_comparison_absolute">%1$d (%2$s)</string>
+    <string name="analytics_comparison_relative">%1$d (%2$s, %3$s%%)</string>
+
+    <!-- Four independent breakdowns of the same window - a conversation appears in all four and the
+         counts do not sum across them, so each says for itself when it is empty rather than one
+         page-wide empty state standing in for four facts. -->
+    <string name="analytics_by_channel_heading">По каналам</string>
+    <string name="analytics_by_channel_empty">В этом периоде нет диалогов.</string>
+    <string name="analytics_channel_column">Канал</string>
+    <string name="analytics_channel_widget">Виджет</string>
+    <string name="analytics_channel_sms">SMS</string>
+    <string name="analytics_channel_max">MAX</string>
+    <string name="analytics_channel_telegram">Telegram</string>
+    <string name="analytics_channel_whatsapp">WhatsApp</string>
+
+    <string name="analytics_by_operator_heading">По операторам</string>
+    <string name="analytics_by_operator_empty">В этом периоде нет диалогов, отнесённых к оператору.</string>
+    <string name="analytics_operator_column">Оператор</string>
+    <!-- The third of three distinct values a cell can show, and the one this item exists to keep:
+         a real `0` is the digit, «нет данных об ответах» is the em dash (`analytics_no_data_value`),
+         and this is «оператор не вёл ни одного интервала в этом периоде» - three facts, three
+         renderings, never collapsed (`analyticsLoadNoDataValue` on the console). -->
+    <string name="analytics_load_no_data_value">Нет данных</string>
+    <string name="analytics_load_interval_note">«Всего вели» считает диалог один раз, даже если этот оператор вёл его дважды (передан и возвращён). «Штатно» и «Сверх нормы» считают интервалы назначения, где тот же диалог учитывается дважды.</string>
+
+    <!-- Stated once, above both tables it qualifies: источник перехода и метка кампании приходят от
+         браузера посетителя, и ни то ни другое AGO Chat не подтверждал. -->
+    <string name="analytics_traffic_source_note">То, что сообщил браузер посетителя, — не факт, независимо проверенный AGO Chat.</string>
+    <string name="analytics_by_referrer_heading">По источникам перехода</string>
+    <string name="analytics_by_referrer_empty">В этом периоде нет диалогов.</string>
+    <string name="analytics_referrer_column">Источник</string>
+    <string name="analytics_direct_referrer_label">Прямой переход</string>
+    <string name="analytics_by_campaign_heading">По рекламным кампаниям</string>
+    <string name="analytics_by_campaign_empty">В этом периоде нет диалогов с меткой кампании.</string>
+    <string name="analytics_campaign_column">Кампания</string>
+
     <!-- `26-16`: Ещё's own list-of-lists - the three folded section headers, drawn only once each has
          at least one real row (`navigation.md` §"The top-level shape"). -->
     <string name="more_section_channels">Каналы</string>

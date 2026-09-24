@@ -1,7 +1,6 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
-import ago.chat.android.analytics.AnalyticsRoute
 import ago.chat.android.bookings.BookingsRoute
 import ago.chat.android.core.domain.navigation.BottomDestination
 import ago.chat.android.core.domain.navigation.visibleBottomDestinations
@@ -520,10 +519,17 @@ private fun AppShellContent(
             composable(BottomDestination.Analytics.route()) {
                 // `26-77`: no Hilt-avoidance slot exists for Аналитика — no back-contract test has ever
                 // needed to visit its own content, only to navigate past it (`BackContractBottomBarTest`'s
-                // own `clause3_backNeverWalksThroughPreviouslyVisitedTabs`), so `AnalyticsRoute` is wired
-                // directly here rather than through one more slot on [AppShellScreen] nobody would ever
+                // own `clause3_backNeverWalksThroughPreviouslyVisitedTabs`), so this is wired directly
+                // here rather than through one more slot on [AppShellScreen] nobody would ever
                 // substitute.
-                AnalyticsRoute(
+                //
+                // `26-70`: [AnalyticsTabHost] replaces the bare `AnalyticsRoute` — Аналитика now has a
+                // landing screen and, behind its own overflow, the administrator reports. The host owns
+                // the back contract's clause 2 for that one level (its own doc comment), exactly as
+                // [MoreScreen] and [ConversationsTabHost] already do for theirs, which is why nothing
+                // about *this* `NavHost` changes: back from a report is consumed one level below here.
+                AnalyticsTabHost(
+                    permissions = permissions,
                     hubConnectionState = hubConnectionState,
                     operatorDisplayName = operatorDisplayName,
                     operatorEmail = operatorEmail,
