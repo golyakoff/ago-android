@@ -69,6 +69,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -235,6 +236,22 @@ internal fun ConversationListScreen(
     // now that the thread app-bar's subtitle is a second caller of the identical mechanism.
     val now = rememberTickingNow()
 
+    // `26-67`: [MineList]/[WaitingList]/[AllList] each call `rememberLazyListState()` for themselves, and
+    // that is still correct — see [MineList]'s own doc comment on why that alone is what survives a
+    // rotation and a process death. What it does not survive is *this* `when` below moving to a sibling
+    // branch: two branches of one `when` are two different compositions, so leaving one disposes it, and
+    // a plain `remember`/`rememberSaveable` inside a disposed composition is simply gone, not parked
+    // somewhere waiting for the branch to come back. `ConversationsTabHost` solved the identical problem
+    // one level up, for "list vs. open thread" (`26-15`'s own back-contract clause 1): a
+    // `rememberSaveableStateHolder`, with one `SaveableStateProvider` key per branch, keeps a disposed
+    // branch's saved state in the holder instead of discarding it, and restores it verbatim the next time
+    // that key's branch is composed again. This is that identical mechanism one level down, keyed by
+    // [ConversationListTab] instead of "list vs. thread" — the shape `docs/backlog/26-67-*.md`'s own
+    // Scope item 1 asks for by name, in preference to hoisting three `LazyListState`s eagerly (which
+    // would create state for a tab — «Все» is holder-gated to begin with — that may never be opened, and
+    // would not survive process death without reimplementing what this holder already does).
+    val listStateHolder = rememberSaveableStateHolder()
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             // `26-32`: one row of chrome, which is what the mockup draws. This used to be a `Column`
@@ -334,14 +351,18 @@ internal fun ConversationListScreen(
                         if (!state.allHasData) {
                             LoadingBody()
                         } else {
-                            AllList(
-                                rows = state.all,
-                                now = now,
-                                canErase = state.canErase,
-                                isLoadingMore = state.isLoadingAll,
-                                onLoadMore = onLoadMoreAll,
-                                onConfirmErasure = onConfirmErasure,
-                            )
+                            // `26-67`: keyed by the tab itself, matching [ConversationListTab.Mine] and
+                            // [ConversationListTab.Waiting] below.
+                            listStateHolder.SaveableStateProvider(ConversationListTab.All.name) {
+                                AllList(
+                                    rows = state.all,
+                                    now = now,
+                                    canErase = state.canErase,
+                                    isLoadingMore = state.isLoadingAll,
+                                    onLoadMore = onLoadMoreAll,
+                                    onConfirmErasure = onConfirmErasure,
+                                )
+                            }
                         }
 
                     // `26-60`: the first load failed and there is nothing cached to show in its place -
@@ -362,15 +383,19 @@ internal fun ConversationListScreen(
 
                     !state.hasData -> LoadingBody()
                     state.selectedTab == ConversationListTab.Mine ->
-                        MineList(rows = state.mine, now = now, onOpenConversation = onOpenConversation)
+                        listStateHolder.SaveableStateProvider(ConversationListTab.Mine.name) {
+                            MineList(rows = state.mine, now = now, onOpenConversation = onOpenConversation)
+                        }
 
                     else ->
-                        WaitingList(
-                            rows = state.waiting,
-                            now = now,
-                            onClaim = onClaim,
-                            onDismissClaimError = onDismissClaimError,
-                        )
+                        listStateHolder.SaveableStateProvider(ConversationListTab.Waiting.name) {
+                            WaitingList(
+                                rows = state.waiting,
+                                now = now,
+                                onClaim = onClaim,
+                                onDismissClaimError = onDismissClaimError,
+                            )
+                        }
                 }
             }
         }
@@ -577,6 +602,10 @@ private fun QueueLoadErrorBanner(
  * hand — which covers both a configuration change (the `ViewModel` and this state alike survive it) and
  * a process death recreation (`rememberSaveable`'s own `Bundle` round trip, which a plain `remember`
  * would not survive).
+ *
+ * `26-67`: what that doc comment does *not* cover — switching to «Ожидают» and back — is handled one
+ * level up, by [ConversationListScreen]'s own `listStateHolder`; this function is unaware of it and
+ * stays exactly as simple as the paragraph above already describes.
  */
 @Composable
 private fun MineList(
