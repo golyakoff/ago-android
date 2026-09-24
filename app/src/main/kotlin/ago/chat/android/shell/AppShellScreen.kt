@@ -205,14 +205,16 @@ internal fun AppShellScreen(
     // (`{ Text("BOOKINGS_MARKER") }`) still type-checks unchanged against this widened type: a
     // function literal that never reads its parameters is ordinary Kotlin, not a test-only
     // accommodation.
-    bookingsTab: @Composable (Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
         showConfirmedSegment,
         showClientsSegment,
+        showServicesSegment,
         onOpenSettings,
         ->
         BookingsRoute(
             showConfirmedSegment = showConfirmedSegment,
             showClientsSegment = showClientsSegment,
+            showServicesSegment = showServicesSegment,
             hubConnectionState = hubConnectionState,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
@@ -317,7 +319,7 @@ private fun AppShellContent(
     unreadConversationsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
-    bookingsTab: @Composable (Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -511,6 +513,11 @@ private fun AppShellContent(
                 bookingsTab(
                     permissions.holds(Permission.CUSTOMER_READ),
                     permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                    // `26-96`: `calendar:configure` alone - a fourth, independent gate, not the third
+                    // one reused (see [visibleBookingsTabs]' own doc comment: an operator holding only
+                    // `customer:read` may read the customer base without rewriting the tenant's own
+                    // service dictionary).
+                    permissions.holds(Permission.CALENDAR_CONFIGURE),
                 ) { navController.navigate(SETTINGS_ROUTE) }
             }
             composable(BottomDestination.Team.route()) {

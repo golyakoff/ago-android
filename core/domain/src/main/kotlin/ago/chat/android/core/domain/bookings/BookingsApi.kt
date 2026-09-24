@@ -12,6 +12,14 @@ package ago.chat.android.core.domain.bookings
  * (`docs/backlog/26-48-*.md`'s own Scope: "the whole promise... shows this tenant's real
  * pending-booking queue, read-only"). Every write (reject/cancel) is `26-49`, a separate port on a
  * separate item.
+ *
+ * **The name is a historical artifact, the same way [BookingsQueueFailure]'s own doc comment says its
+ * is.** This is the port for `Ago.Calendar.Api`'s whole `/api/v1/console` surface as this app uses it,
+ * not for bookings alone — `26-52` put contacts on it, `26-53` a phone reveal, and `26-96` the service
+ * dictionary and its edit. A fourth and fifth adapter would each repeat the same base-URL check, the
+ * same `X-Ago-Active-Site` plumbing and the same [BookingsQueueFailure] classification for no
+ * separation that exists in the deployment: one origin, one token, one set of failure modes. Renaming
+ * it is a mechanical change worth its own item, not a side effect of this one.
  */
 public interface BookingsApi {
     /**
@@ -84,6 +92,71 @@ public interface BookingsApi {
         customerId: String,
         surface: String,
     ): RevealPhoneResult
+
+    /**
+     * `26-96`: `GET /api/v1/console/configuration`, read for one field — `services`. The console's own
+     * `getConfiguration` (`calendarApi.ts`) returns the whole tenant configuration; this app has one
+     * screen for one slice of it, so the adapter reads the whole document and hands back only that
+     * list rather than modelling calendars, workers, origins and a public key nothing here draws.
+     *
+     * **Archived services come back too, and that is the point.** The server deliberately does not
+     * filter them out of this read — it is what a worker card and a past booking resolve a service
+     * name through — so [ConfiguredService.isActive] is a field to render, never a row to drop.
+     */
+    public suspend fun fetchServices(): ServicesResult
+
+    /**
+     * `26-96`: `PUT /api/v1/console/services/{serviceId}` — the edit this product had no endpoint for
+     * until that item, and the one write that takes a service out of rotation.
+     *
+     * **Replace semantics: every field is sent, every time.** The server rewrites the whole record
+     * from this body, so a caller flipping only [isActive] still sends the other five as they stand —
+     * the identical shape `ago-console`'s own `updateService` uses, and the reason this method takes
+     * six parameters rather than a partial patch object.
+     *
+     * There is deliberately **no `deleteService` beside it**. Four server-side read models resolve a
+     * past booking's service *name* through the `services` row, so deleting one would retroactively
+     * blank the service on every booking that ever used it — [ConfiguredService.isActive] is what this
+     * product offers instead (`Ago.Calendar.Domain.Service.IsActive`'s own remarks).
+     *
+     * Answers with [BookingActionResult], reused rather than restated: a `204`, a server-authored
+     * refusal shown verbatim, or a failure — the identical three-way question the veto writes on this
+     * same port already reduce to. A domain refusal an operator can actually act on (a non-positive
+     * duration, say) arrives as [BookingActionResult.Refused] carrying the server's own sentence,
+     * which is exactly why this write must not invent its own validation messages.
+     */
+    public suspend fun updateService(
+        serviceId: String,
+        name: String,
+        durationMinutes: Int,
+        priceMinorUnits: Int?,
+        priceIsFrom: Boolean,
+        description: String?,
+        isActive: Boolean,
+    ): BookingActionResult
+}
+
+/**
+ * `26-96`: what asking for the tenant's own service dictionary came back with — the identical
+ * three-arm shape [PendingBookingsResult]/[ConfirmedBookingsResult]/[ContactsResult] already establish,
+ * restated for the same reason those three are restated from one another: [Loaded] carries
+ * [ConfiguredService], a type with no field in common with any of them.
+ */
+public sealed interface ServicesResult {
+    public data class Loaded(
+        val services: List<ConfiguredService>,
+    ) : ServicesResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact
+     * [PendingBookingsResult.NotConfigured]'s own doc comment explains. */
+    public data object NotConfigured : ServicesResult
+
+    /** [BookingsQueueFailure] reused a fourth time - this read reduces to the same "is it me, or is it
+     * broken" two-way question, and that type's own doc comment already says its name is a historical
+     * artifact of the pending queue having been the first caller. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : ServicesResult
 }
 
 /**

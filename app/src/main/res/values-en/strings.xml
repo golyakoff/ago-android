@@ -256,6 +256,27 @@
     <string name="bookings_contacts_reveal_phone">Show</string>
     <string name="bookings_contacts_revealing_phone">Showing…</string>
 
+    <string name="bookings_tab_services">Services</string>
+    <string name="services_empty">This tenant has no services yet.</string>
+    <string name="services_load_failed_unexpected">Couldn\'t load services. Try again.</string>
+    <string name="services_status_withdrawn">Withdrawn</string>
+    <string name="services_price_unstated">No stated price</string>
+    <string name="services_price_exact">%s RUB</string>
+    <string name="services_price_from">from %s RUB</string>
+    <string name="services_action_edit">Edit</string>
+    <string name="services_action_withdraw">Withdraw</string>
+    <string name="services_action_restore">Put back on offer</string>
+    <string name="services_action_save">Save</string>
+    <string name="services_field_name">Service name</string>
+    <string name="services_field_duration">Duration (minutes)</string>
+    <string name="services_field_price">Price (RUB)</string>
+    <string name="services_field_price_placeholder">No stated price</string>
+    <string name="services_field_price_from">“From” price (varies by master or job)</string>
+    <string name="services_field_description">Description</string>
+    <string name="services_field_active">On offer</string>
+    <string name="services_withdrawn_note">A withdrawn service can no longer be chosen in the booking widget. Bookings already taken and worker cards keep it - the service is not deleted, and it can be put back on offer.</string>
+    <string name="services_duration_invalid">Enter a duration in whole minutes.</string>
+
     <string name="analytics_from_field_label">From</string>
     <string name="analytics_to_field_label">To</string>
     <string name="analytics_apply_button">Apply</string>

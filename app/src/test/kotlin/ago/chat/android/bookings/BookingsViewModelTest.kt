@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.bookings.ServicesResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -301,5 +302,19 @@ class BookingsViewModelTest {
             onAction()
             return actionResult
         }
+
+        // `26-96` widened `BookingsApi` with the service dictionary and its edit - neither of which
+        // this class reads or writes.
+        override suspend fun fetchServices(): ServicesResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun updateService(
+            serviceId: String,
+            name: String,
+            durationMinutes: Int,
+            priceMinorUnits: Int?,
+            priceIsFrom: Boolean,
+            description: String?,
+            isActive: Boolean,
+        ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
     }
 }
