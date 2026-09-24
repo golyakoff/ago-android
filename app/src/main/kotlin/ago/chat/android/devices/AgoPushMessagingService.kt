@@ -1,5 +1,6 @@
 package ago.chat.android.devices
 
+import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.di.IoDispatcher
 import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
@@ -58,7 +59,7 @@ public class AgoPushMessagingService : RuStoreMessagingService() {
      */
     override fun onNewToken(token: String) {
         scope.launch {
-            runCatching { coordinator.onNewToken(token) }
+            runCatching { coordinator.onNewToken(PushProvider.RuStore, token) }
         }
     }
 

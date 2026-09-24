@@ -1,5 +1,7 @@
 package ago.chat.android.devices
 
+import ago.chat.android.core.domain.devices.PushProvider
+
 /**
  * `26-06`/`adr/0180`: the app's one seam onto the RuStore Push SDK.
  *
@@ -20,6 +22,17 @@ package ago.chat.android.devices
  * `ago.chat.android.core.domain.net.NetworkFailure` already does for Ktor/OkHttp's own exceptions.
  */
 public interface PushRegistrationGateway {
+    /**
+     * `26-100`/`adr/0181`: which transport this gateway instance actually talks to - `fcm` or
+     * `rustore` - fixed per concrete implementation ([RuStorePushGateway] always reports
+     * [PushProvider.RuStore], [FcmPushGateway] always [PushProvider.Fcm]). `di/AppModule.kt`'s
+     * `providePushRegistrationGateway` is what picks *which instance* the app's one `@Singleton`
+     * binding resolves to, via [TransportSelector] - this property is how
+     * [DeviceRegistrationCoordinator] learns which provider that was, so it can tell the server without
+     * importing either concrete SDK itself.
+     */
+    public val provider: PushProvider
+
     /** `RuStorePushClient.getToken()` - mints one if this device has none. */
     public suspend fun currentToken(): PushTokenResult
 

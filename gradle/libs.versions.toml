@@ -179,6 +179,22 @@ rustorePushClient = "7.5.0"
 # / `compileSdk = 37`.
 work = "2.10.1"
 
+# `26-100`/`adr/0181`: FCM, the primary push transport now - RuStore (`rustorePushClient` above) stays
+# the fallback. Pinned directly rather than through the Firebase BoM: this app has no other Firebase
+# artifact to keep mutually consistent with it, and every other row in this catalog is already a single
+# pinned version rather than a BoM-managed set (the `composeBom` row above is the one deliberate
+# exception, for a library family this project actually spans several of). 25.1.3 is the `<release>` in
+# `dl.google.com/android/maven2/com/google/firebase/firebase-messaging/maven-metadata.xml`, read
+# 2026-09-25.
+firebaseMessaging = "25.1.3"
+
+# `26-100`: `GoogleApiAvailability`/`ConnectionResult` - `TransportSelector`'s own per-device check for
+# whether FCM's distributor (Google Play Services) is actually usable here, and `FcmPushGateway`'s own
+# `checkAvailability()`. 18.11.0 is the `<release>` in
+# `dl.google.com/android/maven2/com/google/android/gms/play-services-base/maven-metadata.xml`, read
+# 2026-09-25.
+playServicesBase = "18.11.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -262,6 +278,14 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 # test can fall into, which testing the worker's `doWork()` directly and the `WorkRequest`'s own built
 # constraints separately both avoid).
 androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }
+
+# `26-100`/`adr/0181`: FCM — see the `firebaseMessaging` version row above. No `com.google.gms.google-
+# services` plugin/BoM: `FirebaseApp.initializeApp` is called manually from `BuildConfig` fields
+# (`AgoChatApplication`'s own doc comment), so no `google-services.json` is ever committed to this
+# public repo.
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
+# `26-100`: `GoogleApiAvailability` — see the `playServicesBase` version row above.
+play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

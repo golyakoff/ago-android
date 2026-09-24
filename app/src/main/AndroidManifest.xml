@@ -130,6 +130,21 @@
         </service>
 
         <!--
+            `26-100`/`adr/0181`: FCM's own receive path, alongside RuStore's above -
+            `AgoFcmMessagingService`'s own doc comment. `android:exported="false"`, unlike RuStore's
+            service: FCM starts this in-process itself rather than depending on a distributor app in a
+            separate process to start it, so there is nothing outside this app that ever needs to bind to
+            it directly.
+        -->
+        <service
+            android:name="ago.chat.android.devices.AgoFcmMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
             `26-85`: never started by anything outside this app (`exported="false"`) - only
             `ForegroundServiceLauncher`'s own `startService`/`stopService` calls, which already run in
             this process, ever name this class. `foregroundServiceType="connectedDevice"` is mandatory

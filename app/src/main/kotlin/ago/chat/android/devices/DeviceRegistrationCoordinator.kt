@@ -2,6 +2,7 @@ package ago.chat.android.devices
 
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
+import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.di.IoDispatcher
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
@@ -75,7 +76,7 @@ public class DeviceRegistrationCoordinator
 
                 when (val token = pushGateway.currentToken()) {
                     is PushTokenResult.Token ->
-                        deviceRegistrationApi.register(installationIdProvider.installationId(), token.value)
+                        deviceRegistrationApi.register(installationIdProvider.installationId(), token.value, pushGateway.provider)
                     is PushTokenResult.Unavailable -> {
                         reportTokenFailure(token.reason, token.critical)
                         true
@@ -106,12 +107,22 @@ public class DeviceRegistrationCoordinator
             mutablePushAvailability.value = PushAvailability.Unavailable(reason)
         }
 
-        /** [AgoPushMessagingService.onNewToken]'s own call - the identical write [registerThisDevice]
-         * makes, with the token the rotation callback already handed over rather than asking the SDK
-         * for it again. */
-        public suspend fun onNewToken(token: String): Boolean =
+        /**
+         * [AgoPushMessagingService.onNewToken]/[AgoFcmMessagingService.onNewToken]'s own call - the
+         * identical write [registerThisDevice] makes, with the token the rotation callback already
+         * handed over rather than asking the SDK for it again.
+         *
+         * `26-100`/`adr/0181`: [provider] is the caller's own, not read off [pushGateway] - each
+         * messaging service is permanently wired to exactly one transport (RuStore's `onNewToken` fires
+         * only for a RuStore-minted token, FCM's only for an FCM one), and that is true regardless of
+         * which gateway `di/AppModule.kt` happened to select as *this* device's registration transport.
+         */
+        public suspend fun onNewToken(
+            provider: PushProvider,
+            token: String,
+        ): Boolean =
             withContext(ioDispatcher) {
-                deviceRegistrationApi.register(installationIdProvider.installationId(), token)
+                deviceRegistrationApi.register(installationIdProvider.installationId(), token, provider)
             }
 
         /**

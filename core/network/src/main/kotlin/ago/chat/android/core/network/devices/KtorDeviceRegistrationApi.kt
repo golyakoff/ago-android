@@ -1,6 +1,7 @@
 package ago.chat.android.core.network.devices
 
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
+import ago.chat.android.core.domain.devices.PushProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.request.delete
 import io.ktor.client.request.put
@@ -22,11 +23,12 @@ import kotlinx.serialization.Serializable
  * different `operator_id`s server-side, even though [installationId] - deliberately the *same* value
  * both times - never varies. This class has no "which tenancy" concept of its own to get wrong.
  *
- * **`"rustore"`/`"android"` are literals here, not parameters.** `adr/0180` fixed the provider for the
- * whole app, and this is the one client this whole product ships (`docs/architecture.md`'s stack
- * table has no second platform for this repository to build). A port that accepted them as arguments
- * would let a caller send a payload the server was never going to see any other value for - the
- * identical reasoning against inventing a parameter nothing varies.
+ * **`"android"` is a literal here, `provider` is not.** `platform` has exactly one value because this
+ * is the one client this whole product ships (`docs/architecture.md`'s stack table has no second
+ * platform for this repository to build) - the identical reasoning that made `provider` a literal too
+ * under `adr/0180`. `26-100`/`adr/0181` reopened that for `provider` alone: a device now carries whichever
+ * transport [ago.chat.android.devices.TransportSelector] chose for it, so this adapter renders whatever
+ * [PushProvider] its caller hands it ([PushProvider.wireValue]) rather than a fixed string.
  */
 public class KtorDeviceRegistrationApi(
     private val client: HttpClient,
@@ -35,6 +37,7 @@ public class KtorDeviceRegistrationApi(
     override suspend fun register(
         installationId: String,
         token: String,
+        provider: PushProvider,
     ): Boolean {
         val response =
             try {
@@ -44,7 +47,7 @@ public class KtorDeviceRegistrationApi(
                     // request's own declared `Content-Type` - omitting this is what produced "Kotlin
                     // reflection is not available" the first time this app ever sent a POST body.
                     contentType(ContentType.Application.Json)
-                    setBody(RegisterDeviceRequestWireDto(provider = PROVIDER, platform = PLATFORM, token = token))
+                    setBody(RegisterDeviceRequestWireDto(provider = provider.wireValue, platform = PLATFORM, token = token))
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -69,7 +72,6 @@ public class KtorDeviceRegistrationApi(
     }
 
     private companion object {
-        const val PROVIDER = "rustore"
         const val PLATFORM = "android"
     }
 }

@@ -11,6 +11,7 @@ import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
+import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
@@ -52,6 +53,7 @@ import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationCoordinator
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.DeviceRevocation
+import ago.chat.android.devices.FcmPushGateway
 import ago.chat.android.devices.LocalClock
 import ago.chat.android.devices.NotificationChannelStateReader
 import ago.chat.android.devices.NotificationPermissionChecker
@@ -64,6 +66,7 @@ import ago.chat.android.devices.QuietHoursPreferences
 import ago.chat.android.devices.RuStorePushGateway
 import ago.chat.android.devices.SystemLocalClock
 import ago.chat.android.devices.SystemPushNotificationPresenter
+import ago.chat.android.devices.TransportSelector
 import ago.chat.android.devices.WorkManagerDeviceRegistrationScheduler
 import ago.chat.android.presence.AndroidBatteryOptimizationGate
 import ago.chat.android.presence.AndroidForegroundServiceLauncher
@@ -509,9 +512,9 @@ public object AppModule {
     public fun provideInstallationIdProvider(installationId: DataStoreInstallationId): InstallationIdProvider = installationId
 
     /**
-     * `26-06`: the RuStore-facing half of push registration, over the shared authenticated
-     * `HttpClient` every other `:core:network` adapter uses - `KtorDeviceRegistrationApi`'s own doc
-     * comment states why `"rustore"`/`"android"` are literals inside it rather than parameters here.
+     * `26-06`/`26-100`: the device-registration half over the shared authenticated `HttpClient` every
+     * other `:core:network` adapter uses - `KtorDeviceRegistrationApi`'s own doc comment states why
+     * `"android"` alone is a literal inside it, `provider` no longer one since `adr/0181`.
      */
     @Provides
     public fun provideDeviceRegistrationApi(
@@ -519,9 +522,25 @@ public object AppModule {
         config: OidcConfig,
     ): DeviceRegistrationApi = KtorDeviceRegistrationApi(client, config.apiBaseUrl)
 
+    /**
+     * `26-100`/`adr/0181`: the selecting binding - [TransportSelector] decides once, at graph-
+     * construction time, which concrete gateway this app's one `@Singleton` [PushRegistrationGateway]
+     * resolves to for the rest of this process's life (that class's own doc comment: "decided once, at
+     * the DI boundary, not re-asked by every caller"). Both concrete gateways are themselves
+     * `@Singleton` and do nothing at construction time, so requesting both here and using only one costs
+     * nothing measurable either way.
+     */
     @Provides
     @Singleton
-    public fun providePushRegistrationGateway(gateway: RuStorePushGateway): PushRegistrationGateway = gateway
+    public fun providePushRegistrationGateway(
+        selector: TransportSelector,
+        fcmGateway: FcmPushGateway,
+        ruStoreGateway: RuStorePushGateway,
+    ): PushRegistrationGateway =
+        when (selector.selectedProvider()) {
+            PushProvider.Fcm -> fcmGateway
+            PushProvider.RuStore -> ruStoreGateway
+        }
 
     /**
      * `26-06`: two bindings onto the identical `@Singleton` [DeviceRegistrationCoordinator] instance -
