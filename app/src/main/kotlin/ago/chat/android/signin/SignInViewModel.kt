@@ -9,6 +9,7 @@ import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.SignInFailedException
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -48,6 +49,7 @@ public class SignInViewModel
         private val hubConnection: OperatorHubConnection,
         private val deviceRegistrar: DeviceRegistrar,
         private val registrationScheduler: DeviceRegistrationScheduler,
+        private val presenceController: OperatorPresenceController,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<SignInUiState>(SignInUiState.Starting)
@@ -170,6 +172,12 @@ public class SignInViewModel
             viewModelScope.launch {
                 mutableState.value = SignInUiState.Working
                 session.signOut()
+                // `26-85`: stops `OperatorPresenceService` and lowers `OperatorPresenceGate` - a
+                // signed-out identity has no permission set worth keeping a background connection open
+                // for, and `AppShellViewModel`'s own `NavBackStackEntry` (the only other caller of
+                // `OperatorPresenceController`) is torn down by this same sign-out with nothing left to
+                // fetch permissions again on.
+                presenceController.onSignedOut()
                 mutableState.value = SignInUiState.SignedOut
             }
         }

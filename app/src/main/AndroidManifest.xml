@@ -10,6 +10,30 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+        `26-85`: `OperatorPresenceService`'s own four permissions - all normal (install-time, never a
+        runtime prompt), so none of these adds a dialog anywhere in the app.
+
+        - `FOREGROUND_SERVICE`: the base permission every foreground service has needed since API 28;
+          this app's `targetSdk` (34) is well past that floor.
+        - `FOREGROUND_SERVICE_CONNECTED_DEVICE`: the per-type permission Android 14 (API 34) requires
+          declared for each `android:foregroundServiceType` a service actually uses - this service
+          declares exactly `connectedDevice` below, so this is the one matching permission, not a set.
+        - `CHANGE_NETWORK_STATE`: the platform's own runtime check for the `connectedDevice` type
+          additionally requires the app to hold at least one of a fixed list of connectivity-flavoured
+          permissions (Bluetooth, NFC, USB, or this one) - confirmed against Android's own foreground-
+          service-types documentation, not exercised on a real API 34 device in this sandbox (no
+          emulator here; flagged `[~]` in this item's own report). This app has no Bluetooth/NFC/USB use
+          case at all, so this normal, always-granted permission is declared solely to satisfy that
+          check for a service whose actual job - a persistent SignalR connection - is a network one.
+        - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: required to launch
+          `Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` at all (`MainActivity`'s own launcher).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
         `26-06`: `POST_NOTIFICATIONS` (API 33+) ships in `pushclient-7.5.0.aar`'s own manifest and
         merges in automatically — RuStore's own documentation states this has been the SDK's default
         since 1.4.0. Declared here as a comment, not a line, so a future reader searching this file for
@@ -104,6 +128,20 @@
                 <action android:name="ru.rustore.sdk.pushclient.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!--
+            `26-85`: never started by anything outside this app (`exported="false"`) - only
+            `ForegroundServiceLauncher`'s own `startService`/`stopService` calls, which already run in
+            this process, ever name this class. `foregroundServiceType="connectedDevice"` is mandatory
+            from API 34 for a service that calls `startForeground` at all - "maintains a connection to a
+            remote system" (this service's actual job, an operator's own SignalR hub connection) is the
+            documented use case that type exists for; omitting it is a hard manifest-merger/runtime
+            failure on API 34+, not a style choice (`docs/backlog/26-85-*.md`).
+        -->
+        <service
+            android:name="ago.chat.android.presence.OperatorPresenceService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 
 </manifest>

@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OperatorIdentity
 import ago.chat.android.session.OperatorIdentityProvider
 import androidx.lifecycle.ViewModel
@@ -21,6 +22,11 @@ import javax.inject.Inject
 /**
  * `26-16`: reads the signed-in operator's own [OperatorPermissions] once per session — the fact the
  * whole bottom navigation bar is computed from (`ago.chat.android.core.domain.navigation.visibleBottomDestinations`).
+ *
+ * `26-85`: also the one call site that hands that same permission set to [OperatorPresenceController] —
+ * not a new fetch, the identical answer [permissions] itself renders from, so an operator's own
+ * background-presence eligibility is computed from the exact set the bottom bar already trusts, never a
+ * second, independently-timed read of the same endpoint.
  *
  * **Scoped to [AppShellRoute]'s own call site — the shell, not the Activity — which is exactly the
  * "one call, once, when the operator screen actually mounts" scope `ago-console`'s own
@@ -51,6 +57,7 @@ public class AppShellViewModel
     constructor(
         private val api: OperatorPermissionsApi,
         private val identityProvider: OperatorIdentityProvider,
+        private val presenceController: OperatorPresenceController,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
@@ -91,8 +98,13 @@ public class AppShellViewModel
             viewModelScope.launch {
                 when (val fetch = withContext(ioDispatcher) { api.fetchMyPermissions() }) {
                     is PermissionsFetch.Loaded -> {
-                        mutablePermissions.value = OperatorPermissions.Known(fetch.granted)
+                        val knownPermissions = OperatorPermissions.Known(fetch.granted)
+                        mutablePermissions.value = knownPermissions
                         mutableLoadError.value = null
+                        // `26-85`: the one call site that knows what this session's permission set
+                        // actually is - `OperatorPresenceController` decides from it whether
+                        // `OperatorPresenceService` should be running at all.
+                        presenceController.onPermissionsLoaded(knownPermissions)
                     }
 
                     is PermissionsFetch.Failed -> {
