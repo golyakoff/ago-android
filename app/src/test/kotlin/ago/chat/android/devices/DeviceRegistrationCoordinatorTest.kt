@@ -2,6 +2,7 @@ package ago.chat.android.devices
 
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
+import ago.chat.android.core.domain.devices.PushProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -153,7 +154,7 @@ class DeviceRegistrationCoordinatorTest {
             val api = FakeDeviceRegistrationApi()
             val coordinator = coordinatorFor(installationId = "install-1", gateway = gateway, api = api)
 
-            assertTrue(coordinator.onNewToken("rotated-token"))
+            assertTrue(coordinator.onNewToken(PushProvider.RuStore, "rotated-token"))
 
             assertEquals(listOf("install-1" to "rotated-token"), api.registerCalls)
             assertEquals(0, gateway.currentTokenCalls)
@@ -165,10 +166,45 @@ class DeviceRegistrationCoordinatorTest {
             val api = FakeDeviceRegistrationApi()
             val coordinator = coordinatorFor(installationId = "install-1", api = api)
 
-            coordinator.onNewToken("token-1")
-            coordinator.onNewToken("token-2")
+            coordinator.onNewToken(PushProvider.RuStore, "token-1")
+            coordinator.onNewToken(PushProvider.RuStore, "token-2")
 
             assertEquals(listOf("install-1" to "token-1", "install-1" to "token-2"), api.registerCalls)
+        }
+
+    @Test
+    fun `26-100 - onNewToken passes the caller's own provider through, regardless of which gateway is bound`() =
+        runTest {
+            val api = FakeDeviceRegistrationApi()
+            // The bound gateway is RuStore, but `AgoFcmMessagingService`'s own `onNewToken` call always
+            // names `PushProvider.Fcm` for itself - that class's own doc comment states why the provider
+            // is the caller's, not read off `pushGateway`.
+            val coordinator =
+                coordinatorFor(
+                    installationId = "install-1",
+                    gateway = FakeGateway(provider = PushProvider.RuStore),
+                    api = api,
+                )
+
+            coordinator.onNewToken(PushProvider.Fcm, "an-fcm-token")
+
+            assertEquals(listOf(PushProvider.Fcm), api.registerProviders)
+        }
+
+    @Test
+    fun `26-100 - registerThisDevice registers with whichever provider the bound gateway reports`() =
+        runTest {
+            val api = FakeDeviceRegistrationApi()
+            val coordinator =
+                coordinatorFor(
+                    token = PushTokenResult.Token("token"),
+                    gateway = FakeGateway(token = PushTokenResult.Token("token"), provider = PushProvider.Fcm),
+                    api = api,
+                )
+
+            coordinator.registerThisDevice()
+
+            assertEquals(listOf(PushProvider.Fcm), api.registerProviders)
         }
 
     @Test
@@ -180,6 +216,7 @@ class DeviceRegistrationCoordinatorTest {
                     override suspend fun register(
                         installationId: String,
                         token: String,
+                        provider: PushProvider,
                     ): Boolean = true
 
                     override suspend fun revoke(installationId: String): Boolean {
@@ -189,6 +226,8 @@ class DeviceRegistrationCoordinatorTest {
                 }
             val gateway =
                 object : PushRegistrationGateway {
+                    override val provider: PushProvider = PushProvider.RuStore
+
                     override suspend fun currentToken(): PushTokenResult =
                         PushTokenResult.Unavailable(PushUnavailableReason.Unknown, critical = false)
 
@@ -240,6 +279,7 @@ class DeviceRegistrationCoordinatorTest {
     private class FakeGateway(
         private val token: PushTokenResult = PushTokenResult.Token("token"),
         private val availability: PushAvailability = PushAvailability.Available,
+        override val provider: PushProvider = PushProvider.RuStore,
     ) : PushRegistrationGateway {
         var currentTokenCalls: Int = 0
             private set
@@ -260,13 +300,16 @@ class DeviceRegistrationCoordinatorTest {
         private val revokeResult: Boolean = true,
     ) : DeviceRegistrationApi {
         val registerCalls = mutableListOf<Pair<String, String>>()
+        val registerProviders = mutableListOf<PushProvider>()
         val revokeCalls = mutableListOf<String>()
 
         override suspend fun register(
             installationId: String,
             token: String,
+            provider: PushProvider,
         ): Boolean {
             registerCalls += installationId to token
+            registerProviders += provider
             return registerResult
         }
 

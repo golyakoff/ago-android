@@ -1,12 +1,16 @@
 package ago.chat.android
 
 import ago.chat.android.conversations.ConversationListForegroundRefreshTrigger
+import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.devices.ProcessLifecycleForegroundTracker
+import ago.chat.android.devices.TransportSelector
 import ago.chat.android.devices.ensureChannelsCreated
 import ago.chat.android.presence.ensurePresenceChannelCreated
 import ago.chat.android.realtime.OperatorHubConnectionLifecycle
 import android.app.ActivityManager
 import android.app.Application
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import dagger.hilt.android.HiltAndroidApp
 import ru.rustore.sdk.pushclient.RuStorePushClient
 import ru.rustore.sdk.pushclient.common.logger.DefaultLogger
@@ -58,6 +62,15 @@ import javax.inject.Inject
  * token appears in logcat… checked with the SDK's own default logger active, since that is what a
  * developer will actually be running" — a filtering logger substituted here would make that check
  * meaningless rather than pass it honestly.
+ *
+ * `26-100`/`adr/0181`: also where `FirebaseApp.initializeApp` runs, manually, for the identical
+ * "`BuildConfig` field, not a second parallel way of naming the same value" reason — `FirebaseOptions`
+ * built from `agoFcmProperty`'s four fields (`app/build.gradle.kts`'s own doc comment) rather than a
+ * committed `google-services.json`, which would be a secret-shaped file this public repo cannot hold
+ * even though its contents are not secret. Gated on [TransportSelector.selectedProvider] rather than run
+ * unconditionally like RuStore's own `init` above: initialising Firebase with an empty-string
+ * `FirebaseOptions` (a checkout with none of the four `local.properties` values set) has nothing useful
+ * to do, and RuStore already covers every device this branch skips.
  */
 @HiltAndroidApp
 public class AgoChatApplication : Application() {
@@ -69,6 +82,9 @@ public class AgoChatApplication : Application() {
 
     @Inject
     public lateinit var conversationListForegroundRefreshTrigger: ConversationListForegroundRefreshTrigger
+
+    @Inject
+    public lateinit var transportSelector: TransportSelector
 
     override fun onCreate() {
         super.onCreate()
@@ -86,6 +102,19 @@ public class AgoChatApplication : Application() {
                 projectId = BuildConfig.AGO_RUSTORE_PUSH_PROJECT_ID,
                 logger = DefaultLogger(),
             )
+
+            if (transportSelector.selectedProvider() == PushProvider.Fcm) {
+                FirebaseApp.initializeApp(
+                    this,
+                    FirebaseOptions
+                        .Builder()
+                        .setProjectId(BuildConfig.AGO_FCM_PROJECT_ID)
+                        .setGcmSenderId(BuildConfig.AGO_FCM_PROJECT_NUMBER)
+                        .setApplicationId(BuildConfig.AGO_FCM_APPLICATION_ID)
+                        .setApiKey(BuildConfig.AGO_FCM_API_KEY)
+                        .build(),
+                )
+            }
         }
     }
 

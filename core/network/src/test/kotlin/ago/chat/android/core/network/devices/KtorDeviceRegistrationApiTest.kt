@@ -1,5 +1,6 @@
 package ago.chat.android.core.network.devices
 
+import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
 import ago.chat.android.core.network.installAgoRestDefaults
@@ -38,11 +39,26 @@ class KtorDeviceRegistrationApiTest {
                     respond("", HttpStatusCode.NoContent)
                 }
 
-            assertEquals(true, api.register("install-1", "the-real-push-token"))
+            assertEquals(true, api.register("install-1", "the-real-push-token", PushProvider.RuStore))
             assertEquals(HttpMethod.Put to "$baseUrl/api/v1/me/devices/install-1", requested.single())
             assertTrue(sentBody.contains("\"provider\":\"rustore\""))
             assertTrue(sentBody.contains("\"platform\":\"android\""))
             assertTrue(sentBody.contains("\"token\":\"the-real-push-token\""))
+        }
+
+    @Test
+    fun `26-100 - an fcm provider renders its own wire value, not rustore's`() =
+        runTest {
+            var sentBody = ""
+            val api =
+                apiFor { request ->
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(true, api.register("install-1", "an-fcm-token", PushProvider.Fcm))
+            assertTrue(sentBody.contains("\"provider\":\"fcm\""))
+            assertTrue(sentBody.contains("\"platform\":\"android\""))
         }
 
     @Test
@@ -52,9 +68,9 @@ class KtorDeviceRegistrationApiTest {
             val activeSite = InMemoryActiveSite("site-a")
             val api = apiFor(activeSite = activeSite, recordTo = requested) { respond("", HttpStatusCode.NoContent) }
 
-            assertTrue(api.register("install-1", "token-a"))
+            assertTrue(api.register("install-1", "token-a", PushProvider.RuStore))
             activeSite.select("site-b")
-            assertTrue(api.register("install-1", "token-b"))
+            assertTrue(api.register("install-1", "token-b", PushProvider.RuStore))
 
             // This class sends the identical URL and installationId both times - `ActiveSiteHeaderPluginTest`
             // is where the header itself (the thing that actually makes these two rows, not one) is proven;
@@ -80,7 +96,7 @@ class KtorDeviceRegistrationApiTest {
                     )
                 }
 
-            assertEquals(false, api.register("install-1", "token"))
+            assertEquals(false, api.register("install-1", "token", PushProvider.RuStore))
         }
 
     @Test
@@ -88,7 +104,7 @@ class KtorDeviceRegistrationApiTest {
         runTest {
             val api = apiFor { throw IOException("unexpected end of stream") }
 
-            assertEquals(false, api.register("install-1", "token"))
+            assertEquals(false, api.register("install-1", "token", PushProvider.RuStore))
         }
 
     // ------------------------------------------------------- DELETE /api/v1/me/devices/{id}

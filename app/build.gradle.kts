@@ -94,6 +94,22 @@ if (agoLocalPropertiesFile.exists()) {
 
 fun agoSigningProperty(name: String): String? = agoLocalProperties.getProperty(name) ?: (project.findProperty(name) as String?)
 
+/**
+ * `26-100`/`adr/0181`: the four public-by-construction Firebase identifiers `FirebaseOptions.Builder`
+ * needs (`AgoChatApplication`'s own doc comment) — `agoProperty`'s two-source lookup (`-P`/
+ * `gradle.properties`) is not the right one for these: [agoSigningProperty]'s local.properties-first
+ * lookup is, because a real Firebase project's concrete values are worktree-local configuration a
+ * developer supplies without committing, the identical reasoning that lookup already exists for the four
+ * `agoSigning*` values above — even though, unlike those, none of these four is a secret ("ships inside
+ * every APK" is exactly `AGO_RUSTORE_PUSH_PROJECT_ID`'s own reasoning above). Empty-string default, not a
+ * real one — unlike every `agoProperty` row above, there is no one deployment's value safe to bake in as
+ * this repository's own fallback the way `chat-api.reserve-me.ru` is: a checkout with neither source
+ * configured still builds, and the resulting app simply never selects FCM as a transport
+ * ([TransportSelector] only matters once these are non-empty and `FirebaseApp.initializeApp` is actually
+ * reached), falling back to RuStore for every device the way it already does today.
+ */
+fun agoFcmProperty(name: String): String = "\"" + (agoSigningProperty(name) ?: "") + "\""
+
 // Read once, at configuration time, and used as the guard for the whole `signingConfigs`/
 // `buildTypes` wiring below: its presence is what distinguishes an environment that has the shared
 // keystore (local dev with `local.properties` populated, or CI with its two repository secrets)
@@ -201,6 +217,14 @@ android {
             "AGO_RUSTORE_PUSH_PROJECT_ID",
             agoProperty("agoRuStorePushProjectId", "1Q8iLXwwBZViuznG6eCTHgkzrTE9Bto6"),
         )
+
+        // `26-100`/`adr/0181`: the FCM twin of the RuStore project id above — `agoFcmProperty`'s own doc
+        // comment states why these four read from `local.properties` first (never a committed default
+        // beyond the empty-string fallback) rather than `agoProperty`'s usual pattern of a real one.
+        buildConfigField("String", "AGO_FCM_PROJECT_ID", agoFcmProperty("agoFcmProjectId"))
+        buildConfigField("String", "AGO_FCM_PROJECT_NUMBER", agoFcmProperty("agoFcmProjectNumber"))
+        buildConfigField("String", "AGO_FCM_APPLICATION_ID", agoFcmProperty("agoFcmApplicationId"))
+        buildConfigField("String", "AGO_FCM_API_KEY", agoFcmProperty("agoFcmApiKey"))
     }
 
     // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP
@@ -336,6 +360,14 @@ dependencies {
     // `26-06`/`adr/0180`: RuStore Push — see `gradle/libs.versions.toml`'s own remarks on both rows.
     implementation(libs.rustore.pushclient)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // `26-100`/`adr/0181`: FCM, the primary transport now — see `gradle/libs.versions.toml`'s own
+    // remarks on both rows. No `com.google.gms.google-services` plugin: `FirebaseOptions` is built by
+    // hand from `BuildConfig` fields (`AgoChatApplication`'s own doc comment), so no
+    // `google-services.json` is ever committed to this public repo.
+    implementation(libs.firebase.messaging)
+    // `26-100`: `GoogleApiAvailability` — `TransportSelector`'s own per-device check.
+    implementation(libs.play.services.base)
 
     // `26-14`: Room, the conversation list's stale-until-proven-fresh cache
     // (`docs/architecture.md` "Offline"). Lives here, not in a `:core:*` module, for the identical

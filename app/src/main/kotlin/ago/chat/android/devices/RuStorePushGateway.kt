@@ -1,5 +1,6 @@
 package ago.chat.android.devices
 
+import ago.chat.android.core.domain.devices.PushProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
 import ru.rustore.sdk.core.exception.RuStoreException
 import ru.rustore.sdk.core.feature.model.FeatureAvailabilityResult
@@ -28,6 +29,8 @@ import kotlin.coroutines.resume
 public class RuStorePushGateway
     @Inject
     constructor() : PushRegistrationGateway {
+        override val provider: PushProvider = PushProvider.RuStore
+
         override suspend fun currentToken(): PushTokenResult =
             suspendCancellableCoroutine { continuation ->
                 RuStorePushClient

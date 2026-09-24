@@ -15,17 +15,25 @@ package ago.chat.android.core.domain.devices
  * `false` for everything else (transport failure and a genuine server refusal alike), the identical
  * shape [ago.chat.android.core.domain.conversations.ConversationsApi.markRead] already establishes for
  * a caller with no reason left to distinguish *how* a write failed, only *whether* it landed.
+ *
+ * `26-100`/`adr/0181`: [register]'s [PushProvider] parameter used to be a fixed `"rustore"` literal
+ * inside `KtorDeviceRegistrationApi` - `adr/0180` fixed the provider for the whole app, and this was the
+ * one client this product shipped. A second real transport means the server can no longer assume it: the
+ * caller ([DeviceRegistrationCoordinator][ago.chat.android.devices.DeviceRegistrationCoordinator], via
+ * whichever [ago.chat.android.devices.PushRegistrationGateway] was selected for this device) now states
+ * which one every registration is for.
  */
 public interface DeviceRegistrationApi {
     /**
      * `PUT /api/v1/me/devices/{installationId}` - upserts this installation's row with the push
-     * [token] it holds right now. Safe to call repeatedly with the same token (the row's own
-     * `last_seen_at` still advances, which is what turns a periodic call into a liveness signal) and
-     * safe to call again with a new one after rotation.
+     * [token] it holds right now for the given [provider]. Safe to call repeatedly with the same token
+     * (the row's own `last_seen_at` still advances, which is what turns a periodic call into a liveness
+     * signal) and safe to call again with a new one after rotation.
      */
     public suspend fun register(
         installationId: String,
         token: String,
+        provider: PushProvider,
     ): Boolean
 
     /**
