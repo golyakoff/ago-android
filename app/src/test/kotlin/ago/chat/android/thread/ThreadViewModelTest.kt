@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -68,6 +70,167 @@ class ThreadViewModelTest {
                 listOf(1L, 2L, 3L),
                 viewModel.state.value.messages
                     .map { it.sequence },
+            )
+        }
+
+    // -------------------------------------------------------------------- hub reconnect (26-62)
+
+    @Test
+    fun `a join that failed on a bad connection re-drives itself the moment the hub reconnects`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            hub.state.value = OperatorHubConnectionState.Reconnecting
+            hub.joinFailures.add(RuntimeException("connection dropped mid-join"))
+            val viewModel = viewModelWith(hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(1, hub.joinCalls.size)
+            assertNotNull("the failed join left its error up, exactly as the manual Retry path does", viewModel.state.value.historyError)
+            assertTrue(
+                viewModel.state.value.messages
+                    .isEmpty(),
+            )
+
+            // The signal comes back - the app bar's own dot, `ThreadUiState.hubConnectionState`, turns
+            // green - with no tap from the operator.
+            hub.state.value = OperatorHubConnectionState.Connected
+            advanceUntilIdle()
+
+            assertEquals(
+                "the reconnect re-drove the join exactly once, through the same retryJoin path the button uses",
+                2,
+                hub.joinCalls.size,
+            )
+            assertNull(
+                "clearing historyError is this class's own decision, not a side effect of a message arriving",
+                viewModel.state.value.historyError,
+            )
+            assertEquals(
+                listOf(1L, 2L, 3L),
+                viewModel.state.value.messages
+                    .map { it.sequence },
+            )
+        }
+
+    @Test
+    fun `a join failure that happens while the hub was already, and remains, connected is never auto-retried`() =
+        runTest(dispatcher) {
+            // `hub.state` starts, and stays, `Connected` (`FakeOperatorHubEvents`'s own default) - the
+            // connection itself was never the problem, so the collector never observes a transition
+            // into `Connected` at all, and this item's own Scope only ever re-drives a join on a
+            // genuine reconnect, never on `historyError` alone. This is also the "rotation" hazard the
+            // item warns about, turned into a direct assertion: a collector that mistook the very first
+            // replay of an already-`Connected` value for a transition would auto-retry here too, since
+            // nothing in this test ever proves the connection actually dropped.
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            hub.joinFailures.add(RuntimeException("server error, unrelated to the socket"))
+            val viewModel = viewModelWith(hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(1, hub.joinCalls.size)
+            assertNotNull(viewModel.state.value.historyError)
+
+            // Give every stray coroutine a chance to run - nothing here should call joinConversation
+            // again on its own.
+            advanceUntilIdle()
+            assertEquals("no transition happened, so nothing re-drives the join", 1, hub.joinCalls.size)
+
+            viewModel.retryJoin()
+            advanceUntilIdle()
+            assertEquals("the manual button is still the only other entry point", 2, hub.joinCalls.size)
+            assertNull(viewModel.state.value.historyError)
+        }
+
+    @Test
+    fun `rotating the device after a reconnect-driven recovery issues no extra join`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            hub.state.value = OperatorHubConnectionState.Reconnecting
+            hub.joinFailures.add(RuntimeException("connection dropped mid-join"))
+            val viewModel = viewModelWith(hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            hub.state.value = OperatorHubConnectionState.Connected
+            advanceUntilIdle()
+            assertEquals(2, hub.joinCalls.size)
+
+            // `ThreadRoute`'s own `LaunchedEffect(conversationId) { viewModel.open(conversationId) }`
+            // re-invokes `open` with the identical id after a plain device rotation recreates the
+            // `Activity`'s Compose tree - the `ViewModel` itself, and the `previous` connection-state
+            // tracker inside its one-and-only `init` collector, both survive untouched
+            // (`hiltViewModel()` does not recreate this class for a rotation). `open`'s own same-id
+            // guard makes the call below a no-op on its own; this proves the reconnect machinery this
+            // item adds does not add a second reason for it to stop being one.
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals("rotating a healthy, already-recovered thread must never re-join it", 2, hub.joinCalls.size)
+        }
+
+    @Test
+    fun `the connection dot and the join error never both show at once`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            hub.state.value = OperatorHubConnectionState.Reconnecting
+            hub.joinFailures.add(RuntimeException("connection dropped mid-join"))
+            val viewModel = viewModelWith(hub)
+
+            val observedStates = mutableListOf<ThreadUiState>()
+            val collector = launch { viewModel.state.collect { observedStates.add(it) } }
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            hub.state.value = OperatorHubConnectionState.Connected
+            advanceUntilIdle()
+            collector.cancel()
+
+            assertTrue(
+                "no emission ever claims both 'the hub is connected' and 'this thread failed to load' at once",
+                observedStates.none {
+                    it.hubConnectionState == OperatorHubConnectionState.Connected && it.historyError != null
+                },
+            )
+        }
+
+    @Test
+    fun `a load-older failure is never auto-retried by a reconnect - only the initial join is`() =
+        runTest(dispatcher) {
+            // Same `historyError` field, a different situation (`docs/backlog/26-62-*.md`'s own Out of
+            // scope): the join itself already succeeded, so `messages` is non-empty by the time
+            // `loadOlder` can even be called, and that is exactly the signal this class uses to leave a
+            // "load older" failure to its own retry banner.
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..151))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            hub.loadOlderFailures.add(RuntimeException("boom"))
+            viewModel.loadOlder()
+            advanceUntilIdle()
+            assertNotNull(viewModel.state.value.historyError)
+            assertTrue(
+                viewModel.state.value.messages
+                    .isNotEmpty(),
+            )
+
+            hub.state.value = OperatorHubConnectionState.Reconnecting
+            advanceUntilIdle()
+            hub.state.value = OperatorHubConnectionState.Connected
+            advanceUntilIdle()
+
+            assertEquals(
+                "the reconnect must not call joinConversation a second time for a load-older failure",
+                1,
+                hub.joinCalls.size,
+            )
+            assertNotNull(
+                "the load-older error is untouched - it keeps its own retry banner, per this item's own Out of scope",
+                viewModel.state.value.historyError,
             )
         }
 
@@ -735,7 +898,7 @@ class ThreadViewModelTest {
     ) : OperatorHubEvents {
         private val descending = fixtureAscending.sortedByDescending { it.sequence }
 
-        override val state = MutableStateFlow(OperatorHubConnectionState.Connected)
+        override val state: MutableStateFlow<OperatorHubConnectionState> = MutableStateFlow(OperatorHubConnectionState.Connected)
         override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
         override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
@@ -747,7 +910,26 @@ class ThreadViewModelTest {
         val sendCalls: MutableList<Pair<String, String>> = mutableListOf()
         val sendResults: MutableList<SendMessageResult> = mutableListOf()
 
-        override suspend fun joinConversation(conversationId: String): HistoryPage = pageBefore(null, JOIN_PAGE_SIZE)
+        /** Every `joinConversation` call, in order - `26-62`'s own tests assert on the exact count to
+         * prove a reconnect re-drives it exactly once, never zero and never twice. */
+        val joinCalls: MutableList<String> = mutableListOf()
+
+        /** `26-62`: a queue of failures for `joinConversation` to throw, one per call, before falling
+         * back to its ordinary successful page - the same "queue of outcomes" shape [sendResults]
+         * already uses for [sendMessage], so a test can make the *next* join fail without touching every
+         * other call site. */
+        val joinFailures: MutableList<Exception> = mutableListOf()
+
+        /** `26-62`: the identical queue shape as [joinFailures], for `loadOlderHistory` - proves a
+         * "load older" failure is left alone by the reconnect logic, which only ever re-drives the
+         * *initial* join. */
+        val loadOlderFailures: MutableList<Exception> = mutableListOf()
+
+        override suspend fun joinConversation(conversationId: String): HistoryPage {
+            joinCalls.add(conversationId)
+            if (joinFailures.isNotEmpty()) throw joinFailures.removeAt(0)
+            return pageBefore(null, JOIN_PAGE_SIZE)
+        }
 
         override fun leaveConversation() = Unit
 
@@ -757,6 +939,7 @@ class ThreadViewModelTest {
             pageSize: Int,
         ): HistoryPage {
             loadOlderCursors.add(beforeSequence)
+            if (loadOlderFailures.isNotEmpty()) throw loadOlderFailures.removeAt(0)
             return pageBefore(beforeSequence, pageSize)
         }
 
