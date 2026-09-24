@@ -20,6 +20,19 @@ public data class OidcConfig(
     val clientId: String,
     /** `ago-android://callback` — a custom scheme, matching the realm's own `redirectUris` exactly. */
     val redirectUri: String,
+    /**
+     * `26-93`: `ago-android://logout-callback` — the same custom scheme as [redirectUri], a
+     * different path. No second manifest entry is needed for it: `RedirectUriReceiverActivity`'s own
+     * `<intent-filter>` (`net.openid.appauth`'s library manifest, merged via the
+     * `appAuthRedirectScheme` placeholder `app/build.gradle.kts` sets) declares `android:scheme` alone,
+     * with no `android:host`/`android:path`, so it already catches every URI under this scheme —
+     * confirmed by reading that filter out of the resolved `appauth-0.11.1.aar` rather than assumed.
+     * It still has to be a *different* URI than [redirectUri], because Keycloak validates
+     * `post_logout_redirect_uri` against the realm client's own registered list independently of
+     * `redirectUris`, and reusing the sign-in one would make `MainActivity` unable to tell "a sign-in
+     * just completed" from "a sign-out round trip just completed" apart.
+     */
+    val postLogoutRedirectUri: String,
     /** `Ago.Chat.Api`'s origin. */
     val apiBaseUrl: String,
     /** The web console, linked to from the platform-owner terminal screen (`scope-inventory.md` §2). */

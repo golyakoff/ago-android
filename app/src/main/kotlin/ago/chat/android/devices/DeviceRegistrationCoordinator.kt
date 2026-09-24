@@ -81,8 +81,9 @@ public class DeviceRegistrationCoordinator
 
         /**
          * `DeviceRevocation`'s own contract: revoke, then delete the local token, in that order.
-         * `AgoAuthSession.signOut()` calls this strictly before it clears the stored session - see
-         * that function's own doc comment for why the ordering has to be that way round.
+         * `AgoAuthSession.completeSignOut()` (`signOut()` until `26-93` split it in two) calls this
+         * strictly before it clears the stored session - see that function's own doc comment for why
+         * the ordering has to be that way round.
          */
         override suspend fun revokeThisDevice() {
             withContext(ioDispatcher) {

@@ -17,7 +17,8 @@ import javax.inject.Singleton
  * a real temp file and no `Context`).
  *
  * **Its own file, never `SessionStore`'s.** `SessionStore.clear()` runs on every sign-out
- * (`AgoAuthSession.signOut()`), and [InstallationIdProvider]'s own doc comment states this id must
+ * (`AgoAuthSession.completeSignOut()`, `signOut()` until `26-93` split it in two), and
+ * [InstallationIdProvider]'s own doc comment states this id must
  * survive exactly that. Sharing a file with the tokens would mean either leaving this key out of
  * `clear()` - a rule a future call site can get wrong the day it forgets - or accepting that
  * "generated once per install" quietly becomes "generated once per session", silently defeating the

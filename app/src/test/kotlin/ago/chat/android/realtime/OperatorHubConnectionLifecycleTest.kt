@@ -149,7 +149,9 @@ class OperatorHubConnectionLifecycleTest {
 
         override suspend fun completeAuthorization(data: Intent): Unit = throw UnsupportedOperationException("not exercised here")
 
-        override suspend fun signOut(): Unit = throw UnsupportedOperationException("not exercised here")
+        override suspend fun beginSignOut(): Intent? = throw UnsupportedOperationException("not exercised here")
+
+        override suspend fun completeSignOut(data: Intent?): Unit = throw UnsupportedOperationException("not exercised here")
     }
 
     private class FakeHubConnectionControl : HubConnectionControl {
