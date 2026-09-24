@@ -442,12 +442,14 @@
     <string name="push_unavailable_unauthorized">На телефоне нет входа в аккаунт RuStore, поэтому уведомления не приходят.</string>
     <string name="push_unavailable_unknown">Не удалось проверить, могут ли приходить push-уведомления на этот телефон.</string>
 
-    <!-- `26-18`: the two notification channels `26-05`'s own fan-out actually sends - only these two,
-         `PushNotificationChannel`'s own doc comment states why a third is never created. -->
+    <!-- `26-18`/`26-86`: the three notification channels the fan-out actually sends -
+         `PushNotificationChannel`'s own doc comment states why no fourth is ever created. -->
     <string name="push_channel_assignment_name">Новый диалог назначен</string>
     <string name="push_channel_assignment_description">Уведомления о диалогах, назначенных вам</string>
     <string name="push_channel_visitor_message_name">Сообщение от посетителя</string>
     <string name="push_channel_visitor_message_description">Уведомления о новых сообщениях в назначенных вам диалогах</string>
+    <string name="push_channel_waiting_name">Новый диалог в очереди</string>
+    <string name="push_channel_waiting_description">Уведомления о новых диалогах, ожидающих оператора</string>
 
     <!-- `26-85`: `OperatorPresenceService`'s own third channel and its persistent notification -
          silent, `IMPORTANCE_LOW`, deliberately not one more `push_channel_*` string above (this is not
@@ -492,6 +494,10 @@
     <string name="push_text_assigned">Откройте приложение, чтобы посмотреть диалог</string>
     <string name="push_title_message">Новое сообщение</string>
     <string name="push_text_message">Посетитель написал в назначенном вам диалоге</string>
+    <!-- `26-86`: no visitor identity here either, the identical rule the two strings above already
+         follow - only the fact that *some* new conversation is waiting, never which one or who. -->
+    <string name="push_title_waiting">Новый диалог ждёт оператора</string>
+    <string name="push_text_waiting">Откройте приложение, чтобы посмотреть очередь</string>
 
     <!-- `26-16`: the one-time "which permissions does this operator hold" read the whole bottom bar is
          computed from - see `AppShellViewModel`'s own doc comment for why "still loading" renders
