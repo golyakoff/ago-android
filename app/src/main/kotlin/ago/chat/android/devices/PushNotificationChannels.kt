@@ -51,16 +51,21 @@ internal enum class PushNotificationChannel(
  * merely harmless, the same "eagerly, every start, cheap because the platform makes it cheap" shape
  * `RuStorePushClient.init` alongside it already follows.
  *
- * `NotificationManager.IMPORTANCE_DEFAULT` for both - a heads-up/lock-screen-visible notification with a
- * sound, which is the ordinary shape for "an operator should probably look at this soon" and requires no
- * product decision this item is scoped to make (`26-19`'s own per-channel importance control is where a
- * *different* default per channel would be decided, not here).
+ * `NotificationManager.IMPORTANCE_HIGH` for all three - a *heads-up* notification that peeks over the
+ * current screen and shows on the lock screen, which is the point of an operator push: something is
+ * waiting and the phone may be locked in a pocket. `26-18`'s original wording claimed `IMPORTANCE_DEFAULT`
+ * already did this; `26-99` disproved it on a real device (`adb shell dumpsys notification` showed all
+ * three channels at importance 3 and no peek ever appeared) - only `IMPORTANCE_HIGH` (4) produces the
+ * heads-up on API 26+, where importance is read from the channel and `NotificationCompat`'s own
+ * `setPriority` is ignored. The presence foreground-service channel is deliberately *not* one of these -
+ * it stays quiet, created separately. `26-19`'s per-channel importance control is where an operator will
+ * later be able to turn any of these *down*; this only sets the default they start at.
  */
 internal fun ensureChannelsCreated(context: Context) {
     val channels =
         PushNotificationChannel.entries.map { channel ->
             NotificationChannelCompat
-                .Builder(channel.id, NotificationManager.IMPORTANCE_DEFAULT)
+                .Builder(channel.id, NotificationManager.IMPORTANCE_HIGH)
                 .setName(context.getString(channel.nameRes))
                 .setDescription(context.getString(channel.descriptionRes))
                 .build()
