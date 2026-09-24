@@ -29,24 +29,30 @@ import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.devices.AndroidNotificationChannelStateReader
 import ago.chat.android.devices.AndroidNotificationPermissionChecker
 import ago.chat.android.devices.AppForegroundTracker
 import ago.chat.android.devices.ConversationRefreshSignal
 import ago.chat.android.devices.DataStoreInstallationId
 import ago.chat.android.devices.DataStorePushMessageDedupeStore
+import ago.chat.android.devices.DataStoreQuietHoursPreferences
 import ago.chat.android.devices.DefaultConversationRefreshSignal
 import ago.chat.android.devices.DefaultOpenConversationTracker
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationCoordinator
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.DeviceRevocation
+import ago.chat.android.devices.LocalClock
+import ago.chat.android.devices.NotificationChannelStateReader
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.OpenConversationTracker
 import ago.chat.android.devices.ProcessLifecycleForegroundTracker
 import ago.chat.android.devices.PushMessageDedupeStore
 import ago.chat.android.devices.PushNotificationPresenter
 import ago.chat.android.devices.PushRegistrationGateway
+import ago.chat.android.devices.QuietHoursPreferences
 import ago.chat.android.devices.RuStorePushGateway
+import ago.chat.android.devices.SystemLocalClock
 import ago.chat.android.devices.SystemPushNotificationPresenter
 import ago.chat.android.devices.WorkManagerDeviceRegistrationScheduler
 import ago.chat.android.session.AgoActiveSite
@@ -427,6 +433,25 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideNotificationPermissionChecker(checker: AndroidNotificationPermissionChecker): NotificationPermissionChecker = checker
+
+    // `26-19`: the notification-settings screen's own three ports - each a small `@Singleton` seam for
+    // the identical reason every other framework call in this app sits behind one (rule 2).
+
+    @Provides
+    @Singleton
+    public fun provideNotificationChannelStateReader(reader: AndroidNotificationChannelStateReader): NotificationChannelStateReader = reader
+
+    @Provides
+    @Singleton
+    public fun provideLocalClock(clock: SystemLocalClock): LocalClock = clock
+
+    /** `26-19`: [DataStoreQuietHoursPreferences]'s own file - [provideDeviceDataStore] above, the
+     * identical `device.preferences_pb` [DataStoreInstallationId]/[DataStorePushMessageDedupeStore]
+     * already write to - see that class's own doc comment for why a dedicated file is not worth it for
+     * these three fields either. */
+    @Provides
+    @Singleton
+    public fun provideQuietHoursPreferences(preferences: DataStoreQuietHoursPreferences): QuietHoursPreferences = preferences
 
     /** `26-18`: [MainActivity][ago.chat.android.MainActivity]'s own bridge onto the navigation graph -
      * see [PendingConversationOpener]'s own doc comment for why this is a `StateFlow`-backed singleton

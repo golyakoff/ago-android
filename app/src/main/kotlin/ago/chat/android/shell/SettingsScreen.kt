@@ -4,6 +4,7 @@ import ago.chat.android.BuildConfig
 import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.devices.NotificationSettingsRoute
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.PushUnavailableReason
 import ago.chat.android.ui.components.IdentifierText
@@ -12,6 +13,8 @@ import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.ThemeMode
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +73,19 @@ public fun SettingsRoute(
     onSiteSwitched: (String) -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    // `26-19`: the notification-settings screen's own local drill-in - the identical
+    // `rememberSaveable` boolean + `BackHandler` shape [MoreScreen]'s own `openRowId` already is for
+    // Ещё's one-level-deep rows, rather than a second global `NavHost` route
+    // ([ago.chat.android.devices.NotificationSettingsRoute]'s own doc comment states the full reasoning
+    // for staying local here instead of joining `SETTINGS_ROUTE` as a sibling).
+    var showingNotificationSettings by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showingNotificationSettings) { showingNotificationSettings = false }
+
+    if (showingNotificationSettings) {
+        NotificationSettingsRoute(onBack = { showingNotificationSettings = false })
+        return
+    }
+
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val tenancies by viewModel.tenancies.collectAsStateWithLifecycle()
     val currentSiteId by viewModel.currentSiteId.collectAsStateWithLifecycle()
@@ -109,6 +128,7 @@ public fun SettingsRoute(
                     .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
             )
         },
+        onManageNotificationChannels = { showingNotificationSettings = true },
         onBack = onBack,
     )
 }
@@ -140,6 +160,7 @@ internal fun SettingsScreen(
     pushAvailability: PushAvailability? = null,
     notificationsEnabled: Boolean = true,
     onOpenNotificationSettings: () -> Unit = {},
+    onManageNotificationChannels: () -> Unit = {},
 ) {
     val switchableSites = (tenancies as? TenancyListing.Known)?.tenancies.orEmpty()
 
@@ -214,6 +235,24 @@ internal fun SettingsScreen(
                     }
                 }
 
+                // `26-19`: the section header and its entry row into the real notification-settings
+                // screen are now unconditional - channel state and quiet hours are worth configuring
+                // regardless of `pushAvailability`/`notificationsEnabled`, unlike the two warning texts
+                // below, which stay exactly as conditional as `26-18` left them (each names a real
+                // problem, and only when one exists).
+                item { SectionLabel(stringResource(R.string.settings_notifications_section)) }
+                item {
+                    Text(
+                        text = stringResource(R.string.settings_notifications_manage_action),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onManageNotificationChannels)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+
                 // `26-18`: "checkPushAvailability() returning Unavailable produces a state the operator
                 // can act on, naming which condition failed" / "denying POST_NOTIFICATIONS leaves the
                 // app usable and states what it can no longer do". Hidden entirely rather than shown as
@@ -222,7 +261,6 @@ internal fun SettingsScreen(
                 // a row with nothing wrong to report is not a row an operator needs to read.
                 val pushUnavailable = pushAvailability as? PushAvailability.Unavailable
                 if (pushUnavailable != null || !notificationsEnabled) {
-                    item { SectionLabel(stringResource(R.string.settings_notifications_section)) }
                     if (pushUnavailable != null) {
                         item {
                             Text(
