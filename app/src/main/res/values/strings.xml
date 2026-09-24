@@ -428,6 +428,11 @@
     <string name="settings_notifications_section">Push-уведомления</string>
     <string name="settings_notifications_disabled_text">Уведомления для приложения отключены в настройках телефона. Вы не узнаете о новых диалогах, пока экран открыт.</string>
     <string name="settings_notifications_open_settings_action">Открыть настройки уведомлений</string>
+    <!-- `26-19`: the entry point into the real, dedicated notification-settings screen - the banner
+         `scope-inventory.md` §11 once described is gone, and this is what replaces it: an always-visible
+         row, not conditioned on `pushAvailability`/`notificationsEnabled` the way the two strings above
+         are, since channel state and quiet hours are worth configuring regardless of either. -->
+    <string name="settings_notifications_manage_action">Настроить уведомления</string>
 
     <!-- `26-18`: `PushUnavailableReason`'s own four values - `RuStorePushClient.checkPushAvailability()`'s
          real, named causes (`docs/architecture/push-notifications.md`'s own "What the operator's phone
@@ -443,6 +448,34 @@
     <string name="push_channel_assignment_description">Уведомления о диалогах, назначенных вам</string>
     <string name="push_channel_visitor_message_name">Сообщение от посетителя</string>
     <string name="push_channel_visitor_message_description">Уведомления о новых сообщениях в назначенных вам диалогах</string>
+
+    <!-- `26-19`: the real, dedicated notification-settings screen - "the switches on this screen are
+         true" (`docs/backlog/26-19-*.md`). Reuses `push_channel_*_name` above for each row's own title
+         rather than a second copy of the same two names. -->
+    <string name="notification_settings_title">Уведомления</string>
+    <string name="notification_settings_channels_section">Каналы</string>
+    <string name="notification_settings_channel_state_on">Включены</string>
+    <string name="notification_settings_channel_state_off">Отключены в настройках телефона</string>
+    <string name="notification_settings_channel_hint">Изменить можно в системных настройках уведомлений</string>
+
+    <string name="notification_settings_quiet_hours_section">Тихие часы</string>
+    <string name="notification_settings_quiet_hours_switch">Включить тихие часы</string>
+    <string name="notification_settings_quiet_hours_start_label">С</string>
+    <string name="notification_settings_quiet_hours_end_label">До</string>
+    <!-- The honest half of this item's own Done-when: "the screen is honest about what happens to [a
+         suppressed push] (whether it still lands silently in the tray or not - either is fine, but the
+         copy must match the behaviour)". This app's own choice is "not shown at all" - the identical
+         code path `decideAlert` returning silent already uses - so this copy says exactly that, never
+         "silently in the tray". -->
+    <string name="notification_settings_quiet_hours_note">В это время push-уведомления не показываются совсем — ни звука, ни значка, ни новой записи в шторке.</string>
+    <string name="notification_settings_time_picker_confirm">Готово</string>
+    <string name="notification_settings_time_picker_cancel">Отмена</string>
+
+    <!-- `26-19`'s own Away note: `SetAwayAsync` is per operator, not per connection
+         (`docs/architecture.md`'s own Realtime section) - stated here, in place of a control, rather than
+         inventing a per-device toggle this screen has no business offering. -->
+    <string name="notification_settings_away_section">Статус «Отошёл»</string>
+    <string name="notification_settings_away_note">Статус «Отошёл» относится к оператору, а не к этому телефону — он одинаковый на всех ваших устройствах, включая веб-консоль. Управлять им с этого экрана нельзя.</string>
 
     <!-- `26-18`: the notification's own title/text - never the message body and never the visitor's own
          identity (`PushNotificationPresenter`'s own doc comment states why in full), only the kind of

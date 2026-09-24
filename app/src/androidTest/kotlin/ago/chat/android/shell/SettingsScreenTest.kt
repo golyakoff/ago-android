@@ -122,6 +122,36 @@ class SettingsScreenTest {
         assertEquals(ThemeMode.Dark, selected)
     }
 
+    /**
+     * `26-19`: the entry row into the real notification-settings screen — always present, unlike the two
+     * warning rows below it in [SettingsScreen] which stay conditional on `pushAvailability`/
+     * `notificationsEnabled`. The drill-in itself ([ago.chat.android.devices.NotificationSettingsRoute],
+     * reached through [SettingsRoute]'s own local `rememberSaveable` state) needs a Hilt component for
+     * both view models involved and is not driven here — the same boundary every other Hilt-requiring
+     * route in this suite stays behind (`BackContractSettingsRouteTest`'s own markers, for example); this
+     * test proves the one callback the stateless [SettingsScreen] itself owns.
+     */
+    @Test
+    fun tappingManageNotificationsCallsOnManageNotificationChannels() {
+        var manageCalls = 0
+        composeTestRule.setContent {
+            SettingsScreen(
+                themeMode = ThemeMode.System,
+                onThemeModeSelected = {},
+                tenancies = TenancyListing.Known(emptyList()),
+                currentSiteId = null,
+                switching = false,
+                onSwitchSite = {},
+                onBack = {},
+                onManageNotificationChannels = { manageCalls++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Настроить уведомления").performClick()
+
+        assertEquals(1, manageCalls)
+    }
+
     @Test
     fun aboutShowsTheRealBuildTypeAndVersionName() {
         composeTestRule.setContent {

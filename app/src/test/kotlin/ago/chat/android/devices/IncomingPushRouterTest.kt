@@ -1,18 +1,20 @@
 package ago.chat.android.devices
 
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * `26-18`: [IncomingPushRouter] on a plain JVM through fakes for all five of its ports - no `Service`,
+ * `26-18`: [IncomingPushRouter] on a plain JVM through fakes for every one of its ports - no `Service`,
  * no `RemoteMessage`, no real `NotificationManager` anywhere in this file, the identical shape
  * [DeviceRegistrationCoordinatorTest] already establishes for the registration half of this same
- * `Service`.
+ * `Service`. `26-19` added the last two ([QuietHoursPreferences]/[LocalClock]) for its own fourth check.
  *
  * Every Done-when box `AgoPushMessagingService.onMessageReceived` itself is not the place to prove is
  * proven here instead: the tag/dedupe mechanism (four-messages-collapse's own *logic* half), a
@@ -168,6 +170,105 @@ class IncomingPushRouterTest {
         assertEquals(1, refreshSignal.requestCalls)
     }
 
+    // -------------------------------------------------------------------------- `26-19`: quiet hours
+
+    @Test
+    fun `a push arriving inside quiet hours is suppressed - decideAlert's own rule extended`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val router =
+                routerWith(
+                    presenter = presenter,
+                    quietHoursPreferences =
+                        FixedQuietHoursPreferences(
+                            QuietHoursSettings(enabled = true, startMinuteOfDay = 0, endMinuteOfDay = 1439),
+                        ),
+                    clock = FixedLocalClock(minuteOfDay = 12 * 60),
+                )
+
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+
+            assertTrue("quiet hours suppress the push entirely - no notification, silent or otherwise", presenter.presented.isEmpty())
+        }
+
+    @Test
+    fun `a push arriving outside quiet hours is presented normally`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val router =
+                routerWith(
+                    presenter = presenter,
+                    quietHoursPreferences =
+                        FixedQuietHoursPreferences(
+                            QuietHoursSettings(
+                                enabled = true,
+                                startMinuteOfDay = 22 * 60,
+                                endMinuteOfDay =
+                                    7 * 60,
+                            ),
+                        ),
+                    clock = FixedLocalClock(minuteOfDay = 12 * 60),
+                )
+
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+
+            assertEquals(1, presenter.presented.size)
+        }
+
+    @Test
+    fun `quiet hours disabled never suppresses, even at a minute a range would otherwise cover`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val router =
+                routerWith(
+                    presenter = presenter,
+                    quietHoursPreferences =
+                        FixedQuietHoursPreferences(
+                            QuietHoursSettings(enabled = false, startMinuteOfDay = 0, endMinuteOfDay = 1439),
+                        ),
+                    clock = FixedLocalClock(minuteOfDay = 12 * 60),
+                )
+
+            router.handleMessage("provider-1", mapOf("conversationId" to "conv-1"))
+
+            assertEquals(1, presenter.presented.size)
+        }
+
+    @Test
+    fun `a push suppressed by quiet hours still counts as seen - a later redelivery once quiet hours end is not shown late`() =
+        runTest {
+            val presenter = RecordingPresenter()
+            val dedupeStore = DataStoreFreeDedupeStore()
+            val data = mapOf("conversationId" to "conv-1")
+
+            // First delivery: quiet hours are active, so it is suppressed - but still marked seen, per
+            // `PushMessageDedupeStore`'s own contract (`IncomingPushRouterTest`'s own identical case for
+            // `decideAlert`, extended to this fourth check).
+            routerWith(
+                presenter = presenter,
+                dedupeStore = dedupeStore,
+                quietHoursPreferences =
+                    FixedQuietHoursPreferences(
+                        QuietHoursSettings(enabled = true, startMinuteOfDay = 0, endMinuteOfDay = 1439),
+                    ),
+                clock = FixedLocalClock(minuteOfDay = 12 * 60),
+            ).handleMessage("provider-1", data)
+
+            // Redelivery of the identical provider id, now that quiet hours have ended: a naive
+            // implementation that decided *before* deduping would show this one.
+            routerWith(
+                presenter = presenter,
+                dedupeStore = dedupeStore,
+                quietHoursPreferences = FixedQuietHoursPreferences(QuietHoursSettings(enabled = false)),
+                clock = FixedLocalClock(minuteOfDay = 12 * 60),
+            ).handleMessage("provider-1", data)
+
+            assertTrue(
+                "the redelivery of an already-seen message renders nothing new, suppressed by quiet hours or not",
+                presenter.presented.isEmpty(),
+            )
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun routerWith(
@@ -176,6 +277,8 @@ class IncomingPushRouterTest {
         appForegroundTracker: AppForegroundTracker = FixedForegroundTracker(false),
         presenter: PushNotificationPresenter = RecordingPresenter(),
         refreshSignal: ConversationRefreshSignal = RecordingRefreshSignal(),
+        quietHoursPreferences: QuietHoursPreferences = FixedQuietHoursPreferences(QuietHoursSettings(enabled = false)),
+        clock: LocalClock = FixedLocalClock(minuteOfDay = 0),
     ): IncomingPushRouter =
         IncomingPushRouter(
             dedupeStore = dedupeStore,
@@ -183,6 +286,8 @@ class IncomingPushRouterTest {
             appForegroundTracker = appForegroundTracker,
             notificationPresenter = presenter,
             refreshSignal = refreshSignal,
+            quietHoursPreferences = quietHoursPreferences,
+            clock = clock,
         )
 
     private class RecordingPresenter : PushNotificationPresenter {
@@ -229,5 +334,19 @@ class IncomingPushRouterTest {
         override fun requestRefresh() {
             requestCalls++
         }
+    }
+
+    private class FixedQuietHoursPreferences(
+        settings: QuietHoursSettings,
+    ) : QuietHoursPreferences {
+        override val settings: Flow<QuietHoursSettings> = flowOf(settings)
+
+        override suspend fun setSettings(settings: QuietHoursSettings) = error("not exercised by this router")
+    }
+
+    private class FixedLocalClock(
+        private val minuteOfDay: Int,
+    ) : LocalClock {
+        override fun currentMinuteOfDay(): Int = minuteOfDay
     }
 }

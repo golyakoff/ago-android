@@ -1,5 +1,6 @@
 package ago.chat.android.devices
 
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,6 +13,13 @@ import javax.inject.Singleton
  * every dependency is one of this item's own small interfaces - which is what makes this the one place a
  * plain JVM test can exercise "dedupe, then decide, then present" as a sequence, with no `Service`, no
  * `RemoteMessage` and no real `NotificationManager` anywhere in the test.
+ *
+ * `26-19` adds a fourth check, [QuietHoursSettings.suppressesAt] - the identical kind of gate
+ * [decideAlert] already is (a decision made from live state at the moment a push arrives, not a side
+ * effect buried in [PushNotificationPresenter]), so it sits in this same named sequence rather than being
+ * folded into the presenter. It runs *after* [decideAlert] and *after* dedupe, matching this class's own
+ * existing rule that a suppressed push still counts as seen: a redelivery arriving once quiet hours has
+ * ended must not surface the original push late just because dedupe never got the chance to record it.
  */
 @Singleton
 public class IncomingPushRouter
@@ -22,10 +30,12 @@ public class IncomingPushRouter
         private val appForegroundTracker: AppForegroundTracker,
         private val notificationPresenter: PushNotificationPresenter,
         private val refreshSignal: ConversationRefreshSignal,
+        private val quietHoursPreferences: QuietHoursPreferences,
+        private val clock: LocalClock,
     ) {
         /**
-         * `onMessageReceived`'s own decision, in order: parse, dedupe, decide, present. Each step can
-         * return early, and each early return is a real, named outcome rather than a fallthrough:
+         * `onMessageReceived`'s own decision, in order: parse, dedupe, decide, quiet hours, present. Each
+         * step can return early, and each early return is a real, named outcome rather than a fallthrough:
          *
          * 1. [parseIncomingPush] returning `null` - a payload this version does not understand
          *    ([IncomingPush]'s own doc comment on why that is silently ignored rather than thrown).
@@ -36,6 +46,9 @@ public class IncomingPushRouter
          *    is still a message already seen the second time).
          * 3. [decideAlert] returning `false` - the operator is already looking at this exact conversation
          *    right now.
+         * 4. [QuietHoursSettings.suppressesAt] returning `true` - the operator's own quiet-hours window,
+         *    read fresh on every message (`26-19`'s own Scope: "client-side only", never cached beyond the
+         *    single [QuietHoursPreferences.settings] read below).
          *
          * [providerMessageId] is `RemoteMessage.messageId` (nullable on the SDK's own type, despite its
          * documentation describing the field as always present) - see [PushMessageDedupeStore]'s own doc
@@ -60,6 +73,9 @@ public class IncomingPushRouter
                     appInForeground = appForegroundTracker.isAppInForeground,
                 )
             if (!shouldAlert) return
+
+            val quietHours = quietHoursPreferences.settings.first()
+            if (quietHours.suppressesAt(clock.currentMinuteOfDay())) return
 
             notificationPresenter.present(event)
         }
