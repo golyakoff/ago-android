@@ -620,6 +620,18 @@
     <string name="settings_theme_system">Системная</string>
     <string name="settings_theme_light">Светлая</string>
     <string name="settings_theme_dark">Тёмная</string>
+
+    <!-- `26-92`: язык интерфейса этого приложения - кнопки, заголовки экранов, системные сообщения.
+         Не путать с языком виджета чата на сайте магазина: та настройка задаётся отдельно, для
+         каждого сайта, в консоли (`ago-console`), хранится на сервере и не имеет отношения ни к
+         одной из строк ниже. `settings_language_russian`/`settings_language_english` намеренно
+         одинаковы в этом файле и в `values-en/strings.xml` - имя языка не переводится, это
+         общепринятое правило (Lint's `ExtraTranslation` их не помечает, потому что ключ существует
+         в обоих файлах, а совпадающее значение - не ошибка). -->
+    <string name="settings_language_section">Язык интерфейса</string>
+    <string name="settings_language_system">Системный</string>
+    <string name="settings_language_russian">Русский</string>
+    <string name="settings_language_english">English</string>
     <string name="settings_site_section">Текущий сайт</string>
     <string name="settings_site_switching">Переключаем…</string>
     <string name="settings_about_section">О приложении</string>

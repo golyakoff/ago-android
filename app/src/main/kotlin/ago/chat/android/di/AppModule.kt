@@ -71,12 +71,15 @@ import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.presence.OperatorPresenceGate
 import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
+import ago.chat.android.session.DataStoreAppLanguagePreferences
 import ago.chat.android.session.DataStoreThemePreferences
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.session.OperatorIdentityProvider
+import ago.chat.android.session.appLanguageDataStore
 import ago.chat.android.shell.DefaultPendingConversationOpener
 import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInSession
+import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemePreferences
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -115,6 +118,15 @@ public annotation class IoDispatcher
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 public annotation class DeviceDataStore
+
+/**
+ * `26-92`: a third `DataStore<Preferences>` file, the identical "two providers of the same type need a
+ * qualifier" reason [DeviceDataStore] above already states — see [DataStoreAppLanguagePreferences]'s own
+ * doc comment for why this preference gets its own file rather than joining [provideThemeDataStore]'s.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+public annotation class LanguageDataStore
 
 /**
  * `26-12`: the whole object graph, in the one module allowed to hold it.
@@ -424,6 +436,24 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideThemePreferences(preferences: DataStoreThemePreferences): ThemePreferences = preferences
+
+    /**
+     * `26-92`: the Язык preference's own file — [DataStoreAppLanguagePreferences]'s own doc comment
+     * states why it is not [provideThemeDataStore] above. Built through [appLanguageDataStore] rather
+     * than a second `PreferenceDataStoreFactory.create` call typed out here, so this provider and
+     * [ago.chat.android.MainActivity.attachBaseContext]'s own bootstrap read can never name two different
+     * paths for what must be the same file.
+     */
+    @Provides
+    @Singleton
+    @LanguageDataStore
+    public fun provideAppLanguageDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = appLanguageDataStore(context)
+
+    @Provides
+    @Singleton
+    public fun provideAppLanguagePreferences(preferences: DataStoreAppLanguagePreferences): AppLanguagePreferences = preferences
 
     /**
      * `26-06`: [DataStoreInstallationId]'s own file - deliberately not [provideThemeDataStore] above

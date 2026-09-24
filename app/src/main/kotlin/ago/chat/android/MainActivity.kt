@@ -3,14 +3,18 @@ package ago.chat.android
 import ago.chat.android.devices.EXTRA_OPEN_CONVERSATION_ID
 import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OidcConfig
+import ago.chat.android.session.appLanguageDataStore
+import ago.chat.android.session.toAppLanguage
 import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInHost
 import ago.chat.android.signin.SignInViewModel
+import ago.chat.android.ui.language.wrapContextForLanguage
 import ago.chat.android.ui.theme.AgoChatTheme
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -29,7 +33,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 /**
@@ -70,6 +76,13 @@ import javax.inject.Inject
  *    `registerForActivityResult`/`repeatOnLifecycle` shape the notification-permission launcher above
  *    already establishes - see [OperatorPresenceController.requestBatteryOptimizationExemptionEvents]'s
  *    own doc comment for why the *decision* to ask lives in `OperatorPresenceController` instead.
+ *
+ * `26-92` adds a seventh, of a different shape than the first six: not a launch this class defers to a
+ * view model, but a pre-`onCreate` step nothing else in the app is positioned to take.
+ *
+ * 7. **Applying the persisted interface language before the first `Resources` lookup.** [attachBaseContext]'s
+ *    own doc comment has the full account of why this, and not `AppCompatDelegate`, and why it has to run
+ *    this early.
  */
 @AndroidEntryPoint
 public class MainActivity : ComponentActivity() {
@@ -100,6 +113,32 @@ public class MainActivity : ComponentActivity() {
     private lateinit var signOutLauncher: ActivityResultLauncher<Intent>
     private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
     private lateinit var batteryOptimizationLauncher: ActivityResultLauncher<Intent>
+
+    /**
+     * `26-92`: applies the persisted [ago.chat.android.ui.language.AppLanguage] before this - the app's
+     * only `Activity` - resolves a single string resource, on API levels below 33 where nothing else
+     * will. `ago.chat.android.ui.language.applyAppLanguage`'s own doc comment has the full account of why
+     * this exists at all rather than a plain `AppCompatDelegate.setApplicationLocales` call: that call is
+     * a proven dead end in this exact app (`docs/architecture.md`'s "Pinning the locale instrumented UI
+     * tests render against", `26-94`), and on API 33+ the real platform facility applies the persisted
+     * choice on its own with no help from this override.
+     *
+     * Reads [appLanguageDataStore] synchronously, with `runBlocking` - the one deliberate use of it in
+     * this codebase. `attachBaseContext` has no `suspend` hook of any kind, and every `Activity`'s own
+     * `Resources` are already built from whatever `Context` this method returns by the time
+     * `super.onCreate()` runs - there is no later, asynchronous point at which "wrap the base `Context`
+     * for this language" could still take effect. This is not [themePreferences]'s own pattern (a `Flow`,
+     * collected reactively once `setContent` below is already running) because a colour scheme is Compose
+     * state with nothing underneath it to pre-build, where a locale is a property of `Resources` itself.
+     * A fresh [DataStore][androidx.datastore.core.DataStore] instance, not the Hilt-provided one
+     * [ago.chat.android.di.AppModule.provideAppLanguageDataStore] injects - Hilt's field injection runs
+     * from `onCreate` onward, which is already too late for this method's own job; the two instances read
+     * and write the identical file regardless (that provider's own doc comment states why this is safe).
+     */
+    override fun attachBaseContext(newBase: Context) {
+        val language = runBlocking { appLanguageDataStore(newBase).data.first().toAppLanguage() }
+        super.attachBaseContext(wrapContextForLanguage(newBase, language))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

@@ -10,6 +10,8 @@ import ago.chat.android.devices.PushUnavailableReason
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.language.AppLanguage
+import ago.chat.android.ui.language.applyAppLanguage
 import ago.chat.android.ui.theme.ThemeMode
 import android.content.Intent
 import android.provider.Settings
@@ -87,14 +89,26 @@ public fun SettingsRoute(
     }
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val language by viewModel.language.collectAsStateWithLifecycle()
     val tenancies by viewModel.tenancies.collectAsStateWithLifecycle()
     val currentSiteId by viewModel.currentSiteId.collectAsStateWithLifecycle()
     val switching by viewModel.switching.collectAsStateWithLifecycle()
     val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+
     LaunchedEffect(viewModel) {
         viewModel.siteSwitched.collect { newSiteId -> onSiteSwitched(newSiteId) }
+    }
+
+    // `26-92`: the second half of applying a language change - see [SettingsViewModel.languageApplied]'s
+    // own doc comment for why this waits for that event rather than calling [applyAppLanguage] straight
+    // from [onLanguageSelected] below. `context`, not `viewModel`, is what this needs and a view model may
+    // never hold (rule 2) - which is exactly why this step lives here and not on [SettingsViewModel]
+    // itself.
+    LaunchedEffect(viewModel, context) {
+        viewModel.languageApplied.collect { newLanguage -> applyAppLanguage(context, newLanguage) }
     }
 
     // `26-18`: [SettingsViewModel.notificationsEnabled]'s own doc comment states why `ON_RESUME` - the
@@ -112,10 +126,11 @@ public fun SettingsRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val context = LocalContext.current
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeSelected = viewModel::setThemeMode,
+        language = language,
+        onLanguageSelected = viewModel::setLanguage,
         tenancies = tenancies,
         currentSiteId = currentSiteId,
         switching = switching,
@@ -157,6 +172,11 @@ internal fun SettingsScreen(
     switching: Boolean,
     onSwitchSite: (String) -> Unit,
     onBack: () -> Unit,
+    // `26-92`: defaulted, like every other trailing parameter below - `SettingsScreenTest`'s own
+    // call sites predate this row and name every parameter, so a default costs those tests nothing
+    // while sparing them a mechanical update for a section they are not about.
+    language: AppLanguage = AppLanguage.System,
+    onLanguageSelected: (AppLanguage) -> Unit = {},
     pushAvailability: PushAvailability? = null,
     notificationsEnabled: Boolean = true,
     onOpenNotificationSettings: () -> Unit = {},
@@ -202,6 +222,26 @@ internal fun SettingsScreen(
                                 shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
                                 icon = {},
                                 label = { Text(text = themeModeLabel(mode)) },
+                            )
+                        }
+                    }
+                }
+
+                // `26-92`: Язык интерфейса - the identical `SegmentedButton`/`SingleChoiceSegmentedButtonRow`
+                // shape Тема above already establishes, per this item's own Scope ("matching this screen's
+                // existing Тема row's own visual pattern"). Placed directly beneath Тема, the screen's other
+                // "how this app itself presents" choice, rather than beside Текущий сайт - a real operator
+                // question ("which site am I in") - or О приложении, which is not a choice at all.
+                item { SectionLabel(stringResource(R.string.settings_language_section)) }
+                item {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        AppLanguage.entries.forEachIndexed { index, entry ->
+                            SegmentedButton(
+                                selected = entry == language,
+                                onClick = { onLanguageSelected(entry) },
+                                shape = SegmentedButtonDefaults.itemShape(index, AppLanguage.entries.size),
+                                icon = {},
+                                label = { Text(text = appLanguageLabel(entry)) },
                             )
                         }
                     }
@@ -317,6 +357,20 @@ private fun themeModeLabel(mode: ThemeMode): String =
         ThemeMode.System -> stringResource(R.string.settings_theme_system)
         ThemeMode.Light -> stringResource(R.string.settings_theme_light)
         ThemeMode.Dark -> stringResource(R.string.settings_theme_dark)
+    }
+
+/** `26-92`: [AppLanguage.System]'s own label is translated like every other UI string
+ * (`settings_theme_system`'s own precedent); [AppLanguage.Russian]/[AppLanguage.English] are not - a
+ * language names itself, in its own script, regardless of which language the rest of this screen is
+ * currently rendered in, the universal convention every OS-level language picker already follows. Their
+ * resource entries hold the identical literal in both `values/` and `values-en/` for that reason, not by
+ * a translation someone forgot to do (`app/src/main/res/values/strings.xml`'s own comment on this pair). */
+@Composable
+private fun appLanguageLabel(language: AppLanguage): String =
+    when (language) {
+        AppLanguage.System -> stringResource(R.string.settings_language_system)
+        AppLanguage.Russian -> stringResource(R.string.settings_language_russian)
+        AppLanguage.English -> stringResource(R.string.settings_language_english)
     }
 
 @Composable

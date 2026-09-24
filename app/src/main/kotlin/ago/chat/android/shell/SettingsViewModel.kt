@@ -8,6 +8,8 @@ import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.ui.language.AppLanguage
+import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
 import androidx.lifecycle.ViewModel
@@ -27,14 +29,18 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * `26-17`: the Settings screen's own state — three genuinely separate concerns sharing one view model
- * because they share one screen, not because they share any data: [themeMode] (local, no network),
+ * `26-17`: the Settings screen's own state — genuinely separate concerns sharing one view model because
+ * they share one screen, not because they share any data: [themeMode] (local, no network),
  * [tenancies]/[currentSiteId] (a site switcher fed by the identical [IdentityApi] port
  * [ago.chat.android.signin.SignInViewModel] already calls through
  * [ago.chat.android.core.domain.identity.PostSignInRouter]), and О приложении/Выход, which need no
  * state at all — this class's own report reads [BuildConfig][ago.chat.android.BuildConfig] directly and
  * `SettingsRoute` forwards `onSignOut` straight through, unchanged, the same way every pre-session
- * screen already does.
+ * screen already does. `26-92` adds a fourth, [language] — local, no network, the identical shape
+ * [themeMode] already is, except that *applying* it needs a real Android call
+ * ([ago.chat.android.ui.language.applyAppLanguage]) this class deliberately does not make itself — see
+ * [languageApplied]'s own doc comment for why that step stays in `SettingsRoute`, which has a `Context`
+ * to make it with and this class, by the dependency rule, does not.
  *
  * ## The active-site switch's own two halves
  *
@@ -54,12 +60,32 @@ public class SettingsViewModel
         private val activeSite: ActiveSiteSelection,
         private val hubConnection: OperatorHubEvents,
         private val themePreferences: ThemePreferences,
+        private val languagePreferences: AppLanguagePreferences,
         private val deviceRegistrar: DeviceRegistrar,
         private val notificationPermissionChecker: NotificationPermissionChecker,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         public val themeMode: StateFlow<ThemeMode> =
             themePreferences.mode.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+
+        /** `26-92`: the Язык row's own current selection — the identical [themeMode] shape, one line
+         * up, ported for a second, unrelated preference. */
+        public val language: StateFlow<AppLanguage> =
+            languagePreferences.language.stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.System)
+
+        /**
+         * `26-92`: fires once [AppLanguagePreferences.setLanguage] has actually persisted the new
+         * choice — not before, and not as a side effect [setLanguage] performs directly — so
+         * [ago.chat.android.shell.SettingsRoute]'s own collector never calls
+         * [ago.chat.android.ui.language.applyAppLanguage] (which, below API 33, recreates the current
+         * `Activity`) against a value [ago.chat.android.MainActivity.attachBaseContext] might still read
+         * back as the *previous* one on the very next cold start that recreation triggers. A one-shot
+         * `Channel`, not a `StateFlow`, for the identical reason [siteSwitched] is one: a `StateFlow`
+         * would redeliver the same value to a screen recreated after a configuration change, and the
+         * `Activity.recreate()` this event can itself cause is exactly such a change.
+         */
+        private val languageAppliedEvents = Channel<AppLanguage>(Channel.BUFFERED)
+        public val languageApplied: Flow<AppLanguage> = languageAppliedEvents.receiveAsFlow()
 
         /** `26-18`: "`checkPushAvailability()` returning `Unavailable` produces a state the operator can
          * act on" - a plain relay onto [DeviceRegistrar.pushAvailability], the identical shape
@@ -109,6 +135,15 @@ public class SettingsViewModel
 
         public fun setThemeMode(mode: ThemeMode) {
             viewModelScope.launch { themePreferences.setMode(mode) }
+        }
+
+        /** `26-92`: persists first, then signals [languageApplied] — see that property's own doc comment
+         * for why the order is load-bearing rather than incidental. */
+        public fun setLanguage(language: AppLanguage) {
+            viewModelScope.launch {
+                languagePreferences.setLanguage(language)
+                languageAppliedEvents.send(language)
+            }
         }
 
         /** `SettingsRoute`'s own `ON_RESUME` call - see [notificationsEnabled]'s own doc comment for why

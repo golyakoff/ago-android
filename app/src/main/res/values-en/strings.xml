@@ -370,6 +370,16 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+
+    <!-- `26-92`: this app's own interface language - not the chat widget's own per-site language,
+         which is a separate, server-side setting configured in `ago-console` and unrelated to
+         anything on this screen. `settings_language_russian`/`settings_language_english` are
+         deliberately identical to `values/strings.xml`'s own copy - a language names itself, and is
+         never translated into another one. -->
+    <string name="settings_language_section">Interface language</string>
+    <string name="settings_language_system">System</string>
+    <string name="settings_language_russian">Русский</string>
+    <string name="settings_language_english">English</string>
     <string name="settings_site_section">Current shop</string>
     <string name="settings_site_switching">Switching…</string>
     <string name="settings_about_section">About</string>

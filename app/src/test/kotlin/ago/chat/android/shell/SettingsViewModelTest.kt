@@ -18,6 +18,8 @@ import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.PushUnavailableReason
+import ago.chat.android.ui.language.AppLanguage
+import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemeMode
 import ago.chat.android.ui.theme.ThemePreferences
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +88,60 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ThemeMode.Light, preferences.current.value)
+        }
+
+    // ---------------------------------------------------------------------------------- language
+
+    @Test
+    fun `language starts at whatever AppLanguagePreferences already holds`() =
+        runTest(dispatcher) {
+            val preferences = FakeAppLanguagePreferences(AppLanguage.English)
+            val viewModel = viewModelWith(languagePreferences = preferences)
+            advanceUntilIdle()
+
+            assertEquals(AppLanguage.English, viewModel.language.value)
+        }
+
+    @Test
+    fun `setLanguage writes through to AppLanguagePreferences`() =
+        runTest(dispatcher) {
+            val preferences = FakeAppLanguagePreferences(AppLanguage.System)
+            val viewModel = viewModelWith(languagePreferences = preferences)
+            advanceUntilIdle()
+
+            viewModel.setLanguage(AppLanguage.Russian)
+            advanceUntilIdle()
+
+            assertEquals(AppLanguage.Russian, preferences.current.value)
+        }
+
+    /**
+     * `26-92`'s own load-bearing ordering guarantee: [SettingsRoute] calls
+     * [ago.chat.android.ui.language.applyAppLanguage] (which, below API 33, recreates the current
+     * `Activity`) only once [SettingsViewModel.languageApplied] fires - and this proves that fire never
+     * happens before the write it is supposed to be reporting has actually landed. [FakeAppLanguagePreferences]
+     * makes [AppLanguagePreferences.setLanguage] suspend past a `writes` marker this test flips *after* the
+     * write completes; if `languageApplied` could fire first, this test would see it collected while
+     * `writes` was still `0`.
+     */
+    @Test
+    fun `setLanguage emits on languageApplied only after the preference write lands`() =
+        runTest(dispatcher) {
+            val preferences = FakeAppLanguagePreferences(AppLanguage.System)
+            val viewModel = viewModelWith(languagePreferences = preferences)
+            advanceUntilIdle()
+
+            var writesSeenWhenApplied: Int? = null
+            val collecting =
+                CoroutineScope(dispatcher).launch {
+                    viewModel.languageApplied.collect { writesSeenWhenApplied = preferences.writes }
+                }
+
+            viewModel.setLanguage(AppLanguage.English)
+            advanceUntilIdle()
+
+            assertEquals(1, writesSeenWhenApplied)
+            collecting.cancel()
         }
 
     // ------------------------------------------------------------------------------ site switching
@@ -217,6 +273,7 @@ class SettingsViewModelTest {
         activeSite: ActiveSiteSelection = InMemoryActiveSite(),
         hubEvents: OperatorHubEvents = FakeHubEvents(),
         themePreferences: ThemePreferences = FakeThemePreferences(),
+        languagePreferences: AppLanguagePreferences = FakeAppLanguagePreferences(),
         deviceRegistrar: DeviceRegistrar = FakeSettingsDeviceRegistrar(),
         notificationPermissionChecker: NotificationPermissionChecker = FakeNotificationPermissionChecker(),
     ): SettingsViewModel =
@@ -225,6 +282,7 @@ class SettingsViewModelTest {
             activeSite = activeSite,
             hubConnection = hubEvents,
             themePreferences = themePreferences,
+            languagePreferences = languagePreferences,
             deviceRegistrar = deviceRegistrar,
             notificationPermissionChecker = notificationPermissionChecker,
             ioDispatcher = dispatcher,
@@ -284,6 +342,25 @@ class SettingsViewModelTest {
 
         override suspend fun setMode(mode: ThemeMode) {
             current.value = mode
+        }
+    }
+
+    /** `26-92`: [FakeThemePreferences]'s own shape, plus [writes] - a plain counter, incremented only
+     * once [current] has already been updated, so a test can tell whether a collector observed an event
+     * before or after the write it is meant to follow (`setLanguage emits on languageApplied only after
+     * the preference write lands`'s own reason for needing this at all). */
+    private class FakeAppLanguagePreferences(
+        initial: AppLanguage = AppLanguage.System,
+    ) : AppLanguagePreferences {
+        val current = MutableStateFlow(initial)
+        override val language: Flow<AppLanguage> = current
+
+        var writes: Int = 0
+            private set
+
+        override suspend fun setLanguage(language: AppLanguage) {
+            current.value = language
+            writes++
         }
     }
 
