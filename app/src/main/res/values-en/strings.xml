@@ -338,6 +338,16 @@
     <string name="analytics_by_tag_empty">No conversation in this range carries a tag.</string>
     <string name="analytics_multi_tag_note">A conversation with more than one tag counts once per tag it holds, so this column will not sum to the total conversation count above - that is expected, not an error.</string>
 
+    <!-- `26-73`: «Воронка записи», the fourth of the five - see `values/strings.xml` for the full
+         reasoning. Wording copied verbatim from `ago-console`'s own `en.ts` (`navBookingFlow`,
+         `bookingFlow*`). -->
+    <string name="analytics_report_booking_funnel">Booking funnel</string>
+    <string name="analytics_booking_funnel_started_label">Booking flows started</string>
+    <string name="analytics_booking_funnel_closed_label">Flows closed</string>
+    <string name="analytics_booking_funnel_caveat">A closed flow is not the same as a confirmed booking - a visitor can abandon it, an operator can close the conversation mid-step, or it can finish with every offered time declined. This counts flows that closed, not bookings that were made.</string>
+    <string name="analytics_booking_funnel_empty">No booking flow was started in this range.</string>
+    <string name="analytics_booking_funnel_invalid_range_error">The start of the range must be before its end.</string>
+
     <string name="analytics_overall_heading">Total for the period</string>
     <string name="analytics_previous_period_heading">Previous period</string>
     <string name="analytics_previous_range_value">%1$s – %2$s</string>
