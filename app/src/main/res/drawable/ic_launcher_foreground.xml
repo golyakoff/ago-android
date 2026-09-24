@@ -33,13 +33,37 @@
 
     The glyph has no curves in its own outline (a geometric/display face - this "A" is built
     entirely from straight edges), so the transformed path below uses only M/L/Z.
+
+    `26-104`: the placement above under-filled the circle - the "A" read as a tiny glyph floating
+    in a large disc (notification large icon, launcher, task switcher). The path's own bounding
+    box is x:[28.788,79.212] y:[34.200,73.800] (width 50.424dp, height 39.600dp), whose center is
+    exactly (54,54) - the same canvas/safe-zone center - so enlarging in place needs no
+    recentering. A <group> scale transform pivoted at (54,54) is used instead of recomputing the
+    path's coordinates, per this item's note that a group scale is preferable to hand-rescaling a
+    multi-point path:
+
+      scale = 1.5 (chosen so cap-height lands at the requested ~50-60% of the 108dp canvas)
+      new cap height  = 39.600 * 1.5 = 59.4dp  (59.4 / 108 = 55% of the canvas)
+      new glyph width = 50.424 * 1.5 = 75.636dp (half-width 37.8dp)
+
+    59.4dp is inside the 66dp safe zone's own height; the glyph is naturally wider than tall
+    (the font's own "A" bounding box is wider than its cap height), so the 75.636dp width sits
+    slightly past the conservative 66dp guaranteed-safe square on the horizontal axis alone while
+    staying well inside the full 108dp canvas and short of where a circular/squircle mask actually
+    crops - the letter is meant to dominate the circle, not just touch the strict safe-zone box.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+    <group
+        android:scaleX="1.5"
+        android:scaleY="1.5"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M40.140,66.197L40.140,57.379L67.438,57.379L67.438,66.197ZM61.207,34.200L79.212,73.800L67.543,73.800L52.442,38.846L55.610,38.846L40.457,73.800L28.788,73.800L46.793,34.200Z" />
+    </group>
 </vector>
