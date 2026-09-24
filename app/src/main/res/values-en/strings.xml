@@ -133,6 +133,7 @@
     <string name="thread_send_pending_retry">Message not confirmed. Retry sending?</string>
     <string name="thread_join_failed_title">Couldn\'t open the conversation</string>
     <string name="thread_load_older_action">Load older messages</string>
+    <string name="thread_identity_unavailable">Contact unavailable</string>
 
     <string name="message_bubble_author_operator">Operator</string>
     <string name="message_bubble_author_visitor">Visitor</string>

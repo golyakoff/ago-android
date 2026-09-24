@@ -43,25 +43,33 @@ public fun visitorEmojiPair(
  * row's identity line, and the thread screen's app-bar title (`26-40`'s own
  * `ago.chat.android.thread.ThreadTitleBlock`) — read [displayName], never [visitorName] directly, which
  * is what gives the thread screen the same fallback with no separate derivation of its own.
+ *
+ * `26-68`: [visitorId] is nullable, joining every other field here — a restored thread
+ * (`ago.chat.android.shell.ConversationsTabHost`) can genuinely not know it yet, and the fix for that
+ * item's own bug (the conversation's own id substituted into this slot, rendered as if it were a real
+ * visitor short code) is this type admitting "unknown" rather than a caller inventing a value to fill
+ * it. `null` means exactly what it means for [visitorName]/the emoji halves: absent, never rendered,
+ * never guessed.
  */
 public data class VisitorDisplayPrefixParts(
     public val emoji: VisitorEmojiPair?,
     public val visitorName: String?,
     public val displayName: String?,
-    public val visitorId: String,
+    public val visitorId: String?,
 )
 
 /**
  * Builds the parts from raw, wire-shaped fields — nullable emoji halves, a nullable/blankable name,
- * and the visitor's full id. Mirrors `ago-console/src/workspace/visitorEmoji.ts`'s own normalisation
- * exactly: a blank name is treated as absent (that file's own doc comment — "a defensive
- * normalisation, not an expectation that the wire ever actually sends whitespace").
+ * and the visitor's full id, itself nullable since `26-68` for the identical reason the other three
+ * already were. Mirrors `ago-console/src/workspace/visitorEmoji.ts`'s own normalisation exactly: a
+ * blank name is treated as absent (that file's own doc comment — "a defensive normalisation, not an
+ * expectation that the wire ever actually sends whitespace").
  */
 public fun visitorDisplayPrefixParts(
     emojiCreature: String?,
     emojiFood: String?,
     visitorName: String?,
-    visitorId: String,
+    visitorId: String?,
 ): VisitorDisplayPrefixParts {
     val emoji = visitorEmojiPair(emojiCreature, emojiFood)
     val name = visitorName?.trim()?.takeIf { it.isNotEmpty() }
@@ -92,9 +100,17 @@ public fun visitorFallbackLabel(emoji: VisitorEmojiPair?): String? =
  * append after it. Each present part supplies its own trailing space (the emoji pair's, then the
  * name's), and no part ever supplies a *leading* one — so a pair-less, name-less visitor renders the
  * short id alone, with no gap where the pair or the name would have gone, never a blank placeholder.
+ *
+ * `26-68`: [VisitorDisplayPrefixParts.visitorId] can now be `null` too — the newly-possible case is the
+ * *id* being the missing part rather than the pair or the name, so this reuses the identical "each part
+ * supplies its own trailing space, nothing supplies a leading one" rule and simply trims whatever
+ * trailing space the last present part left behind when the id is the one that is absent (`trimEnd()`
+ * is a no-op whenever the id *is* present, since [shortId] never ends in whitespace) — never a stray
+ * trailing gap where the id would have gone, the same standard every other absent part already meets.
  */
 public fun visitorDisplayPrefixText(parts: VisitorDisplayPrefixParts): String {
     val emojiPart = parts.emoji?.let { "${it.creature}${it.food} " } ?: ""
     val namePart = parts.visitorName?.let { "$it " } ?: ""
-    return "$emojiPart$namePart${shortId(parts.visitorId)}"
+    val idPart = parts.visitorId?.let { shortId(it) } ?: ""
+    return "$emojiPart$namePart$idPart".trimEnd()
 }

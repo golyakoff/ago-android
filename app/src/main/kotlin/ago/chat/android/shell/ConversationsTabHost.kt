@@ -89,16 +89,45 @@ public fun ConversationsTabHost(
         }
     } else {
         val row = (listState.mine + listState.waiting).firstOrNull { it.conversationId == currentlyOpen }
+        // `26-68`: the old fallback here (`row?.visitorId ?: currentlyOpen`) substituted the
+        // conversation's own id into the visitor-id slot whenever `row` was not found yet - a restored
+        // thread after process death, or any cold return before the first queue fetch lands - and
+        // `VisitorDisplayPrefix` rendered it as if it were a real, plausible visitor short code
+        // (`docs/backlog/26-68-*.md`'s own Found). `visitorId` is `null`, genuinely, in that case now -
+        // no different from `emojiCreature`/`emojiFood`/`visitorName` two lines below, which were never
+        // given a fabricated fallback in the first place. Same reasoning for `hasAttachmentUploadGrant`:
+        // it was silently `false` whenever `row` was unknown, hiding a control the operator might
+        // actually be entitled to with no sign anything was unknown - `null` now says "not yet known"
+        // rather than a stated, confident "no".
+        //
+        // Both of these are self-healing for the ordinary transient case with no new fetch added here:
+        // `ConversationListViewModel.refresh()` already runs unconditionally from that class's own
+        // `init` (a fresh instance after process death included, since the ViewModel itself does not
+        // survive it - this file's own top-of-file doc comment states `openConversationId` does, the
+        // ViewModel does not). Once that answer lands, `listState` updates, this composable recomposes,
+        // `row` resolves, and the real `visitorId`/`hasAttachmentUploadGrant` flow down with nothing
+        // further to wire - the identical mechanism that already refreshes every other field here.
+        //
+        // `identityUnavailable` covers the other case that fetch can never resolve: a conversation that
+        // has since left both `mine` and `waiting` for good - closed, or reassigned - never matches this
+        // lookup again, ever (`docs/backlog/26-68-*.md`'s own Found). `listState.isStale` is what tells
+        // "still loading, may yet resolve" apart from "a genuinely fresh answer already confirmed this
+        // conversation is not in either half" - it starts `true` and is cleared only inside
+        // `ConversationListViewModel.refresh()`'s own `QueueResult.Loaded` branch, which is the one
+        // place a real, whole-list answer actually landed (that class's own doc comment on `isStale`:
+        // "stale until proven fresh"). No new state is introduced to tell these two cases apart.
+        val identityUnavailable = row == null && !listState.isStale
         stateHolder.SaveableStateProvider("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen") {
             ThreadRoute(
                 conversationId = currentlyOpen,
-                visitorId = row?.visitorId ?: currentlyOpen,
+                visitorId = row?.visitorId,
                 emojiCreature = row?.emojiCreature,
                 emojiFood = row?.emojiFood,
                 visitorName = row?.visitorName,
                 createdAt = row?.createdAt,
                 conversationState = row?.state,
-                hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant ?: false,
+                hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant,
+                identityUnavailable = identityUnavailable,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null

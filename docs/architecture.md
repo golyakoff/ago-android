@@ -352,6 +352,32 @@ place an eight-character code is still drawn today is `IdentifierText`'s two oth
 `SettingsScreen`'s site rows and the sign-in site picker — both ids an operator genuinely may have to
 match, unlike a visitor's own conversation-list/app-bar identity.
 
+`26-68`: `26-40`'s own retirement of the eight-character code above turned out to also (accidentally)
+retire the *symptom* of a separate defect, without retiring the defect itself. `ConversationsTabHost`'s
+row lookup (`(listState.mine + listState.waiting).firstOrNull { ... }`, `null` for a restored thread
+before the queue has re-fetched, or one whose conversation has since left both halves for good) used to
+fall back to `row?.visitorId ?: currentlyOpen` — substituting the *conversation's own id* into the
+visitor-id slot. Once `26-40` stopped this app bar from ever drawing `visitorId` at all, that fabricated
+value became dead data as far as the screen was concerned — never actually the wrong eight-character
+string an operator saw, contrary to what this item's own Found section (written against a commit before
+either change had landed) describes. The defect was real regardless: a value silently invented to fill
+a slot that should have said "unknown", one call away from resurfacing the moment any future consumer —
+the still-not-built visitor context sheet named above, most obviously — reads `visitorId` off the same
+row. The fix: `VisitorDisplayPrefixParts.visitorId` (and the two `ThreadRoute`/`ThreadScreen` parameters
+that feed it) are `String?` now, joining every other field in this composite that was already nullable;
+`ConversationsTabHost` passes `row?.visitorId` with no fallback, exactly as it already did for
+`emojiCreature`/`emojiFood`/`visitorName`. `hasAttachmentUploadGrant` got the identical treatment for
+the identical reason — the old `?: false` hid a control an operator might actually hold, with no sign
+anything was unknown — and is `Boolean?` throughout the same chain, `null` and `false` both hiding the
+paperclip but only one of them meaning "confirmed no". Neither field needed a new network call to
+resolve the ordinary transient case: `ConversationListViewModel.refresh()` already runs unconditionally
+from that class's own `init`, so the real values land through the very next recomposition once the
+queue answers. The one case a re-fetch can never resolve — a conversation gone from both halves for
+good — is named on screen instead: `ConversationsTabHost` derives `identityUnavailable` from
+`listState.isStale` (`false` only once a genuinely fresh queue answer confirmed the absence, never
+merely "not fetched yet"), and `ThreadTitleBlock` renders `thread_identity_unavailable` in that one case
+rather than sitting blank forever with nothing to explain why.
+
 Two places where an id is what the wire carries and a name is what the screen needs — the pending
 booking queue (`PendingBooking` has `workerId`/`serviceId`/`calendarId` and no names) and the
 attachment upload grant (`attachmentUploadGrantedByOperatorId` with no join to a display name) —
