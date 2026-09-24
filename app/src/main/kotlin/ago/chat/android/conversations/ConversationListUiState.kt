@@ -175,6 +175,13 @@ public data class ConversationListUiState(
      * write an exception's own message into them; [ConversationListScreen] renders this into a
      * sentence. */
     public val loadError: NetworkFailure? = null,
+    /** `26-60`: `true` for exactly the duration of one in-flight [ConversationListViewModel.refresh]
+     * call - what [ConversationListScreen] disables the retry control on and relabels while true, and
+     * what [ConversationListViewModel.refresh] itself checks first so a second tap while a refresh is
+     * still out is a no-op rather than a second identical request (the same in-flight guard
+     * [ConversationListViewModel.claim] already keeps in `claimingIds`, restated here for the one
+     * request this class makes with no per-row id to key a set on). */
+    public val isRefreshing: Boolean = false,
     /** `26-90`: the «Все» tab's own rows, kept beside [mine]/[waiting] rather than replacing them,
      * because they come from a genuinely different endpoint with a genuinely different lifetime - this
      * list is keyset-paged and grows as the operator scrolls, where those two are re-read whole on

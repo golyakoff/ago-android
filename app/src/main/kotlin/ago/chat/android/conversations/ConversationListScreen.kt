@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.conversations.ConversationStateLabel
 import ago.chat.android.core.domain.conversations.ElapsedLabel
 import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.conversations.elapsedSince
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
@@ -300,15 +301,27 @@ internal fun ConversationListScreen(
                 if (state.isStale && state.selectedTab != ConversationListTab.All) {
                     StaleBanner(onRefresh = onRefresh)
                 }
-                val bannerFailure =
-                    if (state.selectedTab == ConversationListTab.All) state.allLoadError else state.loadError
-                bannerFailure?.let { reason ->
-                    Text(
-                        text = networkFailureText(reason),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
+                if (state.selectedTab == ConversationListTab.All) {
+                    // Out of scope for `26-60` - the «Все» tab's own read failure keeps the bare-text
+                    // treatment it already had. That tab has no cache to fall back on and no cold-start
+                    // spinner this item was asked to fix (`docs/backlog/26-60-*.md`'s own Scope names
+                    // only [ConversationListViewModel.refresh]'s queue, never `fetchAllPage`).
+                    state.allLoadError?.let { reason ->
+                        Text(
+                            text = networkFailureText(reason),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                } else if (state.hasData) {
+                    // `26-60` Scope item 2: rows are already on screen (that is what [state.hasData]
+                    // means here), so a failed refresh gets a retry beside it rather than replacing the
+                    // list - the no-data case just below is the only one that ever swaps the list out
+                    // for a failure body.
+                    state.loadError?.let { reason ->
+                        QueueLoadErrorBanner(reason = reason, isRetrying = state.isRefreshing, onRetry = onRefresh)
+                    }
                 }
                 if (state.selectedTab == ConversationListTab.All) {
                     state.eraseFailure?.let { failure ->
@@ -330,6 +343,22 @@ internal fun ConversationListScreen(
                                 onConfirmErasure = onConfirmErasure,
                             )
                         }
+
+                    // `26-60`: the first load failed and there is nothing cached to show in its place -
+                    // precisely the state [ConversationListViewModel.refresh]'s own `QueueResult.Failed`
+                    // branch produces on a cold start with no cache and no network
+                    // (`ConversationListViewModel.kt`'s own `lastQueue` stays `null`, so [render] never
+                    // runs and [ConversationListUiState.hasData] never becomes `true`). This used to fall
+                    // through to the bare `LoadingBody()` below, which drew a spinner over work that had
+                    // already finished and failed - the cold-start "spins forever" half of this item's
+                    // Found section. `!state.hasData` alone cannot tell "still loading" from "failed with
+                    // nothing to show"; [ConversationListUiState.loadError] is the one field that can.
+                    !state.hasData && state.loadError != null ->
+                        QueueLoadFailedBody(
+                            failure = state.loadError,
+                            isRetrying = state.isRefreshing,
+                            onRetry = onRefresh,
+                        )
 
                     !state.hasData -> LoadingBody()
                     state.selectedTab == ConversationListTab.Mine ->
@@ -449,6 +478,95 @@ private fun StaleBanner(onRefresh: () -> Unit) {
 private fun LoadingBody() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
+    }
+}
+
+/**
+ * `26-60`: the no-data failure's own body — the same title/detail/Retry shape
+ * `ago.chat.android.thread.ThreadScreen`'s own `JoinErrorBody` and
+ * `ago.chat.android.shell.AppShellScreen`'s own `PermissionsLoadFailedScreen` already draw for the
+ * identical situation on their own screens ("the one real load this screen depends on failed, and there
+ * is nothing else to show in its place"). Both of those are `private` to their own files, so this is a
+ * third copy of the shape rather than a shared call site — deliberately not lifted into a shared
+ * composable by this item, which is scoped to this screen's own two dead ends (`docs/backlog/26-60-*.md`'s
+ * Scope); a fourth caller of the identical shape would be the moment to actually extract it.
+ *
+ * [isRetrying] mirrors [WaitingRow]'s own `enabled = !row.isClaiming` — the control disables itself and
+ * relabels while a retry is out, rather than accepting a second tap that
+ * [ConversationListViewModel.refresh]'s own in-flight guard would silently drop anyway; the two together
+ * are what makes "tapping Retry twice quickly issues one request" true from the operator's own side of
+ * the screen, not only inside the view model.
+ */
+@Composable
+private fun QueueLoadFailedBody(
+    failure: NetworkFailure,
+    isRetrying: Boolean,
+    onRetry: () -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = stringResource(R.string.conversation_list_load_failed_title),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = networkFailureText(failure),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Button(onClick = onRetry, enabled = !isRetrying, modifier = Modifier.padding(top = 16.dp)) {
+                Text(
+                    text =
+                        if (isRetrying) {
+                            stringResource(R.string.conversation_list_retrying_label)
+                        } else {
+                            stringResource(R.string.action_retry)
+                        },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * `26-60`: the has-data failure's own banner — rows stay exactly where [ConversationListViewModel.refresh]
+ * left them ([ConversationListUiState.hasData] is already `true`), and this is the one control that
+ * makes that failure recoverable from the screen it happened on. The same `Text`-beside-`TextButton`
+ * shape [WaitingRow]'s own claim-error row and `ThreadScreen`'s own `DismissibleBanner` already use for
+ * "a failure inline, with exactly one action" — here the action is *retry* rather than *dismiss*, which
+ * is why this is its own composable rather than a third caller of `DismissibleBanner` (`private` to
+ * `ThreadScreen.kt`, and a dismiss-only action label would be the wrong word for what this button does).
+ */
+@Composable
+private fun QueueLoadErrorBanner(
+    reason: NetworkFailure,
+    isRetrying: Boolean,
+    onRetry: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = networkFailureText(reason),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry, enabled = !isRetrying) {
+            Text(
+                text =
+                    if (isRetrying) {
+                        stringResource(R.string.conversation_list_retrying_label)
+                    } else {
+                        stringResource(R.string.action_retry)
+                    },
+            )
+        }
     }
 }
 

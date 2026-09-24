@@ -128,6 +128,91 @@ class ConversationListViewModelTest {
             assertFalse(viewModel.state.value.hasData)
         }
 
+    // ------------------------------------------------------- `26-60`: failed load, retry, no-op guard
+
+    /**
+     * The exact combination `ConversationListScreen`'s own no-data `when` branch
+     * (`!state.hasData && state.loadError != null`) is written to catch — a cold start with no cache,
+     * whose first fetch actually finished and failed, rather than one still pending. Before `26-60` this
+     * was indistinguishable from "still loading" on [ConversationListUiState] alone; this test is what
+     * proves the two fields together already carry the distinction the screen now branches on.
+     */
+    @Test
+    fun `26-60 a cold start with no cache and a failed fetch is a real failure, not a still-loading state`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModelWith(api = api)
+
+            advanceUntilIdle()
+
+            assertFalse("nothing was ever loaded - render() never ran", viewModel.state.value.hasData)
+            assertEquals(NetworkFailure.NoConnection, viewModel.state.value.loadError)
+        }
+
+    @Test
+    fun `26-60 retrying after a cold-start failure loads the queue with no restart`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.hasData)
+
+            // The network is back, and the same view model instance is asked again - `refresh()` is
+            // both the initial load and its own retry action, the same call `ConversationListScreen`'s
+            // Retry button invokes.
+            api.queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1"))))
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.hasData)
+            assertNull("a successful retry clears the failure", viewModel.state.value.loadError)
+            assertEquals(
+                listOf("c1"),
+                viewModel.state.value.mine
+                    .map { it.conversationId },
+            )
+        }
+
+    @Test
+    fun `26-60 a second refresh call while one is still out makes no second request`() =
+        runTest(dispatcher) {
+            // `hangQueueFetch` keeps the very first call (this class's own init-time refresh) from ever
+            // answering, so it is still genuinely in flight when the test calls `refresh()` again.
+            val api = FakeConversationsApi(hangQueueFetch = true)
+            val viewModel = viewModelWith(api = api)
+            dispatcher.scheduler.runCurrent()
+            assertEquals(1, api.fetchCalls)
+            assertTrue("the control reads this to disable itself and relabel", viewModel.state.value.isRefreshing)
+
+            viewModel.refresh()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals("the in-flight guard drops the second call", 1, api.fetchCalls)
+        }
+
+    @Test
+    fun `26-60 isRefreshing returns to false after a completed refresh, success or failure alike`() =
+        runTest(dispatcher) {
+            val loadedApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf()))
+            val loadedViewModel = viewModelWith(api = loadedApi)
+            advanceUntilIdle()
+            assertFalse("cleared after a success", loadedViewModel.state.value.isRefreshing)
+
+            val failedApi = FakeConversationsApi(queueResult = QueueResult.Failed(NetworkFailure.NoConnection))
+            val failedViewModel = viewModelWith(api = failedApi)
+            advanceUntilIdle()
+            assertFalse(
+                "cleared after a failure too - the control must not stay disabled forever",
+                failedViewModel.state.value.isRefreshing,
+            )
+
+            // And the guard above does not therefore wrongly keep refusing a real subsequent retry.
+            failedApi.queueResult = QueueResult.Loaded(queueOf())
+            failedViewModel.refresh()
+            advanceUntilIdle()
+            assertEquals(2, failedApi.fetchCalls)
+        }
+
     // -------------------------------------------------------------------------- assignment pushes
 
     @Test
