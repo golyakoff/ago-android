@@ -168,6 +168,7 @@ jobs:
           # the product as it actually behaves for them, rather than becoming a referendum on whatever
           # locale `ubuntu-latest` happens to boot.
           script: >-
+            adb root &&
             adb shell settings put system system_locales ru-RU &&
             adb shell am broadcast -a android.intent.action.LOCALE_CHANGED &&
             ./gradlew connectedDebugAndroidTest --no-daemon
