@@ -269,6 +269,119 @@ class ConversationListViewModelTest {
             )
         }
 
+    // --------------------------------------------------------- `26-106`: unread badge clears on read
+
+    @Test
+    fun `26-106 opening a conversation with unread messages clears its badge immediately`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1", unread = 3)))))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            assertEquals(
+                3,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+
+            viewModel.onRowOpened("c1")
+
+            assertEquals(
+                "the badge drops to zero the moment the row is opened - no fetch involved",
+                0,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+        }
+
+    @Test
+    fun `26-106 the cleared badge survives a queue refresh that has not caught up with the read yet`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1", unread = 3)))))
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+
+            viewModel.onRowOpened("c1")
+            assertEquals(
+                0,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+
+            // The server's own answer has not caught up with the debounced `26-80` mark-read call yet -
+            // it still reports 3 unread, the exact staleness this item's own optimistic clearing has to
+            // survive without flickering the badge back.
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            assertEquals(
+                "a stale server unread count from a fetch that raced the read-receipt never flickers the badge back",
+                0,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+        }
+
+    @Test
+    fun `26-106 a genuinely new visitor message after a read reinstates the unread badge`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1")))))
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+
+            viewModel.onRowOpened("c1")
+            assertEquals(
+                0,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+
+            // `runCurrent()`, not `advanceUntilIdle()` - the same "rendered off local state alone,
+            // before the coalesced fetch this also schedules ever fires" proof `26-63`'s own sibling
+            // test makes, so a fetch racing this assertion cannot be mistaken for the actual mechanism
+            // under test: [ConversationListViewModel.onMessage] retiring the local override itself.
+            hubEvents.allMessages.tryEmit(MessageDto(id = "m1", sequence = 1, conversationId = "c1", authorKind = "Visitor"))
+            runCurrent()
+
+            assertEquals(
+                "a real new arrival still bumps the badge - the override only ever suppresses a stale " +
+                    "server count, never a genuinely new one",
+                1,
+                viewModel.state.value.mine
+                    .single()
+                    .unreadCount,
+            )
+        }
+
+    @Test
+    fun `26-106 the New badge and the unread badge clear together for a freshly-assigned, already-unread row`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val api = FakeConversationsApi(queueResult = QueueResult.Loaded(queueOf(mine = listOf(waiting("c1", unread = 1)))))
+            val viewModel = viewModelWith(api = api, hubEvents = hubEvents)
+            advanceUntilIdle()
+            hubEvents.assignments.tryEmit(ConversationAssignedDto("c1", "op-1", "2026-09-22T10:00:00Z"))
+            advanceUntilIdle()
+            val rowBeforeOpen =
+                viewModel.state.value.mine
+                    .single()
+            assertTrue(rowBeforeOpen.isNewlyAssigned)
+            assertEquals(1, rowBeforeOpen.unreadCount)
+
+            viewModel.onRowOpened("c1")
+
+            val rowAfterOpen =
+                viewModel.state.value.mine
+                    .single()
+            assertFalse("opening the row still clears the New badge", rowAfterOpen.isNewlyAssigned)
+            assertEquals("and clears the unread badge in the same call", 0, rowAfterOpen.unreadCount)
+        }
+
     // -------------------------------------------------------------- `26-63`: coalesced push refresh
 
     @Test

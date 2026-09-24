@@ -80,6 +80,28 @@ public class ConversationListViewModel
         private var claimingIds: Set<String> = emptySet()
         private var claimErrors: Map<String, ClaimErrorUi> = emptyMap()
 
+        /**
+         * `26-106`: conversations the operator has opened (and is therefore reading, or has read)
+         * since the last time this row was genuinely unread again — the local override that makes a
+         * row's badge clear *promptly* rather than waiting on [ConversationsApi.fetchQueue]'s own
+         * [ConversationSummary.operatorUnreadCount] to catch up with the server-side read-receipt
+         * `26-80` sends from [ago.chat.android.thread.ThreadViewModel] on a fire-and-forget, debounced
+         * timer this class has no way to await.
+         *
+         * While an id is in this set, [toRowUi] renders `0` regardless of what [lastQueue] or a fresh
+         * fetch says [ConversationSummary.operatorUnreadCount] is — this is the "reconciled with the
+         * server" half only in the sense that once the server's own count actually reaches zero the two
+         * agree; until then, a *stale* nonzero count from a fetch that raced the mark-read call is never
+         * allowed to render, which is what [fetchAndApplyQueue] not touching this set (beyond retiring
+         * ids that left `assignedToMe`, the identical treatment [newlyAssignedIds]/[unreadBumps] already
+         * get there) actually buys: a queue refresh's own answer never flickers a cleared badge back.
+         *
+         * Retired the moment [onMessage] sees a genuinely new visitor message for this id — that is the
+         * one signal this class can trust as "unread again" without waiting on a fetch, the same live
+         * overlay [unreadBumps] itself already is for the opposite direction.
+         */
+        private var locallyReadIds: Set<String> = emptySet()
+
         /** `26-90`: the «Все» tab's own accumulated rows, in server order (newest first), appended to
          * one page at a time. A plain `List`, not a `Map` - this list is *ordered* and the order is the
          * server's keyset order, which no client-side re-sort is allowed to second-guess. */
@@ -185,11 +207,21 @@ public class ConversationListViewModel
         }
 
         /** The row was tapped. `26-15` is what this eventually opens; this item's own job is only the
-         * one side effect that belongs to *this* screen regardless of where `26-15` sends the operator
-         * next — clearing the "New" badge, `ConversationList.tsx`'s own `"opened"` event, restated. */
+         * side effects that belong to *this* screen regardless of where `26-15` sends the operator next
+         * — clearing the "New" badge (`ConversationList.tsx`'s own `"opened"` event, restated), and,
+         * `26-106`, dropping the row's unread badge to zero on the same optimistic footing: the operator
+         * is about to read this conversation, and this screen has no reason to wait on the server's own
+         * read-receipt round trip before saying so. [unreadBumps] is cleared alongside it rather than
+         * merely shadowed by [locallyReadIds] - a bump left standing would resurface the instant this id
+         * ever left and rejoined `assignedToMe`, which is not "unread again" by any signal this class
+         * actually trusts. Unconditional (no `newlyAssignedIds` guard the way this method used to have
+         * one) because the common case this item was filed against - an existing «Мои» row with a real
+         * unread count, no "New" badge in sight - must clear exactly the same way a freshly assigned one
+         * does. */
         public fun onRowOpened(conversationId: String) {
-            if (conversationId !in newlyAssignedIds) return
             newlyAssignedIds = newlyAssignedIds - conversationId
+            unreadBumps = unreadBumps - conversationId
+            locallyReadIds = locallyReadIds + conversationId
             render(stale = mutableState.value.isStale)
         }
 
@@ -266,6 +298,13 @@ public class ConversationListViewModel
                     // this snapshot actually re-read.
                     newlyAssignedIds = newlyAssignedIds.intersect(stillMine)
                     unreadBumps = unreadBumps.filterKeys { it in stillMine }
+                    // `26-106`: retired only for the same reason [newlyAssignedIds]/[unreadBumps] are -
+                    // a conversation that left `assignedToMe` has nothing left for this override to
+                    // protect. Deliberately *not* intersected against which ids this answer's own
+                    // [ConversationSummary.operatorUnreadCount] happens to say is zero - a stale nonzero
+                    // count from a fetch that raced the debounced `26-80` mark-read call is exactly the
+                    // flicker this set exists to suppress, and [toRowUi] is what actually enforces that.
+                    locallyReadIds = locallyReadIds.intersect(stillMine)
                     val stillWaiting =
                         result.queue.waiting
                             .map { it.conversationId }
@@ -575,6 +614,12 @@ public class ConversationListViewModel
             // reasoning, right above) rather than hand-rolling a client-side patch of `lastQueue` that
             // would have to duplicate `26-29`'s own truncation/null-for-attachment rules to stay correct.
             if (message.authorKind == VISITOR_AUTHOR_KIND) {
+                // `26-106`: a genuinely new visitor message is the one signal this class trusts as
+                // "unread again" without waiting on a fetch - see [locallyReadIds]'s own doc comment.
+                // Retired *before* the bump below so the row's own [toRowUi] combination
+                // (`operatorUnreadCount + unreadBumps`) is what renders again, rather than staying
+                // pinned at zero underneath a bump nobody would ever see.
+                locallyReadIds = locallyReadIds - conversationId
                 unreadBumps = unreadBumps + (conversationId to ((unreadBumps[conversationId] ?: 0) + 1))
             }
             // `26-63`: rendered immediately, off the local [unreadBumps] overlay alone, before the
@@ -669,7 +714,16 @@ public class ConversationListViewModel
                 emojiFood = emojiFood,
                 visitorName = visitorName,
                 createdAt = createdAt,
-                unreadCount = operatorUnreadCount + (unreadBumps[conversationId] ?: 0),
+                // `26-106`: [locallyReadIds] wins outright over both the server's own
+                // [operatorUnreadCount] and any surviving [unreadBumps] entry - the whole point of that
+                // set is to render `0` even while a fetch's own answer has not yet caught up with the
+                // server-side read-receipt.
+                unreadCount =
+                    if (conversationId in locallyReadIds) {
+                        0
+                    } else {
+                        operatorUnreadCount + (unreadBumps[conversationId] ?: 0)
+                    },
                 isNewlyAssigned = conversationId in newlyAssignedIds,
                 isClaiming = conversationId in claimingIds,
                 claimError = claimErrors[conversationId],
