@@ -247,6 +247,49 @@ convention instead: **a `Color`, a `TextStyle`, or a corner radius is read from 
 literal at a screen's own call site.** If a real violation shows up in review, that is the moment to
 revisit whether a lint dependency has become worth its cost — not before.
 
+## Strings: resources in two languages, no literals
+
+**`26-91` made this real, and it does not lapse.** From `26-91` on: no string literal in a
+Composable or a ViewModel. Every user-facing string is a resource, added to both
+`app/src/main/res/values/strings.xml` (Russian, this app's own base/default locale — `26-10`) **and**
+`app/src/main/res/values-en/strings.xml` (English) **in the same change** — never one file now and the
+other "later". A KDoc/line comment quoting Russian prose for documentation, and an `@Preview` function's
+own placeholder sample data, are not user-facing text and are exempt (`26-91`'s own report names which
+of the sweep's hits were judged which way, and why).
+
+`26-91` shipped `values-en/strings.xml` with a real English translation for every key that existed in
+`values/strings.xml` at the time — nothing reads it yet. `26-92` is what wires
+`AppCompatDelegate.setApplicationLocales` and adds the Settings row that lets an operator actually pick
+English; until then the app always renders Russian, on every device, regardless of this file's
+existence. Do not read the presence of `values-en/` as a signal that language switching is live.
+
+Two things a change touching strings needs to get right that a plain copy-paste won't:
+
+- **Positional arguments may need reordering.** `%1$s`/`%2$s` may appear in a different order in the
+  English translation than in the Russian original if that reads more naturally — Android resource
+  files allow each locale's own string to declare its placeholders in whichever order it needs; a
+  hardcoded Kotlin string interpolation could never do this.
+- **Plural forms are not a copy-paste.** `russianPluralStringResource` (`ui/components/ElapsedText.kt`)
+  hand-picks one of three resource ids (`_one`/`_few`/`_many`) by Russian's own mod-10/mod-100 grammar
+  (CLDR "ru") rather than through Android's own `<plurals>` — deliberately, per that function's doc
+  comment, since `<plurals>` picks its bucket from the *device's* locale rather than from the resource
+  file actually supplying the string. English only has a one/other rule, so the `_few` and `_many`
+  English strings are written identically (there is no third form to distinguish) — but the selection
+  function itself remains Russian-specific: its "one" bucket also fires for 21, 31, 101… (anything
+  ending in 1 except 11), where English wants the plural, not the singular. Reusing this function as-is
+  once a locale switch exists would render "21 minute" — wrong. This is latent, not live, because
+  nothing reads `values-en/` yet; **`26-92` (or a dedicated companion item) must adapt the selection
+  itself — a real `<plurals>` per locale, or a locale-aware wrapper — before English plurals are ever
+  actually shown.** Translating the surrounding text cannot fix a selection-function bug, and `26-91`
+  deliberately left the function untouched rather than reach into runtime locale logic that item's own
+  scope excluded.
+
+Android Lint's own `MissingTranslation`/`ExtraTranslation` checks are on by default (no `lint {}` block
+or `lint.xml` in this project overrides them) and now apply for the first time as of `26-91`, since a
+second `values-*` locale directory existing at all is what makes them run. A `./gradlew lint` catching
+either — a key present in one file and not the other — is this project's own real, mechanical proof
+that the "both files, same change" rule above was actually followed, not merely asserted.
+
 ## How an identifier is rendered
 
 Every id in this product is a GUID, and no screen ever prints one in full. The console's own
