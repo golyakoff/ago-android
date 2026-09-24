@@ -13,6 +13,7 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
@@ -26,6 +27,7 @@ import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
@@ -319,6 +321,19 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): BookingsApi = KtorBookingsApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-97`: the working-hours correction port. A second `@Provides` against the same calendar
+     * origin rather than three more methods on [BookingsApi], for the reason [WorkingHoursApi]'s own
+     * doc comment gives - those are reads of what is on the calendar, these are configuration writes
+     * on a different noun behind a different server-side gate. Always constructs, including when
+     * [OidcConfig.calendarApiBaseUrl] is `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideWorkingHoursApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): WorkingHoursApi = KtorWorkingHoursApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-55`: [ago.chat.android.team.PeopleViewModel]'s own port — plain REST on the chat API this app

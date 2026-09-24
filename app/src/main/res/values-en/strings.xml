@@ -425,4 +425,29 @@
     <string name="network_failure_no_connection">No connection. Check your internet connection and try again.</string>
     <string name="network_failure_server_status">The server returned an error (code %1$d). Try again.</string>
     <string name="network_failure_unexpected">Something went wrong. Try again.</string>
+
+    <string name="working_hours_tab">Hours</string>
+    <string name="working_hours_empty">No working hours yet.</string>
+    <string name="working_hours_load_failed_unexpected">Couldn\'t load working hours. Try again.</string>
+    <string name="working_hours_edit_title">Edit working hours</string>
+    <string name="working_hours_day_label">Day of week</string>
+    <string name="working_hours_opens_label">Opens</string>
+    <string name="working_hours_closes_label">Closes</string>
+    <string name="working_hours_save">Save</string>
+    <string name="working_hours_edit">Edit</string>
+    <string name="working_hours_delete">Delete</string>
+    <string name="working_hours_delete_title">Remove these working hours?</string>
+    <string name="working_hours_delete_message">Days already generated from these hours keep the slots they were cut with - including any bookings on them. Only days generated from now on change.</string>
+    <string name="working_hours_recut_notice">Saved. Days already generated from the old hours keep the grid they were cut with: %1$s. Bookings on those days: %2$d. To apply the change to them, re-cut the schedule from %3$s.</string>
+    <string name="working_hours_recut_notice_no_bookings">Saved. Days already generated from the old hours keep the grid they were cut with: %1$s. No bookings on those days. To apply the change to them, re-cut the schedule from %2$s.</string>
+    <string-array name="working_hours_weekday">
+        <item>Sunday</item>
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+    </string-array>
+
 </resources>

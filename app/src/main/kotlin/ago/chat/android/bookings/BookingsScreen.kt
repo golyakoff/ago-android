@@ -7,6 +7,9 @@ import ago.chat.android.core.domain.bookings.ConfirmationCountdown
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.confirmationCountdown
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.schedule.WorkingHoursBody
+import ago.chat.android.schedule.WorkingHoursUiState
+import ago.chat.android.schedule.WorkingHoursViewModel
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
@@ -65,6 +68,7 @@ public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
     showServicesSegment: Boolean,
+    showHoursSegment: Boolean,
     hubConnectionState: OperatorHubConnectionState,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
@@ -141,11 +145,33 @@ public fun BookingsRoute(
         onSubmitService = {}
     }
 
+    // `26-97`: the identical Hilt-avoidance-when-ungated shape the branches above establish - an
+    // operator without `calendar:configure` never constructs [WorkingHoursViewModel] and so never
+    // triggers its `init`-time read of a configuration document they may not be entitled to.
+    val workingHoursState: WorkingHoursUiState?
+    val onRetryWorkingHours: () -> Unit
+    val onSaveWorkingHours: (String, Int, String, String) -> Unit
+    val onDeleteWorkingHours: (String) -> Unit
+    if (showHoursSegment) {
+        val workingHoursViewModel: WorkingHoursViewModel = hiltViewModel()
+        val collectedWorkingHoursState by workingHoursViewModel.state.collectAsStateWithLifecycle()
+        workingHoursState = collectedWorkingHoursState
+        onRetryWorkingHours = workingHoursViewModel::refresh
+        onSaveWorkingHours = workingHoursViewModel::save
+        onDeleteWorkingHours = workingHoursViewModel::delete
+    } else {
+        workingHoursState = null
+        onRetryWorkingHours = {}
+        onSaveWorkingHours = { _, _, _, _ -> }
+        onDeleteWorkingHours = {}
+    }
+
     BookingsScreen(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
         showServicesSegment = showServicesSegment,
+        showHoursSegment = showHoursSegment,
         selectedTab = selectedTab,
         onTabSelected = { selectedTab = it },
         onRetry = viewModel::refresh,
@@ -164,6 +190,10 @@ public fun BookingsRoute(
         onCancelServiceEdit = onCancelServiceEdit,
         onServiceDraftChanged = onServiceDraftChanged,
         onSubmitService = onSubmitService,
+        workingHoursState = workingHoursState,
+        onRetryWorkingHours = onRetryWorkingHours,
+        onSaveWorkingHours = onSaveWorkingHours,
+        onDeleteWorkingHours = onDeleteWorkingHours,
         hubConnectionState = hubConnectionState,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -191,6 +221,7 @@ internal fun BookingsScreen(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
     showServicesSegment: Boolean,
+    showHoursSegment: Boolean,
     selectedTab: BookingsTab,
     onTabSelected: (BookingsTab) -> Unit,
     onRetry: () -> Unit,
@@ -209,6 +240,10 @@ internal fun BookingsScreen(
     onCancelServiceEdit: () -> Unit,
     onServiceDraftChanged: (ServiceDraft) -> Unit,
     onSubmitService: (ServiceDraft) -> Unit,
+    workingHoursState: WorkingHoursUiState?,
+    onRetryWorkingHours: () -> Unit,
+    onSaveWorkingHours: (String, Int, String, String) -> Unit,
+    onDeleteWorkingHours: (String) -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
@@ -220,7 +255,8 @@ internal fun BookingsScreen(
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
     // `rememberTickingNow`).
     val now = rememberTickingNow()
-    val tabs = visibleBookingsTabs(showConfirmedSegment, showClientsSegment, showServicesSegment)
+    val tabs =
+        visibleBookingsTabs(showConfirmedSegment, showClientsSegment, showServicesSegment, showHoursSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -331,6 +367,21 @@ internal fun BookingsScreen(
                                 onSubmit = onSubmitService,
                             )
                         }
+
+                    // `26-97`: the identical "non-null exactly when selectable" invariant the two
+                    // branches above state, for `showHoursSegment`. Kept stateless here rather than
+                    // calling `hiltViewModel()` inline, so this composable stays the Hilt-free half
+                    // the back-contract tests can drive - this file's own doc comment's whole reason
+                    // for the Route/Screen split.
+                    BookingsTab.Hours ->
+                        workingHoursState?.let {
+                            WorkingHoursBody(
+                                state = it,
+                                onRetry = onRetryWorkingHours,
+                                onSave = onSaveWorkingHours,
+                                onDelete = onDeleteWorkingHours,
+                            )
+                        }
                 }
             }
         }
@@ -347,6 +398,7 @@ private fun bookingsTabLabel(
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
         BookingsTab.Services -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_services)) }
+        BookingsTab.Hours -> buildAnnotatedString { append(stringResource(R.string.working_hours_tab)) }
     }
 
 /** `null` before [BookingsUiState.Loaded] is known, exactly the "no digit for a count not yet known"

@@ -86,6 +86,7 @@ flowchart TD
     Pending["Ожидают"]
     Confirmed["Утверждены"]
     Clients["Клиенты"]
+    Hours["Часы · 26-97, интерим"]
     BookingCard["Карточка записи"]
     ClientCard["Карточка клиента"]
     Merge["Объединение клиентов"]
@@ -106,7 +107,9 @@ flowchart TD
 
   Pending -- "сегмент" --> Confirmed
   Confirmed -- "сегмент" --> Clients
-  Clients -- "сегмент" --> Pending
+  Clients -- "сегмент · calendar:configure" --> Hours
+  Hours -- "сегмент" --> Pending
+  Hours -- "Изменить / Удалить" --> Hours
   Pending -- "тап" --> BookingCard
   Pending -- "Подтвердить / Отклонить" --> Pending
   Confirmed -- "лента дат" --> Confirmed
@@ -428,6 +431,16 @@ the change this iteration makes.
 The two operational tabs are **Ожидают** and **Утверждены** — verb forms, not the console's own
 "В ожидании"/"Утверждённые". A tab label answers "what is in here", and the shortest honest answer is
 what these rows are doing.
+
+**`26-97` added a fourth segment, «Часы», and it is deliberately interim.** The table above puts
+«График мастера» behind the hub, which is where a worker's working hours belong once that screen
+exists — it does not yet. Meanwhile `Ago.Calendar.Api` had exactly one working-hours verb until
+`26-97` (`POST /working-hours`), so a mistyped 09:00-for-19:00 was permanent and the only remedy
+anywhere in the product was deleting the master. `26-97` added `PUT`/`DELETE /working-hours/{ruleId}`
+and needed a reachable surface to use them from on the phone; a segment gated on `calendar:configure`
+alone is the smallest one, and the whole of it is a list plus an edit dialog. **When «График мастера»
+lands it absorbs this body and the segment goes away** — this row is not a fourth operational tab the
+design gained, it is the correction's temporary door.
 
 ```mermaid
 flowchart LR

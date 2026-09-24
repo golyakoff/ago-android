@@ -205,16 +205,24 @@ internal fun AppShellScreen(
     // (`{ Text("BOOKINGS_MARKER") }`) still type-checks unchanged against this widened type: a
     // function literal that never reads its parameters is ordinary Kotlin, not a test-only
     // accommodation.
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
+    //
+    // `26-96` adds a third `Boolean` — `calendar:configure` alone. `26-97` adds a fourth, the identical
+    // gate for a different write (the two working-hours endpoints check the same permission
+    // server-side), kept as its own parameter rather than reusing the third: `showClientsSegment` is
+    // `calendar:configure` **or** `customer:read`, so an operator holding only `customer:read` would
+    // otherwise be offered an edit the server will refuse.
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
         showConfirmedSegment,
         showClientsSegment,
         showServicesSegment,
+        showHoursSegment,
         onOpenSettings,
         ->
         BookingsRoute(
             showConfirmedSegment = showConfirmedSegment,
             showClientsSegment = showClientsSegment,
             showServicesSegment = showServicesSegment,
+            showHoursSegment = showHoursSegment,
             hubConnectionState = hubConnectionState,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
@@ -319,7 +327,9 @@ private fun AppShellContent(
     unreadConversationsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
+    // `26-96`/`26-97`: the third and fourth `Boolean` are `calendar:configure` alone, each its own gate
+    // rather than a reuse of the Клиенты one - see [AppShellScreen]'s own `bookingsTab` parameter.
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -517,6 +527,12 @@ private fun AppShellContent(
                     // one reused (see [visibleBookingsTabs]' own doc comment: an operator holding only
                     // `customer:read` may read the customer base without rewriting the tenant's own
                     // service dictionary).
+                    permissions.holds(Permission.CALENDAR_CONFIGURE),
+                    // `26-97`: `calendar:configure` alone - the permission the working-hours writes
+                    // themselves check, never the wider Клиенты gate above. Currently the same
+                    // expression as the Услуги gate immediately above; each is its own parameter because
+                    // the two writes check the permission independently server-side, not because either
+                    // reuses the other's boolean.
                     permissions.holds(Permission.CALENDAR_CONFIGURE),
                 ) { navController.navigate(SETTINGS_ROUTE) }
             }
