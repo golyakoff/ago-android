@@ -10,6 +10,7 @@ import ago.chat.android.devices.NotificationSettingsRoute
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.PushUnavailableReason
 import ago.chat.android.devices.batteryModeStatus
+import ago.chat.android.devices.openAppInfoSettings
 import ago.chat.android.devices.openAutostartSettings
 import ago.chat.android.devices.openBatteryOptimizationSettings
 import ago.chat.android.ui.components.IdentifierText
@@ -169,6 +170,7 @@ public fun SettingsRoute(
         onManageNotificationChannels = { showingNotificationSettings = true },
         batteryUnrestricted = batteryUnrestricted,
         onOpenBatterySettings = { openBatteryOptimizationSettings(context) },
+        onOpenAppInfoSettings = { openAppInfoSettings(context) },
         autostartStatus = viewModel.autostartStatus,
         autostartSettingsTarget = viewModel.autostartSettingsTarget,
         onOpenAutostartSettings = { openAutostartSettings(context, viewModel.autostartSettingsTarget) },
@@ -217,6 +219,7 @@ internal fun SettingsScreen(
     // on this signature.
     batteryUnrestricted: Boolean = true,
     onOpenBatterySettings: () -> Unit = {},
+    onOpenAppInfoSettings: () -> Unit = {},
     autostartStatus: DeviceModeStatus = DeviceModeStatus.Ok,
     autostartSettingsTarget: AutostartSettingsTarget = AutostartSettingsTarget.None,
     onOpenAutostartSettings: () -> Unit = {},
@@ -400,6 +403,20 @@ internal fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 8.dp),
                             )
+                            // `26-137`: MIUI's «Приостановить работу приложения, если оно не используется»
+                            // (App Info → properties) can silence notifications even with battery mode set
+                            // to «Без ограничений». Android exposes no reliable way to read or deep-link
+                            // this exact toggle on most phones, so this is folded into the battery card as a
+                            // recommendation with only App-info to open — never presented as a verified
+                            // status the way «Режим работы» above is, matching «Автозапуск»'s own hedge.
+                            Text(
+                                text = stringResource(R.string.settings_app_suspend_note),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+                            )
+                            OutlinedButton(onClick = onOpenAppInfoSettings) {
+                                Text(text = stringResource(R.string.settings_app_info_action))
+                            }
                         }
                     }
                 }
@@ -544,8 +561,10 @@ private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
  * (never a triangle: round 3 of the approved mockup singled out a triangle-in-a-circle as "looks wrong" —
  * [ago.chat.android.shell.BatteryAwarenessSheet]'s own header keeps the triangle, this circle never does).
  * Deliberately smaller than round 3's own mockup circle (`docs/backlog/26-128-*.md`'s "circles slightly
- * smaller" tweak) — 20dp, not 26dp, with an 11dp glyph inside rather than 15dp, the same two-thirds ratio
- * scaled down.
+ * smaller" tweak) — a 20dp circle, not 26dp. `26-137` enlarges the glyph inside it from 11dp to 13dp and
+ * (in [ago.chat.android.ui.icons.AgoIcons]) draws [AgoIcons.Check]/[AgoIcons.Exclamation] at a heavier
+ * stroke weight than the rest of the family, because at 11dp with the family's 1.8 stroke both read
+ * hair-thin and barely visible on a real device — the `26-128` follow-up this item fixes.
  *
  * **Why the fill colours are computed, not read from `MaterialTheme.colorScheme` for both states.** The
  * green fill reads `colorScheme.tertiary`/`onTertiary` — a real Material 3 role pair `Theme.kt` already
@@ -582,7 +601,7 @@ private fun StatusGlyph(status: DeviceModeStatus) {
     ) {
         // Decorative: the row's own visible text already states the full sentence
         // ("Режим работы: ..."/"Автозапуск: ...") this glyph is only a colour cue for.
-        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(11.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(13.dp))
     }
 }
 

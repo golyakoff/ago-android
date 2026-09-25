@@ -808,7 +808,17 @@
     <string name="settings_battery_mode_title_restricted">Режим работы: Экономия энергии</string>
     <string name="settings_battery_mode_current_unrestricted">Сейчас: Без ограничений</string>
     <string name="settings_battery_mode_current_restricted">Сейчас: Экономия энергии</string>
-    <string name="settings_battery_mode_list_caption">Откроется системный список приложений — найдите «АГО Чат» и выберите «Без ограничений».</string>
+    <!-- `26-137`: the button now opens this app's own per-app battery screen directly (the
+         «С оптимизацией»/«Без ограничений» choice), not the system-wide app list — so this caption no
+         longer tells the operator to hunt for the app in a list. -->
+    <string name="settings_battery_mode_list_caption">Откроется экран батареи для этого приложения — выберите «Без ограничений».</string>
+
+    <!-- `26-137`: MIUI's «Приостановить работу приложения, если оно не используется» (в «Сведениях о
+         приложении») может гасить уведомления даже при режиме «Без ограничений». Android не даёт способа
+         прочитать или открыть этот параметр напрямую, поэтому это рекомендация, а не проверенный факт -
+         открывается только экран сведений о приложении. -->
+    <string name="settings_app_suspend_note">На некоторых телефонах (например, Xiaomi/MIUI) в «Сведениях о приложении» есть параметр «Приостановить работу приложения, если оно не используется» — рекомендуется его выключить, иначе уведомления могут приходить с задержкой или не приходить. Android не даёт способа прочитать или открыть этот параметр напрямую, поэтому это рекомендация, а не проверенный факт.</string>
+    <string name="settings_app_info_action">Сведения о приложении</string>
 
     <!-- `26-128`: «Автозапуск» never claims a verified status - see `AutostartAdvisor`'s own doc comment
          for why Android gives this app no way to read it. `settings_autostart_title_*` still speaks in
