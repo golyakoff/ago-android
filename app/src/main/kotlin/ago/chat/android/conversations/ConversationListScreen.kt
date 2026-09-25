@@ -57,6 +57,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -252,8 +256,33 @@ internal fun ConversationListScreen(
     // would not survive process death without reimplementing what this holder already does).
     val listStateHolder = rememberSaveableStateHolder()
 
+    // `26-118`: a swipe-to-delete removes the row from the «Все» list optimistically; a failed
+    // background erasure restores it and raises [ConversationListUiState.eraseFailure], shown here as a
+    // non-blocking «Не удалось удалить» snackbar with a «Повторить» action. A snackbar rather than the
+    // former top-of-list banner precisely because the row is already back where it was - the operator
+    // needs a recoverable notice, not a persistent block, and «Повторить» re-issues the request for the
+    // conversation the failure names.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val eraseFailedMessage = stringResource(R.string.conversation_list_erase_failed)
+    val eraseRetryLabel = stringResource(R.string.conversation_list_erase_retry)
+    LaunchedEffect(state.eraseFailure) {
+        val failure = state.eraseFailure ?: return@LaunchedEffect
+        val result =
+            snackbarHostState.showSnackbar(
+                message = eraseFailedMessage,
+                actionLabel = eraseRetryLabel,
+                withDismissAction = true,
+                duration = SnackbarDuration.Short,
+            )
+        when (result) {
+            SnackbarResult.ActionPerformed -> onConfirmErasure(failure.conversationId)
+            SnackbarResult.Dismissed -> onDismissEraseFailure()
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             // `26-32`: one row of chrome, which is what the mockup draws. This used to be a `Column`
             // of two — the app bar, and under it a full-width row carrying the active site's short
             // code and the words «Соединение: Подключено». Both halves of that second row are gone:
@@ -340,12 +369,6 @@ internal fun ConversationListScreen(
                         QueueLoadErrorBanner(reason = reason, isRetrying = state.isRefreshing, onRetry = onRefresh)
                     }
                 }
-                if (state.selectedTab == ConversationListTab.All) {
-                    state.eraseFailure?.let { failure ->
-                        EraseFailureBanner(failure = failure, onDismiss = onDismissEraseFailure)
-                    }
-                }
-
                 when {
                     state.selectedTab == ConversationListTab.All ->
                         if (!state.allHasData) {
@@ -803,14 +826,13 @@ private fun conversationRowContentDescription(
             listOfNotNull(preview, lastMessageClause).joinToString(separator = ", ")
         }
 
-    // `26-90`: the same two things the third line draws, in the same order - the status (or the held
-    // "erasing" word, which is the one fact an operator most needs to hear before acting on this row
-    // again) and the total, worded as the visible line words it rather than as a bare digit.
+    // `26-90`: the same two things the third line draws, in the same order - the status and the total,
+    // worded as the visible line words it rather than as a bare digit. `26-118`: an erased row is
+    // removed from the list optimistically, so there is no longer a held "erasing" word for this line
+    // to speak.
     val statusClause =
         if (!includeStatusLine) {
             null
-        } else if (row.isErasing) {
-            stringResource(R.string.conversation_list_erasing_label)
         } else {
             conversationStatusPillText(row)
         }
@@ -1258,35 +1280,6 @@ private fun AllReadOnlyNote() {
     )
 }
 
-/** `26-90`: an erasure request that was refused or never landed, shown once above the list and
- * dismissed by hand — the identical "shown once, never retried automatically" posture [WaitingRow]'s
- * own claim error already takes, hoisted to the list because the row it concerns is still sitting in
- * that list exactly where it was. */
-@Composable
-private fun EraseFailureBanner(
-    failure: EraseFailureUi,
-    onDismiss: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-    ) {
-        Text(
-            text =
-                when (failure) {
-                    is EraseFailureUi.ServerRefusal -> failure.detail
-                    is EraseFailureUi.Unavailable -> networkFailureText(failure.reason)
-                },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onDismiss) {
-            Text(text = stringResource(R.string.action_dismiss))
-        }
-    }
-}
-
 /**
  * `26-90`: the «Все» tab's own list. The same rows as «Мои»/«Ожидают» — [ConversationRow], not a
  * table and not a second row composable — plus the third meta line and, for a holder of
@@ -1365,8 +1358,9 @@ private fun AllList(
  * promise says — "the way they already can from the console". Reported as a scope finding; the line
  * under the filter chip ([AllReadOnlyNote]) is what stops a dead tap from reading as a bug.
  *
- * **A held ("erasing") row cannot be swiped again** — a second erase request for a conversation
- * already being erased is noise, not intent.
+ * **`26-118`: a swipe-to-delete removes the row optimistically.** Confirming the swipe hands the id
+ * up to [ConversationListViewModel.confirmErasure], which drops the row from the list at once; there is
+ * no longer a held "erasing" row to re-swipe, because a pending removal is simply not in the list.
  */
 @Composable
 private fun AllRow(
@@ -1375,14 +1369,15 @@ private fun AllRow(
     canErase: Boolean,
     onConfirmErasure: () -> Unit,
 ) {
-    val swipeable = canErase && !row.isErasing
+    val swipeable = canErase
     val revealWidthPx = with(LocalDensity.current) { EraseActionWidth.toPx() }
     var offsetX by remember(row.conversationId) { mutableFloatStateOf(0f) }
     var confirming by rememberSaveable(row.conversationId) { mutableStateOf(false) }
     val animatedOffset by animateFloatAsState(targetValue = offsetX, label = "eraseReveal")
 
-    // Closes the reveal again whenever the gesture stops being available - a row that entered the
-    // erasing state while held open must not be left sitting on a red panel it can no longer act on.
+    // Closes the reveal again whenever the gesture stops being available - an operator whose
+    // `conversation:erase` capability is revoked while a row is held open must not be left sitting on a
+    // red panel it can no longer act on.
     LaunchedEffect(swipeable) { if (!swipeable) offsetX = 0f }
 
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -1529,19 +1524,9 @@ private fun ConversationRowStatusLine(row: ConversationRowUi) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        if (row.isErasing) {
-            // `--danger-tint`/`--danger`, the mockup's own `.pill.bad` pair - the same tint family the
-            // swipe panel uses, one step quieter, because this pill reports a state rather than
-            // offering an action.
-            StatusPill(
-                text = stringResource(R.string.conversation_list_erasing_label),
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-        } else {
-            conversationStatusPill(row)
-        }
+        // `26-118`: no more «Стирается…» pill - a swiped row is removed from the list optimistically, so
+        // it is never rendered in a held erasing state at all.
+        conversationStatusPill(row)
         Text(
             // `.rcount{font-size:11.5px; color:var(--ink-faint); font-variant-numeric:tabular-nums}` -
             // the snippet line's own quiet weight, never the blue `.badge`, because in this product a

@@ -90,10 +90,13 @@ public interface ConversationsApi {
      * **`202 Accepted`, and that is the whole point of this method having its own result type.** The
      * server stamps `erasure_requested_at` and returns immediately; the conversation is erased later, by
      * a separate job (`RequestConversationErasureHandler`). So [ErasureResult.Accepted] means "the
-     * request was recorded", never "the conversation is gone" — a caller that removed the row on this
-     * answer would watch it reappear on the next page and read that as a bug. What the caller does
-     * instead is `26-90`'s own decision, written down in [ConversationListViewModel]: hold the row in a
-     * visible "erasing" state and let it disappear only when the server stops returning it.
+     * request was recorded", never "the conversation is gone" — the erasure job may still be running
+     * when the next page is fetched, so the server keeps returning the row for a while after this
+     * answer. What the caller does with that is `26-118`'s decision, written down in
+     * [ConversationListViewModel]: **remove the row optimistically the moment the swipe is confirmed**
+     * and suppress it from every subsequent page until the server stops returning it (reconciliation),
+     * restoring it only if this request itself fails. `26-90` originally held the row in a visible
+     * "erasing" state instead; that lingering placeholder is what `26-118` replaced.
      */
     public suspend fun requestErasure(conversationId: String): ErasureResult
 }

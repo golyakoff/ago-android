@@ -141,12 +141,6 @@ public data class ConversationRowUi(
      * `Waiting` row (nobody holds it) and on every row of «Мои»/«Ожидают»; the pill then renders the
      * bare word, never an invented placeholder. */
     public val operatorName: String? = null,
-    /** `26-90`: this row's erasure has been *requested* and the server has not yet stopped returning
-     * it. Set by [ConversationListViewModel.confirmErasure] on a `202 Accepted` and cleared only by a
-     * list answer that no longer contains this conversation - never by a timer, and never by removing
-     * the row from the list on the operator's behalf. See that method's own doc comment for why a
-     * `202` may not be treated as a deletion. */
-    public val isErasing: Boolean = false,
 )
 
 /**
@@ -214,32 +208,26 @@ public data class ConversationListUiState(
      * [visibleConversationListTabs] uses for the segment itself. `false` means the swipe gesture is
      * not wired at all, not that it is wired and refused. */
     public val canErase: Boolean = false,
-    /** `26-90`: the last erasure request's own failure, shown once above the list and cleared by
-     * [ConversationListViewModel.dismissEraseFailure] - never per row, because the row it belongs to is
-     * still in the list exactly where it was and the operator has just come back from a confirmation
-     * dialog, so there is no ambiguity about which conversation this is about. */
+    /** `26-118`: the last erasure request that failed *after* its row had already been optimistically
+     * removed - the one-shot signal [ConversationListScreen] turns into a «Не удалось удалить» snackbar
+     * with a «Повторить» action. Carries [EraseFailureUi.conversationId] so that snackbar can re-issue
+     * the request for the right conversation, and so the row this failure restored and the message the
+     * operator reads name the same one. Cleared by [ConversationListViewModel.dismissEraseFailure] once
+     * the snackbar has been shown (or by a retry, which starts a fresh attempt). */
     public val eraseFailure: EraseFailureUi? = null,
 )
 
 /**
- * `26-90`: what an erasure *request* failed with. Mirrors
- * [ago.chat.android.core.domain.conversations.ErasureResult]'s own two failure arms one-to-one, which
- * is the same rule [ClaimErrorUi] states for itself against `ClaimResult` - one UI type per domain
- * result type, rather than one shared "row action failed" type the two would both have to be bent to
- * fit. Kept separate from [ClaimErrorUi] deliberately: they are rendered in different places (a claim
- * refusal inline under its own waiting row, an erase refusal above the «Все» list), and merging them
- * would rename a type three files and an existing test already name, on exactly the files
- * `26-60`/`26-61`/`26-63`/`26-67` are queued to rebase onto.
+ * `26-118`: an erasure request that failed after its row was optimistically removed from the «Все»
+ * list. A single shape carrying only the [conversationId], not the former
+ * `ServerRefusal(detail)`/`Unavailable(reason)` split: the recoverable error is now one snackbar that
+ * says the same thing («Не удалось удалить») whichever cause it was, so the two arms no longer rendered
+ * differently and the distinction stopped earning its keep. The id is what the snackbar's «Повторить»
+ * action needs to retry, and what pairs the message with the row that was just restored.
  */
-public sealed interface EraseFailureUi {
-    public data class ServerRefusal(
-        val detail: String,
-    ) : EraseFailureUi
-
-    public data class Unavailable(
-        val reason: NetworkFailure,
-    ) : EraseFailureUi
-}
+public data class EraseFailureUi(
+    public val conversationId: String,
+)
 
 /** `26-59`: what a claim attempt on one row failed with — a genuine server answer
  * ([ServerRefusal], shown verbatim) or anything that kept the answer from ever being genuine at all

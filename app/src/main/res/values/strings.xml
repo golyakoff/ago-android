@@ -161,11 +161,12 @@
     <string name="conversation_list_erase_confirm_action">Удалить</string>
     <string name="action_cancel">Отмена</string>
     <!--
-        Shown on the row itself after the server has accepted the request. The erasure happens later,
-        as a separate job, so the row stays in the list until the server stops returning it - this word
-        is what makes that wait honest instead of looking like a stuck delete.
+        `26-118`: a swiped row is removed from the list optimistically, while the background erasure
+        runs. If that request fails the row is restored and this snackbar is shown - a recoverable
+        notice with a «Повторить» action, not a placeholder holding the row's slot.
     -->
-    <string name="conversation_list_erasing_label">Стирается…</string>
+    <string name="conversation_list_erase_failed">Не удалось удалить</string>
+    <string name="conversation_list_erase_retry">Повторить</string>
 
     <!--
         `26-30`: the mockup's own short form - «4 ч» / «20 мин» / «2 д», no «Открыт»/«Ждёт» prefix of

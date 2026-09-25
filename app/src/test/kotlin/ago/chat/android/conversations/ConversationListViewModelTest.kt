@@ -1051,19 +1051,26 @@ class ConversationListViewModelTest {
         }
 
     @Test
-    fun `a 202 holds the row in an erasing state instead of removing it`() =
+    fun `26-118 a swipe removes the row from the list immediately even while the server still returns it`() =
         runTest(dispatcher) {
             val api =
                 FakeConversationsApi(
                     queueResult = QueueResult.Loaded(queueOf()),
                     // The server keeps returning the row after accepting the request - which is the
-                    // whole point: erasure is a job, not a deletion this call performed.
+                    // whole point: erasure is a background job, not a deletion this call performed. The
+                    // optimistic removal has to hide the row regardless.
                     allPages = { allPageOf(listOf(summary("c1")), nextBeforeId = null) },
                 )
             val viewModel = viewModelWith(api = api)
             advanceUntilIdle()
             viewModel.onTabSelected(ConversationListTab.All)
             advanceUntilIdle()
+            assertEquals(
+                "the row is listed before the swipe",
+                listOf("c1"),
+                viewModel.state.value.all
+                    .map { it.conversationId },
+            )
 
             // `runCurrent()`, not `advanceUntilIdle()`, from here down: `confirmErasure` starts
             // `startErasurePollIfNeeded`'s own `while (…) { delay(15s); reloadAll() }` loop, and
@@ -1075,11 +1082,12 @@ class ConversationListViewModelTest {
             runCurrent()
 
             assertEquals(listOf("c1"), api.erasureCalls)
-            val row =
+            assertTrue(
+                "the row is gone from view at once, even though the fake page still returns it",
                 viewModel.state.value.all
-                    .single()
-            assertEquals("c1", row.conversationId)
-            assertTrue("the row is still listed, visibly erasing", row.isErasing)
+                    .isEmpty(),
+            )
+            assertNull("no lingering placeholder or error", viewModel.state.value.eraseFailure)
 
             // The erasure poll this test started is still parked on its own `delay` - stopped
             // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's
@@ -1090,7 +1098,7 @@ class ConversationListViewModelTest {
         }
 
     @Test
-    fun `the erasing row leaves only when the server stops returning it`() =
+    fun `26-118 the removed row never flickers back while the server is still returning it`() =
         runTest(dispatcher) {
             var stillListed = true
             val api =
@@ -1117,18 +1125,28 @@ class ConversationListViewModelTest {
             viewModel.confirmErasure("c1")
             runCurrent()
             assertTrue(
+                "gone the instant the swipe is confirmed",
                 viewModel.state.value.all
-                    .single()
-                    .isErasing,
+                    .isEmpty(),
             )
 
-            // The erasure job has now run server-side; the held row's own poll is what notices.
+            // A poll cycle re-reads the list while the server is still returning the row - it must stay
+            // suppressed rather than reappearing under the optimistic removal.
+            advanceTimeBy(15_001)
+            runCurrent()
+            assertTrue(
+                "still gone across a poll that re-fetched it",
+                viewModel.state.value.all
+                    .isEmpty(),
+            )
+
+            // The erasure job has now run server-side; the pending removal reconciles into a real
+            // server-confirmed absence, and the row is still gone.
             stillListed = false
             advanceTimeBy(15_001)
             runCurrent()
-
             assertTrue(
-                "gone, because the server stopped sending it",
+                "gone, now because the server stopped sending it",
                 viewModel.state.value.all
                     .isEmpty(),
             )
@@ -1142,7 +1160,7 @@ class ConversationListViewModelTest {
         }
 
     @Test
-    fun `a refused erasure releases the held row and says so, and never retries`() =
+    fun `26-118 a refused erasure restores the row, raises a recoverable error, and never retries`() =
         runTest(dispatcher) {
             val api =
                 FakeConversationsApi(
@@ -1164,22 +1182,74 @@ class ConversationListViewModelTest {
             viewModel.confirmErasure("c1")
             runCurrent()
 
-            assertFalse(
-                "the hold is released",
+            assertEquals(
+                "the optimistically removed row is restored, in place",
+                listOf("c1"),
                 viewModel.state.value.all
-                    .single()
-                    .isErasing,
+                    .map { it.conversationId },
             )
             assertEquals(
-                EraseFailureUi.ServerRefusal("Operator does not have permission to erase."),
+                "the recoverable error names the conversation, for the snackbar's retry",
+                EraseFailureUi("c1"),
                 viewModel.state.value.eraseFailure,
             )
 
-            // The refusal already released the hold, so the poll started by the swipe stops at its
-            // own first wake-up rather than running on - and nothing re-sends the request meanwhile.
+            // The refusal already restored the row, so the poll started by the swipe stops at its own
+            // first wake-up rather than running on - and nothing re-sends the request meanwhile.
             advanceTimeBy(60_000)
             runCurrent()
             assertEquals("never retried on its own", 1, api.erasureCalls.size)
+
+            // The erasure poll this test started is still parked on its own `delay` - stopped
+            // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's
+            // own tests already follow. `runTest` waits for every coroutine on its scheduler after the
+            // body returns; an endless poll left running does not merely linger, it exhausts the test
+            // JVM's heap (found the hard way - `OutOfMemoryError` in `Gradle Test Executor`).
+            viewModel.onScreenStopped()
+        }
+
+    @Test
+    fun `26-118 a transport failure restores the row, and a manual retry removes it again`() =
+        runTest(dispatcher) {
+            var attempts = 0
+            val api =
+                FakeConversationsApi(
+                    queueResult = QueueResult.Loaded(queueOf()),
+                    allPages = { allPageOf(listOf(summary("c1")), nextBeforeId = null) },
+                    erasureResult = {
+                        attempts++
+                        if (attempts == 1) ErasureResult.Failed(NetworkFailure.NoConnection) else ErasureResult.Accepted
+                    },
+                )
+            val viewModel = viewModelWith(api = api)
+            advanceUntilIdle()
+            viewModel.onTabSelected(ConversationListTab.All)
+            advanceUntilIdle()
+
+            // First swipe: the request never lands, so the row is restored and the recoverable error is
+            // raised - see the refusal test above for why `runCurrent()` rather than `advanceUntilIdle()`.
+            viewModel.confirmErasure("c1")
+            runCurrent()
+            assertEquals(
+                "restored after a transport failure",
+                listOf("c1"),
+                viewModel.state.value.all
+                    .map { it.conversationId },
+            )
+            assertEquals(EraseFailureUi("c1"), viewModel.state.value.eraseFailure)
+
+            // The snackbar's «Повторить» action re-enters `confirmErasure` for the same conversation.
+            // This time the server accepts, so the row is optimistically removed again and the error
+            // clears.
+            viewModel.confirmErasure("c1")
+            runCurrent()
+            assertTrue(
+                "removed again on the retry",
+                viewModel.state.value.all
+                    .isEmpty(),
+            )
+            assertNull("the error clears on retry", viewModel.state.value.eraseFailure)
+            assertEquals(listOf("c1", "c1"), api.erasureCalls)
 
             // The erasure poll this test started is still parked on its own `delay` - stopped
             // explicitly rather than left to outlive the test body, the same rule the «Ожидают» poll's

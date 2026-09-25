@@ -109,16 +109,24 @@ public class ConversationListViewModel
         private var allNextBeforeId: String? = null
 
         /**
-         * `26-90`: conversations whose erasure has been requested and which the server is still
-         * returning. In memory only, never written to [cache] - a held "erasing" row is a fact about
-         * *this* screen's last few seconds, not about the conversation, and a restored-from-disk row
-         * marked erasing after a process death would be asserting something this app never verified.
+         * `26-118`: conversations the operator has swiped to delete and which are hidden from the «Все»
+         * list *optimistically* - removed from view the instant the swipe is confirmed, while the
+         * server carries the erasure out in the background. [renderAll] filters every id in this set out
+         * of the rendered list, so a row here is gone from the operator's screen even though a page
+         * fetch keeps returning it until the async erasure job actually finishes.
          *
-         * Cleared for any id a fresh *first* page no longer contains (see [reloadAll]) - which is the
-         * whole mechanism: the row leaves because the server stopped sending it, not because this class
-         * decided it was gone.
+         * In memory only, never written to [cache] - an optimistic removal is a fact about *this*
+         * screen's last few seconds, not about the conversation, and a row restored from disk still
+         * hidden after a process death would be suppressing something this app never confirmed was gone.
+         *
+         * Two things clear an id from here: a fresh *first* page that no longer contains it (see
+         * [reloadAll]) - the reconciliation that turns the optimistic hide into a real, server-confirmed
+         * absence - and a failed erasure *request*, which restores the row (see [confirmErasure]).
+         *
+         * `26-90` originally held these ids in a *visible* "erasing" state (a «Стирается…» placeholder
+         * row); `26-118` replaced that lingering slot with an immediate optimistic removal.
          */
-        private var erasingIds: Set<String> = emptySet()
+        private var pendingErasureIds: Set<String> = emptySet()
 
         private var waitingPollJob: Job? = null
 
@@ -514,30 +522,38 @@ public class ConversationListViewModel
         }
 
         /**
-         * `26-90`: asks the server to erase one conversation, after the screen's own confirmation
-         * dialog has already been accepted. **The row is not removed.**
+         * `26-118`: asks the server to erase one conversation, after the screen's own confirmation
+         * dialog has already been accepted. **The row is removed from the list at once** - the optimistic
+         * update this item is about.
          *
          * `POST /api/v1/conversations/{id}/erase` answers `202 Accepted`
          * (`RequestConversationErasureHandler`): the request is *recorded*, and a separate job carries
-         * the erasure out later. So an optimistic removal here would be a lie with a visible
-         * consequence - the row comes back on the next page load, and an operator who watched it vanish
-         * reads its return as a bug in the product rather than as the truth about an asynchronous job.
+         * the erasure out later. `26-90` read that asynchrony as a reason *not* to remove the row (it
+         * would reappear on the next page while the job ran), and held it in a visible «Стирается…» state
+         * instead. `26-118` reverses that trade: the lingering placeholder read as a stuck delete, and
+         * the operator's intent - "this is gone" - is better served by removing the row immediately and
+         * keeping it hidden until the server catches up.
          *
-         * What happens instead, and why this is the shape rather than a spinner or a toast:
-         *  1. the id joins [erasingIds], and the row renders in a held "стирается" state - visibly not
-         *     gone, visibly not ordinary, and no longer openable;
+         * What happens, and why it stays honest despite the `202`:
+         *  1. the id joins [pendingErasureIds] and [renderAll] drops it from the list *now* - the swipe's
+         *     result is instant, with no placeholder holding a slot;
          *  2. the list is re-read immediately, and then every [WAITING_POLL_INTERVAL_MILLIS] while the
-         *     tab is showing and at least one row is still held ([startErasurePollIfNeeded]);
-         *  3. the row leaves the list on the first answer that no longer contains it - i.e. **when the
-         *     server stops returning it**, which is the only moment at which "erased" is actually true.
+         *     tab is showing and at least one removal is still pending ([startErasurePollIfNeeded]) - the
+         *     row stays filtered out of every one of those answers, so the server still returning it
+         *     never flickers it back;
+         *  3. the id leaves [pendingErasureIds] the first time a *first* page no longer contains it
+         *     ([fetchAllPage]) - the optimistic hide reconciled into a real, server-confirmed absence.
          *
-         * A refusal or a transport failure clears the held state again and surfaces
-         * [ConversationListUiState.eraseFailure]; nothing is retried automatically, the same posture
-         * [claim] takes for the identical reason.
+         * A refusal or a transport failure **restores the row** (removing the id from [pendingErasureIds]
+         * before the next [renderAll]) and raises [ConversationListUiState.eraseFailure] - the one-shot
+         * signal the screen shows as a recoverable «Не удалось удалить» snackbar with a «Повторить»
+         * action. An optimistic removal is reversible precisely so a failed delete never silently loses a
+         * conversation from the operator's view. Nothing is retried automatically; the retry is the
+         * operator's own, through that snackbar.
          */
         public fun confirmErasure(conversationId: String) {
-            if (conversationId in erasingIds) return
-            erasingIds = erasingIds + conversationId
+            if (conversationId in pendingErasureIds) return
+            pendingErasureIds = pendingErasureIds + conversationId
             mutableState.update { it.copy(eraseFailure = null) }
             renderAll()
             startErasurePollIfNeeded()
@@ -546,27 +562,29 @@ public class ConversationListViewModel
                 when (val result = withContext(ioDispatcher) { api.requestErasure(conversationId) }) {
                     ErasureResult.Accepted -> reloadAll()
 
-                    is ErasureResult.Refused -> {
-                        erasingIds = erasingIds - conversationId
-                        mutableState.update { it.copy(eraseFailure = EraseFailureUi.ServerRefusal(result.detail)) }
-                        renderAll()
-                    }
+                    is ErasureResult.Refused -> restoreAfterFailedErasure(conversationId)
 
-                    is ErasureResult.Failed -> {
-                        // The request may or may not have reached the server - but holding the row as
-                        // "erasing" on an answer this app never got would be asserting more than it
-                        // knows. Released, and the operator is told; the next list answer is the truth
-                        // either way.
-                        erasingIds = erasingIds - conversationId
-                        mutableState.update { it.copy(eraseFailure = EraseFailureUi.Unavailable(result.reason)) }
-                        renderAll()
-                    }
+                    // The request may or may not have reached the server - but keeping the row hidden on
+                    // an answer this app never got would be suppressing more than it knows. Restored, and
+                    // the operator is told; the next list answer is the truth either way.
+                    is ErasureResult.Failed -> restoreAfterFailedErasure(conversationId)
                 }
             }
         }
 
-        /** Dismisses a shown erasure failure. A plain acknowledgement, never a retry - the same rule
-         * [dismissClaimError] states for its own half. */
+        /** `26-118`: the shared failure path for both [ErasureResult] failure arms - restore the
+         * optimistically removed row and raise the recoverable-error signal. One function because the
+         * snackbar says the same thing («Не удалось удалить») for either cause; the arms differ only in
+         * that a refusal will fail again on retry and a transport failure may not, which is the
+         * operator's call to make, not this class's. */
+        private fun restoreAfterFailedErasure(conversationId: String) {
+            pendingErasureIds = pendingErasureIds - conversationId
+            mutableState.update { it.copy(eraseFailure = EraseFailureUi(conversationId)) }
+            renderAll()
+        }
+
+        /** Dismisses a shown erasure failure. A plain acknowledgement, never a retry - the retry is the
+         * snackbar's «Повторить» action, which re-enters [confirmErasure]. */
         public fun dismissEraseFailure() {
             if (mutableState.value.eraseFailure == null) return
             mutableState.update { it.copy(eraseFailure = null) }
@@ -646,12 +664,13 @@ public class ConversationListViewModel
          * `26-90`: one page of `GET /api/v1/conversations/all`. [beforeId] `null` means the first page,
          * which *replaces* [allRows]; any other value appends.
          *
-         * The first-page branch is also where a held "erasing" row is released: every id in
-         * [erasingIds] that this answer no longer contains has actually been erased, so it stops being
-         * held at the same moment it stops being in the list. Deliberately only on the first page - a
-         * *later* page not containing an id says nothing at all about that id (it may simply be on an
-         * earlier one), and intersecting against a partial answer would release a row that is still
-         * very much there.
+         * The first-page branch is also where an optimistic removal is reconciled: every id in
+         * [pendingErasureIds] that this answer no longer contains has actually been erased server-side,
+         * so it stops being suppressed at the same moment it stops being in the list (the row was already
+         * gone from view; this only frees the id). Deliberately only on the first page - a *later* page
+         * not containing an id says nothing at all about that id (it may simply be on an earlier one),
+         * and intersecting against a partial answer would drop the suppression of a row the next page
+         * would then flicker back in.
          */
         private fun fetchAllPage(beforeId: String?) {
             mutableState.update { it.copy(isLoadingAll = true) }
@@ -677,7 +696,7 @@ public class ConversationListViewModel
                                 result.page.conversations
                                     .map { it.conversationId }
                                     .toSet()
-                            erasingIds = erasingIds.intersect(stillListed)
+                            pendingErasureIds = pendingErasureIds.intersect(stillListed)
                         }
                         mutableState.update {
                             it.copy(
@@ -701,9 +720,21 @@ public class ConversationListViewModel
 
         /** `26-90`: the «Все» list's own projection, kept apart from [render] because the two lists
          * are refreshed by different answers - folding them into one function would make every queue
-         * answer re-render a site-wide list it knows nothing about, and vice versa. */
+         * answer re-render a site-wide list it knows nothing about, and vice versa.
+         *
+         * `26-118`: rows in [pendingErasureIds] are filtered out here - this is where the optimistic
+         * removal actually happens. [allRows] itself is left untouched (still the server's own page in
+         * the server's own order), so removing an id from [pendingErasureIds] on a failed request
+         * restores the row exactly where it was, no re-fetch and no re-sort. */
         private fun renderAll() {
-            mutableState.update { current -> current.copy(all = allRows.map { it.toRowUi() }) }
+            mutableState.update { current ->
+                current.copy(
+                    all =
+                        allRows
+                            .filterNot { it.conversationId in pendingErasureIds }
+                            .map { it.toRowUi() },
+                )
+            }
         }
 
         private fun ConversationSummary.toRowUi() =
@@ -734,7 +765,6 @@ public class ConversationListViewModel
                 lastMessageContentKind = lastMessageContentKind,
                 messageCount = messageCount,
                 operatorName = operatorName,
-                isErasing = conversationId in erasingIds,
             )
 
         /**
@@ -779,8 +809,11 @@ public class ConversationListViewModel
          * `26-90`: the only poll this item adds, and it is deliberately the narrowest one that can
          * keep [confirmErasure]'s promise. It runs **only** while all three of these hold: «Все» is the
          * selected tab, the screen is in the foreground ([onScreenStarted]/[onScreenStopped]), and at
-         * least one row is actually held in the erasing state. The moment the last held row leaves the
-         * list, this job stops on its own - there is nothing left to watch for.
+         * least one optimistic removal is still pending reconciliation ([pendingErasureIds]). The moment
+         * the last pending id is reconciled away, this job stops on its own - there is nothing left to
+         * watch for. `26-118`: what it reconciles is now an already-hidden row (the removal is optimistic),
+         * so this poll only frees the id once the server confirms the absence, rather than being what
+         * makes the row disappear.
          *
          * That is a strictly smaller footprint than [startWaitingPollIfNeeded]'s, which is already the
          * deliberately-narrow one (that method's own doc comment on why a phone does not get the
@@ -791,7 +824,7 @@ public class ConversationListViewModel
          */
         private fun startErasurePollIfNeeded() {
             val shouldPoll =
-                mutableState.value.selectedTab == ConversationListTab.All && erasingIds.isNotEmpty()
+                mutableState.value.selectedTab == ConversationListTab.All && pendingErasureIds.isNotEmpty()
             if (!shouldPoll) {
                 erasurePollJob?.cancel()
                 erasurePollJob = null
@@ -801,7 +834,7 @@ public class ConversationListViewModel
 
             erasurePollJob =
                 viewModelScope.launch {
-                    while (isActive && erasingIds.isNotEmpty()) {
+                    while (isActive && pendingErasureIds.isNotEmpty()) {
                         delay(WAITING_POLL_INTERVAL_MILLIS)
                         reloadAll()
                     }
