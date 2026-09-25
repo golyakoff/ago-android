@@ -2,8 +2,10 @@ package ago.chat.android.core.network.realtime
 
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -83,5 +85,36 @@ class OperatorHubConnectionTest {
             first,
             second,
         )
+    }
+
+    /**
+     * `26-144`: what is provable about [OperatorHubConnection.getVisitorHistoryConversation] with no
+     * server, no emulator and no real socket — the same ceiling every invoke-based method in this class
+     * hits (the actual `HubConnection.invoke` needs a real, negotiated socket, exactly why
+     * [OperatorHubConnection.joinConversation]/[OperatorHubConnection.loadOlderHistory] have no
+     * invoke-level test here either). The read-only "open one past dialog" path is guarded by
+     * `requireConnection()`, so calling it before [OperatorHubConnection.connect] fails fast with an
+     * [IllegalStateException] rather than silently building or opening a socket of its own — the property
+     * that keeps this a pure read against an already-owned connection, never a second connection lifecycle.
+     */
+    @Test
+    fun `opening a past dialog before connect fails fast rather than silently opening a socket`() {
+        val connection =
+            OperatorHubConnection(
+                hubUrl = "https://chat-api.reserve-me.ru/hubs/operator",
+                accessTokens = MutableAccessTokenProvider(token = "a-token"),
+                activeSite = InMemoryActiveSite(),
+            )
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking {
+                connection.getVisitorHistoryConversation(
+                    conversationId = "c1",
+                    historicalConversationId = "hist-1",
+                    beforeSequence = null,
+                    pageSize = 20,
+                )
+            }
+        }
     }
 }

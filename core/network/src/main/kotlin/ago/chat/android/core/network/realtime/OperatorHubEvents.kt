@@ -89,6 +89,38 @@ public interface OperatorHubEvents {
     ): HistoryPage
 
     /**
+     * `26-144`: `OperatorHub.GetVisitorHistoryConversationAsync`, called with its full four-argument
+     * arity (`conversationId`, `historicalConversationId`, `beforeSequence`, `pageSize`) every time —
+     * the identical "a hub method's parameter count is a contract" rule [loadOlderHistory] above states,
+     * `ago-console`'s own `OperatorConnection.getVisitorHistoryConversation` restated. The «Прошлые
+     * диалоги» section (`26-151`) reads one past conversation of the *same* visitor **read-only**:
+     * [conversationId] is the operator's own standing (the conversation they are actually assigned to
+     * right now — the server's per-conversation permission anchor), [historicalConversationId] is the
+     * different, past conversation being opened. The two ids are genuinely distinct on the wire because
+     * the authorization rule is "assigned to *a* live conversation with this visitor", not "assigned to
+     * this specific historical one" (`GetVisitorHistoryConversationAsync`'s own remarks, `ago-chat`).
+     *
+     * Returns the identical [HistoryPage]/[MessageDto] wire shape [loadOlderHistory] does, so `26-151`
+     * feeds the message renderer it already has with no new content path — Q6 decided these are read-only
+     * (no composer, no actions), which this method embodies by fetching only.
+     *
+     * **Unlike [joinConversation]/[loadOlderHistory], this records nothing in [MessageSubscription].**
+     * That machinery keeps the one *live* joined conversation's [messages] stream exactly-once and
+     * resumable across a reconnect; a past dialog is a different conversation opened only to read, and
+     * marking its messages delivered — or worse, letting a later reconnect try to resume it — would
+     * corrupt the live subscription's own record. So this is a pure fetch with no subscription
+     * bookkeeping, the same "no join to replay" posture [getTeamHistory] takes for its own reason.
+     * [beforeSequence] is `null` for the initial "most recent page" load and a real cursor for "load
+     * older", the identical convention [getTeamHistory] uses.
+     */
+    public suspend fun getVisitorHistoryConversation(
+        conversationId: String,
+        historicalConversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage
+
+    /**
      * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity every time
      * (`OperatorHub.cs`'s own comment on why a hub method's argument *count* is a wire contract this
      * class must never shorten). The message this call sends is never appended to [messages] directly

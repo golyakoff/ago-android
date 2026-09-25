@@ -114,6 +114,13 @@ internal class FakeListHubEvents : OperatorHubEvents {
         pageSize: Int,
     ): HistoryPage = error("not used by the list screen")
 
+    override suspend fun getVisitorHistoryConversation(
+        conversationId: String,
+        historicalConversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage = error("not used by the list screen")
+
     override suspend fun sendMessage(
         conversationId: String,
         body: String,

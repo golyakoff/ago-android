@@ -240,6 +240,31 @@ public class OperatorHubConnection(
     }
 
     /**
+     * `26-144`: `GetVisitorHistoryConversationAsync` — the read-only "open one past dialog" call the
+     * «Прошлые диалоги» section (`26-151`) makes. Deliberately **not** routed through [subscription] at
+     * all (no `join`, no `markAlreadyDelivered`): this fetches a *different* conversation than the one
+     * currently joined, purely to display it, so touching the live subscription's record — or letting a
+     * later reconnect try to resume this historical conversation — would corrupt the joined
+     * conversation's own exactly-once/resume guarantee. See [OperatorHubEvents.getVisitorHistoryConversation]'s
+     * own doc comment for the two-id authorization rule and why `beforeSequence` is nullable.
+     */
+    public override suspend fun getVisitorHistoryConversation(
+        conversationId: String,
+        historicalConversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage =
+        requireConnection()
+            .invoke(
+                HistoryPage::class.java,
+                GET_VISITOR_HISTORY_CONVERSATION_METHOD,
+                conversationId,
+                historicalConversationId,
+                beforeSequence,
+                pageSize,
+            ).await()
+
+    /**
      * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity
      * (`conversationId`, `body`, `attachmentId`, `clientMessageId`) every time — never fewer, per that
      * method's own comment on why appending is safe for a caller like this one but omitting a
@@ -523,6 +548,7 @@ public class OperatorHubConnection(
     private companion object {
         const val JOIN_CONVERSATION_METHOD = "JoinConversationAsync"
         const val GET_HISTORY_METHOD = "GetHistoryAsync"
+        const val GET_VISITOR_HISTORY_CONVERSATION_METHOD = "GetVisitorHistoryConversationAsync"
         const val SEND_MESSAGE_METHOD = "SendMessageAsync"
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
         const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"
