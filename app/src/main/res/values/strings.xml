@@ -281,6 +281,20 @@
     <string name="message_bubble_time">в %1$s</string>
 
     <!--
+        `26-147`: the contact-detail panel's own shell + header (`docs/design/26-111-thread-contact-detail-panel.md`).
+        `thread_open_contact_panel` names the app-bar tap target that opens the panel for a screen reader.
+        `contact_panel_first_visit` is H4 («Первый визит 14 марта»); the count trio is H5, pluralised the
+        same way `conversation_row_unread_*` is. `contact_panel_summary_load_failed` is the header's own
+        inline failure text - the H4/H5 read failing never blanks the in-hand H1-H3 (design §4).
+    -->
+    <string name="thread_open_contact_panel">Сведения о собеседнике</string>
+    <string name="contact_panel_first_visit">Первый визит %1$s</string>
+    <string name="contact_panel_conversation_count_one">%1$d диалог</string>
+    <string name="contact_panel_conversation_count_few">%1$d диалога</string>
+    <string name="contact_panel_conversation_count_many">%1$d диалогов</string>
+    <string name="contact_panel_summary_load_failed">Не удалось загрузить</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

@@ -54,6 +54,12 @@ public fun ConversationsTabHost(
     // back-contract test that constructs this composable directly compiles and behaves unchanged.
     canSeeAllConversations: Boolean = false,
     canEraseConversations: Boolean = false,
+    // `26-147`: `conversation:read`, computed by [AppShellScreen]'s own `conversationsTab` default from
+    // the permission set it already holds - the identical split `canSeeAllConversations` above already
+    // uses. Threaded straight through to [ThreadRoute], which gates the contact-panel affordance on it
+    // (hide-not-disable). Defaulted to `false` so every back-contract test constructing this composable
+    // directly compiles and behaves unchanged.
+    canReadContactDetail: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -140,6 +146,7 @@ public fun ConversationsTabHost(
                 conversationState = row?.state,
                 hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant,
                 identityUnavailable = identityUnavailable,
+                canReadContactDetail = canReadContactDetail,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null
