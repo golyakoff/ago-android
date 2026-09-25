@@ -59,17 +59,23 @@ import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
 import ago.chat.android.devices.AndroidBatteryOptimizationChecker
+import ago.chat.android.devices.AndroidBootTimeSource
 import ago.chat.android.devices.AndroidNotificationChannelStateReader
 import ago.chat.android.devices.AndroidNotificationPermissionChecker
 import ago.chat.android.devices.AppForegroundTracker
 import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.AutostartInferenceReader
 import ago.chat.android.devices.BatteryAwarenessPromptPreferences
 import ago.chat.android.devices.BatteryOptimizationChecker
+import ago.chat.android.devices.BootAutostartMarkerStore
+import ago.chat.android.devices.BootTimeSource
 import ago.chat.android.devices.ConversationRefreshSignal
 import ago.chat.android.devices.DataStoreBatteryAwarenessPromptPreferences
+import ago.chat.android.devices.DataStoreBootAutostartMarkerStore
 import ago.chat.android.devices.DataStoreInstallationId
 import ago.chat.android.devices.DataStorePushMessageDedupeStore
 import ago.chat.android.devices.DataStoreQuietHoursPreferences
+import ago.chat.android.devices.DefaultAutostartInferenceReader
 import ago.chat.android.devices.DefaultConversationRefreshSignal
 import ago.chat.android.devices.DefaultOpenConversationTracker
 import ago.chat.android.devices.DeviceRegistrar
@@ -748,6 +754,25 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideAutostartAdvisor(advisor: ManufacturerAutostartAdvisor): AutostartAdvisor = advisor
+
+    /** `26-129`: the after-the-fact autostart signal that refines `26-128`'s guess - see
+     * [AutostartInferenceReader]'s own doc comment for why it is a read of on-disk markers, never a live probe. */
+    @Provides
+    @Singleton
+    public fun provideAutostartInferenceReader(reader: DefaultAutostartInferenceReader): AutostartInferenceReader = reader
+
+    /** `26-129`: the two boot markers the inference compares - [provideDeviceDataStore] above, the identical
+     * `device.preferences_pb` file [DataStoreInstallationId]/[DataStorePushMessageDedupeStore] already write
+     * to (see [BootAutostartMarkerStore]'s own doc comment). */
+    @Provides
+    @Singleton
+    public fun provideBootAutostartMarkerStore(store: DataStoreBootAutostartMarkerStore): BootAutostartMarkerStore = store
+
+    /** `26-129`: the approximate last-boot wall-clock read shared by the receiver and the inference reader -
+     * behind a port for the identical rule-2 reason [provideLocalClock] below is. */
+    @Provides
+    @Singleton
+    public fun provideBootTimeSource(source: AndroidBootTimeSource): BootTimeSource = source
 
     /** `26-128`: the first-launch battery/autostart sheet's own "don't show again" flag -
      * [provideDeviceDataStore] above, the identical `device.preferences_pb`

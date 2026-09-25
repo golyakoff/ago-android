@@ -34,6 +34,15 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!--
+        `26-129`: `RECEIVE_BOOT_COMPLETED` is a normal (install-time, never a runtime prompt) permission -
+        it adds no dialog anywhere. It is the sole gate on the `ACTION_BOOT_COMPLETED` broadcast the
+        `BootCompletedReceiver` below listens for; whether that receiver *runs* after a reboot is exactly the
+        autostart signal `26-129` infers - see that class's own doc comment for why the failure is read from
+        the receiver's absence rather than from any read API (Android has none).
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
         `26-06`: `POST_NOTIFICATIONS` (API 33+) ships in `pushclient-7.5.0.aar`'s own manifest and
         merges in automatically — RuStore's own documentation states this has been the SDK's default
         since 1.4.0. Declared here as a comment, not a line, so a future reader searching this file for
@@ -157,6 +166,23 @@
             android:name="ago.chat.android.presence.OperatorPresenceService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!--
+            `26-129`: the boot marker's own receiver. `exported="true"` because the sender is the system,
+            a different process, and Android delivers `ACTION_BOOT_COMPLETED` only to an exported receiver -
+            the `RECEIVE_BOOT_COMPLETED` permission above is what actually gates it, not `exported`. An app
+            in the freshly-installed "stopped state" receives no broadcasts until its first manual launch,
+            so this receiver only ever fires after the app has already established its `seen` baseline once -
+            which is what keeps the first ordering `BootAutostartMarkerStore` relies on true. Its running is
+            the evidence autostart worked; its silence after a reboot is what `26-129` infers as blocked.
+        -->
+        <receiver
+            android:name="ago.chat.android.devices.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

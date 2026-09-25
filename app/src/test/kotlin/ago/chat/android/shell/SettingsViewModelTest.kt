@@ -15,6 +15,8 @@ import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.AutostartBootSignal
+import ago.chat.android.devices.AutostartInferenceReader
 import ago.chat.android.devices.AutostartSettingsTarget
 import ago.chat.android.devices.BatteryOptimizationChecker
 import ago.chat.android.devices.DeviceModeStatus
@@ -301,21 +303,58 @@ class SettingsViewModelTest {
     // ----------------------------------------------------------------------------------- autostart
 
     @Test
-    fun `autostartStatus and autostartSettingsTarget relay AutostartAdvisor's own answers`() =
+    fun `with no boot signal, autostartStatus falls back to the manufacturer guess and never warns of a blocked reboot`() =
         runTest(dispatcher) {
             val advisor =
                 FakeAutostartAdvisor(
                     status = DeviceModeStatus.NeedsAttention,
                     target = AutostartSettingsTarget.OemComponent("com.example.oem", "com.example.oem.AutostartActivity"),
                 )
-            val viewModel = viewModelWith(autostartAdvisor = advisor)
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = advisor,
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.NoSignal),
+                )
             advanceUntilIdle()
 
-            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus)
+            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus.value)
+            assertEquals(false, viewModel.autostartBlockedAfterReboot.value)
             assertEquals(
                 AutostartSettingsTarget.OemComponent("com.example.oem", "com.example.oem.AutostartActivity"),
                 viewModel.autostartSettingsTarget,
             )
+        }
+
+    @Test
+    fun `a blocked boot signal turns the row orange and flags the specific reason`() =
+        runTest(dispatcher) {
+            // Even a manufacturer the guess considers fine (Ok) must go orange once a reboot is observed to
+            // have been blocked - the observation overrides the guess, never the other way round.
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.Ok),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.Blocked),
+                )
+            advanceUntilIdle()
+
+            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus.value)
+            assertEquals(true, viewModel.autostartBlockedAfterReboot.value)
+        }
+
+    @Test
+    fun `a confirmed boot signal shows green even on a manufacturer the guess would warn about`() =
+        runTest(dispatcher) {
+            // Positive proof autostart worked this boot overrides a restrictive OEM's NeedsAttention guess -
+            // "where it autostarted, no false warning".
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.NeedsAttention),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.AutostartConfirmed),
+                )
+            advanceUntilIdle()
+
+            assertEquals(DeviceModeStatus.Ok, viewModel.autostartStatus.value)
+            assertEquals(false, viewModel.autostartBlockedAfterReboot.value)
         }
 
     // ------------------------------------------------------------------------------------- fakes
@@ -330,6 +369,7 @@ class SettingsViewModelTest {
         notificationPermissionChecker: NotificationPermissionChecker = FakeNotificationPermissionChecker(),
         batteryOptimizationChecker: BatteryOptimizationChecker = FakeBatteryOptimizationChecker(),
         autostartAdvisor: AutostartAdvisor = FakeAutostartAdvisor(),
+        autostartInferenceReader: AutostartInferenceReader = FakeAutostartInferenceReader(),
     ): SettingsViewModel =
         SettingsViewModel(
             identity = identity,
@@ -341,6 +381,7 @@ class SettingsViewModelTest {
             notificationPermissionChecker = notificationPermissionChecker,
             batteryOptimizationChecker = batteryOptimizationChecker,
             autostartAdvisor = autostartAdvisor,
+            autostartInferenceReader = autostartInferenceReader,
             ioDispatcher = dispatcher,
         )
 
@@ -365,6 +406,18 @@ class SettingsViewModelTest {
         override fun recommendation(): DeviceModeStatus = status
 
         override fun settingsTarget(): AutostartSettingsTarget = target
+    }
+
+    /** `26-129`: a fixed after-the-fact signal - the real reader
+     * ([DefaultAutostartInferenceReader][ago.chat.android.devices.DefaultAutostartInferenceReader]) resolves
+     * this from on-disk boot markers, proven in [ago.chat.android.devices.AutostartBootInferenceTest]; this
+     * fake lets each view-model test drive one branch of the combine logic directly. Defaults to
+     * [AutostartBootSignal.NoSignal] so a test that is not about autostart sees `26-128`'s manufacturer guess
+     * flow through unchanged. */
+    private class FakeAutostartInferenceReader(
+        private val signal: AutostartBootSignal = AutostartBootSignal.NoSignal,
+    ) : AutostartInferenceReader {
+        override suspend fun currentSignal(): AutostartBootSignal = signal
     }
 
     /** `26-18`: [SignInViewModelTest][ago.chat.android.signin.SignInViewModelTest]'s own
