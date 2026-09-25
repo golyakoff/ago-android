@@ -219,13 +219,21 @@ internal fun AppShellScreen(
     // (`calendar:configure` alone), threaded before the Услуги one. `26-142` adds a sixth,
     // `showSetupSegment` (`calendar:configure` alone), for the tenant-configuration writes — threaded
     // ahead of the others, since Настройка (Календари) is the first entry in the `⋮` hub.
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
+    //
+    // `26-157`: one more slot argument, `onConfigScreenChanged: (Boolean) -> Unit` — [BookingsRoute]
+    // reports `true` while one of the four `⋮` configuration screens is open, so [AppShellContent] can
+    // hide the bottom navigation bar for exactly as long as that modal page is showing. Placed before
+    // `onOpenSettings` so the latter stays the trailing lambda at the call site. A back-contract test's own
+    // substitute lambda that ignores the new parameter still type-checks unchanged against the widened
+    // function type.
+    bookingsTab: BookingsTabSlot = {
         showConfirmedSegment,
         showClientsSegment,
         showSetupSegment,
         showMastersSegment,
         showServicesSegment,
         showHoursSegment,
+        onConfigScreenChanged,
         onOpenSettings,
         ->
         BookingsRoute(
@@ -238,6 +246,7 @@ internal fun AppShellScreen(
             hubConnectionState = hubConnectionState,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
+            onConfigScreenChanged = onConfigScreenChanged,
             onOpenSettings = onOpenSettings,
             onSignOut = onSignOut,
         )
@@ -341,8 +350,9 @@ private fun AppShellContent(
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     // `26-96`/`26-97`/`26-140`/`26-142`: the third through sixth `Boolean` are `calendar:configure` alone,
     // each its own gate rather than a reuse of the Клиенты one - see [AppShellScreen]'s own `bookingsTab`
-    // parameter.
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
+    // parameter. `26-157`: the `(Boolean) -> Unit` before `onOpenSettings` is `onConfigScreenChanged` -
+    // whether a `⋮` configuration screen is open, so this function can hide the bottom bar while it is.
+    bookingsTab: BookingsTabSlot,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -351,6 +361,14 @@ private fun AppShellContent(
     val destinations = remember(permissions) { visibleBottomDestinations(permissions) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // `26-157`: whether one of Записи's four `⋮` configuration screens is open as a modal page. Reported up
+    // by `bookingsTab`'s own `onConfigScreenChanged`, it hides the bottom navigation bar for exactly as
+    // long as that page is showing (the requirement's "no bottom tabs while a config screen is open").
+    // Safe to hold here rather than derive from `currentRoute`: the only way out of a config page is its
+    // own back handling ([ago.chat.android.bookings.BookingsScreen]'s `BackHandler`), which sets this back
+    // to `false` before the tab can change - so it is only ever `true` while Записи is the current route.
+    var bookingsConfigActive by rememberSaveable { mutableStateOf(false) }
 
     // `26-18`: "A tap opens the thread, never the list" - the half of that promise this function alone
     // can keep. [ConversationsTabHost]'s own matching collector (further down this same `NavHost`, at
@@ -404,7 +422,12 @@ private fun AppShellContent(
         //   inset on top of the space this one already reserved.
         contentWindowInsets =
             WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
-        bottomBar = {
+        bottomBar = bottomBar@{
+            // `26-157`: hidden while a Записи `⋮` configuration screen is open - it renders as a modal
+            // page with its own back-button app bar, so the bottom navigation tabs are suppressed for as
+            // long as it is showing. Drawing nothing here reserves no space, so the modal page fills the
+            // shell exactly as the requirement asks.
+            if (bookingsConfigActive) return@bottomBar
             NavigationBar {
                 // `26-23`: the mockup's `.bnav div.on .ind{background:var(--brand-tint)}` with
                 // `.bnav div.on{color:var(--brand-deep)}` content — which is *not* what Material 3
@@ -556,6 +579,10 @@ private fun AppShellContent(
                     // the two writes check the permission independently server-side, not because either
                     // reuses the other's boolean.
                     permissions.holds(Permission.CALENDAR_CONFIGURE),
+                    // `26-157`: `onConfigScreenChanged` (positional - named arguments are not allowed when
+                    // invoking a function-typed value) - whether a `⋮` configuration screen is open, so the
+                    // bottom bar above hides itself while its modal page is showing (see `bookingsConfigActive`).
+                    { active -> bookingsConfigActive = active },
                 ) { navController.navigate(SETTINGS_ROUTE) }
             }
             composable(BottomDestination.Team.route()) {
@@ -614,6 +641,25 @@ private fun AppShellContent(
         }
     }
 }
+
+/**
+ * `26-157`: the Записи tab slot's own function type — the six visibility gates, then
+ * `onConfigScreenChanged` (whether a `⋮` configuration screen is open, so the bottom bar can hide while its
+ * modal page shows) and `onOpenSettings`. Named as a typealias so both declarations of it ([AppShellScreen]
+ * and [AppShellContent]) keep the parameter names the call site's `onConfigScreenChanged =` argument needs,
+ * yet stay within the line-length limit.
+ */
+internal typealias BookingsTabSlot =
+    @Composable (
+        showConfirmedSegment: Boolean,
+        showClientsSegment: Boolean,
+        showSetupSegment: Boolean,
+        showMastersSegment: Boolean,
+        showServicesSegment: Boolean,
+        showHoursSegment: Boolean,
+        onConfigScreenChanged: (Boolean) -> Unit,
+        onOpenSettings: () -> Unit,
+    ) -> Unit
 
 /** `26-77`: Настройки's own `NavHost` route — not a [BottomDestination] (it is reached by every
  * account menu's own push, never by a `NavigationBarItem`), so it is named here rather than added as a

@@ -173,6 +173,8 @@ internal class FakeThreadHubEvents(
         pageSize: Int,
     ): HistoryPage = HistoryPage()
 
+    // `26-144` added this to `OperatorHubEvents`; the thread-open/leave clauses never call it, so it stays
+    // an unused stub like the rest of this fake.
     override suspend fun getVisitorHistoryConversation(
         conversationId: String,
         historicalConversationId: String,

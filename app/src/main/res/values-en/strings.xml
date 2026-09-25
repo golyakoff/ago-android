@@ -380,13 +380,7 @@
          comment on this same key block for the full reasoning. -->
     <string name="calendar_setup_tab">Setup</string>
     <string name="calendar_setup_load_failed_unexpected">Couldn\'t load the setup. Try again.</string>
-    <string name="calendar_setup_section_embed">Embedding</string>
     <string name="calendar_setup_section_calendars">Calendars</string>
-    <string name="calendar_setup_embed_caption">This embed snippet is filled in for you. Paste it into your site\'s page to show the widget.</string>
-    <string name="calendar_setup_embed_snippet_label">Embed snippet</string>
-    <string name="calendar_setup_origins_field_label">Allowed origins</string>
-    <string name="calendar_setup_origins_hint">One address per line. The widget will load only from these origins.</string>
-    <string name="calendar_setup_action_save_origins">Save origins</string>
     <string name="calendar_setup_calendars_empty">This tenant has no calendars yet.</string>
     <string name="calendar_setup_action_add_calendar">Add calendar</string>
     <string name="calendar_setup_action_edit">Edit</string>

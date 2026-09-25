@@ -640,21 +640,16 @@
 
     <!--
         `26-142`: Записи's own «Настройка» screen (menu label «Настройка», primary section «Календари») -
-        the tenant-configuration writes a single Setup screen owns: the embed's allowed origins and the
-        calendar roster. Wording carried over from `ago-console`'s own `CalendarSetupPage`. The timezone
-        picker is a curated, localized dropdown (`25-16`), never free text; the eleven zone names below are
-        the same curated set the console ships. Working hours are NOT here - that is the existing Часы
-        screen, a deliberate deviation from the console's own Setup page.
+        the calendar roster a single Setup screen owns. Wording carried over from `ago-console`'s own
+        `CalendarSetupPage`. The timezone picker is a curated, localized dropdown (`25-16`), never free
+        text; the eleven zone names below are the same curated set the console ships. Working hours are NOT
+        here - that is the existing Часы screen, a deliberate deviation from the console's own Setup page.
+        `26-158`: the embed snippet and allowed origins are NOT here either - they are a chat/channel
+        setting that now lives in the «Установка виджета» screen under «Ещё» (`26-159`, `channels_install_*`).
     -->
     <string name="calendar_setup_tab">Настройка</string>
     <string name="calendar_setup_load_failed_unexpected">Не удалось загрузить настройку. Попробуйте ещё раз.</string>
-    <string name="calendar_setup_section_embed">Встраивание</string>
     <string name="calendar_setup_section_calendars">Календари</string>
-    <string name="calendar_setup_embed_caption">Этот код встраивания подставляется автоматически. Вставьте его на страницу вашего сайта, чтобы показать виджет.</string>
-    <string name="calendar_setup_embed_snippet_label">Код встраивания</string>
-    <string name="calendar_setup_origins_field_label">Разрешённые источники</string>
-    <string name="calendar_setup_origins_hint">По одному адресу в строке. Виджет загрузится только с этих источников.</string>
-    <string name="calendar_setup_action_save_origins">Сохранить источники</string>
     <string name="calendar_setup_calendars_empty">У этого тенанта пока нет календарей.</string>
     <string name="calendar_setup_action_add_calendar">Добавить календарь</string>
     <string name="calendar_setup_action_edit">Изменить</string>

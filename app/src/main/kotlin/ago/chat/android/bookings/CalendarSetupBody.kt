@@ -38,10 +38,13 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * `26-142`: Записи's own «Настройка» body — the tenant-configuration writes a single Setup screen owns:
- * the embed's allowed origins, and the calendar roster with create/edit. One scrolling [Column] of two
- * [SectionLabel]-headed sections, the four-arm `when` below the identical shape [MastersBody]/[ServicesBody]
- * already draw, reusing [LoadingBody]/[EmptyBody]/[RefusalBody]/[ActionErrorBanner] verbatim.
+ * `26-142`: Записи's own «Настройка» body — the calendar roster with create/edit, the four-arm `when`
+ * below the identical shape [MastersBody]/[ServicesBody] already draw, reusing
+ * [LoadingBody]/[EmptyBody]/[RefusalBody]/[ActionErrorBanner] verbatim.
+ *
+ * `26-158`: the embed snippet and allowed-origins section that used to head this body are gone — they are a
+ * chat/channel setting, not a calendar one, and now live in the «Установка виджета» screen under «Ещё»
+ * ([ago.chat.android.channels.InstallWidgetScreen], `26-159`). This body now shows only Календари.
  *
  * **Working hours are not here.** The console's own Setup page carries a working-hours block; on this app
  * that is the existing Часы screen ([ago.chat.android.schedule.WorkingHoursBody]), reached from the same
@@ -56,8 +59,6 @@ import java.time.ZoneId
 internal fun CalendarSetupBody(
     state: CalendarSetupUiState,
     onRetry: () -> Unit,
-    onOriginsTextChanged: (String) -> Unit,
-    onSaveOrigins: () -> Unit,
     onAddCalendar: () -> Unit,
     onEditCalendar: (ConfiguredCalendar) -> Unit,
     onCalendarFormChanged: (CalendarForm) -> Unit,
@@ -82,8 +83,6 @@ internal fun CalendarSetupBody(
                 is CalendarSetupUiState.Loaded ->
                     CalendarSetupContent(
                         state = state,
-                        onOriginsTextChanged = onOriginsTextChanged,
-                        onSaveOrigins = onSaveOrigins,
                         onAddCalendar = onAddCalendar,
                         onEditCalendar = onEditCalendar,
                         onCalendarFormChanged = onCalendarFormChanged,
@@ -95,15 +94,12 @@ internal fun CalendarSetupBody(
     }
 }
 
-/** The loaded screen: one vertically-scrolling column, the embed/origins section first, the calendars
- * section second. A single scroll rather than a [androidx.compose.foundation.lazy.LazyColumn] because the
- * roster on this screen is a handful of calendars, not an unbounded feed, and the create/edit form sits
- * inside the same scroll above them. */
+/** The loaded screen: one vertically-scrolling column of the calendars section. A single scroll rather
+ * than a [androidx.compose.foundation.lazy.LazyColumn] because the roster on this screen is a handful of
+ * calendars, not an unbounded feed, and the create/edit form sits inside the same scroll above them. */
 @Composable
 private fun CalendarSetupContent(
     state: CalendarSetupUiState.Loaded,
-    onOriginsTextChanged: (String) -> Unit,
-    onSaveOrigins: () -> Unit,
     onAddCalendar: () -> Unit,
     onEditCalendar: (ConfiguredCalendar) -> Unit,
     onCalendarFormChanged: (CalendarForm) -> Unit,
@@ -111,39 +107,6 @@ private fun CalendarSetupContent(
     onSubmitCalendar: (CalendarForm) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // Section 1 - Встраивание / Разрешённые источники.
-        SectionLabel(text = stringResource(R.string.calendar_setup_section_embed))
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = stringResource(R.string.calendar_setup_embed_caption),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // Read-only, selectable so the operator can copy it. The disabled `OutlinedTextField` is the
-            // one control in this app that renders a fixed monospace-shaped block a caption already frames
-            // as not-editable, rather than a bare `Text` that reads as body copy.
-            OutlinedTextField(
-                value = state.embedSnippet,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(text = stringResource(R.string.calendar_setup_embed_snippet_label)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = state.originsText,
-                onValueChange = onOriginsTextChanged,
-                label = { Text(text = stringResource(R.string.calendar_setup_origins_field_label)) },
-                supportingText = { Text(text = stringResource(R.string.calendar_setup_origins_hint)) },
-                enabled = !state.originsBusy,
-                minLines = 3,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(onClick = onSaveOrigins, enabled = !state.originsBusy) {
-                Text(text = stringResource(R.string.calendar_setup_action_save_origins))
-            }
-        }
-
-        // Section 2 - Календари.
         SectionLabel(text = stringResource(R.string.calendar_setup_section_calendars))
         val form = state.calendarForm
         if (form != null) {

@@ -17,6 +17,7 @@ import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.icons.AgoIcons
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,10 +89,22 @@ public fun BookingsRoute(
     onSignOut: () -> Unit,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
+    // `26-157`: reported up so [ago.chat.android.shell.AppShellScreen] can hide the bottom navigation bar
+    // while one of the four `⋮` configuration screens (Услуги/Часы/Мастера/Календари) is open — they render
+    // as a modal page with a back-button app bar, not inside the normal shell. `true` exactly while
+    // [activeConfigTab] is non-null.
+    onConfigScreenChanged: (Boolean) -> Unit = {},
     viewModel: BookingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // `selectedTab` holds only the operational segment (Ожидают/Утверждены/Клиенты). The four
+    // configuration screens reached from the `⋮` menu are tracked separately in [activeConfigTab] so that
+    // closing one returns to whichever operational segment was showing (`26-157`).
     var selectedTab by rememberSaveable { mutableStateOf(BookingsTab.Pending) }
+    // `26-157`: `null` = the operational Записи view; non-null = the modal config page for that screen. An
+    // enum is saveable here the same way `selectedTab` above is. Reported up via [onConfigScreenChanged].
+    var activeConfigTab by rememberSaveable { mutableStateOf<BookingsTab?>(null) }
+    LaunchedEffect(activeConfigTab) { onConfigScreenChanged(activeConfigTab != null) }
 
     // `26-51`: [ConfirmedBookingsViewModel] is obtained by `hiltViewModel()` only inside this branch, so
     // an operator lacking `customer:read` never constructs it and never triggers its `init`-time read
@@ -180,8 +194,6 @@ public fun BookingsRoute(
     // triggers its `init`-time read of the tenant configuration.
     val calendarSetupState: CalendarSetupUiState?
     val onRetryCalendarSetup: () -> Unit
-    val onOriginsTextChanged: (String) -> Unit
-    val onSaveOrigins: () -> Unit
     val onAddCalendar: () -> Unit
     val onEditCalendar: (ConfiguredCalendar) -> Unit
     val onCalendarFormChanged: (CalendarForm) -> Unit
@@ -192,8 +204,6 @@ public fun BookingsRoute(
         val collectedCalendarSetupState by calendarSetupViewModel.state.collectAsStateWithLifecycle()
         calendarSetupState = collectedCalendarSetupState
         onRetryCalendarSetup = calendarSetupViewModel::refresh
-        onOriginsTextChanged = calendarSetupViewModel::onOriginsTextChanged
-        onSaveOrigins = calendarSetupViewModel::saveOrigins
         onAddCalendar = calendarSetupViewModel::startAddCalendar
         onEditCalendar = calendarSetupViewModel::editCalendar
         onCalendarFormChanged = calendarSetupViewModel::onCalendarFormChanged
@@ -202,8 +212,6 @@ public fun BookingsRoute(
     } else {
         calendarSetupState = null
         onRetryCalendarSetup = {}
-        onOriginsTextChanged = {}
-        onSaveOrigins = {}
         onAddCalendar = {}
         onEditCalendar = {}
         onCalendarFormChanged = {}
@@ -277,7 +285,10 @@ public fun BookingsRoute(
         showServicesSegment = showServicesSegment,
         showHoursSegment = showHoursSegment,
         selectedTab = selectedTab,
-        onTabSelected = { selectedTab = it },
+        onSegmentSelected = { selectedTab = it },
+        activeConfigTab = activeConfigTab,
+        onConfigSelected = { activeConfigTab = it },
+        onCloseConfig = { activeConfigTab = null },
         onRetry = viewModel::refresh,
         onReject = viewModel::reject,
         onCancel = viewModel::cancel,
@@ -298,8 +309,6 @@ public fun BookingsRoute(
         onSubmitService = onSubmitService,
         calendarSetupState = calendarSetupState,
         onRetryCalendarSetup = onRetryCalendarSetup,
-        onOriginsTextChanged = onOriginsTextChanged,
-        onSaveOrigins = onSaveOrigins,
         onAddCalendar = onAddCalendar,
         onEditCalendar = onEditCalendar,
         onCalendarFormChanged = onCalendarFormChanged,
@@ -355,7 +364,13 @@ internal fun BookingsScreen(
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
     selectedTab: BookingsTab,
-    onTabSelected: (BookingsTab) -> Unit,
+    onSegmentSelected: (BookingsTab) -> Unit,
+    // `26-157`: `null` = the operational Записи view; non-null = the modal configuration page for that
+    // screen (Услуги/Часы/Мастера/Календари), reached from the `⋮` menu. [onConfigSelected] opens one,
+    // [onCloseConfig] returns to the operational view (the back button and system back).
+    activeConfigTab: BookingsTab?,
+    onConfigSelected: (BookingsTab) -> Unit,
+    onCloseConfig: () -> Unit,
     onRetry: () -> Unit,
     onReject: (String) -> Unit,
     onCancel: (String) -> Unit,
@@ -376,8 +391,6 @@ internal fun BookingsScreen(
     onSubmitService: (ServiceDraft) -> Unit,
     calendarSetupState: CalendarSetupUiState?,
     onRetryCalendarSetup: () -> Unit,
-    onOriginsTextChanged: (String) -> Unit,
-    onSaveOrigins: () -> Unit,
     onAddCalendar: () -> Unit,
     onEditCalendar: (ConfiguredCalendar) -> Unit,
     onCalendarFormChanged: (CalendarForm) -> Unit,
@@ -402,6 +415,47 @@ internal fun BookingsScreen(
     onOpenSettings: () -> Unit = {},
     onSignOut: () -> Unit = {},
 ) {
+    // `26-157`: the four `⋮` configuration screens (Услуги/Часы/Мастера/Календари) render as a modal page
+    // over the whole shell - a back-button app bar, no avatar, and (reported one level up through
+    // [BookingsRoute]'s own `onConfigScreenChanged`) no bottom navigation tabs. `activeConfigTab` being
+    // non-null is the whole switch; the operational Записи view (Ожидают/Утверждены/Клиенты) is drawn
+    // otherwise, unchanged. System back closes the page before the shell's own back handling ever runs.
+    if (activeConfigTab != null) {
+        BackHandler(onBack = onCloseConfig)
+        BookingsConfigModalPage(
+            configTab = activeConfigTab,
+            pendingState = state,
+            onBack = onCloseConfig,
+            calendarSetupState = calendarSetupState,
+            onRetryCalendarSetup = onRetryCalendarSetup,
+            onAddCalendar = onAddCalendar,
+            onEditCalendar = onEditCalendar,
+            onCalendarFormChanged = onCalendarFormChanged,
+            onCancelCalendarEdit = onCancelCalendarEdit,
+            onSubmitCalendar = onSubmitCalendar,
+            mastersState = mastersState,
+            onRetryMasters = onRetryMasters,
+            onAddMaster = onAddMaster,
+            onEditMaster = onEditMaster,
+            onToggleMasterActive = onToggleMasterActive,
+            onDeleteMaster = onDeleteMaster,
+            onCancelMasterEdit = onCancelMasterEdit,
+            onMasterFormChanged = onMasterFormChanged,
+            onSubmitMaster = onSubmitMaster,
+            servicesState = servicesState,
+            onRetryServices = onRetryServices,
+            onEditService = onEditService,
+            onCancelServiceEdit = onCancelServiceEdit,
+            onServiceDraftChanged = onServiceDraftChanged,
+            onSubmitService = onSubmitService,
+            workingHoursState = workingHoursState,
+            onRetryWorkingHours = onRetryWorkingHours,
+            onSaveWorkingHours = onSaveWorkingHours,
+            onDeleteWorkingHours = onDeleteWorkingHours,
+        )
+        return
+    }
+
     // `ago-console`'s own `useNow` hook, restated - the one clock read this screen makes, so every
     // deadline countdown on it re-renders together rather than each row reading `OffsetDateTime.now()`
     // on its own recomposition schedule (`ConversationListScreen`'s own identical reasoning for
@@ -422,10 +476,13 @@ internal fun BookingsScreen(
                         // sharing the row was crowding the segmented control, wrapping «Утверждены» to two
                         // lines. `BookingsConfigMenu` still hides itself when [configMenuEntries] is empty,
                         // so nothing changes when there is nothing to show.
+                        //
+                        // `26-157`: selecting an entry now opens it as a modal config page (via
+                        // [onConfigSelected]) rather than swapping a body underneath the same shell.
                         BookingsConfigMenu(
                             entries = configMenuEntries,
                             labelFor = { tab -> bookingsTabLabel(tab = tab, pendingState = state) },
-                            onSelect = onTabSelected,
+                            onSelect = onConfigSelected,
                         )
                         // `26-77`: Записи had neither a presence dot nor a menu before this item - the
                         // avatar is this screen's first `actions` content of any kind.
@@ -450,7 +507,7 @@ internal fun BookingsScreen(
                     segments.forEachIndexed { index, tab ->
                         SegmentedButton(
                             selected = selectedTab == tab,
-                            onClick = { onTabSelected(tab) },
+                            onClick = { onSegmentSelected(tab) },
                             shape = SegmentedButtonDefaults.itemShape(index, segments.size),
                             label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
                             icon = {},
@@ -505,7 +562,7 @@ internal fun BookingsScreen(
                         }
 
                     // `confirmedState` is non-null exactly when `showConfirmedSegment` is true - the only
-                    // condition under which this tab even appears in `segments` for `onTabSelected` to
+                    // condition under which this tab even appears in `segments` for `onSegmentSelected` to
                     // have been able to select it in the first place.
                     BookingsTab.Confirmed ->
                         confirmedState?.let {
@@ -525,16 +582,91 @@ internal fun BookingsScreen(
                             ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
                         }
 
-                    // `26-142`: the identical "non-null exactly when selectable" invariant the branches
-                    // around it state, for `showSetupSegment`. Kept stateless here rather than calling
-                    // `hiltViewModel()` inline, for this file's own Route/Screen-split reason.
+                    // `26-157`: the four configuration tabs are never a `selectedTab` - they are opened as a
+                    // modal page tracked by `activeConfigTab` (handled above), never selected in the
+                    // operational segmented view - so there is nothing for the operational `when` to draw.
+                    BookingsTab.Calendars,
+                    BookingsTab.Masters,
+                    BookingsTab.Services,
+                    BookingsTab.Hours,
+                    -> Unit
+                }
+            }
+        }
+    }
+}
+
+/**
+ * `26-157`: the modal page a `⋮` configuration screen (Услуги/Часы/Мастера/Календари) renders as — a
+ * back-button app bar with no [AccountAvatarAction], and no segmented row. It reuses the app's existing
+ * detail-screen chrome verbatim (the identical [AgoIcons.Back] + [R.string.action_back] navigation icon
+ * [ago.chat.android.thread.ThreadScreen] and [ago.chat.android.channels.InstallWidgetScreen] already
+ * draw), rather than inventing new chrome. The bottom navigation tabs are hidden one level up
+ * ([ago.chat.android.shell.AppShellScreen]), signalled by [BookingsRoute]'s own `onConfigScreenChanged`.
+ *
+ * The four config bodies are the same ones the operational view used to swap in place; each is still
+ * rendered only when its state is non-null, the "non-null exactly when the entry was offered" invariant
+ * `visibleBookingsConfigMenuEntries` guarantees (an operator without `calendar:configure` never sees the
+ * `⋮` entry, so [configTab] is never one of these for them).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookingsConfigModalPage(
+    configTab: BookingsTab,
+    pendingState: BookingsUiState,
+    onBack: () -> Unit,
+    calendarSetupState: CalendarSetupUiState?,
+    onRetryCalendarSetup: () -> Unit,
+    onAddCalendar: () -> Unit,
+    onEditCalendar: (ConfiguredCalendar) -> Unit,
+    onCalendarFormChanged: (CalendarForm) -> Unit,
+    onCancelCalendarEdit: () -> Unit,
+    onSubmitCalendar: (CalendarForm) -> Unit,
+    mastersState: MastersUiState?,
+    onRetryMasters: () -> Unit,
+    onAddMaster: () -> Unit,
+    onEditMaster: (Worker) -> Unit,
+    onToggleMasterActive: (Worker) -> Unit,
+    onDeleteMaster: (String) -> Unit,
+    onCancelMasterEdit: () -> Unit,
+    onMasterFormChanged: (WorkerForm) -> Unit,
+    onSubmitMaster: (WorkerForm) -> Unit,
+    servicesState: ServicesUiState?,
+    onRetryServices: () -> Unit,
+    onEditService: (ConfiguredService) -> Unit,
+    onCancelServiceEdit: () -> Unit,
+    onServiceDraftChanged: (ServiceDraft) -> Unit,
+    onSubmitService: (ServiceDraft) -> Unit,
+    workingHoursState: WorkingHoursUiState?,
+    onRetryWorkingHours: () -> Unit,
+    onSaveWorkingHours: (String, Int, String, String) -> Unit,
+    onDeleteWorkingHours: (String) -> Unit,
+) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = AgoIcons.Back,
+                                contentDescription = stringResource(R.string.action_back),
+                            )
+                        }
+                    },
+                    title = { Text(text = bookingsTabLabel(tab = configTab, pendingState = pendingState)) },
+                )
+            },
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                when (configTab) {
+                    // `26-142`: Календари - kept stateless here rather than calling `hiltViewModel()`
+                    // inline, for this file's own Route/Screen-split reason.
                     BookingsTab.Calendars ->
                         calendarSetupState?.let {
                             CalendarSetupBody(
                                 state = it,
                                 onRetry = onRetryCalendarSetup,
-                                onOriginsTextChanged = onOriginsTextChanged,
-                                onSaveOrigins = onSaveOrigins,
                                 onAddCalendar = onAddCalendar,
                                 onEditCalendar = onEditCalendar,
                                 onCalendarFormChanged = onCalendarFormChanged,
@@ -543,9 +675,7 @@ internal fun BookingsScreen(
                             )
                         }
 
-                    // `26-140`: the identical "non-null exactly when selectable" invariant the branches
-                    // around it state, for `showMastersSegment`. Kept stateless here rather than calling
-                    // `hiltViewModel()` inline, for this file's own Route/Screen-split reason.
+                    // `26-140`: Мастера.
                     BookingsTab.Masters ->
                         mastersState?.let {
                             MastersBody(
@@ -561,8 +691,7 @@ internal fun BookingsScreen(
                             )
                         }
 
-                    // `26-96`: the identical "non-null exactly when selectable" invariant, for
-                    // `showServicesSegment`.
+                    // `26-96`: Услуги.
                     BookingsTab.Services ->
                         servicesState?.let {
                             ServicesBody(
@@ -575,11 +704,7 @@ internal fun BookingsScreen(
                             )
                         }
 
-                    // `26-97`: the identical "non-null exactly when selectable" invariant the two
-                    // branches above state, for `showHoursSegment`. Kept stateless here rather than
-                    // calling `hiltViewModel()` inline, so this composable stays the Hilt-free half
-                    // the back-contract tests can drive - this file's own doc comment's whole reason
-                    // for the Route/Screen split.
+                    // `26-97`: Часы.
                     BookingsTab.Hours ->
                         workingHoursState?.let {
                             WorkingHoursBody(
@@ -589,6 +714,9 @@ internal fun BookingsScreen(
                                 onDelete = onDeleteWorkingHours,
                             )
                         }
+
+                    // The three operational segments are never opened as a modal config page.
+                    BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients -> Unit
                 }
             }
         }
