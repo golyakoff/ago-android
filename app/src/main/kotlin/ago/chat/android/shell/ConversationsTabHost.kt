@@ -60,6 +60,11 @@ public fun ConversationsTabHost(
     // (hide-not-disable). Defaulted to `false` so every back-contract test constructing this composable
     // directly compiles and behaves unchanged.
     canReadContactDetail: Boolean = false,
+    // `26-149`: `conversation:tag`, computed by [AppShellScreen]'s own `conversationsTab` default and
+    // threaded straight through to [ThreadRoute] alongside `canReadContactDetail`, which gates the tags
+    // section's write affordances on it (hide-not-disable). Defaulted to `false` so every back-contract
+    // test constructing this composable directly compiles and behaves unchanged.
+    canTagConversation: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -147,6 +152,7 @@ public fun ConversationsTabHost(
                 hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant,
                 identityUnavailable = identityUnavailable,
                 canReadContactDetail = canReadContactDetail,
+                canTagConversation = canTagConversation,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null

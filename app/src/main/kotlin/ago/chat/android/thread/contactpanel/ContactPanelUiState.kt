@@ -2,6 +2,8 @@ package ago.chat.android.thread.contactpanel
 
 import ago.chat.android.core.domain.contactdetails.ContactDetail
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.tags.ConversationTag
+import ago.chat.android.core.domain.tags.Tag
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 
 /**
@@ -26,6 +28,7 @@ import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 public data class ContactPanelUiState(
     val summary: HeaderSummaryState = HeaderSummaryState.Loading,
     val contactDetails: ContactDetailsSectionState = ContactDetailsSectionState.Loading,
+    val tags: TagsSectionState = TagsSectionState.Loading,
 )
 
 /**
@@ -103,4 +106,82 @@ public sealed interface RowRevealError {
     public data class Failed(
         val reason: NetworkFailure,
     ) : RowRevealError
+}
+
+/**
+ * `26-149`: the tags section's async state — the second section slice to grow [ContactPanelUiState] the
+ * additive way its own doc comment prescribes, reading and writing through
+ * [ago.chat.android.core.domain.tags.ConversationTagsApi] (`26-115`). Three arms, the same
+ * Loading/Loaded/Failed vocabulary [HeaderSummaryState] and [ContactDetailsSectionState] establish, so the
+ * section renders a skeleton while it loads, the chips + «+ метка» control once they land, and its own
+ * inline retry (never a whole-sheet failure — `docs/design/26-111-thread-contact-detail-panel.md` §4) if
+ * it does not.
+ *
+ * **Why one [Loaded] carries both lists.** The section needs two reads — the conversation's own applied
+ * tags (`fetchConversationTags`, the chips) and the site's whole tag vocabulary (`fetchSiteTags`, what the
+ * «+ метка» picker offers minus the applied ones). Rather than two arms that can each be in a different
+ * Loading/Failed state (doubling this type for a picker that a single retry fixes anyway), the arm lands
+ * [Loaded] only when the **applied-tags** read — the primary content — succeeds, and folds whatever the
+ * vocabulary read returned into [vocabulary]; a vocabulary read that itself failed simply yields an empty
+ * [vocabulary] (the picker then offers nothing, non-destructively), the same "a secondary read degrades to
+ * empty rather than failing the section it decorates" posture the chips-first shape here takes. The
+ * alternative — failing the whole section when only the vocabulary read failed — would hide the readable
+ * chips behind a retry the operator did not need.
+ *
+ * The two write-transient fields live on [Loaded] rather than on [ContactPanelUiState] itself, the
+ * identical "the in-flight set travels with the loaded list it acts on" shape
+ * [ContactDetailsSectionState.Loaded] already establishes for the reveal.
+ */
+public sealed interface TagsSectionState {
+    public data object Loading : TagsSectionState
+
+    /**
+     * The conversation's applied tags and the site's tag vocabulary, plus the per-write transient state.
+     *
+     * [applied] — the tags currently on this conversation, drawn as chips (each removable when the
+     * operator holds `conversation:tag`).
+     *
+     * [vocabulary] — the site's whole tag vocabulary; the «+ метка» picker offers this list **minus**
+     * [applied] (that subtraction is a UI concern, [ConversationTagsApi][ago.chat.android.core.domain.tags.ConversationTagsApi.fetchSiteTags]'s
+     * own doc comment). Empty when the vocabulary read itself failed — the picker then offers nothing.
+     *
+     * [pendingTagIds] — the tag ids with an apply or a remove in flight right now; the section disables
+     * that chip's remove and that picker entry while its id is in this set (keyed by tag id, since both
+     * writes act on a tag id).
+     *
+     * [actionError] — the last write outcome when it was not a success, shown non-destructively as one
+     * line beneath the chips and cleared the moment a new write begins. The applied set is left exactly as
+     * it was through either arm — a refused or failed write never mutates the on-screen tags.
+     */
+    public data class Loaded(
+        val applied: List<ConversationTag>,
+        val vocabulary: List<Tag>,
+        val pendingTagIds: Set<String> = emptySet(),
+        val actionError: TagActionError? = null,
+    ) : TagsSectionState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : TagsSectionState
+}
+
+/**
+ * `26-149`: why an apply or remove did not take — the two non-success arms of
+ * [ago.chat.android.core.domain.tags.TagActionResult], carried into the UI so the section can show a
+ * genuine server refusal verbatim but a transport failure as its own generic, localized line — the
+ * identical split [RowRevealError] draws for the reveal. The successful arm needs no representation: it
+ * updates the applied list in place.
+ */
+public sealed interface TagActionError {
+    /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
+     * sentence" posture [RowRevealError.Refused] establishes. */
+    public data class Refused(
+        val detail: String,
+    ) : TagActionError
+
+    /** A transport failure — no server sentence to show, so the section renders one generic
+     * «Не удалось изменить метки» line, classified by [reason] only if a caller ever needs to. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : TagActionError
 }
