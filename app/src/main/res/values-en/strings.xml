@@ -516,6 +516,16 @@
     <string name="more_administration_billing_row">Plan &amp; billing</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
+    <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
+    <string name="channels_install_title">Widget install</string>
+    <string name="channels_install_embed_caption">This embed snippet is filled in for you. Paste it into your site\'s page to show the widget.</string>
+    <string name="channels_install_snippet_label">Embed snippet</string>
+    <string name="channels_install_origins_label">Allowed origins</string>
+    <string name="channels_install_origins_empty">No origins set yet.</string>
+    <string name="channels_install_origins_hint">To change the list of origins, contact AGO support.</string>
+    <string name="channels_install_load_failed_transport">Couldn\'t reach AGO. Check your connection and try again.</string>
+    <string name="channels_install_load_failed_unexpected">Couldn\'t load the widget install. Please try again.</string>
+
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
     <string name="account_menu_fallback_initial">?</string>

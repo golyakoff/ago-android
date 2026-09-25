@@ -587,6 +587,10 @@ private fun AppShellContent(
                     operatorEmail = operatorEmail,
                     onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
                     onSignOut = onSignOut,
+                    // `26-159`: computed once here from the `Known` set this function already holds, the
+                    // identical shape `conversationsTab`/`teamTab` above compute their own gates - Ещё's
+                    // Каналы «Установка виджета» row is drawn only for `site:configure`.
+                    canConfigureSite = permissions.holds(Permission.SITE_CONFIGURE),
                 )
             }
             // `26-77`: the one `NavHost` route none of the five bottom-nav destinations owns - pushed by
