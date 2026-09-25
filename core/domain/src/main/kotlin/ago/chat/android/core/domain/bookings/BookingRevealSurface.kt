@@ -26,4 +26,15 @@ public object BookingRevealSurface {
     /** Reserved for the pending-queue card's own reveal control, once one exists — unused by any call
      * site today. */
     public const val ANDROID_QUEUE: String = "AndroidQueue"
+
+    /**
+     * `26-117`: Утверждены's own booking-detail sheet reveal (`docs/backlog/26-117-*.md`'s own hard
+     * requirement 9) — a distinct string from [ANDROID_CONTACTS] even though both call the identical
+     * `revealCustomerPhone` endpoint, because the audit trail's whole reason to carry `surface` at all is
+     * telling "which screen actually revealed this number" apart (this object's own class doc comment).
+     * `docs/design/26-112-*.md` §5 states the matching boundary on the `ago-chat` side: this app's own
+     * booking-detail reveal and the in-dialog contact-detail reveal (`26-111`) stay two different calls
+     * with two different surface labels, on purpose, never collapsed into one.
+     */
+    public const val ANDROID_BOOKINGS: String = "AndroidBookings"
 }

@@ -1,7 +1,10 @@
 package ago.chat.android.bookings
 
+import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
+import ago.chat.android.core.domain.bookings.DayGroup
+import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.confirmedBookingsStrip
 import ago.chat.android.core.domain.bookings.defaultConfirmedBookingsRange
 import ago.chat.android.core.domain.bookings.groupByDayThenWorker
@@ -44,15 +47,23 @@ internal class ConfirmedBookingsViewModel
         private val mutableState = MutableStateFlow<ConfirmedBookingsUiState>(ConfirmedBookingsUiState.Loading)
         val state: StateFlow<ConfirmedBookingsUiState> = mutableState.asStateFlow()
 
+        /** `26-117`: which customers have a booking-detail reveal in flight right now — the identical
+         * plain-instance-state shape [ContactsViewModel]'s own doc comment states for its own field of
+         * the same name ("no lock needed" — this class is confined to the main thread, like every other
+         * `ViewModel` here). */
+        private var revealingCustomerIds: Set<String> = emptySet()
+
         init {
             refresh()
         }
 
         /** The initial load, and the retry action a [ConfirmedBookingsUiState.Failed] screen offers —
          * the identical "asking again is the whole of retry" shape [BookingsViewModel.refresh]'s own doc
-         * comment states. */
+         * comment states. Clears [revealingCustomerIds] the identical reason
+         * [ContactsViewModel.refresh]'s own doc comment gives for clearing its own field of that name. */
         fun refresh() {
             mutableState.update { ConfirmedBookingsUiState.Loading }
+            revealingCustomerIds = emptySet()
             viewModelScope.launch {
                 // `ago-console`'s own `defaultRange` reads a bare `new Date()`, i.e. the *UTC* calendar
                 // date - `defaultConfirmedBookingsRange`'s own doc comment on why this ports that
@@ -87,4 +98,73 @@ internal class ConfirmedBookingsViewModel
                 if (current is ConfirmedBookingsUiState.Loaded) current.copy(selectedDate = date) else current
             }
         }
+
+        /**
+         * `26-117`: the booking-detail sheet's own «Показать» — `docs/backlog/26-117-*.md`'s own hard
+         * requirement 9 reusing the identical audited reveal `26-53` already established, keyed here by
+         * [BookingRevealSurface.ANDROID_BOOKINGS] rather than [BookingRevealSurface.ANDROID_CONTACTS] so
+         * the audit trail can tell the two screens' own reveals apart (`BookingRevealSurface`'s own doc
+         * comment). The identical one-reveal-per-customer-at-a-time, match-by-customerId-not-row shape
+         * [ContactsViewModel.reveal]'s own doc comment states in full — [replacePhone] below is the one
+         * difference: a confirmed booking's own rows are nested under [DayGroup]/[WorkerGroup] rather
+         * than sitting in a flat list, so unmasking in place means mapping through both levels.
+         */
+        fun reveal(customerId: String) {
+            if (customerId in revealingCustomerIds) return
+            val loaded = mutableState.value as? ConfirmedBookingsUiState.Loaded ?: return
+            revealingCustomerIds = revealingCustomerIds + customerId
+            mutableState.update { loaded.copy(revealingCustomerIds = revealingCustomerIds, actionError = null) }
+
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { api.revealCustomerPhone(customerId, BookingRevealSurface.ANDROID_BOOKINGS) }
+                revealingCustomerIds = revealingCustomerIds - customerId
+
+                mutableState.update { current ->
+                    val currentLoaded = current as? ConfirmedBookingsUiState.Loaded ?: return@update current
+                    when (result) {
+                        is RevealPhoneResult.Revealed ->
+                            currentLoaded.copy(
+                                days = replacePhone(currentLoaded.days, customerId, result.phone),
+                                revealingCustomerIds = revealingCustomerIds,
+                                actionError = null,
+                            )
+
+                        is RevealPhoneResult.Refused ->
+                            currentLoaded.copy(
+                                revealingCustomerIds = revealingCustomerIds,
+                                actionError = BookingActionErrorUi.ServerRefusal(result.detail),
+                            )
+
+                        is RevealPhoneResult.Failed ->
+                            currentLoaded.copy(
+                                revealingCustomerIds = revealingCustomerIds,
+                                actionError = BookingActionErrorUi.Unavailable(result.reason),
+                            )
+                    }
+                }
+            }
+        }
+
+        /** [reveal]'s own in-place unmask, across every [DayGroup]/[WorkerGroup] this range read holds —
+         * a customer with several confirmed bookings (different masters, different days) has every one
+         * of those rows unmasked together, the identical "match by customerId, not row" rule
+         * [ContactsViewModel.reveal]'s own doc comment states, extended to two nesting levels. */
+        private fun replacePhone(
+            days: List<DayGroup>,
+            customerId: String,
+            phone: String,
+        ): List<DayGroup> =
+            days.map { day ->
+                day.copy(
+                    workers =
+                        day.workers.map { worker ->
+                            worker.copy(
+                                rows =
+                                    worker.rows.map { row ->
+                                        if (row.customerId == customerId) row.copy(phone = phone, masked = false) else row
+                                    },
+                            )
+                        },
+                )
+            }
     }
