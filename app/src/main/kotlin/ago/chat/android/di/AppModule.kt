@@ -22,6 +22,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
@@ -42,6 +43,7 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
+import ago.chat.android.core.network.workers.KtorWorkersApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
@@ -444,6 +446,19 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): WorkingHoursApi = KtorWorkingHoursApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-140`: [ago.chat.android.bookings.MastersViewModel]'s own port — a third `@Provides` against the
+     * same calendar origin as [provideBookingsApi]/[provideWorkingHoursApi], for the reason
+     * [WorkersApi]'s own doc comment gives: the worker dictionary is a different noun behind the same
+     * `calendar:configure` gate, not a fourth method on [BookingsApi]. Always constructs, including when
+     * [OidcConfig.calendarApiBaseUrl] is `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideWorkersApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): WorkersApi = KtorWorkersApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-55`: [ago.chat.android.team.PeopleViewModel]'s own port — plain REST on the chat API this app

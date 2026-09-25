@@ -565,6 +565,41 @@
     <string name="services_duration_invalid">Укажите длительность в целых минутах.</string>
 
     <!--
+        `26-140`: Записи's own «Мастера» segment - the worker dictionary, with the full create/edit/delete
+        this product had no screen for at all until this item. A `⋮` config entry gated on
+        `calendar:configure`, offered before Услуги (menu order Календари · Мастера · Услуги · Часы).
+        Unlike Услуги, `«Удалить»` here is a real delete: a worker never booked can be removed outright,
+        while a booked one is refused by the server and must be deactivated instead.
+    -->
+    <string name="masters_tab">Мастера</string>
+    <string name="masters_empty">У этого тенанта пока нет мастеров.</string>
+    <string name="masters_load_failed_unexpected">Не удалось загрузить мастеров. Попробуйте ещё раз.</string>
+    <!-- The word, never a colour alone - an operator who cannot tell two greys apart still reads
+         «Неактивен». -->
+    <string name="masters_status_inactive">Неактивен</string>
+    <string name="masters_no_services">Услуги не назначены</string>
+    <string name="masters_action_add">Добавить мастера</string>
+    <!-- Add is disabled when there is no calendar to put a worker on - the honest reason is stated, not
+         a picker with no options. -->
+    <string name="masters_add_disabled_note">Сначала добавьте календарь — в разделе «Настройка».</string>
+    <string name="masters_action_edit">Изменить</string>
+    <string name="masters_action_deactivate">Снять с активных</string>
+    <string name="masters_action_reactivate">Вернуть</string>
+    <string name="masters_action_delete">Удалить</string>
+    <string name="masters_action_save">Сохранить</string>
+    <string name="masters_field_last_name">Фамилия</string>
+    <string name="masters_field_first_name">Имя</string>
+    <string name="masters_field_middle_name">Отчество</string>
+    <string name="masters_field_display_name">Отображаемое имя</string>
+    <string name="masters_field_calendar">Календарь</string>
+    <string name="masters_field_services">Услуги</string>
+    <string name="masters_field_active">Активен</string>
+    <string name="masters_delete_title">Удалить мастера?</string>
+    <!-- Says what a delete does and does not do before it happens - and that a booked worker is
+         deactivated, not deleted (the server refuses the delete for exactly that worker). -->
+    <string name="masters_delete_message">Безвозвратно удалить можно только мастера без записей. Если у мастера есть записи, снимите его с активных - история записей сохранится.</string>
+
+    <!--
         `26-57`: Аналитика's own «Мои показатели» - the one ungated, personal report on this app. Wording
         carried over from `ago-console`'s own `ru.ts` (`myNumbers*`/`analytics*`) where the console has an
         equivalent string, since this is the same numbers described the same way on both surfaces.

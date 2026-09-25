@@ -331,6 +331,30 @@
     <string name="services_withdrawn_note">A withdrawn service can no longer be chosen in the booking widget. Bookings already taken and worker cards keep it - the service is not deleted, and it can be put back on offer.</string>
     <string name="services_duration_invalid">Enter a duration in whole minutes.</string>
 
+    <!-- `26-140`: English half of Записи's own «Мастера» segment - see `values/strings.xml`'s own doc
+         comment on this same key block for the full reasoning. -->
+    <string name="masters_tab">Masters</string>
+    <string name="masters_empty">This tenant has no masters yet.</string>
+    <string name="masters_load_failed_unexpected">Couldn\'t load masters. Try again.</string>
+    <string name="masters_status_inactive">Inactive</string>
+    <string name="masters_no_services">No services assigned</string>
+    <string name="masters_action_add">Add master</string>
+    <string name="masters_add_disabled_note">Add a calendar first — under “Setup”.</string>
+    <string name="masters_action_edit">Edit</string>
+    <string name="masters_action_deactivate">Deactivate</string>
+    <string name="masters_action_reactivate">Reactivate</string>
+    <string name="masters_action_delete">Delete</string>
+    <string name="masters_action_save">Save</string>
+    <string name="masters_field_last_name">Last name</string>
+    <string name="masters_field_first_name">First name</string>
+    <string name="masters_field_middle_name">Middle name</string>
+    <string name="masters_field_display_name">Display name</string>
+    <string name="masters_field_calendar">Calendar</string>
+    <string name="masters_field_services">Services</string>
+    <string name="masters_field_active">Active</string>
+    <string name="masters_delete_title">Delete this master?</string>
+    <string name="masters_delete_message">Only a master with no bookings can be deleted outright. If a master has bookings, deactivate them instead - the booking history is kept.</string>
+
     <string name="analytics_from_field_label">From</string>
     <string name="analytics_to_field_label">To</string>
     <string name="analytics_apply_button">Apply</string>

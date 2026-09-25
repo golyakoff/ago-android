@@ -16,6 +16,10 @@ internal enum class BookingsTab {
     Pending,
     Confirmed,
     Clients,
+
+    /** `26-140`: the worker dictionary, with the full create/edit/delete this product had no screen for
+     * until that item. A `⋮` config entry, never a segment — see [visibleBookingsConfigMenuEntries]. */
+    Masters,
     Services,
 
     /** `26-97`: the working-hours rules, with the Edit and Delete this product did not have until that
@@ -81,15 +85,23 @@ internal fun visibleBookingsSegments(
  * [showServicesSegment], since the two writes check the permission independently server-side, not
  * because either reuses the other's boolean.
  *
+ * `26-140`: [showMastersSegment] is the identical gate again — `calendar:configure` alone, the permission
+ * the worker-dictionary writes check server-side — added as its own parameter for the same reason each of
+ * the others is one, not because it reuses another's boolean. Мастера is offered **before** Услуги (menu
+ * order Календари · Мастера · Услуги · Часы, where Календари arrives with `26-142`): the reading fills the
+ * dictionary first, then the services those workers perform.
+ *
  * **"Hide, don't disable" one level up.** An empty result here is what makes `BookingsConfigMenu` draw
- * no `⋮` at all when neither entry applies (`docs/backlog/26-103-*.md`'s own Done-when) — the same rule
+ * no `⋮` at all when no entry applies (`docs/backlog/26-103-*.md`'s own Done-when) — the same rule
  * [ago.chat.android.analytics.AnalyticsReportsOverflowMenu] already follows for Аналитика's own `⋮`.
  */
 internal fun visibleBookingsConfigMenuEntries(
+    showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
+        if (showMastersSegment) add(BookingsTab.Masters)
         if (showServicesSegment) add(BookingsTab.Services)
         if (showHoursSegment) add(BookingsTab.Hours)
     }
