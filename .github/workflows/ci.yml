@@ -396,10 +396,16 @@ jobs:
         env:
           AGO_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
         run: |
+          # `26-110`: point the published APK at the stand's AGO Calendar backend. `agoCalendarApiBaseUrl`
+          # has no committed default on purpose (`app/build.gradle.kts`: Calendar is a second product a
+          # deployment may not run) - it is set here, in the build that targets the reserve-me.ru stand
+          # where `Ago.Calendar.Api` (https://calendar-api.reserve-me.ru) is deployed. Without it the APK
+          # ships `AGO_CALENDAR_API_BASE_URL` empty and every Записи screen renders `NotConfigured`.
           ./gradlew assembleRelease --no-daemon \
             -PagoVersionName=${{ steps.version.outputs.short_sha }} \
             -PagoVersionCode=${{ github.run_number }} \
             -PagoReleaseVersion=${{ steps.version.outputs.release_version }} \
+            -PagoCalendarApiBaseUrl=https://calendar-api.reserve-me.ru \
             -PagoSigningKeystorePath="$RUNNER_TEMP/ago-android-release.keystore" \
             -PagoSigningStorePassword="$AGO_SIGNING_STORE_PASSWORD" \
             -PagoSigningKeyPassword="$AGO_SIGNING_STORE_PASSWORD" \
