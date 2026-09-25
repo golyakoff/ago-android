@@ -145,6 +145,12 @@ public fun ThreadRoute(
     // hide-not-disable (design Q7): `false` (the default every direct-construction test still gets) means
     // the affordance is never drawn, and the panel VM below is never opened.
     canReadContactDetail: Boolean = false,
+    // `26-149`: `conversation:tag`, computed once from the operator's permission set by `AppShellScreen`'s
+    // own `conversationsTab` default and threaded down through `ConversationsTabHost` alongside
+    // `canReadContactDetail`. Gates the tags section's write affordances hide-not-disable (design Q7); it
+    // never gates the section's existence (reading tags rides `conversation:read`, the panel's own gate).
+    // `false` (the default every direct-construction test still gets) hides the add/remove controls.
+    canTagConversation: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -244,6 +250,13 @@ public fun ThreadRoute(
             onRetrySummary = contactPanelViewModel::retry,
             onRevealContactDetail = contactPanelViewModel::revealContactDetail,
             onRetryContactDetails = contactPanelViewModel::retryContactDetails,
+            // `26-149`: the tags section's write callbacks + its `conversation:tag` gate, wired the same way
+            // the contact-details callbacks above are - the VM stays permission-agnostic (it always exposes
+            // apply/remove), the gate lives here in the UI layer where the permission set is known.
+            canTag = canTagConversation,
+            onAddTag = contactPanelViewModel::applyTag,
+            onRemoveTag = contactPanelViewModel::removeTag,
+            onRetryTags = contactPanelViewModel::retryTags,
             onDismiss = { showContactPanel = false },
         )
     }

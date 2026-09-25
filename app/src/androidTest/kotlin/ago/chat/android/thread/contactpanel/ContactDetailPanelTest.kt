@@ -109,6 +109,10 @@ class ContactDetailPanelTest {
                 onRetrySummary = {},
                 onRevealContactDetail = {},
                 onRetryContactDetails = {},
+                canTag = false,
+                onAddTag = {},
+                onRemoveTag = {},
+                onRetryTags = {},
                 onDismiss = { showPanel = false },
             )
         }

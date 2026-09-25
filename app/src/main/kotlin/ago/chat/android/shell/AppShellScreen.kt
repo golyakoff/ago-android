@@ -193,6 +193,12 @@ internal fun AppShellScreen(
             // already holds, the identical shape the two Booleans above use. Safe while [permissions] is
             // still [OperatorPermissions.Unknown] for the reason stated above.
             canReadContactDetail = permissions.holds(Permission.CONVERSATION_READ),
+            // `26-149`: `conversation:tag` gates the contact-panel tags section's write affordances
+            // (hide-not-disable, design Q7) - computed here, once, from the same permission set, the
+            // identical shape `canReadContactDetail` above uses. A separate check from `conversation:read`:
+            // reading a conversation's tags and being allowed to change them are two capabilities the server
+            // checks separately too.
+            canTagConversation = permissions.holds(Permission.CONVERSATION_TAG),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for

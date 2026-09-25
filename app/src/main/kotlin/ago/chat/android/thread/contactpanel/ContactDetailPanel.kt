@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
+import ago.chat.android.thread.contactpanel.sections.TagsSection
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.visitorEmojiPairName
@@ -85,6 +86,14 @@ internal fun ContactDetailPanel(
     onRetrySummary: () -> Unit,
     onRevealContactDetail: (String) -> Unit,
     onRetryContactDetails: () -> Unit,
+    // `26-149`: `conversation:tag` gates the tags section's write affordances (each chip's «×» and the
+    // «+ метка» add) hide-not-disable (design Q7); the chips themselves ride the panel's own
+    // `conversation:read` gate. Reading the tags needs no second gate, so this Boolean only ever hides
+    // controls, never the section.
+    canTag: Boolean,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+    onRetryTags: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -127,6 +136,19 @@ internal fun ContactDetailPanel(
                 state = state.contactDetails,
                 onReveal = onRevealContactDetail,
                 onRetry = onRetryContactDetails,
+            )
+
+            Spacer(modifier = Modifier.height(SectionSpacing))
+
+            // `26-149` (S-G): the tags section - chips of the applied tags + «+ метка» from the site vocab.
+            // Reads its own arm off the same state and takes its callbacks from the same VM, the additive
+            // convention documented above; `conversation:tag` gates its write affordances (hide-not-disable).
+            TagsSection(
+                state = state.tags,
+                canTag = canTag,
+                onAddTag = onAddTag,
+                onRemoveTag = onRemoveTag,
+                onRetry = onRetryTags,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

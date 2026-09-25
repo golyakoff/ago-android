@@ -315,6 +315,22 @@
     <string name="contact_details_reveal_failed">Не удалось показать</string>
 
     <!--
+        `26-149`: the contact-detail panel's tags section - «МЕТКИ» (chips + «+ метка» picker,
+        `docs/design/26-111-thread-contact-detail-panel.md`). `tags_section_title` is rendered uppercase by
+        the section (like `contact_details_section_title`), so the source stays sentence case for TalkBack.
+        `tags_add` is the picker control (its own literal «+», not a Material icon); `tags_remove` is the
+        accessible label for a chip's remove target, `%1$s` being the tag's own name. `tags_action_failed`
+        is the generic transport-failure line for an apply/remove; a genuine server refusal shows the
+        server's own sentence verbatim instead (design §4).
+    -->
+    <string name="tags_section_title">Метки</string>
+    <string name="tags_empty">Нет меток</string>
+    <string name="tags_load_failed">Не удалось загрузить метки</string>
+    <string name="tags_add">+ метка</string>
+    <string name="tags_remove">Удалить метку %1$s</string>
+    <string name="tags_action_failed">Не удалось изменить метки</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

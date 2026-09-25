@@ -185,6 +185,14 @@
     <string name="contact_details_load_failed">Couldn\'t load contact details</string>
     <string name="contact_details_reveal_failed">Couldn\'t show</string>
 
+    <!-- `26-149`: contact-detail panel tags section (chips + «+ метка» picker). -->
+    <string name="tags_section_title">Tags</string>
+    <string name="tags_empty">No tags</string>
+    <string name="tags_load_failed">Couldn\'t load tags</string>
+    <string name="tags_add">+ tag</string>
+    <string name="tags_remove">Remove tag %1$s</string>
+    <string name="tags_action_failed">Couldn\'t update tags</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>

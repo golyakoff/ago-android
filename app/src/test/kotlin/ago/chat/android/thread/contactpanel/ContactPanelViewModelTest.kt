@@ -5,6 +5,12 @@ import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.tags.ConversationTag
+import ago.chat.android.core.domain.tags.ConversationTagsApi
+import ago.chat.android.core.domain.tags.ConversationTagsResult
+import ago.chat.android.core.domain.tags.Tag
+import ago.chat.android.core.domain.tags.TagActionResult
+import ago.chat.android.core.domain.tags.TagVocabularyResult
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryResult
@@ -46,9 +52,11 @@ class ContactPanelViewModelTest {
     private fun viewModel(
         summaryApi: VisitorSummaryApi = FakeVisitorSummaryApi(),
         contactDetailsApi: ContactDetailsApi = FakeContactDetailsApi(),
+        conversationTagsApi: ConversationTagsApi = FakeConversationTagsApi(),
     ) = ContactPanelViewModel(
         visitorSummaryApi = summaryApi,
         contactDetailsApi = contactDetailsApi,
+        conversationTagsApi = conversationTagsApi,
         ioDispatcher = dispatcher,
     )
 
@@ -192,6 +200,146 @@ class ContactPanelViewModelTest {
             assertEquals(RowRevealError.Refused("Not entitled"), loaded.revealErrors["p1"])
         }
 
+    // ─── 26-149: tags section ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `open loads the applied tags and the site vocabulary into the Loaded arm`() =
+        runTest(dispatcher) {
+            val applied = listOf(ConversationTag(id = "t1", name = "VIP", createdAt = "2026-01-01T00:00:00Z", source = "Operator"))
+            val vocabulary =
+                listOf(
+                    Tag(id = "t1", name = "VIP", createdAt = "2026-01-01T00:00:00Z"),
+                    Tag(id = "t2", name = "Refund", createdAt = "2026-01-02T00:00:00Z"),
+                )
+            val api =
+                FakeConversationTagsApi(
+                    conversationTagsResult = ConversationTagsResult.Loaded(applied),
+                    siteTagsResult = TagVocabularyResult.Loaded(vocabulary),
+                )
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(
+                TagsSectionState.Loaded(applied = applied, vocabulary = vocabulary),
+                viewModel.state.value.tags,
+            )
+        }
+
+    @Test
+    fun `a failed conversation-tags read becomes the Failed arm, and its retry asks again`() =
+        runTest(dispatcher) {
+            val api = FakeConversationTagsApi(conversationTagsResult = ConversationTagsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            assertEquals(TagsSectionState.Failed(NetworkFailure.NoConnection), viewModel.state.value.tags)
+
+            viewModel.retryTags()
+            advanceUntilIdle()
+
+            assertEquals(2, api.conversationTagsCalls)
+        }
+
+    @Test
+    fun `a failed vocabulary read degrades to an empty vocabulary without failing the section`() =
+        runTest(dispatcher) {
+            val applied = listOf(ConversationTag(id = "t1", name = "VIP", createdAt = "2026-01-01T00:00:00Z", source = "Operator"))
+            val api =
+                FakeConversationTagsApi(
+                    conversationTagsResult = ConversationTagsResult.Loaded(applied),
+                    siteTagsResult = TagVocabularyResult.Failed(NetworkFailure.Unexpected),
+                )
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(
+                TagsSectionState.Loaded(applied = applied, vocabulary = emptyList()),
+                viewModel.state.value.tags,
+            )
+        }
+
+    @Test
+    fun `applyTag adds the vocabulary tag to the applied set on success`() =
+        runTest(dispatcher) {
+            val vocabulary =
+                listOf(
+                    Tag(id = "t1", name = "VIP", createdAt = "2026-01-01T00:00:00Z"),
+                    Tag(id = "t2", name = "Refund", createdAt = "2026-01-02T00:00:00Z"),
+                )
+            val api =
+                FakeConversationTagsApi(
+                    conversationTagsResult = ConversationTagsResult.Loaded(emptyList()),
+                    siteTagsResult = TagVocabularyResult.Loaded(vocabulary),
+                    applyResult = TagActionResult.Succeeded,
+                )
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.applyTag("t2")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.tags as TagsSectionState.Loaded
+            assertEquals(
+                listOf(ConversationTag(id = "t2", name = "Refund", createdAt = "2026-01-02T00:00:00Z", source = "Operator")),
+                loaded.applied,
+            )
+            assertTrue(loaded.pendingTagIds.isEmpty())
+            assertEquals(null, loaded.actionError)
+        }
+
+    @Test
+    fun `removeTag drops the tag from the applied set on success`() =
+        runTest(dispatcher) {
+            val applied =
+                listOf(
+                    ConversationTag(id = "t1", name = "VIP", createdAt = "2026-01-01T00:00:00Z", source = "Operator"),
+                    ConversationTag(id = "t2", name = "Refund", createdAt = "2026-01-02T00:00:00Z", source = "Operator"),
+                )
+            val api =
+                FakeConversationTagsApi(
+                    conversationTagsResult = ConversationTagsResult.Loaded(applied),
+                    siteTagsResult = TagVocabularyResult.Loaded(emptyList()),
+                    removeResult = TagActionResult.Succeeded,
+                )
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.removeTag("t1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.tags as TagsSectionState.Loaded
+            assertEquals(listOf(applied[1]), loaded.applied)
+        }
+
+    @Test
+    fun `a refused apply keeps the applied set and surfaces the server detail`() =
+        runTest(dispatcher) {
+            val vocabulary = listOf(Tag(id = "t2", name = "Refund", createdAt = "2026-01-02T00:00:00Z"))
+            val api =
+                FakeConversationTagsApi(
+                    conversationTagsResult = ConversationTagsResult.Loaded(emptyList()),
+                    siteTagsResult = TagVocabularyResult.Loaded(vocabulary),
+                    applyResult = TagActionResult.Refused("Not entitled"),
+                )
+            val viewModel = viewModel(conversationTagsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.applyTag("t2")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.tags as TagsSectionState.Loaded
+            assertTrue(loaded.applied.isEmpty())
+            assertEquals(TagActionError.Refused("Not entitled"), loaded.actionError)
+        }
+
     private class FakeVisitorSummaryApi(
         private val result: VisitorSummaryResult = VisitorSummaryResult.Failed(NetworkFailure.Unexpected),
         private val hang: Boolean = false,
@@ -223,6 +371,44 @@ class ContactPanelViewModelTest {
         ): RevealContactDetailResult {
             revealCalls++
             return revealResult
+        }
+    }
+
+    private class FakeConversationTagsApi(
+        private val conversationTagsResult: ConversationTagsResult = ConversationTagsResult.Loaded(emptyList()),
+        private val siteTagsResult: TagVocabularyResult = TagVocabularyResult.Loaded(emptyList()),
+        private val applyResult: TagActionResult = TagActionResult.Failed(NetworkFailure.Unexpected),
+        private val removeResult: TagActionResult = TagActionResult.Failed(NetworkFailure.Unexpected),
+    ) : ConversationTagsApi {
+        var conversationTagsCalls = 0
+        var siteTagsCalls = 0
+        var applyCalls = 0
+        var removeCalls = 0
+
+        override suspend fun fetchSiteTags(): TagVocabularyResult {
+            siteTagsCalls++
+            return siteTagsResult
+        }
+
+        override suspend fun fetchConversationTags(conversationId: String): ConversationTagsResult {
+            conversationTagsCalls++
+            return conversationTagsResult
+        }
+
+        override suspend fun applyTag(
+            conversationId: String,
+            tagId: String,
+        ): TagActionResult {
+            applyCalls++
+            return applyResult
+        }
+
+        override suspend fun removeTag(
+            conversationId: String,
+            tagId: String,
+        ): TagActionResult {
+            removeCalls++
+            return removeResult
         }
     }
 }
