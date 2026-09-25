@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
+import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
@@ -35,6 +36,7 @@ import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
 import ago.chat.android.core.network.contactdetails.KtorContactDetailsApi
+import ago.chat.android.core.network.conversationactions.KtorConversationActionsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
@@ -323,6 +325,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversationsApi = KtorConversationsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-146`: the contact-detail panel's own close (`26-153`) and files-toggle (`26-152`) port —
+     * `config.apiBaseUrl`, the same `Ago.Chat.Api` origin [provideConversationsApi] above reads, since
+     * `/close`, `/grant-attachment-upload` and `/revoke-attachment-upload` are sub-resources of the same
+     * conversations resource on that host, not the calendar's. A new `@Provides` for a new port rather
+     * than widening [provideConversationsApi], the identical reason [ConversationActionsApi]'s own doc
+     * comment gives for keeping these panel actions off the queue port.
+     */
+    @Provides
+    public fun provideConversationActionsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): ConversationActionsApi = KtorConversationActionsApi(client, config.apiBaseUrl)
 
     /**
      * `26-115`: the contact-detail panel's own list-and-reveal port — `config.apiBaseUrl`, the same
