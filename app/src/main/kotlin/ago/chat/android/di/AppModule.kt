@@ -26,6 +26,7 @@ import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
@@ -52,6 +53,7 @@ import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
+import ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi
 import ago.chat.android.core.network.visitorsummary.KtorVisitorSummaryApi
 import ago.chat.android.core.network.workers.KtorWorkersApi
 import ago.chat.android.data.AgoChatDatabase
@@ -406,6 +408,19 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): VisitorSummaryApi = KtorVisitorSummaryApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-144`: the contact-detail panel's own «Прошлые диалоги» list port (`26-151`) — the same
+     * `apiBaseUrl` [provideVisitorSummaryApi] above reads, since `GET .../visitor-history` is one more
+     * endpoint on that same `Ago.Chat.Api` origin, not the calendar's. Only the *list* is a REST port;
+     * opening one past dialog read-only is a hub call on the already-provided `OperatorHubConnection`
+     * ([provideOperatorHubEvents]), so it needs no binding of its own here.
+     */
+    @Provides
+    public fun provideVisitorHistoryApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): VisitorHistoryApi = KtorVisitorHistoryApi(client, config.apiBaseUrl)
 
     /**
      * `26-57`: [ago.chat.android.analytics.AnalyticsViewModel]'s own port — `config.apiBaseUrl`, the

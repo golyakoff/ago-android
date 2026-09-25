@@ -953,6 +953,13 @@ class ThreadViewModelTest {
             return pageBefore(beforeSequence, pageSize)
         }
 
+        override suspend fun getVisitorHistoryConversation(
+            conversationId: String,
+            historicalConversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this screen")
+
         override suspend fun sendMessage(
             conversationId: String,
             body: String,
