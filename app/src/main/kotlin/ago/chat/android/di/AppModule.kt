@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
@@ -16,8 +17,10 @@ import ago.chat.android.core.domain.devices.PushProvider
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
+import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
+import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
@@ -26,15 +29,18 @@ import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
+import ago.chat.android.core.network.contactdetails.KtorContactDetailsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
 import ago.chat.android.core.network.identity.KtorIdentityApi
+import ago.chat.android.core.network.notes.KtorConversationNotesApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
+import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
@@ -303,6 +309,40 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversationsApi = KtorConversationsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-115`: the contact-detail panel's own list-and-reveal port — `config.apiBaseUrl`, the same
+     * `Ago.Chat.Api` origin [provideConversationsApi] above already reads, since the contact-details
+     * endpoints live on that same host, not the calendar's.
+     */
+    @Provides
+    public fun provideContactDetailsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): ContactDetailsApi = KtorContactDetailsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-115`: the contact-detail panel's own tags port. Needs [ActiveSiteSelection] in addition to the
+     * `apiBaseUrl` [provideContactDetailsApi] above already reads — the site vocabulary read is
+     * `{siteId}`-scoped in the URL itself, the identical shape [provideOperatorTeamApi] below already
+     * threads [ActiveSiteSelection] through for.
+     */
+    @Provides
+    public fun provideConversationTagsApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): ConversationTagsApi = KtorConversationTagsApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-115`: the contact-detail panel's own «Заметки команды» port — the same `apiBaseUrl`
+     * [provideContactDetailsApi] above reads, since notes are one more endpoint on that same origin.
+     */
+    @Provides
+    public fun provideConversationNotesApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): ConversationNotesApi = KtorConversationNotesApi(client, config.apiBaseUrl)
 
     /**
      * `26-57`: [ago.chat.android.analytics.AnalyticsViewModel]'s own port — `config.apiBaseUrl`, the
