@@ -103,7 +103,15 @@ public class AgoChatApplication : Application() {
                 logger = DefaultLogger(),
             )
 
-            if (transportSelector.selectedProvider() == PushProvider.Fcm) {
+            // `26-100` crash guard: never call FirebaseOptions with a blank applicationId — it throws
+            // `IllegalArgumentException: ApplicationId must be set` and takes the whole app down at
+            // startup (the `0.31.0` crash). The identifiers now carry real committed defaults, so this is
+            // belt-and-suspenders: a build that somehow ships them empty degrades to the RuStore path
+            // instead of crashing.
+            if (transportSelector.selectedProvider() == PushProvider.Fcm &&
+                BuildConfig.AGO_FCM_APPLICATION_ID.isNotBlank() &&
+                BuildConfig.AGO_FCM_PROJECT_ID.isNotBlank()
+            ) {
                 FirebaseApp.initializeApp(
                     this,
                     FirebaseOptions

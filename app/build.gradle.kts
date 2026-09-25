@@ -101,14 +101,16 @@ fun agoSigningProperty(name: String): String? = agoLocalProperties.getProperty(n
  * lookup is, because a real Firebase project's concrete values are worktree-local configuration a
  * developer supplies without committing, the identical reasoning that lookup already exists for the four
  * `agoSigning*` values above — even though, unlike those, none of these four is a secret ("ships inside
- * every APK" is exactly `AGO_RUSTORE_PUSH_PROJECT_ID`'s own reasoning above). Empty-string default, not a
- * real one — unlike every `agoProperty` row above, there is no one deployment's value safe to bake in as
- * this repository's own fallback the way `chat-api.reserve-me.ru` is: a checkout with neither source
- * configured still builds, and the resulting app simply never selects FCM as a transport
- * ([TransportSelector] only matters once these are non-empty and `FirebaseApp.initializeApp` is actually
- * reached), falling back to RuStore for every device the way it already does today.
+ * every APK" is exactly `AGO_RUSTORE_PUSH_PROJECT_ID`'s own reasoning above). `26-100` crash fix: the
+ * real identifiers ARE committed as the `default` here (they are public, in every APK) — an empty default
+ * shipped in `0.31.0` and crashed every Google-Play device at startup
+ * (`FirebaseOptions.Builder().setApplicationId("")` → `ApplicationId must be set`), because a CI build has
+ * no `local.properties` override. `local.properties`/`-P` still overrides per developer.
  */
-fun agoFcmProperty(name: String): String = "\"" + (agoSigningProperty(name) ?: "") + "\""
+fun agoFcmProperty(
+    name: String,
+    default: String,
+): String = "\"" + (agoSigningProperty(name) ?: default) + "\""
 
 // Read once, at configuration time, and used as the guard for the whole `signingConfigs`/
 // `buildTypes` wiring below: its presence is what distinguishes an environment that has the shared
@@ -218,13 +220,18 @@ android {
             agoProperty("agoRuStorePushProjectId", "1Q8iLXwwBZViuznG6eCTHgkzrTE9Bto6"),
         )
 
-        // `26-100`/`adr/0181`: the FCM twin of the RuStore project id above — `agoFcmProperty`'s own doc
-        // comment states why these four read from `local.properties` first (never a committed default
-        // beyond the empty-string fallback) rather than `agoProperty`'s usual pattern of a real one.
-        buildConfigField("String", "AGO_FCM_PROJECT_ID", agoFcmProperty("agoFcmProjectId"))
-        buildConfigField("String", "AGO_FCM_PROJECT_NUMBER", agoFcmProperty("agoFcmProjectNumber"))
-        buildConfigField("String", "AGO_FCM_APPLICATION_ID", agoFcmProperty("agoFcmApplicationId"))
-        buildConfigField("String", "AGO_FCM_API_KEY", agoFcmProperty("agoFcmApiKey"))
+        // `26-100`/`adr/0181`: the FCM twin of the RuStore project id above — these four are the Firebase
+        // project's PUBLIC identifiers (they ship in every APK's google-services.json), committed as the
+        // real default so a CI build without a local.properties override is not empty (empty crashed
+        // `0.31.0` at startup on every Google-Play device). `local.properties`/`-P` can still override.
+        val fcmProjectId = agoFcmProperty("agoFcmProjectId", "ago-chat-783f7")
+        val fcmProjectNumber = agoFcmProperty("agoFcmProjectNumber", "517357722914")
+        val fcmApplicationId = agoFcmProperty("agoFcmApplicationId", "1:517357722914:android:e9017cf7898063d70a597b")
+        val fcmApiKey = agoFcmProperty("agoFcmApiKey", "AIzaSyBvFmhAPGBM8QyyXpMzVbVtCB4pp1K0Tp4")
+        buildConfigField("String", "AGO_FCM_PROJECT_ID", fcmProjectId)
+        buildConfigField("String", "AGO_FCM_PROJECT_NUMBER", fcmProjectNumber)
+        buildConfigField("String", "AGO_FCM_APPLICATION_ID", fcmApplicationId)
+        buildConfigField("String", "AGO_FCM_API_KEY", fcmApiKey)
     }
 
     // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP
