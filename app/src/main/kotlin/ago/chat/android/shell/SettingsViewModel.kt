@@ -5,6 +5,8 @@ import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.AutostartBootSignal
+import ago.chat.android.devices.AutostartInferenceReader
 import ago.chat.android.devices.AutostartSettingsTarget
 import ago.chat.android.devices.BatteryOptimizationChecker
 import ago.chat.android.devices.DeviceModeStatus
@@ -69,6 +71,7 @@ public class SettingsViewModel
         private val notificationPermissionChecker: NotificationPermissionChecker,
         private val batteryOptimizationChecker: BatteryOptimizationChecker,
         private val autostartAdvisor: AutostartAdvisor,
+        private val autostartInferenceReader: AutostartInferenceReader,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         public val themeMode: StateFlow<ThemeMode> =
@@ -120,11 +123,25 @@ public class SettingsViewModel
          * screen is backgrounded. */
         public val batteryUnrestricted: StateFlow<Boolean> = mutableBatteryUnrestricted.asStateFlow()
 
-        /** `26-128`: Settings → «Автозапуск»'s own status - never re-read, unlike [batteryUnrestricted]
-         * above: [AutostartAdvisor.recommendation] is a pure function of [android.os.Build.MANUFACTURER],
-         * which cannot change for the life of this process, so there is nothing an `ON_RESUME` refresh
-         * could ever pick up that `init` did not already see. */
-        public val autostartStatus: DeviceModeStatus = autostartAdvisor.recommendation()
+        private val mutableAutostartStatus = MutableStateFlow(autostartAdvisor.recommendation())
+
+        /** `26-128`/`26-129`: Settings → «Автозапуск»'s own status. Its initial value is `26-128`'s pure
+         * manufacturer guess ([AutostartAdvisor.recommendation], constant for the life of the process); once
+         * [refreshAutostartInference] resolves `26-129`'s after-the-fact signal it is refined to
+         * [DeviceModeStatus.NeedsAttention] when a reboot was blocked, or to [DeviceModeStatus.Ok] when a
+         * reboot demonstrably autostarted (overriding a restrictive OEM's guess so a phone on which the
+         * operator already enabled autostart is not falsely warned). A `StateFlow`, unlike `26-128`'s plain
+         * `val`, precisely because it now has a second, disk-backed input that resolves asynchronously. */
+        public val autostartStatus: StateFlow<DeviceModeStatus> = mutableAutostartStatus.asStateFlow()
+
+        private val mutableAutostartBlockedAfterReboot = MutableStateFlow(false)
+
+        /** `26-129`: `true` only when the after-the-fact inference is [AutostartBootSignal.Blocked] - the
+         * phone rebooted and the app's `BOOT_COMPLETED` receiver never ran. `SettingsScreen` reads this to
+         * show the specific reason («не запустился автоматически после последней перезагрузки») rather than
+         * `26-128`'s generic recommendation text. Never `true` on the manufacturer guess alone: a guess is
+         * not an observation. */
+        public val autostartBlockedAfterReboot: StateFlow<Boolean> = mutableAutostartBlockedAfterReboot.asStateFlow()
 
         /** `26-128`: where «Настройки автозапуска» leads - `SettingsRoute`'s own click handler reads this
          * to build the `Intent`, since building it needs a `Context` this `ViewModel` may never hold
@@ -156,6 +173,7 @@ public class SettingsViewModel
 
         init {
             loadTenancies()
+            refreshAutostartInference()
         }
 
         public fun setThemeMode(mode: ThemeMode) {
@@ -182,6 +200,35 @@ public class SettingsViewModel
          * value [init] captured once. */
         public fun refreshBatteryOptimization() {
             mutableBatteryUnrestricted.value = batteryOptimizationChecker.isIgnoringBatteryOptimizations()
+        }
+
+        /**
+         * `26-129`: resolves the after-the-fact autostart signal and folds it onto the manufacturer guess.
+         * Called from `init` and again on `SettingsRoute`'s own `ON_RESUME`, since opening «Настройки
+         * автозапуска» and coming back is exactly the moment the operator may have changed the setting the
+         * *next* reboot will reflect. The disk read runs on [ioDispatcher]; the three outcomes map to:
+         * [AutostartBootSignal.Blocked] → orange + specific reason; [AutostartBootSignal.AutostartConfirmed]
+         * → green, overriding the OEM guess with positive proof; [AutostartBootSignal.NoSignal] → the
+         * `26-128` manufacturer guess, unchanged (this signal only ever *refines*, never invents, a warning).
+         */
+        public fun refreshAutostartInference() {
+            viewModelScope.launch {
+                val signal = withContext(ioDispatcher) { autostartInferenceReader.currentSignal() }
+                when (signal) {
+                    AutostartBootSignal.Blocked -> {
+                        mutableAutostartStatus.value = DeviceModeStatus.NeedsAttention
+                        mutableAutostartBlockedAfterReboot.value = true
+                    }
+                    AutostartBootSignal.AutostartConfirmed -> {
+                        mutableAutostartStatus.value = DeviceModeStatus.Ok
+                        mutableAutostartBlockedAfterReboot.value = false
+                    }
+                    AutostartBootSignal.NoSignal -> {
+                        mutableAutostartStatus.value = autostartAdvisor.recommendation()
+                        mutableAutostartBlockedAfterReboot.value = false
+                    }
+                }
+            }
         }
 
         private fun loadTenancies() {

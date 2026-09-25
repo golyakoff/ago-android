@@ -907,6 +907,11 @@
          `_limitation_note` below are what keep the expanded card honest about what that value actually is. -->
     <string name="settings_autostart_title_ok">Автозапуск: Включено</string>
     <string name="settings_autostart_title_needs_attention">Автозапуск: Выключено</string>
+    <!-- `26-129`: the after-the-fact inference's own specific reason - shown only when the app observed that
+         the phone rebooted but its BOOT_COMPLETED receiver never ran, evidence the OS blocked autostart. Unlike
+         `settings_autostart_*` above (a manufacturer guess), this is a real observation, so it names the fact
+         plainly rather than hedging. See `AutostartBootInference.kt`. -->
+    <string name="settings_autostart_blocked_after_reboot">Не запустился автоматически после последней перезагрузки</string>
     <string name="settings_autostart_recommendation_label">Рекомендация</string>
     <string name="settings_autostart_open_caption">Откроются настройки автозапуска для этого телефона.</string>
     <string name="settings_autostart_not_needed_text">На этом телефоне отдельная настройка автозапуска, скорее всего, не нужна — обычно достаточно общих настроек батареи.</string>

@@ -112,6 +112,8 @@ public fun SettingsRoute(
     val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
+    val autostartStatus by viewModel.autostartStatus.collectAsStateWithLifecycle()
+    val autostartBlockedAfterReboot by viewModel.autostartBlockedAfterReboot.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -144,6 +146,10 @@ public fun SettingsRoute(
                     // «Настройки батареи» opens exactly the system screen an operator would flip this
                     // from and come straight back.
                     viewModel.refreshBatteryOptimization()
+                    // `26-129`: re-run the after-the-fact autostart inference on the same `ON_RESUME` -
+                    // «Настройки автозапуска» opens the exact OEM screen an operator would change and come
+                    // straight back from, and the value it reads is disk-backed, not a process constant.
+                    viewModel.refreshAutostartInference()
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -171,7 +177,8 @@ public fun SettingsRoute(
         batteryUnrestricted = batteryUnrestricted,
         onOpenBatterySettings = { openBatteryOptimizationSettings(context) },
         onOpenAppInfoSettings = { openAppInfoSettings(context) },
-        autostartStatus = viewModel.autostartStatus,
+        autostartStatus = autostartStatus,
+        autostartBlockedAfterReboot = autostartBlockedAfterReboot,
         autostartSettingsTarget = viewModel.autostartSettingsTarget,
         onOpenAutostartSettings = { openAutostartSettings(context, viewModel.autostartSettingsTarget) },
         onBack = onBack,
@@ -221,6 +228,9 @@ internal fun SettingsScreen(
     onOpenBatterySettings: () -> Unit = {},
     onOpenAppInfoSettings: () -> Unit = {},
     autostartStatus: DeviceModeStatus = DeviceModeStatus.Ok,
+    // `26-129`: whether the after-the-fact inference found this boot was reached without autostart. Defaulted
+    // to `false` like every trailing parameter above - "nothing observed", the safe non-warning default.
+    autostartBlockedAfterReboot: Boolean = false,
     autostartSettingsTarget: AutostartSettingsTarget = AutostartSettingsTarget.None,
     onOpenAutostartSettings: () -> Unit = {},
 ) {
@@ -443,11 +453,24 @@ internal fun SettingsScreen(
                             } else {
                                 R.string.settings_autostart_title_needs_attention
                             }
-                        Text(
-                            text = stringResource(titleRes),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f).padding(start = 12.dp),
-                        )
+                        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(
+                                text = stringResource(titleRes),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            // `26-129`: the specific after-the-fact reason, shown inline on the row (not only
+                            // in the expanded card) so an operator sees *why* it is orange without tapping.
+                            // Only when the inference actually observed a blocked reboot - the manufacturer
+                            // guess never sets this, so it never contradicts `settings_autostart_limitation_note`.
+                            if (autostartBlockedAfterReboot) {
+                                Text(
+                                    text = stringResource(R.string.settings_autostart_blocked_after_reboot),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = agoWarningColors().warning,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
                         ExpandChevron(expanded = autostartExpanded)
                     }
                 }

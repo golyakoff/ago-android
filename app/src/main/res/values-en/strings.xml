@@ -565,6 +565,7 @@
 
     <string name="settings_autostart_title_ok">Autostart: On</string>
     <string name="settings_autostart_title_needs_attention">Autostart: Off</string>
+    <string name="settings_autostart_blocked_after_reboot">Didn\'t start automatically after the last restart</string>
     <string name="settings_autostart_recommendation_label">Recommendation</string>
     <string name="settings_autostart_open_caption">This opens this phone\'s autostart settings.</string>
     <string name="settings_autostart_not_needed_text">This phone most likely has no separate autostart setting — the general battery settings above are usually enough.</string>
