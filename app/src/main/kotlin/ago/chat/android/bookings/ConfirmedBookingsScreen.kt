@@ -13,7 +13,6 @@ import ago.chat.android.core.domain.bookings.confirmedBookingsMonthLabels
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +20,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -41,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,16 +51,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * `26-51`: Утверждены's own body — the date strip, then the selected day's rows grouped by master. See
@@ -148,14 +154,31 @@ internal fun ConfirmedBookingsBody(
 }
 
 /**
- * `26-117` hard requirement 4: the month+year label now rides *inside* the identical horizontally
- * scrolling container the day chips already use, rather than a fixed row of its own — a plain
- * `Modifier.horizontalScroll` [Column] wrapping two [Row]s in place of the old `LazyRow`, so both rows
- * are children of the one scroll container and necessarily move together; there is no second scroll
- * state to keep in sync. [Modifier.horizontalScroll] draws no scrollbar of its own, which is what
- * satisfies "no visible scrollbar" with no extra code. A plain `Row`/`forEach` replaces the old `LazyRow`/
- * `items` because the strip is never more than a handful of chips wide (`RANGE_HORIZON_DAYS`,
- * `:core:domain`) — nothing here is large enough to need lazy layout or item keys.
+ * `26-127`: the month+year label over the day strip is now a **sticky, shrinking header** rather than a
+ * label row that scrolls off with its chips.
+ *
+ * The day strip itself is a [LazyRow] (`26-127`'s own directive to drive the sticky/shrink from the
+ * list's `firstVisibleItemIndex` + `firstVisibleItemScrollOffset`) — the plain `horizontalScroll` [Row]
+ * `26-117` used carried no per-item scroll position for a sticky header to read. The labels are lifted
+ * out of that scrolling row into an overlay [Box] above it and positioned by hand from the derived scroll
+ * offset, so they still track the chips exactly (same `DateStripEdgePadding` origin, same chip stride)
+ * while the current month can be pinned independently:
+ *
+ * - the **current** month (the one whose chips hold the left edge, [StickyMonthHeaderGeometry.currentIndex])
+ *   is pinned at the strip's left edge, its width capped at how far the *next* month's own label still is
+ *   from that edge ([StickyMonthHeaderGeometry.nextMonthStartPx]); as the next month scrolls in, that cap
+ *   shrinks the current label — truncating it with an ellipsis — until it reaches zero and the next month
+ *   inherits the sticky slot in the same place, at the same width it already occupied. Because the same
+ *   geometry is a pure function of the scroll offset, the handoff replays identically scrolling the other
+ *   way.
+ * - every month **after** the current rides its chips at the identical content offset those chips occupy,
+ *   sliding in from the right; the one that becomes current simply switches from this natural offset to
+ *   the pinned slot at the same edge, so nothing jumps.
+ *
+ * The muted sub-label style ([MonthSpanLabel]) is unchanged — `26-127` asked only for the sticky/shrink
+ * behaviour, not a new colour or weight. A [Box] with `clipToBounds` hides the labels that have scrolled
+ * past either edge; its height is set by whichever label is at full width (there is always one — a label
+ * only shrinks while its successor is present and full), so the lane never collapses during a handoff.
  */
 @Composable
 private fun ConfirmedDateStrip(
@@ -166,37 +189,75 @@ private fun ConfirmedDateStrip(
     val weekdayLabels = stringArrayResource(R.array.bookings_weekday_short)
     val monthLabels = stringArrayResource(R.array.bookings_month_full)
     val labels = remember(strip) { confirmedBookingsMonthLabels(strip) }
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val chipStridePx = with(density) { (DateStripChipWidth + DateStripChipGap).toPx() }
+    val edgePaddingPx = with(density) { DateStripEdgePadding.toPx() }
 
-    Column(modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState).padding(vertical = 8.dp)) {
-        // One label per month, each under its own day span, no "|" divider between two labels - the gap
-        // between adjacent labels is the identical `DateStripChipGap` the day row below uses between
-        // adjacent chips, via the identical `Arrangement.spacedBy`, so the one gap a month boundary needs
-        // (between the last day of one month and the first of the next) lines up with the day row's own
-        // gap at that same boundary rather than doubling or dropping it.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(DateStripChipGap),
-            modifier = Modifier.padding(horizontal = 16.dp),
-        ) {
-            labels.forEach { label ->
-                Text(
-                    text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}",
-                    // Same muted font, size and weight as the service/duration sub-label
-                    // (`ConfirmedBookingRow`'s own `row.serviceName` `Text`) - no new colour, size or
-                    // weight invented for "a month style" (hard requirement 4).
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(monthLabelSpanWidth(label.dayCount)),
-                )
+    // The chip index at which each month's own span begins — the label's content-space origin, mirroring
+    // the LazyRow item at that same index. Kept as a plain list, not re-derived per frame.
+    val monthStartChip =
+        remember(labels) {
+            var chip = 0
+            labels.map { label -> chip.also { chip += label.dayCount } }
+        }
+    val monthDayCounts = remember(labels) { labels.map { it.dayCount } }
+
+    // The strip's scroll position in pixels, folded from the list's first-visible item + its offset. A
+    // `derivedStateOf` so a recomposition happens only when the folded value actually moves, not on every
+    // intermediate frame the raw list state ticks through.
+    val scrollXPx by
+        remember(chipStridePx) {
+            derivedStateOf {
+                listState.firstVisibleItemIndex * chipStridePx + listState.firstVisibleItemScrollOffset
             }
         }
-        Row(
+    val geometry = stickyMonthHeaderGeometry(monthDayCounts, chipStridePx, scrollXPx)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().clipToBounds()) {
+            labels.forEachIndexed { index, label ->
+                val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
+                when {
+                    // Handed off already: scrolled past the left edge, `clipToBounds` would hide it anyway.
+                    index < geometry.currentIndex -> Unit
+                    index == geometry.currentIndex ->
+                        MonthSpanLabel(
+                            text = text,
+                            modifier =
+                                Modifier
+                                    .padding(start = DateStripEdgePadding)
+                                    .then(
+                                        // Cap the width at the next month's approach; an infinite cap (no
+                                        // next month) leaves the label at its natural width.
+                                        if (geometry.nextMonthStartPx.isFinite()) {
+                                            Modifier.widthIn(max = with(density) { geometry.nextMonthStartPx.toDp() })
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                        )
+                    else ->
+                        MonthSpanLabel(
+                            text = text,
+                            modifier =
+                                Modifier.offset {
+                                    IntOffset(
+                                        (edgePaddingPx + monthStartChip[index] * chipStridePx - scrollXPx).roundToInt(),
+                                        0,
+                                    )
+                                },
+                        )
+                }
+            }
+        }
+        LazyRow(
+            state = listState,
             horizontalArrangement = Arrangement.spacedBy(DateStripChipGap),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+            contentPadding = PaddingValues(start = DateStripEdgePadding, end = DateStripEdgePadding, top = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            strip.forEach { day ->
+            items(strip, key = { it.date }) { day ->
                 DateStripChip(
                     day = day,
                     weekdayLabel = weekdayLabels.getOrElse(day.weekday) { "" },
@@ -208,10 +269,72 @@ private fun ConfirmedDateStrip(
     }
 }
 
-/** The exact pixel width [dayCount] day chips plus the gaps *between* them occupy in the day row below —
- * the width a month label spanning that many days must claim so its own text sits flush under exactly
- * those chips, no more and no less. */
-private fun monthLabelSpanWidth(dayCount: Int): Dp = DateStripChipWidth * dayCount + DateStripChipGap * (dayCount - 1)
+/** The muted month+year sub-label — same font, colour and weight as the service/duration sub-label
+ * ([ConfirmedBookingRow]'s own `row.serviceName` `Text`), shared by the sticky slot and the incoming
+ * labels so the two can never drift in style. */
+@Composable
+private fun MonthSpanLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/**
+ * `26-127`: the pure geometry behind the sticky, shrinking month header — extracted from the composable so
+ * the sticky/shrink/handoff can be tested with plain numbers, no Compose UI test.
+ *
+ * @property currentIndex index into the month list of the label that owns the sticky slot — the last month
+ *   whose span has reached the left edge; `-1` when there are no months at all.
+ * @property nextMonthStartPx how far the *next* month's own label still is from the left edge, in pixels;
+ *   this is the width cap that shrinks the sticky label, reaching `0` exactly at the handoff.
+ *   [Float.POSITIVE_INFINITY] when [currentIndex] is the last month (nothing left to shrink it).
+ */
+internal data class StickyMonthHeaderGeometry(
+    val currentIndex: Int,
+    val nextMonthStartPx: Float,
+)
+
+/**
+ * Fold a horizontal scroll offset into which month owns the sticky slot and how much room its successor has
+ * left it. Content-space is chip-uniform: month `m` begins at `(chips before m) * chipStridePx`. The
+ * current month is the last whose start has passed under the left edge ([scrollXPx]); the next month's
+ * remaining distance to that edge is its start minus the scroll, floored at `0` so the handoff frame reads
+ * exactly zero rather than a tiny negative. Stateless in [scrollXPx], so scrolling back replays the same
+ * handoffs in reverse.
+ */
+internal fun stickyMonthHeaderGeometry(
+    monthDayCounts: List<Int>,
+    chipStridePx: Float,
+    scrollXPx: Float,
+): StickyMonthHeaderGeometry {
+    if (monthDayCounts.isEmpty()) {
+        return StickyMonthHeaderGeometry(currentIndex = -1, nextMonthStartPx = Float.POSITIVE_INFINITY)
+    }
+    val scroll = scrollXPx.coerceAtLeast(0f)
+    var chipsBefore = 0
+    var currentIndex = 0
+    val monthStartPx = FloatArray(monthDayCounts.size)
+    for (i in monthDayCounts.indices) {
+        monthStartPx[i] = chipsBefore * chipStridePx
+        if (monthStartPx[i] <= scroll) currentIndex = i
+        chipsBefore += monthDayCounts[i]
+    }
+    val nextMonthStartPx =
+        if (currentIndex + 1 < monthDayCounts.size) {
+            (monthStartPx[currentIndex + 1] - scroll).coerceAtLeast(0f)
+        } else {
+            Float.POSITIVE_INFINITY
+        }
+    return StickyMonthHeaderGeometry(currentIndex = currentIndex, nextMonthStartPx = nextMonthStartPx)
+}
 
 @Composable
 private fun DateStripChip(
@@ -609,6 +732,11 @@ private val DateStripChipWidth = 52.dp
 private val DateStripChipCorner = 12.dp
 private val DateStripChipGap = 8.dp
 private val DateStripDotSize = 6.dp
+
+// `26-127`: the strip's leading/trailing inset, shared verbatim between the `LazyRow` `contentPadding` and
+// the sticky label's own pinned left edge so a label sits flush over its first chip. One name, so the two
+// can never drift apart.
+private val DateStripEdgePadding = 16.dp
 
 // `.rtop{gap:8px}` - the identical gap `ConversationListScreen`'s own `RtopGap` names for the same CSS
 // rule, restated here rather than imported since that value is `private` to its own file.
