@@ -838,4 +838,64 @@
         <item>Суббота</item>
     </string-array>
 
+    <!--
+        `26-116`: the contact-detail panel's (`docs/design/26-111-thread-contact-detail-panel.md`, H2)
+        localized emoji-pair name fallback — shown when a visitor has no real name, never a raw
+        hex/shortId (that design's own Author decisions). `:core:domain` already carries a Russian-only,
+        non-resource version of this same table (`VisitorEmojiNames.kt`, from `26-30`, predating this
+        rule) for its own two existing call sites; that one is left exactly as it is - out of this
+        item's scope, and moving it would touch two already-shipped, already-tested screens for no
+        reason this item asks for. These 40 entries are `:app`'s own, deliberately resource-backed
+        (CLAUDE.md "Android strings must be resources") pair, for the new panel this item is the
+        foundation of.
+
+        **Byte-for-byte, not retyped.** Every key's English gloss and Russian value below is
+        copy-pasted from two sources already in this workspace, not typed fresh from an OS emoji picker:
+        the Russian values from this repository's own `VisitorEmojiNames.kt`, and (for `values-en`) the
+        English values from `ago-console/src/i18n/visitorEmojiNames.ts`'s `visitorEmojiNamesEn` - which
+        both, in turn, are themselves byte-for-byte ports of `ago-chat/src/Ago.Chat.Domain/
+        VisitorEmojiDictionary.cs`'s `Creatures`/`Foods` arrays. `VisitorEmojiPairNameTest`'s own
+        completeness check is the independent, second transcription of the same 40 glyph keys this
+        codebase's own testing convention already asks for (`VisitorEmojiNamesTest`'s doc comment).
+    -->
+    <string name="visitor_emoji_name_chicken">Курица</string>
+    <string name="visitor_emoji_name_fish">Рыбка</string>
+    <string name="visitor_emoji_name_whale">Кит</string>
+    <string name="visitor_emoji_name_dog">Собака</string>
+    <string name="visitor_emoji_name_cat">Кошка</string>
+    <string name="visitor_emoji_name_mouse">Мышь</string>
+    <string name="visitor_emoji_name_hamster">Хомяк</string>
+    <string name="visitor_emoji_name_rabbit">Кролик</string>
+    <string name="visitor_emoji_name_fox">Лиса</string>
+    <string name="visitor_emoji_name_bear">Медведь</string>
+    <string name="visitor_emoji_name_panda">Панда</string>
+    <string name="visitor_emoji_name_koala">Коала</string>
+    <string name="visitor_emoji_name_tiger">Тигр</string>
+    <string name="visitor_emoji_name_lion">Лев</string>
+    <string name="visitor_emoji_name_cow">Корова</string>
+    <string name="visitor_emoji_name_pig">Свинья</string>
+    <string name="visitor_emoji_name_frog">Лягушка</string>
+    <string name="visitor_emoji_name_monkey">Обезьяна</string>
+    <string name="visitor_emoji_name_bird">Птица</string>
+    <string name="visitor_emoji_name_owl">Сова</string>
+    <string name="visitor_emoji_name_orange">Апельсин</string>
+    <string name="visitor_emoji_name_kiwi">Киви</string>
+    <string name="visitor_emoji_name_hot_dog">Хот-дог</string>
+    <string name="visitor_emoji_name_pizza">Пицца</string>
+    <string name="visitor_emoji_name_burger">Бургер</string>
+    <string name="visitor_emoji_name_fries">Картофель фри</string>
+    <string name="visitor_emoji_name_taco">Тако</string>
+    <string name="visitor_emoji_name_sushi">Суши</string>
+    <string name="visitor_emoji_name_donut">Пончик</string>
+    <string name="visitor_emoji_name_cookie">Печенье</string>
+    <string name="visitor_emoji_name_ice_cream">Мороженое</string>
+    <string name="visitor_emoji_name_apple">Яблоко</string>
+    <string name="visitor_emoji_name_banana">Банан</string>
+    <string name="visitor_emoji_name_grapes">Виноград</string>
+    <string name="visitor_emoji_name_watermelon">Арбуз</string>
+    <string name="visitor_emoji_name_strawberry">Клубника</string>
+    <string name="visitor_emoji_name_cherry">Вишня</string>
+    <string name="visitor_emoji_name_peach">Персик</string>
+    <string name="visitor_emoji_name_avocado">Авокадо</string>
+    <string name="visitor_emoji_name_pineapple">Ананас</string>
 </resources>

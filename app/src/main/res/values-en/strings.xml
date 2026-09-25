@@ -509,4 +509,50 @@
         <item>Saturday</item>
     </string-array>
 
+    <!--
+        `26-116`: English half of the contact-detail panel's localized emoji-pair name fallback - see
+        `values/strings.xml`'s own doc comment on this same key block for the full reasoning. Values
+        copy-pasted byte-for-byte from `ago-console/src/i18n/visitorEmojiNames.ts`'s own
+        `visitorEmojiNamesEn`, itself a port of `ago-chat/src/Ago.Chat.Domain/VisitorEmojiDictionary.cs`.
+    -->
+    <string name="visitor_emoji_name_chicken">Chicken</string>
+    <string name="visitor_emoji_name_fish">Fish</string>
+    <string name="visitor_emoji_name_whale">Whale</string>
+    <string name="visitor_emoji_name_dog">Dog</string>
+    <string name="visitor_emoji_name_cat">Cat</string>
+    <string name="visitor_emoji_name_mouse">Mouse</string>
+    <string name="visitor_emoji_name_hamster">Hamster</string>
+    <string name="visitor_emoji_name_rabbit">Rabbit</string>
+    <string name="visitor_emoji_name_fox">Fox</string>
+    <string name="visitor_emoji_name_bear">Bear</string>
+    <string name="visitor_emoji_name_panda">Panda</string>
+    <string name="visitor_emoji_name_koala">Koala</string>
+    <string name="visitor_emoji_name_tiger">Tiger</string>
+    <string name="visitor_emoji_name_lion">Lion</string>
+    <string name="visitor_emoji_name_cow">Cow</string>
+    <string name="visitor_emoji_name_pig">Pig</string>
+    <string name="visitor_emoji_name_frog">Frog</string>
+    <string name="visitor_emoji_name_monkey">Monkey</string>
+    <string name="visitor_emoji_name_bird">Bird</string>
+    <string name="visitor_emoji_name_owl">Owl</string>
+    <string name="visitor_emoji_name_orange">Orange</string>
+    <string name="visitor_emoji_name_kiwi">Kiwi</string>
+    <string name="visitor_emoji_name_hot_dog">Hot Dog</string>
+    <string name="visitor_emoji_name_pizza">Pizza</string>
+    <string name="visitor_emoji_name_burger">Burger</string>
+    <string name="visitor_emoji_name_fries">Fries</string>
+    <string name="visitor_emoji_name_taco">Taco</string>
+    <string name="visitor_emoji_name_sushi">Sushi</string>
+    <string name="visitor_emoji_name_donut">Donut</string>
+    <string name="visitor_emoji_name_cookie">Cookie</string>
+    <string name="visitor_emoji_name_ice_cream">Ice Cream</string>
+    <string name="visitor_emoji_name_apple">Apple</string>
+    <string name="visitor_emoji_name_banana">Banana</string>
+    <string name="visitor_emoji_name_grapes">Grapes</string>
+    <string name="visitor_emoji_name_watermelon">Watermelon</string>
+    <string name="visitor_emoji_name_strawberry">Strawberry</string>
+    <string name="visitor_emoji_name_cherry">Cherry</string>
+    <string name="visitor_emoji_name_peach">Peach</string>
+    <string name="visitor_emoji_name_avocado">Avocado</string>
+    <string name="visitor_emoji_name_pineapple">Pineapple</string>
 </resources>
