@@ -39,6 +39,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -414,8 +415,10 @@ private fun confirmedBookingIdentityText(identity: ConfirmedBookingIdentity): St
 /**
  * `26-117` hard requirements 6-11: the row-tap booking detail — a bottom sheet over the list, the
  * identical [ModalBottomSheet] shape [ago.chat.android.team.InviteColleagueSheet] already establishes,
- * with none of that sheet's own drag-lock: nothing here is a one-shot secret a swipe could lose, so the
- * plain default [androidx.compose.material3.rememberModalBottomSheetState] is enough.
+ * with none of that sheet's own drag-lock: nothing here is a one-shot secret a swipe could lose.
+ * `skipPartiallyExpanded = true` opens it at full height so the action buttons are visible without a
+ * drag — the sheet's content is a short fixed card, not a long list, so the Material default
+ * half-expanded state would just hide the actions below the fold.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -426,7 +429,10 @@ private fun ConfirmedBookingDetailSheet(
     onOpenDialog: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         ConfirmedBookingDetailBody(
             booking = booking,
             revealing = revealing,

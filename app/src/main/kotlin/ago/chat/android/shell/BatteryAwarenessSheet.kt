@@ -74,7 +74,7 @@ internal fun BatteryAwarenessSheet(
     onDismiss: (dontShowAgain: Boolean) -> Unit,
 ) {
     var dontShowAgain by rememberSaveable { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = { onDismiss(dontShowAgain) },
