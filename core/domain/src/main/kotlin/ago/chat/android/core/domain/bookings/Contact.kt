@@ -14,6 +14,17 @@ package ago.chat.android.core.domain.bookings
  * tells the two possible shapes of [phone] apart; the card renders [phone] exactly as the server sent
  * it either way ("Masked is masked", `docs/backlog/26-52-*.md`'s own Scope item 4). Показать, the
  * audited reveal that would ever turn a masked [phone] into a real one, is `26-53`.
+ *
+ * `26-162`/`adr/0184`: [customerId] now carries the account's opaque `PersonId` — `ContactResponse`
+ * dropped its own `CustomerId`/`DisplayName` when the calendar stopped holding a person copy, so this
+ * field keeps its name (the identical "rename deferred, the concept is not" precedent `adr/0184`'s own
+ * Consequences section states for `Visitor -> Person` itself) while what it actually identifies changes
+ * underneath it. [displayName] is no longer read off `ContactResponse` at all — [KtorBookingsApi] always
+ * maps it `null`; [ago.chat.android.bookings.ContactsViewModel] fills it back in, when chat's own
+ * [ago.chat.android.core.domain.persons.PersonsApi] has a name for this id, the same display-merge
+ * `adr/0184` decision 4 describes for `ago-console`. A lookup miss or a reachability failure simply
+ * leaves it `null` — [ContactCard] already renders that through [ago.chat.android.ui.components.IdentifierText],
+ * never a blank card (`adr/0184`'s own Consequences: "degrades to name not shown yet").
  */
 public data class Contact(
     val customerId: String,

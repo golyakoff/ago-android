@@ -74,7 +74,7 @@ public interface BookingsApi {
     public suspend fun markNoShow(bookingId: String): BookingActionResult
 
     /**
-     * `26-53`: `POST /api/v1/console/contacts/{customerId}/reveal-phone`, body `{"surface": surface}` —
+     * `26-53`: `POST /api/v1/console/contacts/{personId}/reveal-phone`, body `{"surface": surface}` —
      * the audited unmask `ago-console`'s own `revealCustomerPhone` (`calendarApi.ts:701`) already
      * establishes, ported onto this port rather than a fourth, phone-specific adapter. [surface] is
      * recorded server-side on the reveal's own audit row — it names *which screen* asked, never which

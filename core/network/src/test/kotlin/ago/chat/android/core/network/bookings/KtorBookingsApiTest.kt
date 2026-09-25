@@ -160,7 +160,7 @@ class KtorBookingsApiTest {
                         [
                           {
                             "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина Соколова",
-                            "serviceId":"s1","serviceName":"Стрижка","customerId":"c1","customerDisplayName":"Анна",
+                            "serviceId":"s1","serviceName":"Стрижка","personId":"c1",
                             "startsAt":"2026-09-24T09:00:00Z","endsAt":"2026-09-24T09:30:00Z",
                             "localDate":"2026-09-24","weekday":4,"originConversationId":"conv1"
                           }
@@ -184,7 +184,10 @@ class KtorBookingsApiTest {
                             serviceId = "s1",
                             serviceName = "Стрижка",
                             customerId = "c1",
-                            customerDisplayName = "Анна",
+                            // `26-162`/`adr/0184`: `ConfirmedBookingResponse` no longer carries a name at
+                            // all - this adapter always maps it `null`; `ConfirmedBookingsViewModel` is
+                            // what fills a real one back in, from chat's own `PersonsApi`.
+                            customerDisplayName = null,
                             startsAt = "2026-09-24T09:00:00Z",
                             endsAt = "2026-09-24T09:30:00Z",
                             localDate = "2026-09-24",
@@ -209,9 +212,10 @@ class KtorBookingsApiTest {
                         [
                           {
                             "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина Соколова",
-                            "serviceId":"s1","serviceName":null,"customerId":"c1","customerDisplayName":null,
+                            "serviceId":"s1","serviceName":null,"personId":"c1",
                             "startsAt":"2026-09-24T09:00:00Z","endsAt":"2026-09-24T09:30:00Z",
-                            "localDate":"2026-09-24","weekday":4,"phone":"+7***","masked":true
+                            "localDate":"2026-09-24","weekday":4,"phone":"+7***","masked":true,
+                            "someFieldThisAppHasNoUseFor":"whatever"
                           }
                         ]
                         """.trimIndent(),
@@ -270,7 +274,7 @@ class KtorBookingsApiTest {
                         """
                         [
                           {
-                            "customerId":"c1","phone":"+7***5678","masked":true,"displayName":"Анна",
+                            "personId":"c1","phone":"+7***5678","masked":true,
                             "noShowCount":2,"phoneVerifiedAt":"2026-09-01T10:00:00Z",
                             "phoneConfirmedByOperatorAt":null
                           }
@@ -290,7 +294,10 @@ class KtorBookingsApiTest {
                             customerId = "c1",
                             phone = "+7***5678",
                             masked = true,
-                            displayName = "Анна",
+                            // `26-162`/`adr/0184`: `ContactResponse` no longer carries a name at all -
+                            // this adapter always maps it `null`; `ContactsViewModel` is what fills a
+                            // real one back in, from chat's own `PersonsApi`.
+                            displayName = null,
                             noShowCount = 2,
                             phoneVerifiedAt = "2026-09-01T10:00:00Z",
                             phoneConfirmedByOperatorAt = null,
@@ -311,10 +318,9 @@ class KtorBookingsApiTest {
                         """
                         [
                           {
-                            "customerId":"c1","phone":"+7***5678","masked":true,"displayName":null,
+                            "personId":"c1","phone":"+7***5678","masked":true,
                             "noShowCount":0,"phoneVerifiedAt":null,"phoneConfirmedByOperatorAt":null,
-                            "notes":"important","firstSeenAt":"2026-01-01T00:00:00Z",
-                            "lastSeenAt":"2026-01-01T00:00:00Z","duplicatePhoneCustomerIds":["c2"]
+                            "firstSeenAt":"2026-01-01T00:00:00Z","lastSeenAt":"2026-01-01T00:00:00Z"
                           }
                         ]
                         """.trimIndent(),
@@ -547,8 +553,8 @@ class KtorBookingsApiTest {
                         """
                         {
                           "items": [
-                            {"id":"r2","occurredAt":"2026-09-24T12:00:00Z","customerId":"c1","operatorId":"op1","surface":"AndroidContacts"},
-                            {"id":"r1","occurredAt":"2026-09-23T09:00:00Z","customerId":"c2","operatorId":"op2","surface":"ConsoleQueue"}
+                            {"id":"r2","occurredAt":"2026-09-24T12:00:00Z","personId":"c1","operatorId":"op1","surface":"AndroidContacts"},
+                            {"id":"r1","occurredAt":"2026-09-23T09:00:00Z","personId":"c2","operatorId":"op2","surface":"ConsoleQueue"}
                           ],
                           "nextBefore": "r1"
                         }

@@ -26,6 +26,16 @@ package ago.chat.android.core.domain.bookings
  *   (`docs/backlog/26-117-*.md`'s own "Dialog link"), which now switches itself on for a real chat-origin
  *   booking instead of staying permanently disabled. The default below stays `null` for the wire DTO's own
  *   forward-compatibility, and honestly reflects a booking that carries no origin conversation.
+ *
+ * `26-162`/`adr/0184`: [customerId] now carries the account's opaque `PersonId` —
+ * `ConfirmedBookingResponse` dropped `CustomerDisplayName` entirely when the calendar stopped holding a
+ * person copy, so this class keeps [customerId]'s own name for the identical "rename deferred, the
+ * concept is not" reason [Contact]'s own doc comment states. [customerDisplayName] is no longer read off
+ * the wire — [KtorBookingsApi] always maps it `null`; [ago.chat.android.bookings.ConfirmedBookingsViewModel]
+ * fills it back in from chat's own [ago.chat.android.core.domain.persons.PersonsApi] the identical
+ * display-merge way [Contact.displayName]'s own doc comment describes. [confirmedBookingIdentity]'s own
+ * name/phone/no-name fallback is unaffected either way: it already treats a `null` name as absent, exactly
+ * what a lookup miss or an unreachable chat API now produces.
  */
 public data class ConfirmedBooking(
     val bookingId: String,

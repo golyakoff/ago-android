@@ -2,12 +2,15 @@ package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.DayGroup
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.confirmedBookingsStrip
 import ago.chat.android.core.domain.bookings.defaultConfirmedBookingsRange
 import ago.chat.android.core.domain.bookings.groupByDayThenWorker
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.di.IoDispatcher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,12 +39,18 @@ import javax.inject.Inject
  * branch, so an operator without the permission never triggers this read at all (`docs/backlog/26-51-*.md`'s
  * own Done-when: "does not see this segment at all" — extended here to "does not even ask the server
  * for it").
+ *
+ * `26-162`/`adr/0184`: [personsApi] is the identical display-merge
+ * [ago.chat.android.bookings.ContactsViewModel]'s own doc comment describes for its own screen, restated
+ * here because [api]'s own `ConfirmedBookingResponse` carries the identical bare `personId`-no-name
+ * shape now. [mergeDisplayNames] is the one place this class closes that gap.
  */
 @HiltViewModel
 internal class ConfirmedBookingsViewModel
     @Inject
     constructor(
         private val api: BookingsApi,
+        private val personsApi: PersonsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<ConfirmedBookingsUiState>(ConfirmedBookingsUiState.Loading)
@@ -71,10 +80,10 @@ internal class ConfirmedBookingsViewModel
                 // to trust than the console's own browser-local one.
                 val today = LocalDate.now(ZoneOffset.UTC)
                 val range = defaultConfirmedBookingsRange(today)
-                mutableState.update {
+                val newState =
                     when (val result = withContext(ioDispatcher) { api.fetchConfirmedBookings(range.from, range.to) }) {
                         is ConfirmedBookingsResult.Loaded -> {
-                            val days = groupByDayThenWorker(result.bookings)
+                            val days = groupByDayThenWorker(mergeDisplayNames(result.bookings))
                             ConfirmedBookingsUiState.Loaded(
                                 days = days,
                                 strip = confirmedBookingsStrip(range, days),
@@ -85,7 +94,33 @@ internal class ConfirmedBookingsViewModel
                         ConfirmedBookingsResult.NotConfigured -> ConfirmedBookingsUiState.NotConfigured
                         is ConfirmedBookingsResult.Failed -> ConfirmedBookingsUiState.Failed(result.reason)
                     }
+                mutableState.update { newState }
+            }
+        }
+
+        /**
+         * `26-162`/`adr/0184`: the identical chat-registry display-merge
+         * [ago.chat.android.bookings.ContactsViewModel.mergeDisplayNames]'s own doc comment describes in
+         * full, restated here for [ConfirmedBooking] instead of [ago.chat.android.core.domain.bookings.Contact] —
+         * a lookup miss or an unreachable [personsApi] leaves [ConfirmedBooking.customerDisplayName] at
+         * `null`, which [confirmedBookingIdentity] already falls back from to the masked phone, then to
+         * [ago.chat.android.core.domain.bookings.ConfirmedBookingIdentity.NoName].
+         */
+        private suspend fun mergeDisplayNames(bookings: List<ConfirmedBooking>): List<ConfirmedBooking> {
+            val personIds = bookings.map { it.customerId }.distinct()
+            if (personIds.isEmpty()) return bookings
+
+            val persons =
+                when (val result = withContext(ioDispatcher) { personsApi.fetchPersons(personIds) }) {
+                    is PersonsResult.Loaded -> result.persons
+                    is PersonsResult.Failed -> return bookings
                 }
+
+            val namesByPersonId = persons.mapNotNull { person -> person.displayName?.let { name -> person.personId to name } }.toMap()
+            if (namesByPersonId.isEmpty()) return bookings
+
+            return bookings.map { booking ->
+                namesByPersonId[booking.customerId]?.let { name -> booking.copy(customerDisplayName = name) } ?: booking
             }
         }
 

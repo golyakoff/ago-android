@@ -22,6 +22,7 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.installation.InstallationApi
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
@@ -46,6 +47,7 @@ import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.installation.KtorInstallationApi
 import ago.chat.android.core.network.notes.KtorConversationNotesApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
+import ago.chat.android.core.network.persons.KtorPersonsApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -505,6 +507,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): BookingFunnelReportApi = KtorBookingFunnelReportApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-162`/`adr/0184`: the person-registry read [ago.chat.android.bookings.ContactsViewModel] and
+     * [ago.chat.android.bookings.ConfirmedBookingsViewModel] both display-merge onto their own calendar
+     * rows - `config.apiBaseUrl`, the `Ago.Chat.Api` origin [provideConversationsApi] above already
+     * reads, since chat owns the Person now (not the calendar's own `calendarApiBaseUrl`
+     * [provideBookingsApi] below reads). Always constructs - this app is never deployed without a chat
+     * API to talk to, unlike [provideBookingsApi]'s own calendar, which can genuinely be absent.
+     */
+    @Provides
+    public fun providePersonsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): PersonsApi = KtorPersonsApi(client, config.apiBaseUrl)
 
     /**
      * `26-48`: [KtorBookingsApi] always constructs — even when [OidcConfig.calendarApiBaseUrl] is

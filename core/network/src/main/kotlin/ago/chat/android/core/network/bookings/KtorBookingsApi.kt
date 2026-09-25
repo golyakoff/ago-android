@@ -215,7 +215,7 @@ public class KtorBookingsApi(
     }
 
     /**
-     * `26-53`: `POST /api/v1/console/contacts/{customerId}/reveal-phone`, body `{"surface": surface}` —
+     * `26-53`: `POST /api/v1/console/contacts/{personId}/reveal-phone`, body `{"surface": surface}` —
      * the identical `204`-or-refusal shape [performBookingAction] establishes, with one difference: a
      * success here carries a body (`CustomerPhoneRevealResponse.Phone`), so this method is not folded
      * into that one shared helper. [contentType]/[setBody] are required for the exact reason
@@ -519,6 +519,15 @@ private fun PendingBookingWireDto.toDomain() =
  * see [ConfirmedBooking]'s own doc comment. Still defaulted to `null`: the server sends the key as JSON
  * `null` for a booking with no chat origin, and the default also lets an older response that omits the key
  * entirely keep decoding.
+ *
+ * `26-162`/`adr/0184`: the wire field is `personId` now, not `customerId` — `ConfirmedBookingResponse`
+ * dropped `CustomerId`/`CustomerDisplayName` for `PersonId` alone when the calendar stopped holding a
+ * person copy ([ConfirmedBooking]'s own doc comment). This DTO's own property is renamed to match what
+ * actually arrives (kotlinx.serialization matches by property name by default, so decoding the old key
+ * would silently stop working otherwise); [toDomain] still fills [ConfirmedBooking.customerId] from it —
+ * that field kept its name on purpose. `customerDisplayName` is simply gone: nothing on the wire fills it
+ * any more, so [ConfirmedBooking.customerDisplayName] always starts `null` here and is display-merged in
+ * afterwards.
  */
 @Serializable
 private data class ConfirmedBookingWireDto(
@@ -528,8 +537,7 @@ private data class ConfirmedBookingWireDto(
     val workerDisplayName: String,
     val serviceId: String,
     val serviceName: String?,
-    val customerId: String,
-    val customerDisplayName: String?,
+    val personId: String,
     val startsAt: String,
     val endsAt: String,
     val localDate: String,
@@ -547,8 +555,8 @@ private fun ConfirmedBookingWireDto.toDomain() =
         workerDisplayName = workerDisplayName,
         serviceId = serviceId,
         serviceName = serviceName,
-        customerId = customerId,
-        customerDisplayName = customerDisplayName,
+        customerId = personId,
+        customerDisplayName = null,
         startsAt = startsAt,
         endsAt = endsAt,
         localDate = localDate,
@@ -558,16 +566,22 @@ private fun ConfirmedBookingWireDto.toDomain() =
         originConversationId = originConversationId,
     )
 
-/** `Ago.Calendar.Contracts.ContactResponse`, reduced to the fields [Contact] carries — `notes`/
- * `firstSeenAt`/`lastSeenAt`/`duplicatePhoneCustomerIds` are all on the wire and simply omitted here,
- * the identical `ignoreUnknownKeys`-backed reduction [PendingBookingWireDto]'s own doc comment
- * explains, applied for the identical reason [Contact]'s own doc comment gives. */
+/** `Ago.Calendar.Contracts.ContactResponse`, reduced to the fields [Contact] carries — `firstSeenAt`/
+ * `lastSeenAt` are on the wire and simply omitted here, the identical `ignoreUnknownKeys`-backed
+ * reduction [PendingBookingWireDto]'s own doc comment explains, applied for the identical reason
+ * [Contact]'s own doc comment gives.
+ *
+ * `26-162`/`adr/0184`: `personId` replaces the wire's own `customerId`, and `displayName`/`notes` are
+ * gone entirely — the identical rename [ConfirmedBookingWireDto]'s own doc comment explains, applied to
+ * this response instead. [toDomain] still fills [Contact.customerId] from it and always maps
+ * [Contact.displayName] `null`; [ago.chat.android.bookings.ContactsViewModel] display-merges a real name
+ * back in from [ago.chat.android.core.domain.persons.PersonsApi].
+ */
 @Serializable
 private data class ContactWireDto(
-    val customerId: String,
+    val personId: String,
     val phone: String,
     val masked: Boolean,
-    val displayName: String?,
     val noShowCount: Int,
     val phoneVerifiedAt: String?,
     val phoneConfirmedByOperatorAt: String?,
@@ -575,10 +589,10 @@ private data class ContactWireDto(
 
 private fun ContactWireDto.toDomain() =
     Contact(
-        customerId = customerId,
+        customerId = personId,
         phone = phone,
         masked = masked,
-        displayName = displayName,
+        displayName = null,
         noShowCount = noShowCount,
         phoneVerifiedAt = phoneVerifiedAt,
         phoneConfirmedByOperatorAt = phoneConfirmedByOperatorAt,
@@ -586,12 +600,18 @@ private fun ContactWireDto.toDomain() =
 
 /** `Ago.Calendar.Contracts.ContactPhoneRevealResponse`, field for field — see [PhoneReveal]'s own doc
  * comment for why every field here is one this app already renders and none is a name invented for
- * either id. */
+ * either id.
+ *
+ * `26-162`/`adr/0184`: `personId` replaces the wire's own `customerId` — the identical rename
+ * [ConfirmedBookingWireDto]'s own doc comment explains; [PhoneReveal.customerId] keeps its own name for
+ * the same "rename deferred" reason [Contact]'s own doc comment states, this audit row having no display
+ * name to merge in either way ([PhoneReveal]'s own doc comment: always rendered through
+ * [ago.chat.android.ui.components.IdentifierText]). */
 @Serializable
 private data class ContactPhoneRevealWireDto(
     val id: String,
     val occurredAt: String,
-    val customerId: String,
+    val personId: String,
     val operatorId: String,
     val surface: String,
 )
@@ -600,7 +620,7 @@ private fun ContactPhoneRevealWireDto.toDomain() =
     PhoneReveal(
         id = id,
         occurredAt = occurredAt,
-        customerId = customerId,
+        customerId = personId,
         operatorId = operatorId,
         surface = surface,
     )
