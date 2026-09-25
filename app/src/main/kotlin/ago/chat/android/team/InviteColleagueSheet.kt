@@ -93,6 +93,7 @@ internal fun InviteColleagueSheet(
     var explicitDismissRequested by remember { mutableStateOf(false) }
     val sheetState =
         rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
             confirmValueChange = { target -> target != SheetValue.Hidden || createdInvite == null || explicitDismissRequested },
         )
 
