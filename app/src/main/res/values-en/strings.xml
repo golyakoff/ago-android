@@ -120,7 +120,8 @@
     <string name="conversation_list_erase_confirm_body">The transcript, its attachments and the visitor\'s own details will be erased permanently. This cannot be undone.</string>
     <string name="conversation_list_erase_confirm_action">Delete</string>
     <string name="action_cancel">Cancel</string>
-    <string name="conversation_list_erasing_label">Erasing…</string>
+    <string name="conversation_list_erase_failed">Couldn\'t delete</string>
+    <string name="conversation_list_erase_retry">Retry</string>
 
     <string name="conversation_list_elapsed_minutes_short">%dm</string>
     <string name="conversation_list_elapsed_hours_short">%dh</string>
