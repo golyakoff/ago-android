@@ -295,6 +295,26 @@
     <string name="contact_panel_summary_load_failed">Не удалось загрузить</string>
 
     <!--
+        `26-148`: the contact-detail panel's first section - «КОНТАКТНЫЕ ДАННЫЕ» (fields + «Показать»,
+        `docs/design/26-111-thread-contact-detail-panel.md`). `contact_details_section_title` is rendered
+        uppercase by the section (like `SectionLabel`), so the source stays sentence case for TalkBack.
+        The field labels mirror the console's own «Имя»/«Телефон»/«Почта». `contact_details_reveal`/
+        `contact_details_revealing` are this section's own reveal control (the calendar's own
+        `bookings_contacts_reveal_phone` says the same words but is a different, calendar-scoped name).
+        `contact_details_reveal_failed` is the generic transport-failure line under a row; a genuine server
+        refusal shows the server's own sentence verbatim instead (design §4).
+    -->
+    <string name="contact_details_section_title">Контактные данные</string>
+    <string name="contact_details_label_name">Имя</string>
+    <string name="contact_details_label_phone">Телефон</string>
+    <string name="contact_details_label_email">Почта</string>
+    <string name="contact_details_reveal">Показать</string>
+    <string name="contact_details_revealing">Показ…</string>
+    <string name="contact_details_empty">Нет контактных данных</string>
+    <string name="contact_details_load_failed">Не удалось загрузить контактные данные</string>
+    <string name="contact_details_reveal_failed">Не удалось показать</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.
