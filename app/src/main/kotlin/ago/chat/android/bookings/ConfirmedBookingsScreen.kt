@@ -470,21 +470,38 @@ private fun ConfirmedBookingDetailBody(
         }
 
         // Hard requirement 8: Услуга / Мастер / Телефон / Подтверждён по SMS / Источник, each its own
-        // row.
+        // row. `26-135`: the labels ride `bodyMedium` (matching the date line above, not the smaller
+        // `labelMedium` default the pending-card call sites keep), the values are bold and pinned to the
+        // row's right edge by `BookingDetailRow`'s own weighted spacer, and a thin `HorizontalDivider`
+        // separates each pair, exactly as the mockup draws them.
+        val detailLabelStyle = MaterialTheme.typography.bodyMedium
+        val detailValueStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
         BookingDetailRow(
             label = stringResource(R.string.bookings_card_service_label),
-            modifier = Modifier.padding(top = 20.dp),
+            labelStyle = detailLabelStyle,
+            modifier = Modifier.padding(top = 20.dp, bottom = 12.dp),
         ) {
-            Text(text = booking.serviceName ?: "—", style = MaterialTheme.typography.bodyMedium)
+            Text(text = booking.serviceName ?: "—", style = detailValueStyle)
         }
-        BookingDetailRow(label = stringResource(R.string.bookings_card_worker_label), modifier = Modifier.padding(top = 12.dp)) {
-            Text(text = booking.workerDisplayName, style = MaterialTheme.typography.bodyMedium)
+        HorizontalDivider()
+        BookingDetailRow(
+            label = stringResource(R.string.bookings_card_worker_label),
+            labelStyle = detailLabelStyle,
+            modifier = Modifier.padding(vertical = 12.dp),
+        ) {
+            Text(text = booking.workerDisplayName, style = detailValueStyle)
         }
+        HorizontalDivider()
         // Hard requirement 9: masked value + «Показать», reusing `26-53`'s own reveal control verbatim
         // (`bookings_contacts_reveal_phone`/`_revealing_phone`) rather than a second copy of that string
-        // pair for a second surface.
-        BookingDetailRow(label = stringResource(R.string.bookings_confirmed_detail_phone_label), modifier = Modifier.padding(top = 12.dp)) {
-            Text(text = booking.phone.ifBlank { "—" }, style = MaterialTheme.typography.bodyMedium)
+        // pair for a second surface. `26-135`: the masked value + «Показать» group is right-aligned as one
+        // unit (it is `BookingDetailRow`'s own trailing content), the value bold like every other row.
+        BookingDetailRow(
+            label = stringResource(R.string.bookings_confirmed_detail_phone_label),
+            labelStyle = detailLabelStyle,
+            modifier = Modifier.padding(vertical = 12.dp),
+        ) {
+            Text(text = booking.phone.ifBlank { "—" }, style = detailValueStyle)
             if (booking.masked && booking.phone.isNotBlank()) {
                 TextButton(onClick = onReveal, enabled = !revealing) {
                     Text(
@@ -496,37 +513,51 @@ private fun ConfirmedBookingDetailBody(
                 }
             }
         }
+        HorizontalDivider()
         // `26-117`: a real backend gap, disclosed rather than hidden - see this file's own top-of-file
         // doc comment for the full explanation. Both rows are always drawn, per the mockup's own hard
         // requirement 8, with the identical honest "—" `ConfirmedBookingRow` already uses for a missing
-        // `serviceName` - never a fabricated confirmation state or channel name.
+        // `serviceName` - never a fabricated confirmation state or channel name. `26-135`: the «—»
+        // placeholder is bold and right-aligned like every real value, so an empty row still lines up.
         BookingDetailRow(
             label = stringResource(R.string.bookings_confirmed_detail_sms_label),
-            modifier = Modifier.padding(top = 12.dp),
+            labelStyle = detailLabelStyle,
+            modifier = Modifier.padding(vertical = 12.dp),
         ) {
-            Text(text = "—", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "—", style = detailValueStyle)
         }
+        HorizontalDivider()
         BookingDetailRow(
             label = stringResource(R.string.bookings_confirmed_detail_source_label),
-            modifier = Modifier.padding(top = 12.dp),
+            labelStyle = detailLabelStyle,
+            modifier = Modifier.padding(vertical = 12.dp),
         ) {
             // Hard requirement 10: plain text, no styled pill - a bare `Text`, the identical treatment
             // every other row's own value gets on this sheet.
-            Text(text = "—", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "—", style = detailValueStyle)
         }
 
-        // Hard requirement 11: «Перейти к диалогу» (primary) then «Закрыть» (secondary). Disabled while
-        // `originConversationId` is absent - the "Dialog link" section's own no-op/disabled rule, restated
-        // here for the sheet's own copy of the affordance the row's chat icon already carries.
-        Button(
-            onClick = onOpenDialog,
-            enabled = booking.originConversationId != null,
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        // Hard requirement 11 (as revised by `26-135`): «К диалогу» (primary) and «Закрыть» (secondary)
+        // sit side by side in ONE row rather than stacked full-width, each taking half the width via
+        // `weight(1f)` so the pair definitely fits at ~360dp. The primary label is the shortened
+        // `bookings_confirmed_open_dialog_short_action` (not the row/full-sheet `..._open_dialog_action`)
+        // precisely so «Перейти к диалогу» cannot overflow its half. The primary stays disabled while
+        // `originConversationId` is absent - the "Dialog link" section's own no-op/disabled rule.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = stringResource(R.string.bookings_confirmed_open_dialog_action))
-        }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp)) {
-            Text(text = stringResource(R.string.bookings_confirmed_close_action))
+            Button(
+                onClick = onOpenDialog,
+                enabled = booking.originConversationId != null,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = stringResource(R.string.bookings_confirmed_open_dialog_short_action), maxLines = 1)
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                Text(text = stringResource(R.string.bookings_confirmed_close_action), maxLines = 1)
+            }
         }
     }
 }

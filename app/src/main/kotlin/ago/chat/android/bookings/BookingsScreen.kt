@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -720,15 +722,22 @@ private fun PendingBookingCard(
 internal fun BookingDetailRow(
     label: String,
     modifier: Modifier = Modifier,
+    labelStyle: TextStyle = MaterialTheme.typography.labelMedium,
     content: @Composable () -> Unit,
 ) {
+    // Label leads the row, the value trails it at the row's own end - the weighted spacer between the two
+    // is what pins the content to the right edge (`26-135`'s own "values right-aligned to the sheet edge",
+    // the identical mockup layout). `labelStyle` is parametrised, default unchanged, so the confirmed-
+    // booking detail sheet can lift its own labels to `bodyMedium` without this pending-card call site's
+    // own `labelMedium` moving with it (`26-135`: "parametrise the label style, default unchanged").
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = labelStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(end = 8.dp),
         )
+        Spacer(modifier = Modifier.weight(1f))
         content()
     }
 }
