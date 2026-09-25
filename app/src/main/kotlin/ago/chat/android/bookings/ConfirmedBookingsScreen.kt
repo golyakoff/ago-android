@@ -74,16 +74,18 @@ import kotlin.math.roundToInt
  * full, hard-requirement list; the composables below cite the specific requirement number they answer
  * rather than restating the whole item at every call site.
  *
- * **A found gap, disclosed rather than papered over.** Hard requirement 8 asks for a «Подтверждён по
- * SMS» row and a «Источник» row on the booking-detail sheet. Neither fact exists anywhere on the wire:
- * `Ago.Calendar.Contracts.ConfirmedBookingResponse` carries no SMS-confirmation timestamp and no source
- * field at all (verified against `ConsoleContracts.cs` — the only `Source` field anywhere in that file
- * belongs to the unrelated customer-merge preview, `CustomerMergeCandidateResponse`), and neither field
- * is named in this item's own "Depends on" line the way `originConversationId` is. [ConfirmedBookingDetailBody]
- * still draws both rows, exactly as the mockup shows — the author's own rule against dropping a required
- * element — but with an honest "—" rather than a fabricated value, the identical `?: "—"` convention
- * [ConfirmedBookingRow] already uses for a genuinely missing [ConfirmedBooking.serviceName]. Making
- * either row real is a `ago-calendar` contract change this item's own scope never authorised.
+ * **The two rows hard requirement 8 asks for, one now real and one still an honest gap (`26-121`).**
+ * The «Источник» row is real as of `26-121`: `Ago.Calendar.Contracts.ConfirmedBookingResponse` now carries
+ * `OriginConversationId`, wired through [ConfirmedBooking.originConversationId], and
+ * [ConfirmedBookingDetailBody] renders «Из чата» when a booking arrived through a chat conversation, "—"
+ * otherwise. That is the only source signal the calendar can honestly offer — it treats the chat origin
+ * opaquely (`adr/0184`/`adr/0065`) and never learns the channel within chat (widget vs Telegram vs Max),
+ * so there is no richer breakdown to bind. The «Подтверждён по SMS» row stays "—": `26-121` verified the
+ * calendar records no customer-SMS-confirmation of a booking anywhere (confirmation is the operator veto
+ * window or the auto-sweep; `20-05`'s SMS is outbound, not an inbound confirmation), so there is nothing
+ * on the wire to fill it — making that row real is a new SMS-confirm flow, an author decision, not an
+ * additive field. Both rows are still drawn, per the mockup, with the identical honest "—"
+ * [ConfirmedBookingRow] already uses for a genuinely missing [ConfirmedBooking.serviceName].
  */
 @Composable
 internal fun ConfirmedBookingsBody(
@@ -393,8 +395,9 @@ private fun ConfirmedDayList(
                     row = row,
                     onClick = { onRowClick(row.bookingId) },
                     // Hard requirement 5/"Dialog link": both icons always render, but the chat icon is
-                    // only ever a real tap while a real id is present - see `ConfirmedBooking`'s own doc
-                    // comment for why `originConversationId` is `null` on every row today.
+                    // only ever a real tap while a real id is present - `26-121` puts a real
+                    // `originConversationId` on the wire for a chat-origin booking, so the tap is now live
+                    // for those rows and stays a no-op for a booking with no chat origin.
                     onOpenDialog = { row.originConversationId?.let(onOpenDialog) },
                 )
                 HorizontalDivider()
@@ -643,11 +646,13 @@ private fun ConfirmedBookingDetailBody(
             }
         }
         HorizontalDivider()
-        // `26-117`: a real backend gap, disclosed rather than hidden - see this file's own top-of-file
-        // doc comment for the full explanation. Both rows are always drawn, per the mockup's own hard
-        // requirement 8, with the identical honest "—" `ConfirmedBookingRow` already uses for a missing
-        // `serviceName` - never a fabricated confirmation state or channel name. `26-135`: the «—»
-        // placeholder is bold and right-aligned like every real value, so an empty row still lines up.
+        // «Подтверждён по SMS» stays honestly "—": `26-121` verified the calendar records no
+        // customer-SMS-confirmation of a booking at all (confirmation is the operator veto window or the
+        // auto-sweep, and `20-05`'s SMS is an outbound notice, not an inbound confirmation), so there is
+        // nothing on the wire to bind here - `ConfirmedBookingResponse` carries no such field. Making this
+        // row real is a new SMS-confirm flow, an author decision, not an additive field - see `26-121`'s
+        // own report. The row is still drawn (mockup hard requirement 8), with the identical bold,
+        // right-aligned "—" `26-135` gave every empty value.
         BookingDetailRow(
             label = stringResource(R.string.bookings_confirmed_detail_sms_label),
             labelStyle = detailLabelStyle,
@@ -661,9 +666,21 @@ private fun ConfirmedBookingDetailBody(
             labelStyle = detailLabelStyle,
             modifier = Modifier.padding(vertical = 12.dp),
         ) {
-            // Hard requirement 10: plain text, no styled pill - a bare `Text`, the identical treatment
-            // every other row's own value gets on this sheet.
-            Text(text = "—", style = detailValueStyle)
+            // `26-121`: this row is now real. `ConfirmedBookingResponse.OriginConversationId` (wired
+            // through [ConfirmedBooking.originConversationId]) tells us whether the booking arrived through
+            // a chat conversation - the only source signal the calendar can honestly offer, since it treats
+            // the chat origin opaquely (`adr/0184`/`adr/0065`) and never learns the channel within chat.
+            // Present -> «Из чата»; absent -> the identical honest "—" every other genuinely-missing value
+            // uses, never a fabricated channel name. Hard requirement 10: plain text, no styled pill.
+            Text(
+                text =
+                    if (booking.originConversationId != null) {
+                        stringResource(R.string.bookings_confirmed_detail_source_chat)
+                    } else {
+                        "—"
+                    },
+                style = detailValueStyle,
+            )
         }
 
         // Hard requirement 11 (as revised by `26-135`): «К диалогу» (primary) and «Закрыть» (secondary)
