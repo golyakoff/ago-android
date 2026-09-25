@@ -17,6 +17,11 @@ internal enum class BookingsTab {
     Confirmed,
     Clients,
 
+    /** `26-142`: the tenant-configuration screen (menu label «Настройка», primary section «Календари») —
+     * the embed's allowed origins and the calendar roster. A `⋮` config entry, never a segment, and the
+     * first one offered — see [visibleBookingsConfigMenuEntries]. */
+    Calendars,
+
     /** `26-140`: the worker dictionary, with the full create/edit/delete this product had no screen for
      * until that item. A `⋮` config entry, never a segment — see [visibleBookingsConfigMenuEntries]. */
     Masters,
@@ -87,20 +92,27 @@ internal fun visibleBookingsSegments(
  *
  * `26-140`: [showMastersSegment] is the identical gate again — `calendar:configure` alone, the permission
  * the worker-dictionary writes check server-side — added as its own parameter for the same reason each of
- * the others is one, not because it reuses another's boolean. Мастера is offered **before** Услуги (menu
- * order Календари · Мастера · Услуги · Часы, where Календари arrives with `26-142`): the reading fills the
- * dictionary first, then the services those workers perform.
+ * the others is one, not because it reuses another's boolean. Мастера is offered **before** Услуги: the
+ * reading fills the dictionary first, then the services those workers perform.
+ *
+ * `26-142`: [showSetupSegment] is the identical gate once more — `calendar:configure` alone, the
+ * permission the tenant-configuration writes (allowed origins, the calendar roster) check server-side —
+ * its own parameter for the same reason, and offered **first**: the final fill/readiness order is
+ * Настройка (Календари) · Мастера · Услуги · Часы, because a calendar is the thing a worker, a service and
+ * a working-hours rule all hang off, so it is configured before any of them.
  *
  * **"Hide, don't disable" one level up.** An empty result here is what makes `BookingsConfigMenu` draw
  * no `⋮` at all when no entry applies (`docs/backlog/26-103-*.md`'s own Done-when) — the same rule
  * [ago.chat.android.analytics.AnalyticsReportsOverflowMenu] already follows for Аналитика's own `⋮`.
  */
 internal fun visibleBookingsConfigMenuEntries(
+    showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
+        if (showSetupSegment) add(BookingsTab.Calendars)
         if (showMastersSegment) add(BookingsTab.Masters)
         if (showServicesSegment) add(BookingsTab.Services)
         if (showHoursSegment) add(BookingsTab.Hours)
