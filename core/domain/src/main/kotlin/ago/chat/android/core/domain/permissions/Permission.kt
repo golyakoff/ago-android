@@ -61,6 +61,49 @@ public object Permission {
      * and the server checks them separately too. Gates the swipe-to-erase action on the «Все» tab, and
      * nothing else. */
     public const val CONVERSATION_ERASE: String = "conversation:erase"
+
+    /** `26-116`: "may read this conversation's own detail" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationRead`. Gates the contact-detail panel's own existence
+     * (`docs/design/26-111-thread-contact-detail-panel.md`'s Appendix: "See the sheet / read
+     * contact-details / reveal / read tags / read notes / read history") — an operator without it never
+     * sees the panel's info affordance at all, hide-not-disable like every other permission here. Not
+     * [CONVERSATION_SEND]: reading a conversation's contact details, tags and notes is a weaker claim
+     * than being allowed to act in it, and the server checks the two separately. */
+    public const val CONVERSATION_READ: String = "conversation:read"
+
+    /** `26-116`: "may apply or remove a tag" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationTag`. Gates the panel's «+ метка» affordance and each
+     * chip's own remove (`26-111`'s design, T2). */
+    public const val CONVERSATION_TAG: String = "conversation:tag"
+
+    /** `26-116`: "may add a team note" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationNoteWrite`. Gates only the notes composer; the notes
+     * *count* row itself is read-gated by [CONVERSATION_READ] (`26-111`'s design, N1). */
+    public const val CONVERSATION_NOTE_WRITE: String = "conversation:note_write"
+
+    /** `26-116`: "may close this conversation" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationClose`. Gates the panel's «Закрыть диалог» action
+     * (`26-111`'s design, A1). */
+    public const val CONVERSATION_CLOSE: String = "conversation:close"
+
+    /** `26-116`: "may block a visitor site-wide" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationBlock`. Gates the panel's reversible «Ограничить» /
+     * «Снять ограничение» action (`26-111`'s design, A2, Author decision #2: one reversible action, no
+     * second destructive verb — so [CONVERSATION_MARK_SPAM] below is named for completeness but this is
+     * the one the panel actually gates on). */
+    public const val CONVERSATION_BLOCK: String = "conversation:block"
+
+    /** `26-116`: "may close a conversation as spam" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.ConversationMarkSpam`. Part of the same restrict-visitor gate family
+     * as [CONVERSATION_BLOCK] in `26-111`'s own Appendix table; named here now so the write-actions
+     * item (`26-120`) has no second place to look for the string, even though the panel's Author
+     * decision #2 settled on [CONVERSATION_BLOCK] alone as the one action actually wired up. */
+    public const val CONVERSATION_MARK_SPAM: String = "conversation:mark_spam"
+
+    /** `26-116`: "may grant or revoke a visitor's attachment-upload permission" — copied verbatim from
+     * `ago-chat`'s own `Ago.Chat.Domain.Permission.ConversationAttachmentUploadGrant`. Gates the panel's
+     * «Приём файлов от посетителя» toggle (`26-111`'s design, F1). */
+    public const val CONVERSATION_ATTACHMENT_UPLOAD_GRANT: String = "conversation:attachment_upload_grant"
 }
 
 /** Every permission [Permission.CALENDAR_CONFIGURE]'s own destination can be earned through, per
