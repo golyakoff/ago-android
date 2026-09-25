@@ -146,13 +146,19 @@ public fun ThreadRoute(
     // the affordance is never drawn, and the panel VM below is never opened.
     canReadContactDetail: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
-    // `26-147`: wired at the route, not the composable (design "Open from thread") - scoped per open
-    // conversation the same way [viewModel] is, and defaulted to `hiltViewModel()` so a test can
-    // substitute its own instance with no Hilt component, the identical shape [viewModel] already uses.
-    contactPanelViewModel: ContactPanelViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val contactPanelState by contactPanelViewModel.state.collectAsStateWithLifecycle()
+    // `26-147`: the panel VM is deliberately NOT a `hiltViewModel()` default parameter of this route.
+    // [ThreadViewModel] above can be one only because [ago.chat.android.shell.ConversationsTabHost]
+    // always passes it explicitly from an overridable provider, so that default expression is never
+    // evaluated - which is exactly why the shell/back-contract instrumented tests (which compose this
+    // real route over a fake `ThreadViewModel`, under a plain non-Hilt `ComponentActivity`) do not
+    // crash on it. A second `hiltViewModel()` default here had no such override and fired the moment a
+    // thread opened in those tests, crashing them. So the panel VM is obtained lazily, inside the
+    // `if (showContactPanel)` block below, and only ever when the operator actually opens the sheet -
+    // a code path no shell/back-contract test reaches (none taps the affordance), so none is dragged
+    // through Hilt. `ContactDetailPanel` itself stays stateless (state + callbacks passed down), which
+    // is what lets `ContactDetailPanelTest` drive it with a plain [ContactPanelUiState] and no Hilt.
     var showContactPanel by rememberSaveable { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -201,17 +207,10 @@ public fun ThreadRoute(
         identityUnavailable = identityUnavailable,
         // `26-147`: hide-not-disable (design Q7) - the affordance is `null`, so `ThreadTitleBlock`
         // renders as plain, non-interactive text exactly as before, whenever the operator lacks
-        // `conversation:read`. Present only when they hold it, and then opening the panel also fires the
-        // one visitor-summary read for H4/H5.
-        onOpenContactPanel =
-            if (canReadContactDetail) {
-                {
-                    contactPanelViewModel.open(conversationId)
-                    showContactPanel = true
-                }
-            } else {
-                null
-            },
+        // `conversation:read`. Present only when they hold it; opening the sheet is all this does, and the
+        // panel VM + its one visitor-summary read for H4/H5 are created lazily inside the sheet block
+        // below (see the top-of-route comment on why the VM must not be created before then).
+        onOpenContactPanel = if (canReadContactDetail) ({ showContactPanel = true }) else null,
         onBack = leaveThread,
         onLoadOlder = viewModel::loadOlder,
         onRetryJoin = viewModel::retryJoin,
@@ -226,6 +225,15 @@ public fun ThreadRoute(
     )
 
     if (showContactPanel) {
+        // The one `hiltViewModel()` for the panel - reached only here, when the operator has actually
+        // opened the sheet. Scoped to the same `ViewModelStoreOwner` (the back-stack entry / activity)
+        // whether it is created now or on a later open, so it survives the sheet closing and reopening.
+        // `LaunchedEffect(conversationId)` fires the visitor-summary read for H4/H5 when the sheet opens
+        // (and re-reads if this route is somehow reused for another conversation) - [ContactPanelViewModel.open]'s
+        // own same-id guard makes a repeat a no-op.
+        val contactPanelViewModel: ContactPanelViewModel = hiltViewModel()
+        val contactPanelState by contactPanelViewModel.state.collectAsStateWithLifecycle()
+        LaunchedEffect(conversationId) { contactPanelViewModel.open(conversationId) }
         ContactDetailPanel(
             state = contactPanelState,
             emojiCreature = emojiCreature,
