@@ -22,6 +22,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
@@ -43,6 +44,7 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
+import ago.chat.android.core.network.visitorsummary.KtorVisitorSummaryApi
 import ago.chat.android.core.network.workers.KtorWorkersApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
@@ -351,6 +353,17 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ConversationNotesApi = KtorConversationNotesApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-143`: the contact-detail panel's own visitor-summary port (header H4/H5) — the same
+     * `apiBaseUrl` [provideContactDetailsApi] above reads, since `GET .../visitor-summary` is one more
+     * endpoint on that same `Ago.Chat.Api` origin, not the calendar's.
+     */
+    @Provides
+    public fun provideVisitorSummaryApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): VisitorSummaryApi = KtorVisitorSummaryApi(client, config.apiBaseUrl)
 
     /**
      * `26-57`: [ago.chat.android.analytics.AnalyticsViewModel]'s own port — `config.apiBaseUrl`, the
