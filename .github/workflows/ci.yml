@@ -106,6 +106,13 @@ jobs:
   instrumented-tests:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # `26-160`: the GitHub-hosted emulator flakes ("device offline" / adb exit 1) roughly every
+    # other run, which — while this job was a required check — blocked every PR and buried the author
+    # in CI-failure notifications. Made advisory (removed from the `main` ruleset's required checks) and
+    # `continue-on-error` so a flaky infra failure neither fails the workflow (no false alarm) nor
+    # gates a merge. The job still runs and uploads its report, so a genuine regression is still visible.
+    # Revert both (re-require + drop this) once `26-160` stabilizes the emulator step.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
