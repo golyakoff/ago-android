@@ -2,8 +2,11 @@ package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.di.IoDispatcher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,12 +37,19 @@ import javax.inject.Inject
  * [revealingCustomerIds] is plain instance state, not part of [ContactsUiState] itself until
  * [applyContactsResult] folds it in, the identical "no lock needed" shape
  * [BookingsViewModel]'s own class doc comment states for its own `busyBookingIds`.
+ *
+ * `26-162`/`adr/0184`: [personsApi] is the display-merge this screen now performs on every load —
+ * [api]'s own `ContactResponse` carries a bare `personId` and no name at all any more (the calendar
+ * stopped holding a person copy); [mergeDisplayNames] is the one place that gap is closed, reading
+ * chat's own person registry for the ids this page's own read just came back with. Reachability of that
+ * second call is never allowed to fail the whole screen — see [mergeDisplayNames]'s own doc comment.
  */
 @HiltViewModel
 internal class ContactsViewModel
     @Inject
     constructor(
         private val api: BookingsApi,
+        private val personsApi: PersonsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<ContactsUiState>(ContactsUiState.Loading)
@@ -62,7 +72,42 @@ internal class ContactsViewModel
             mutableState.update { ContactsUiState.Loading }
             revealingCustomerIds = emptySet()
             viewModelScope.launch {
-                applyContactsResult(withContext(ioDispatcher) { api.fetchContacts() }, actionError = null)
+                val result = withContext(ioDispatcher) { api.fetchContacts() }
+                val merged =
+                    if (result is ContactsResult.Loaded) {
+                        ContactsResult.Loaded(mergeDisplayNames(result.contacts))
+                    } else {
+                        result
+                    }
+                applyContactsResult(merged, actionError = null)
+            }
+        }
+
+        /**
+         * `26-162`/`adr/0184`: reads chat's own person registry for every distinct id [contacts] carries
+         * and copies a real [Contact.displayName] onto the rows that got one back — never the other way
+         * round. A person id with nobody in the answer, or [personsApi] itself failing or being
+         * unreachable, simply leaves that row's [Contact.displayName] at whatever [api] already gave it
+         * (`null`, since `ContactResponse` carries no name of its own any more) — `adr/0184`'s own
+         * Consequences: "degrades to name not shown yet", never a failed Клиенты read. [ContactCard]
+         * already renders a `null` name through [ago.chat.android.ui.components.IdentifierText], so this
+         * merge is the only place that decision needs making.
+         */
+        private suspend fun mergeDisplayNames(contacts: List<Contact>): List<Contact> {
+            val personIds = contacts.map { it.customerId }.distinct()
+            if (personIds.isEmpty()) return contacts
+
+            val persons =
+                when (val result = withContext(ioDispatcher) { personsApi.fetchPersons(personIds) }) {
+                    is PersonsResult.Loaded -> result.persons
+                    is PersonsResult.Failed -> return contacts
+                }
+
+            val namesByPersonId = persons.mapNotNull { person -> person.displayName?.let { name -> person.personId to name } }.toMap()
+            if (namesByPersonId.isEmpty()) return contacts
+
+            return contacts.map { contact ->
+                namesByPersonId[contact.customerId]?.let { name -> contact.copy(displayName = name) } ?: contact
             }
         }
 

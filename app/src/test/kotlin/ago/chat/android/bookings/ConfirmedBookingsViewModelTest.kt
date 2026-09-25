@@ -11,6 +11,10 @@ import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -48,7 +52,7 @@ class ConfirmedBookingsViewModelTest {
     fun `starts Loading before the first answer comes back`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(hangFetch = true)
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             dispatcher.scheduler.runCurrent()
 
@@ -60,7 +64,7 @@ class ConfirmedBookingsViewModelTest {
         runTest(dispatcher) {
             val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)))
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -79,7 +83,7 @@ class ConfirmedBookingsViewModelTest {
         runTest(dispatcher) {
             val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)))
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
             assertEquals(1, api.confirmedFetchCalls)
 
@@ -101,7 +105,7 @@ class ConfirmedBookingsViewModelTest {
     fun `NotConfigured passes straight through`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.NotConfigured)
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -112,7 +116,7 @@ class ConfirmedBookingsViewModelTest {
     fun `a failure carries its own classification through, unedited`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Failed(BookingsQueueFailure.Transport))
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -123,7 +127,7 @@ class ConfirmedBookingsViewModelTest {
     fun `refresh asks the server again`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Failed(BookingsQueueFailure.Unexpected))
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
             assertEquals(1, api.confirmedFetchCalls)
 
@@ -140,7 +144,7 @@ class ConfirmedBookingsViewModelTest {
         runTest(dispatcher) {
             val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)), hangReveal = true)
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal(monday.customerId)
@@ -154,7 +158,7 @@ class ConfirmedBookingsViewModelTest {
         runTest(dispatcher) {
             val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)), hangReveal = true)
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal(monday.customerId)
@@ -178,7 +182,7 @@ class ConfirmedBookingsViewModelTest {
                 FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday, tuesday))).apply {
                     revealResult = RevealPhoneResult.Revealed("+79991234567")
                 }
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -203,7 +207,7 @@ class ConfirmedBookingsViewModelTest {
                 FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday))).apply {
                     revealResult = RevealPhoneResult.Refused("Недостаточно прав для просмотра номера.")
                 }
-            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal(monday.customerId)
@@ -223,6 +227,50 @@ class ConfirmedBookingsViewModelTest {
                     .rows
                     .single()
             assertEquals(monday.phone, row.phone)
+        }
+
+    @Test
+    fun `26-162 a name chat's person registry answers with is merged onto the matching booking`() =
+        runTest(dispatcher) {
+            val monday =
+                booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова", customerId = "c1")
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)))
+            val persons = FakePersonsApi(result = PersonsResult.Loaded(listOf(PersonProfile(personId = "c1", displayName = "Анна"))))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(listOf("c1"), persons.requestedIds)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            val row =
+                state.days
+                    .single()
+                    .workers
+                    .single()
+                    .rows
+                    .single()
+            assertEquals("Анна", row.customerDisplayName)
+        }
+
+    @Test
+    fun `26-162 an unreachable person registry leaves the booking as it was, never fails the screen`() =
+        runTest(dispatcher) {
+            val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)))
+            val persons = FakePersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            val row =
+                state.days
+                    .single()
+                    .workers
+                    .single()
+                    .rows
+                    .single()
+            assertEquals(null, row.customerDisplayName)
         }
 
     private fun booking(
@@ -317,5 +365,25 @@ class ConfirmedBookingsViewModelTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
+    }
+
+    /** `26-162`: the identical fake `ContactsViewModelTest`'s own `FakePersonsApi` already establishes,
+     * restated here for the same reason `FakeBookingsApi` above is restated rather than shared - a
+     * single canned answer, no server-shaped state to fake. Defaults to an empty [PersonsResult.Loaded]
+     * so every pre-existing test above (none of which cares about the merge itself) keeps asserting a
+     * `null` [ConfirmedBooking.customerDisplayName], exactly as every fixture already supplies. */
+    private class FakePersonsApi(
+        var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+    ) : PersonsApi {
+        var fetchCalls: Int = 0
+            private set
+        var requestedIds: List<String> = emptyList()
+            private set
+
+        override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+            fetchCalls++
+            requestedIds = personIds
+            return result
+        }
     }
 }

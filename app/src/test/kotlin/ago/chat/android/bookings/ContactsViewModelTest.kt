@@ -11,6 +11,10 @@ import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -47,7 +51,7 @@ class ContactsViewModelTest {
     fun `starts Loading before the first answer comes back`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(hangFetch = true)
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             dispatcher.scheduler.runCurrent()
 
@@ -68,7 +72,7 @@ class ContactsViewModelTest {
                     phoneConfirmedByOperatorAt = null,
                 )
             val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact)))
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -79,7 +83,7 @@ class ContactsViewModelTest {
     fun `NotConfigured passes straight through`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ContactsResult.NotConfigured)
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -90,7 +94,7 @@ class ContactsViewModelTest {
     fun `a failure carries its own classification through, unedited`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ContactsResult.Failed(BookingsQueueFailure.Transport))
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -101,7 +105,7 @@ class ContactsViewModelTest {
     fun `refresh asks the server again`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ContactsResult.Failed(BookingsQueueFailure.Unexpected))
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
             assertEquals(1, api.contactsFetchCalls)
 
@@ -118,7 +122,7 @@ class ContactsViewModelTest {
         runTest(dispatcher) {
             val contact = contact(id = "c1")
             val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact)), hangReveal = true)
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -134,7 +138,7 @@ class ContactsViewModelTest {
         runTest(dispatcher) {
             val contact = contact(id = "c1")
             val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact)), hangReveal = true)
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -151,7 +155,7 @@ class ContactsViewModelTest {
             val first = contact(id = "c1")
             val second = contact(id = "c2")
             val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(first, second)), hangReveal = true)
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -174,7 +178,7 @@ class ContactsViewModelTest {
                 FakeBookingsApi(result = ContactsResult.Loaded(listOf(firstBooking, other))).apply {
                     revealResult = RevealPhoneResult.Revealed("+79991234567")
                 }
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -202,7 +206,7 @@ class ContactsViewModelTest {
                 FakeBookingsApi(result = ContactsResult.Loaded(listOf(firstRow, secondRow))).apply {
                     revealResult = RevealPhoneResult.Revealed("+79991234567")
                 }
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -220,7 +224,7 @@ class ContactsViewModelTest {
                 FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
                     revealResult = RevealPhoneResult.Refused("Недостаточно прав для просмотра номера.")
                 }
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -243,7 +247,7 @@ class ContactsViewModelTest {
                 FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
                     revealResult = RevealPhoneResult.Failed(BookingsQueueFailure.Transport)
                 }
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.reveal("c1")
@@ -266,7 +270,7 @@ class ContactsViewModelTest {
             val contact = contact(id = "c1")
             val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact)))
             api.revealResult = RevealPhoneResult.Refused("на секунду опоздали")
-            val viewModel = ContactsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
             viewModel.reveal("c1")
             advanceUntilIdle()
@@ -283,6 +287,68 @@ class ContactsViewModelTest {
             )
         }
 
+    @Test
+    fun `26-162 a name chat's person registry answers with is merged onto the matching row`() =
+        runTest(dispatcher) {
+            // `ContactResponse` carries no name of its own any more (adr/0184) - a real `fetchContacts`
+            // always hands this class a `null` displayName, exactly like this bare fixture.
+            val bare =
+                Contact(
+                    customerId = "c1",
+                    phone = "+7***5678",
+                    masked = true,
+                    displayName = null,
+                    noShowCount = 0,
+                    phoneVerifiedAt = null,
+                    phoneConfirmedByOperatorAt = null,
+                )
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(bare)))
+            val persons = FakePersonsApi(result = PersonsResult.Loaded(listOf(PersonProfile(personId = "c1", displayName = "Анна"))))
+            val viewModel = ContactsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(listOf("c1"), persons.requestedIds)
+            assertEquals(
+                ContactsUiState.Loaded(listOf(bare.copy(displayName = "Анна"))),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `26-162 an unreachable person registry leaves the row as it was, never fails the screen`() =
+        runTest(dispatcher) {
+            val bare =
+                Contact(
+                    customerId = "c1",
+                    phone = "+7***5678",
+                    masked = true,
+                    displayName = null,
+                    noShowCount = 0,
+                    phoneVerifiedAt = null,
+                    phoneConfirmedByOperatorAt = null,
+                )
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(bare)))
+            val persons = FakePersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = ContactsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(ContactsUiState.Loaded(listOf(bare)), viewModel.state.value)
+        }
+
+    @Test
+    fun `26-162 an empty contact list asks the person registry for nothing`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(emptyList()))
+            val persons = FakePersonsApi()
+            val viewModel = ContactsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(0, persons.fetchCalls)
+        }
+
     private fun contact(id: String) =
         Contact(
             customerId = id,
@@ -293,6 +359,26 @@ class ContactsViewModelTest {
             phoneVerifiedAt = null,
             phoneConfirmedByOperatorAt = null,
         )
+
+    /** `26-162`: the identical fake shape [FakeBookingsApi] above already establishes for the calendar
+     * port, restated for [PersonsApi] - a single canned answer, no server-shaped state to fake. Defaults
+     * to an empty [PersonsResult.Loaded] so every pre-existing test above (none of which cares about the
+     * merge itself) keeps asserting the identical [Contact] its own fixture already carries: an empty
+     * answer changes nothing ([ContactsViewModel.mergeDisplayNames]'s own doc comment). */
+    private class FakePersonsApi(
+        var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+    ) : PersonsApi {
+        var fetchCalls: Int = 0
+            private set
+        var requestedIds: List<String> = emptyList()
+            private set
+
+        override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+            fetchCalls++
+            requestedIds = personIds
+            return result
+        }
+    }
 
     private class FakeBookingsApi(
         var result: ContactsResult = ContactsResult.NotConfigured,
