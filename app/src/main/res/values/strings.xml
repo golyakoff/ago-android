@@ -822,6 +822,22 @@
          needs it. -->
     <string name="more_placeholder_body">Появится в одной из следующих версий.</string>
 
+    <!-- `26-159`: Каналы → «Установка виджета» - the chat-widget embed snippet and its allowed origins,
+         a chat site/channel setting read from `Ago.Chat.Api` (`GET /api/v1/sites/{siteId}/installation`),
+         mirroring `ago-console`'s own `InstallSnippetPage`. One resource for both the Ещё row label and the
+         screen's own app-bar title, the identical "one word, one string" shape `nav_more` already takes for
+         its own two call sites. -->
+    <string name="channels_install_title">Установка виджета</string>
+    <string name="channels_install_embed_caption">Этот код встраивания подставляется автоматически. Вставьте его на страницу вашего сайта, чтобы показать виджет.</string>
+    <string name="channels_install_snippet_label">Код встраивания</string>
+    <string name="channels_install_origins_label">Разрешённые источники</string>
+    <string name="channels_install_origins_empty">Пока не задано ни одного источника.</string>
+    <!-- The origins are read-only here, exactly as in the console: `Ago.Chat.Api` exposes no
+         `site:configure`-gated write for them. -->
+    <string name="channels_install_origins_hint">Чтобы изменить список источников, напишите в поддержку AGO.</string>
+    <string name="channels_install_load_failed_transport">Не удалось связаться с AGO. Проверьте подключение и попробуйте ещё раз.</string>
+    <string name="channels_install_load_failed_unexpected">Не удалось загрузить установку виджета. Попробуйте ещё раз.</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity

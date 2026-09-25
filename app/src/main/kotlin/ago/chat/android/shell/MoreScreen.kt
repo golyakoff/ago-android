@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
@@ -66,14 +67,32 @@ internal fun MoreScreen(
     operatorEmail: String?,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
+    // `26-159`: whether the signed-in operator holds `site:configure` - computed once by
+    // [AppShellContent] from the [ago.chat.android.core.domain.permissions.OperatorPermissions.Known] it
+    // already has, and handed here as a plain `Boolean`, the identical "the caller who already has the
+    // permission set computes the gate" split every other screen's own gate follows. Decides whether the
+    // Каналы «Установка виджета» row is drawn at all (hide-not-disable). Defaults to `false` so the
+    // back-contract tests that drive [MoreScreen] with no `site:configure` keep rendering exactly the rows
+    // they did before this item.
+    canConfigureSite: Boolean = false,
 ) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
-    val rows = remember { buildMoreRows() }
+    val rows = remember(canConfigureSite) { buildMoreRows(canConfigureSite) }
     BackHandler(enabled = openRowId != null) { openRowId = null }
 
     val openRow = rows.firstOrNull { it.id == openRowId }
     if (openRow != null) {
-        PlaceholderDestinationScreen(title = stringResource(openRow.labelRes), body = stringResource(R.string.more_placeholder_body))
+        when (openRow.id) {
+            // `26-159`: the one Ещё row with a real screen behind it - the chat-widget install screen,
+            // mirroring `ago-console`'s own `InstallSnippetPage`. Back returns to the Ещё list (clause 2)
+            // via the same `openRowId = null` this screen's own `BackHandler` above already uses.
+            CHANNELS_INSTALL_ROW_ID -> InstallWidgetRoute(onBack = { openRowId = null })
+            else ->
+                PlaceholderDestinationScreen(
+                    title = stringResource(openRow.labelRes),
+                    body = stringResource(R.string.more_placeholder_body),
+                )
+        }
     } else {
         MoreListScreen(
             rows = rows,
@@ -171,36 +190,59 @@ internal data class MoreRow(
     val section: MoreSectionId?,
 )
 
+internal const val CHANNELS_INSTALL_ROW_ID: String = "channels-install"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 
 /** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
- * opens [PlaceholderDestinationScreen] rather than a finished screen. */
-internal fun buildMoreRows(): List<MoreRow> =
-    listOf(
-        MoreRow(
-            id = AUTOMATION_QUICK_REPLIES_ROW_ID,
-            labelRes = R.string.more_automation_quick_replies_row,
-            section = MoreSectionId.Automation,
-        ),
-        MoreRow(
-            id = AUTOMATION_AFTER_HOURS_ROW_ID,
-            labelRes = R.string.more_automation_after_hours_row,
-            section = MoreSectionId.Automation,
-        ),
-        MoreRow(
-            id = ADMINISTRATION_OPERATORS_ROW_ID,
-            labelRes = R.string.more_administration_operators_row,
-            section = MoreSectionId.Administration,
-        ),
-        MoreRow(
-            id = ADMINISTRATION_BILLING_ROW_ID,
-            labelRes = R.string.more_administration_billing_row,
-            section = MoreSectionId.Administration,
-        ),
-    )
+ * opens [PlaceholderDestinationScreen] rather than a finished screen.
+ *
+ * `26-159`: Каналы gains its first real row — «Установка виджета» — but only when [canConfigureSite],
+ * matching how `ago-console`'s own rail gates its `/channels/install` entry on `site:configure`. A
+ * section with no rows is still not drawn at all ([buildMoreSections]), so an operator without the
+ * permission sees no Каналы header either, exactly as before this item. */
+internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
+    buildList {
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = CHANNELS_INSTALL_ROW_ID,
+                    labelRes = R.string.channels_install_title,
+                    section = MoreSectionId.Channels,
+                ),
+            )
+        }
+        add(
+            MoreRow(
+                id = AUTOMATION_QUICK_REPLIES_ROW_ID,
+                labelRes = R.string.more_automation_quick_replies_row,
+                section = MoreSectionId.Automation,
+            ),
+        )
+        add(
+            MoreRow(
+                id = AUTOMATION_AFTER_HOURS_ROW_ID,
+                labelRes = R.string.more_automation_after_hours_row,
+                section = MoreSectionId.Automation,
+            ),
+        )
+        add(
+            MoreRow(
+                id = ADMINISTRATION_OPERATORS_ROW_ID,
+                labelRes = R.string.more_administration_operators_row,
+                section = MoreSectionId.Administration,
+            ),
+        )
+        add(
+            MoreRow(
+                id = ADMINISTRATION_BILLING_ROW_ID,
+                labelRes = R.string.more_administration_billing_row,
+                section = MoreSectionId.Administration,
+            ),
+        )
+    }
 
 /** `ago-console/src/shell/consoleNav.ts`'s own `buildSection`, ported: a section with no rows is not
  * returned at all, rather than returned empty for the caller to filter — there is no "collapsed

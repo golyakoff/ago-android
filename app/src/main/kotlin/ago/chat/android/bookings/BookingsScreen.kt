@@ -716,6 +716,11 @@ internal fun RefusalBody(
     reason: BookingsQueueFailure,
     onRetry: () -> Unit,
     unexpectedMessageRes: Int = R.string.bookings_load_failed_unexpected,
+    // `26-159`: parametrised for the same reason [unexpectedMessageRes] already is - the chat
+    // «Установка виджета» screen reuses this body against `Ago.Chat.Api`, so its transport wording must
+    // not name "AGO Calendar" the way the default (worded for this file's own calendar reads) does.
+    // Default unchanged, so every existing caller keeps the exact string it had.
+    transportMessageRes: Int = R.string.bookings_load_failed_transport,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -723,7 +728,7 @@ internal fun RefusalBody(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = failureMessage(reason, unexpectedMessageRes),
+            text = failureMessage(reason, unexpectedMessageRes, transportMessageRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -738,9 +743,10 @@ internal fun RefusalBody(
 private fun failureMessage(
     reason: BookingsQueueFailure,
     unexpectedMessageRes: Int,
+    transportMessageRes: Int = R.string.bookings_load_failed_transport,
 ): String =
     when (reason) {
-        BookingsQueueFailure.Transport -> stringResource(R.string.bookings_load_failed_transport)
+        BookingsQueueFailure.Transport -> stringResource(transportMessageRes)
         BookingsQueueFailure.Unexpected -> stringResource(unexpectedMessageRes)
     }
 
