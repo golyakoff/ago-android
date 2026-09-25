@@ -48,10 +48,15 @@ import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.data.conversations.RoomConversationListCache
 import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
+import ago.chat.android.devices.AndroidBatteryOptimizationChecker
 import ago.chat.android.devices.AndroidNotificationChannelStateReader
 import ago.chat.android.devices.AndroidNotificationPermissionChecker
 import ago.chat.android.devices.AppForegroundTracker
+import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.BatteryAwarenessPromptPreferences
+import ago.chat.android.devices.BatteryOptimizationChecker
 import ago.chat.android.devices.ConversationRefreshSignal
+import ago.chat.android.devices.DataStoreBatteryAwarenessPromptPreferences
 import ago.chat.android.devices.DataStoreInstallationId
 import ago.chat.android.devices.DataStorePushMessageDedupeStore
 import ago.chat.android.devices.DataStoreQuietHoursPreferences
@@ -63,6 +68,7 @@ import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.DeviceRevocation
 import ago.chat.android.devices.FcmPushGateway
 import ago.chat.android.devices.LocalClock
+import ago.chat.android.devices.ManufacturerAutostartAdvisor
 import ago.chat.android.devices.NotificationChannelStateReader
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.OpenConversationTracker
@@ -654,6 +660,29 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideNotificationPermissionChecker(checker: AndroidNotificationPermissionChecker): NotificationPermissionChecker = checker
+
+    /** `26-128`: Settings → «Режим работы»'s own live read - see [BatteryOptimizationChecker]'s own doc
+     * comment for why this is a second port rather than reusing `26-85`'s own `BatteryOptimizationGate`. */
+    @Provides
+    @Singleton
+    public fun provideBatteryOptimizationChecker(checker: AndroidBatteryOptimizationChecker): BatteryOptimizationChecker = checker
+
+    /** `26-128`: Settings → «Автозапуск»'s own manufacturer-based guess - see [AutostartAdvisor]'s own
+     * doc comment for why this can never be a real system read. */
+    @Provides
+    @Singleton
+    public fun provideAutostartAdvisor(advisor: ManufacturerAutostartAdvisor): AutostartAdvisor = advisor
+
+    /** `26-128`: the first-launch battery/autostart sheet's own "don't show again" flag -
+     * [provideDeviceDataStore] above, the identical `device.preferences_pb`
+     * [DataStoreInstallationId]/[DataStoreQuietHoursPreferences] already write to - see
+     * [DataStoreBatteryAwarenessPromptPreferences]'s own doc comment for why a dedicated file is not
+     * worth it for this one flag either. */
+    @Provides
+    @Singleton
+    public fun provideBatteryAwarenessPromptPreferences(
+        preferences: DataStoreBatteryAwarenessPromptPreferences,
+    ): BatteryAwarenessPromptPreferences = preferences
 
     // `26-19`: the notification-settings screen's own three ports - each a small `@Singleton` seam for
     // the identical reason every other framework call in this app sits behind one (rule 2).

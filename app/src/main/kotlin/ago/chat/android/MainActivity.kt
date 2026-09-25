@@ -5,8 +5,10 @@ import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.session.appLanguageDataStore
 import ago.chat.android.session.toAppLanguage
+import ago.chat.android.shell.BatteryAwarenessRoute
 import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInHost
+import ago.chat.android.signin.SignInUiState
 import ago.chat.android.signin.SignInViewModel
 import ago.chat.android.ui.language.wrapContextForLanguage
 import ago.chat.android.ui.theme.AgoChatTheme
@@ -245,6 +247,13 @@ public class MainActivity : ComponentActivity() {
                     onSignOut = viewModel::signOut,
                     onOpenConsole = ::openInBrowser,
                 )
+                // `26-128`: composed here, over the whole signed-in shell, rather than inside
+                // `AppShellScreen` or any one tab - see `BatteryAwarenessRoute`'s own doc comment for why.
+                // Gated on `SignedIn` so the sheet never appears over the pre-session screens above, where
+                // there is no operator identity yet for a "don't show again" choice to belong to.
+                if (state is SignInUiState.SignedIn) {
+                    BatteryAwarenessRoute()
+                }
             }
         }
     }
