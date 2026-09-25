@@ -166,6 +166,14 @@
     <string name="message_bubble_author_system">System</string>
     <string name="message_bubble_time">at %1$s</string>
 
+    <!-- `26-147`: contact-detail panel shell + header. -->
+    <string name="thread_open_contact_panel">Contact details</string>
+    <string name="contact_panel_first_visit">First seen %1$s</string>
+    <string name="contact_panel_conversation_count_one">%1$d conversation</string>
+    <string name="contact_panel_conversation_count_few">%1$d conversations</string>
+    <string name="contact_panel_conversation_count_many">%1$d conversations</string>
+    <string name="contact_panel_summary_load_failed">Couldn\'t load</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>

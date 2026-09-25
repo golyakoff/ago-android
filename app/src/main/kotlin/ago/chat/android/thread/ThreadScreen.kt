@@ -6,11 +6,14 @@ import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.thread.contactpanel.ContactDetailPanel
+import ago.chat.android.thread.contactpanel.ContactPanelViewModel
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,14 +48,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -130,9 +138,22 @@ public fun ThreadRoute(
      * [ThreadTitleBlock]'s own fallback text so that case is named on screen rather than left as a
      * title that stays blank forever with no explanation. */
     identityUnavailable: Boolean = false,
+    // `26-147`: `conversation:read`, computed once from the operator's permission set by
+    // `AppShellScreen`'s own `conversationsTab` default and threaded down through
+    // `ConversationsTabHost` - the identical "the caller who holds the permission set computes the
+    // Boolean" split every other gate in this app draws. Gates the contact-panel affordance
+    // hide-not-disable (design Q7): `false` (the default every direct-construction test still gets) means
+    // the affordance is never drawn, and the panel VM below is never opened.
+    canReadContactDetail: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
+    // `26-147`: wired at the route, not the composable (design "Open from thread") - scoped per open
+    // conversation the same way [viewModel] is, and defaulted to `hiltViewModel()` so a test can
+    // substitute its own instance with no Hilt component, the identical shape [viewModel] already uses.
+    contactPanelViewModel: ContactPanelViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val contactPanelState by contactPanelViewModel.state.collectAsStateWithLifecycle()
+    var showContactPanel by rememberSaveable { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // The one "leave this thread" action, reached two ways - the app bar's own back arrow (passed to
@@ -178,6 +199,19 @@ public fun ThreadRoute(
         conversationState = conversationState,
         hasAttachmentUploadGrant = hasAttachmentUploadGrant,
         identityUnavailable = identityUnavailable,
+        // `26-147`: hide-not-disable (design Q7) - the affordance is `null`, so `ThreadTitleBlock`
+        // renders as plain, non-interactive text exactly as before, whenever the operator lacks
+        // `conversation:read`. Present only when they hold it, and then opening the panel also fires the
+        // one visitor-summary read for H4/H5.
+        onOpenContactPanel =
+            if (canReadContactDetail) {
+                {
+                    contactPanelViewModel.open(conversationId)
+                    showContactPanel = true
+                }
+            } else {
+                null
+            },
         onBack = leaveThread,
         onLoadOlder = viewModel::loadOlder,
         onRetryJoin = viewModel::retryJoin,
@@ -190,6 +224,19 @@ public fun ThreadRoute(
         // simply `state.messages`' own newest entry.
         onNewestVisibleSequenceChanged = viewModel::markReadUpTo,
     )
+
+    if (showContactPanel) {
+        ContactDetailPanel(
+            state = contactPanelState,
+            emojiCreature = emojiCreature,
+            emojiFood = emojiFood,
+            visitorName = visitorName,
+            visitorId = visitorId,
+            conversationState = conversationState,
+            onRetrySummary = contactPanelViewModel::retry,
+            onDismiss = { showContactPanel = false },
+        )
+    }
 }
 
 /** The stateless half - [ThreadRoute] wires the [ThreadViewModel] above it, the same "route wires,
@@ -214,6 +261,12 @@ internal fun ThreadScreen(
     onDismissSendRefusal: () -> Unit,
     onNewestVisibleSequenceChanged: (Long) -> Unit,
     identityUnavailable: Boolean = false,
+    // `26-147`: the contact-panel open affordance, or `null` when the operator lacks `conversation:read`
+    // (hide-not-disable, design Q7). When present, `ThreadTitleBlock`'s own visitor identity block
+    // becomes the tap target - the "small, additive change to this same title slot" this file's own
+    // top-of-file doc comment predicted the visitor context sheet would land as, now that the sheet
+    // exists. When `null`, the block stays the plain, non-interactive text it has always been.
+    onOpenContactPanel: (() -> Unit)? = null,
 ) {
     // `26-40`: the app-bar subtitle's own age half - the mockup's short elapsed form, ticking on the
     // identical shared clock `ConversationListScreen`'s own row ages already read
@@ -256,7 +309,10 @@ internal fun ThreadScreen(
                         }
                     },
                     title = {
-                        // Plain text, not a chip - see this file's own top-of-file doc comment.
+                        // `26-147`: a tap target when [onOpenContactPanel] is non-null (the operator holds
+                        // `conversation:read`), plain non-interactive text otherwise - see this file's own
+                        // top-of-file doc comment on why "absent" was the right first shape and why the
+                        // chip is additive now that the sheet exists.
                         ThreadTitleBlock(
                             emojiCreature = emojiCreature,
                             emojiFood = emojiFood,
@@ -264,6 +320,7 @@ internal fun ThreadScreen(
                             visitorId = visitorId,
                             identityUnavailable = identityUnavailable,
                             subtitle = subtitle,
+                            onOpenContactPanel = onOpenContactPanel,
                         )
                     },
                 )
@@ -360,10 +417,29 @@ private fun ThreadTitleBlock(
     visitorId: String?,
     identityUnavailable: Boolean,
     subtitle: String?,
+    onOpenContactPanel: (() -> Unit)? = null,
 ) {
     val parts = visitorDisplayPrefixParts(emojiCreature, emojiFood, visitorName, visitorId)
     val titleText = parts.displayName ?: stringResource(R.string.thread_identity_unavailable).takeIf { identityUnavailable }
-    Column {
+    // `26-147`: the tap target only exists when [onOpenContactPanel] does - a `clickable` added
+    // conditionally rather than a disabled one, the same hide-not-disable posture the composer's own
+    // attach control already takes. The `Role.Button` + `contentDescription` name the action for a screen
+    // reader; the `testTag` is `ContactDetailPanelTest`'s own hook, independent of the (Russian) title
+    // text below.
+    val affordanceLabel = stringResource(R.string.thread_open_contact_panel)
+    val titleModifier =
+        if (onOpenContactPanel != null) {
+            Modifier
+                .testTag(THREAD_CONTACT_PANEL_AFFORDANCE_TEST_TAG)
+                .clickable(onClick = onOpenContactPanel)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = affordanceLabel
+                }
+        } else {
+            Modifier
+        }
+    Column(modifier = titleModifier) {
         titleText?.let { name ->
             Text(
                 text = name,
@@ -679,6 +755,12 @@ private fun messageBubbleContentDescription(message: MessageDto): String {
  * [MessageDto.id] rather than a query built on the (Russian, wording-sensitive) `contentDescription`
  * itself, the identical reasoning `CONVERSATION_ROW_CONTENT_TEST_TAG`'s own doc comment gives. */
 internal fun messageBubbleContentTestTag(messageId: String): String = "messageBubbleContent:$messageId"
+
+/** `26-147`: `ContactDetailPanelTest`'s own hook onto the app-bar tap target that opens the contact
+ * panel - keyed here rather than queried by the (Russian) title text, the identical reasoning
+ * [messageBubbleContentTestTag] gives. The node carrying it exists only when the operator holds
+ * `conversation:read` (hide-not-disable), which is exactly what the gating test asserts. */
+internal const val THREAD_CONTACT_PANEL_AFFORDANCE_TEST_TAG: String = "threadContactPanelAffordance"
 
 /** `26-42`: one tick ("✓") — the server has the message — until [deliveredAt] is set, then two
  * ("✓✓") — the visitor's own widget acknowledged it. Never a third state: there is no read receipt in

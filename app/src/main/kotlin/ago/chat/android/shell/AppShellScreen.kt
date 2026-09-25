@@ -188,6 +188,11 @@ internal fun AppShellScreen(
             // who was never granted it.
             canSeeAllConversations = permissions.holds(Permission.SITE_CONFIGURE),
             canEraseConversations = permissions.holds(Permission.CONVERSATION_ERASE),
+            // `26-147`: `conversation:read` gates the thread's contact-panel affordance
+            // (hide-not-disable, design Q7) - computed here, once, from the permission set this function
+            // already holds, the identical shape the two Booleans above use. Safe while [permissions] is
+            // still [OperatorPermissions.Unknown] for the reason stated above.
+            canReadContactDetail = permissions.holds(Permission.CONVERSATION_READ),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for
