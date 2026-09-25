@@ -19,6 +19,7 @@ import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
@@ -41,6 +42,7 @@ import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
@@ -330,6 +332,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): ContactDetailsApi = KtorContactDetailsApi(client, config.apiBaseUrl)
+
+    /**
+     * `26-145`: the contact-detail panel's own «Ограничить» / «Снять ограничение» port (`26-153`) —
+     * `config.apiBaseUrl`, the same `Ago.Chat.Api` origin [provideContactDetailsApi] above reads, since
+     * block-visitor and the visitor-restriction endpoints live on that same host, not the calendar's.
+     * The whole-site status read is `SiteId`-scoped by the operator's own token claims server-side, not
+     * by a `{siteId}` URL segment, so no [ActiveSiteSelection] is threaded through here (unlike
+     * [provideConversationTagsApi] below, whose vocabulary read does carry the id in the path).
+     */
+    @Provides
+    public fun provideVisitorRestrictionApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): VisitorRestrictionApi = KtorVisitorRestrictionApi(client, config.apiBaseUrl)
 
     /**
      * `26-115`: the contact-detail panel's own tags port. Needs [ActiveSiteSelection] in addition to the
