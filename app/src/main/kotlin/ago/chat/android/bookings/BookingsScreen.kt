@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmationCountdown
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.confirmationCountdown
+import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.schedule.WorkingHoursBody
 import ago.chat.android.schedule.WorkingHoursUiState
@@ -76,6 +77,7 @@ import java.time.format.DateTimeFormatter
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
     hubConnectionState: OperatorHubConnectionState,
@@ -171,6 +173,42 @@ public fun BookingsRoute(
         onSubmitService = {}
     }
 
+    // `26-140`: the identical Hilt-avoidance-when-ungated shape the branches above establish, applied to
+    // [MastersViewModel] - an operator lacking `calendar:configure` never constructs it and never triggers
+    // its `init`-time read of the worker dictionary.
+    val mastersState: MastersUiState?
+    val onRetryMasters: () -> Unit
+    val onAddMaster: () -> Unit
+    val onEditMaster: (Worker) -> Unit
+    val onToggleMasterActive: (Worker) -> Unit
+    val onDeleteMaster: (String) -> Unit
+    val onCancelMasterEdit: () -> Unit
+    val onMasterFormChanged: (WorkerForm) -> Unit
+    val onSubmitMaster: (WorkerForm) -> Unit
+    if (showMastersSegment) {
+        val mastersViewModel: MastersViewModel = hiltViewModel()
+        val collectedMastersState by mastersViewModel.state.collectAsStateWithLifecycle()
+        mastersState = collectedMastersState
+        onRetryMasters = mastersViewModel::refresh
+        onAddMaster = mastersViewModel::startAdd
+        onEditMaster = mastersViewModel::edit
+        onToggleMasterActive = mastersViewModel::toggleActive
+        onDeleteMaster = mastersViewModel::delete
+        onCancelMasterEdit = mastersViewModel::cancelEdit
+        onMasterFormChanged = mastersViewModel::onFormChanged
+        onSubmitMaster = mastersViewModel::submit
+    } else {
+        mastersState = null
+        onRetryMasters = {}
+        onAddMaster = {}
+        onEditMaster = {}
+        onToggleMasterActive = {}
+        onDeleteMaster = {}
+        onCancelMasterEdit = {}
+        onMasterFormChanged = {}
+        onSubmitMaster = {}
+    }
+
     // `26-97`: the identical Hilt-avoidance-when-ungated shape the branches above establish - an
     // operator without `calendar:configure` never constructs [WorkingHoursViewModel] and so never
     // triggers its `init`-time read of a configuration document they may not be entitled to.
@@ -196,6 +234,7 @@ public fun BookingsRoute(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
+        showMastersSegment = showMastersSegment,
         showServicesSegment = showServicesSegment,
         showHoursSegment = showHoursSegment,
         selectedTab = selectedTab,
@@ -218,6 +257,15 @@ public fun BookingsRoute(
         onCancelServiceEdit = onCancelServiceEdit,
         onServiceDraftChanged = onServiceDraftChanged,
         onSubmitService = onSubmitService,
+        mastersState = mastersState,
+        onRetryMasters = onRetryMasters,
+        onAddMaster = onAddMaster,
+        onEditMaster = onEditMaster,
+        onToggleMasterActive = onToggleMasterActive,
+        onDeleteMaster = onDeleteMaster,
+        onCancelMasterEdit = onCancelMasterEdit,
+        onMasterFormChanged = onMasterFormChanged,
+        onSubmitMaster = onSubmitMaster,
         workingHoursState = workingHoursState,
         onRetryWorkingHours = onRetryWorkingHours,
         onSaveWorkingHours = onSaveWorkingHours,
@@ -254,6 +302,7 @@ internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
     selectedTab: BookingsTab,
@@ -276,6 +325,15 @@ internal fun BookingsScreen(
     onCancelServiceEdit: () -> Unit,
     onServiceDraftChanged: (ServiceDraft) -> Unit,
     onSubmitService: (ServiceDraft) -> Unit,
+    mastersState: MastersUiState?,
+    onRetryMasters: () -> Unit,
+    onAddMaster: () -> Unit,
+    onEditMaster: (Worker) -> Unit,
+    onToggleMasterActive: (Worker) -> Unit,
+    onDeleteMaster: (String) -> Unit,
+    onCancelMasterEdit: () -> Unit,
+    onMasterFormChanged: (WorkerForm) -> Unit,
+    onSubmitMaster: (WorkerForm) -> Unit,
     workingHoursState: WorkingHoursUiState?,
     onRetryWorkingHours: () -> Unit,
     onSaveWorkingHours: (String, Int, String, String) -> Unit,
@@ -292,7 +350,7 @@ internal fun BookingsScreen(
     // `rememberTickingNow`).
     val now = rememberTickingNow()
     val segments = visibleBookingsSegments(showConfirmedSegment, showClientsSegment)
-    val configMenuEntries = visibleBookingsConfigMenuEntries(showServicesSegment, showHoursSegment)
+    val configMenuEntries = visibleBookingsConfigMenuEntries(showMastersSegment, showServicesSegment, showHoursSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -408,6 +466,24 @@ internal fun BookingsScreen(
                             ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
                         }
 
+                    // `26-140`: the identical "non-null exactly when selectable" invariant the branches
+                    // around it state, for `showMastersSegment`. Kept stateless here rather than calling
+                    // `hiltViewModel()` inline, for this file's own Route/Screen-split reason.
+                    BookingsTab.Masters ->
+                        mastersState?.let {
+                            MastersBody(
+                                state = it,
+                                onRetry = onRetryMasters,
+                                onAdd = onAddMaster,
+                                onEdit = onEditMaster,
+                                onToggleActive = onToggleMasterActive,
+                                onDelete = onDeleteMaster,
+                                onCancelEdit = onCancelMasterEdit,
+                                onFormChanged = onMasterFormChanged,
+                                onSubmit = onSubmitMaster,
+                            )
+                        }
+
                     // `26-96`: the identical "non-null exactly when selectable" invariant, for
                     // `showServicesSegment`.
                     BookingsTab.Services ->
@@ -498,6 +574,7 @@ private fun bookingsTabLabel(
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
+        BookingsTab.Masters -> buildAnnotatedString { append(stringResource(R.string.masters_tab)) }
         BookingsTab.Services -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_services)) }
         BookingsTab.Hours -> buildAnnotatedString { append(stringResource(R.string.working_hours_tab)) }
     }

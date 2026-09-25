@@ -66,34 +66,46 @@ class BookingsTabTest {
  */
 class BookingsConfigMenuEntriesTest {
     @Test
-    fun `neither entry earned means an empty list - the menu control itself must not be drawn`() {
+    fun `no entry earned means an empty list - the menu control itself must not be drawn`() {
         assertEquals(
             emptyList<BookingsTab>(),
-            visibleBookingsConfigMenuEntries(showServicesSegment = false, showHoursSegment = false),
+            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = false, showHoursSegment = false),
+        )
+    }
+
+    /** `26-140`'s own Done-when: the Мастера entry appears exactly on `calendar:configure`. An operator
+     * without it earns no config entry at all - the whole `⋮` stays hidden (the case above). */
+    @Test
+    fun `Masters alone is a real combination, gated on calendar-configure`() {
+        assertEquals(
+            listOf(BookingsTab.Masters),
+            visibleBookingsConfigMenuEntries(showMastersSegment = true, showServicesSegment = false, showHoursSegment = false),
         )
     }
 
     @Test
-    fun `Services without Hours is a real combination`() {
+    fun `Services without Masters or Hours is a real combination`() {
         assertEquals(
             listOf(BookingsTab.Services),
-            visibleBookingsConfigMenuEntries(showServicesSegment = true, showHoursSegment = false),
+            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = true, showHoursSegment = false),
         )
     }
 
     @Test
-    fun `Hours without Services is a real combination too`() {
+    fun `Hours alone is a real combination too`() {
         assertEquals(
             listOf(BookingsTab.Hours),
-            visibleBookingsConfigMenuEntries(showServicesSegment = false, showHoursSegment = true),
+            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = false, showHoursSegment = true),
         )
     }
 
+    /** `26-140`: the fill/readiness order is Мастера before Услуги before Часы (Календари, when `26-142`
+     * lands, will lead). */
     @Test
-    fun `both entries are drawn, Services before Hours`() {
+    fun `all entries are drawn, Masters before Services before Hours`() {
         assertEquals(
-            listOf(BookingsTab.Services, BookingsTab.Hours),
-            visibleBookingsConfigMenuEntries(showServicesSegment = true, showHoursSegment = true),
+            listOf(BookingsTab.Masters, BookingsTab.Services, BookingsTab.Hours),
+            visibleBookingsConfigMenuEntries(showMastersSegment = true, showServicesSegment = true, showHoursSegment = true),
         )
     }
 }
