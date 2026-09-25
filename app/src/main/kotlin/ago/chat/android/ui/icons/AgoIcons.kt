@@ -170,6 +170,47 @@ public object AgoIcons {
             },
         )
 
+    /**
+     * `26-117`: the booking-detail sheet's own «Телефон» affordance and the confirmed-booking row's
+     * trailing phone icon (`docs/backlog/26-117-*.md`'s own hard requirement 5: "Phone = Material
+     * Symbols `call`"). Transcribed from Feather's own `phone` glyph — a handset silhouette drawn as one
+     * continuous stroke, arcs and cubic curves alike — rather than Material's own filled `call` glyph,
+     * for the identical reason this file's own header gives for redrawing `delete_forever` as
+     * [TrashForever]: a filled Material path dropped into this family's one-continuous-1.8-stroke
+     * treatment would read as a different icon set from a different app. Feather's own outline rendering
+     * (`fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round`) already matches this
+     * family's own stroke treatment almost exactly (this file's [STROKE_WIDTH] is 1.8, not 2), which is
+     * why this is a transcription rather than a redraw from scratch the way [TrashForever] needed to be.
+     */
+    public val Call: ImageVector =
+        strokeIcon(
+            "AgoCall",
+            // M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6
+            // 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81
+            // a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45
+            // c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z
+            {
+                moveTo(22f, 16.92f)
+                verticalLineToRelative(3f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, -2.18f, 2f)
+                arcToRelative(19.79f, 19.79f, 0f, isMoreThanHalf = false, isPositiveArc = true, -8.63f, -3.07f)
+                arcToRelative(19.5f, 19.5f, 0f, isMoreThanHalf = false, isPositiveArc = true, -6f, -6f)
+                arcToRelative(19.79f, 19.79f, 0f, isMoreThanHalf = false, isPositiveArc = true, -3.07f, -8.67f)
+                arcTo(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 4.11f, 2f)
+                horizontalLineToRelative(3f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 2f, 1.72f)
+                curveToRelative(0.127f, 0.96f, 0.361f, 1.903f, 0.7f, 2.81f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, -0.45f, 2.11f)
+                lineTo(8.09f, 9.91f)
+                arcToRelative(16f, 16f, 0f, isMoreThanHalf = false, isPositiveArc = false, 6f, 6f)
+                lineToRelative(1.27f, -1.27f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 2.11f, -0.45f)
+                curveToRelative(0.907f, 0.339f, 1.85f, 0.573f, 2.81f, 0.7f)
+                arcTo(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 22f, 16.92f)
+                close()
+            },
+        )
+
     /** `i-send` — the composer's send control. */
     public val Send: ImageVector =
         strokeIcon(

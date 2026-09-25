@@ -39,4 +39,52 @@ class ConfirmedBookingsRangeTest {
         assertFalse(strip.first { it.date == "2026-09-23" }.hasBookings)
         assertEquals(true, strip.first { it.date == "2026-09-24" }.hasBookings)
     }
+
+    @Test
+    fun `a strip entirely inside one month produces exactly one label spanning every day`() {
+        // 2026-09-23 .. 2026-09-29 - the whole default range, one month, one label.
+        val range = defaultConfirmedBookingsRange(LocalDate.of(2026, 9, 23))
+        val strip = confirmedBookingsStrip(range, emptyList())
+
+        val labels = confirmedBookingsMonthLabels(strip)
+
+        assertEquals(listOf(ConfirmedBookingsMonthLabel(monthValue = 9, year = 2026, dayCount = 7)), labels)
+    }
+
+    @Test
+    fun `a strip crossing a month boundary produces one label per month, each with its own day count and year`() {
+        // 2026-09-25 .. 2026-10-01 - six September days (25-30), one October day.
+        val range = defaultConfirmedBookingsRange(LocalDate.of(2026, 9, 25))
+        val strip = confirmedBookingsStrip(range, emptyList())
+
+        val labels = confirmedBookingsMonthLabels(strip)
+
+        assertEquals(
+            listOf(
+                ConfirmedBookingsMonthLabel(monthValue = 9, year = 2026, dayCount = 6),
+                ConfirmedBookingsMonthLabel(monthValue = 10, year = 2026, dayCount = 1),
+            ),
+            labels,
+        )
+        // The two counts still add up to the whole strip - no day silently dropped or double-counted at
+        // the boundary.
+        assertEquals(strip.size, labels.sumOf { it.dayCount })
+    }
+
+    @Test
+    fun `a strip crossing a year boundary keeps December and January as two labels with two different years`() {
+        // 2026-12-29 .. 2027-01-04 - three December days, four January days, two different years.
+        val range = defaultConfirmedBookingsRange(LocalDate.of(2026, 12, 29))
+        val strip = confirmedBookingsStrip(range, emptyList())
+
+        val labels = confirmedBookingsMonthLabels(strip)
+
+        assertEquals(
+            listOf(
+                ConfirmedBookingsMonthLabel(monthValue = 12, year = 2026, dayCount = 3),
+                ConfirmedBookingsMonthLabel(monthValue = 1, year = 2027, dayCount = 4),
+            ),
+            labels,
+        )
+    }
 }

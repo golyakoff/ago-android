@@ -73,3 +73,40 @@ public fun confirmedBookingsStrip(
         )
     }
 }
+
+/**
+ * `26-117`: one month-label's own span across the day strip — [dayCount] chips wide, in strip order.
+ * `docs/backlog/26-117-*.md`'s own hard requirement 4: one label per month, each carrying its own
+ * [year], no divider between two labels, and each sitting under exactly its own [dayCount] day chips —
+ * this type is what lets the UI size and position each label without re-deriving month boundaries
+ * itself. [monthValue] is `1..12`, `java.time.LocalDate.getMonthValue`'s own convention, so a caller
+ * indexes a 12-entry resource array with `monthValue - 1` the same way [ConfirmedBooking.weekday] is
+ * already indexed directly with no remapping.
+ */
+public data class ConfirmedBookingsMonthLabel(
+    val monthValue: Int,
+    val year: Int,
+    val dayCount: Int,
+)
+
+/**
+ * `26-117`: [strip] collapsed into runs of consecutive days sharing one calendar month — the default
+ * range never spans more than a handful of days (`RANGE_HORIZON_DAYS` above), so a strip crosses at most
+ * one month boundary in practice, but this makes no assumption of that: a longer range would still
+ * collapse correctly into one label per distinct `(year, month)` run, in order, each with its own
+ * [ConfirmedBookingsMonthLabel.year] — the hard requirement that rules out a shared, divider-joined
+ * "Сентябрь | Октябрь 2026" label spanning two different years' worth of the same month name.
+ */
+public fun confirmedBookingsMonthLabels(strip: List<ConfirmedBookingsStripDay>): List<ConfirmedBookingsMonthLabel> {
+    val labels = mutableListOf<ConfirmedBookingsMonthLabel>()
+    for (day in strip) {
+        val date = LocalDate.parse(day.date)
+        val last = labels.lastOrNull()
+        if (last != null && last.monthValue == date.monthValue && last.year == date.year) {
+            labels[labels.lastIndex] = last.copy(dayCount = last.dayCount + 1)
+        } else {
+            labels.add(ConfirmedBookingsMonthLabel(monthValue = date.monthValue, year = date.year, dayCount = 1))
+        }
+    }
+    return labels
+}

@@ -10,6 +10,7 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.schedule.WorkingHoursBody
 import ago.chat.android.schedule.WorkingHoursUiState
 import ago.chat.android.schedule.WorkingHoursViewModel
+import ago.chat.android.shell.rememberPendingConversationOpener
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
@@ -94,17 +95,34 @@ public fun BookingsRoute(
     val confirmedState: ConfirmedBookingsUiState?
     val onSelectDay: (String) -> Unit
     val onRetryConfirmed: () -> Unit
+    val onRevealConfirmed: (String) -> Unit
     if (showConfirmedSegment) {
         val confirmedViewModel: ConfirmedBookingsViewModel = hiltViewModel()
         val collectedConfirmedState by confirmedViewModel.state.collectAsStateWithLifecycle()
         confirmedState = collectedConfirmedState
         onSelectDay = confirmedViewModel::onDaySelected
         onRetryConfirmed = confirmedViewModel::refresh
+        onRevealConfirmed = confirmedViewModel::reveal
     } else {
         confirmedState = null
         onSelectDay = {}
         onRetryConfirmed = {}
+        onRevealConfirmed = {}
     }
+    // `26-117`: the booking-detail sheet's own «Перейти к диалогу» / chat icon
+    // (`docs/backlog/26-117-*.md`'s own "Dialog link") reuses the identical cross-tab thread navigation
+    // `26-18`'s own push-tap flow already established, rather than a new navigation mechanism grown just
+    // for this screen - [ago.chat.android.shell.PendingConversationOpener]'s own doc comment states why
+    // it is a `StateFlow`-backed singleton reachable from any composable (`rememberPendingConversationOpener`
+    // reads it straight off the application's own Hilt graph), not a callback threaded down from
+    // `AppShellScreen`: `AppShellContent`'s own collector already switches the bottom bar to Диалоги the
+    // moment a pending id appears, and `ConversationsTabHost`'s own collector already opens the thread -
+    // calling `.open(conversationId)` here is indistinguishable, on the receiving end, from a notification
+    // tap. `originConversationId` is `null` on every row today (`ConfirmedBooking`'s own doc comment), so
+    // this call is unreachable in practice until `docs/design/26-112-*.md`'s own GAP-C1 ships - the
+    // moment it does, this wiring needs no further Android change.
+    val pendingConversationOpener = rememberPendingConversationOpener()
+    val onOpenDialog: (String) -> Unit = { conversationId -> pendingConversationOpener.open(conversationId) }
 
     // `26-52`: the identical Hilt-avoidance-when-ungated shape [confirmedState] above already
     // establishes, applied to [ContactsViewModel] for the same reason - an operator lacking both
@@ -187,6 +205,8 @@ public fun BookingsRoute(
         confirmedState = confirmedState,
         onSelectDay = onSelectDay,
         onRetryConfirmed = onRetryConfirmed,
+        onRevealConfirmed = onRevealConfirmed,
+        onOpenDialog = onOpenDialog,
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
         onRevealContact = onRevealContact,
@@ -243,6 +263,8 @@ internal fun BookingsScreen(
     confirmedState: ConfirmedBookingsUiState?,
     onSelectDay: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
+    onRevealConfirmed: (String) -> Unit,
+    onOpenDialog: (String) -> Unit,
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
     onRevealContact: (String) -> Unit,
@@ -368,7 +390,13 @@ internal fun BookingsScreen(
                     // have been able to select it in the first place.
                     BookingsTab.Confirmed ->
                         confirmedState?.let {
-                            ConfirmedBookingsBody(state = it, onSelectDay = onSelectDay, onRetry = onRetryConfirmed)
+                            ConfirmedBookingsBody(
+                                state = it,
+                                onSelectDay = onSelectDay,
+                                onRetry = onRetryConfirmed,
+                                onReveal = onRevealConfirmed,
+                                onOpenDialog = onOpenDialog,
+                            )
                         }
 
                     // `26-52`: the identical "non-null exactly when selectable" invariant
@@ -684,9 +712,12 @@ private fun PendingBookingCard(
 
 /** `SettingsScreen`'s own `AboutLine` shape, restated: a label, then whatever the row actually needs to
  * show beside it - here a slot rather than a single value, since some rows carry two pieces (a time and
- * a worker id; a service id and its duration). */
+ * a worker id; a service id and its duration). `internal`, not `private`: `26-117`'s own booking-detail
+ * sheet (`ConfirmedBookingsScreen.kt`'s own `ConfirmedBookingDetailBody`) reuses this for its own
+ * Услуга/Мастер/Телефон/Подтверждён по SMS/Источник rows rather than a second, near-identical
+ * label-then-content row shape. */
 @Composable
-private fun BookingDetailRow(
+internal fun BookingDetailRow(
     label: String,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,

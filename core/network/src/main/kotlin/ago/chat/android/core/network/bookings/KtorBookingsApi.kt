@@ -504,11 +504,21 @@ private fun PendingBookingWireDto.toDomain() =
         confirmationDeadline = confirmationDeadline,
     )
 
-/** `Ago.Calendar.Contracts.ConfirmedBookingResponse`, reduced to the fields [ConfirmedBooking]
- * carries — `phone`/`masked` are on the wire and simply omitted here, the identical
- * `ignoreUnknownKeys`-backed reduction [PendingBookingWireDto]'s own doc comment explains, applied for
- * the identical reason ([ConfirmedBooking]'s own doc comment: the masked-phone reveal is `26-53`, not
- * this item). */
+/**
+ * `Ago.Calendar.Contracts.ConfirmedBookingResponse`, reduced to the fields [ConfirmedBooking] carries.
+ *
+ * `26-117`: [phone]/[masked] are no longer omitted — [ConfirmedBooking]'s own doc comment says why the
+ * reduction that used to drop them no longer applies. Both are defaulted rather than required: the real
+ * server always sends them (`ConsoleContracts.cs`'s own remarks on `Phone`: "Always populated"), but a
+ * default lets a `2xx` that happened to omit them degrade to [ConfirmedBookingIdentity.NoName] through
+ * [confirmedBookingIdentity]'s own blank-is-absent rule rather than failing the whole page's decode — the
+ * identical `ignoreUnknownKeys`-adjacent resilience [PendingBookingWireDto]'s own doc comment already
+ * relies on for fields this adapter has no use for, applied here to fields it does read.
+ *
+ * [originConversationId] is genuinely not on the wire yet — see [ConfirmedBooking]'s own doc comment for
+ * the backend ticket that adds it. Defaulted to `null` so today's real response (which has no such key at
+ * all) still decodes.
+ */
 @Serializable
 private data class ConfirmedBookingWireDto(
     val bookingId: String,
@@ -523,6 +533,9 @@ private data class ConfirmedBookingWireDto(
     val endsAt: String,
     val localDate: String,
     val weekday: Int,
+    val phone: String = "",
+    val masked: Boolean = false,
+    val originConversationId: String? = null,
 )
 
 private fun ConfirmedBookingWireDto.toDomain() =
@@ -539,6 +552,9 @@ private fun ConfirmedBookingWireDto.toDomain() =
         endsAt = endsAt,
         localDate = localDate,
         weekday = weekday,
+        phone = phone,
+        masked = masked,
+        originConversationId = originConversationId,
     )
 
 /** `Ago.Calendar.Contracts.ContactResponse`, reduced to the fields [Contact] carries — `notes`/

@@ -1,6 +1,7 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingActionResult
+import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
@@ -134,12 +135,103 @@ class ConfirmedBookingsViewModelTest {
             assertTrue(viewModel.state.value is ConfirmedBookingsUiState.Loaded)
         }
 
+    @Test
+    fun `revealing a customer marks it, immediately, before the server answers`() =
+        runTest(dispatcher) {
+            val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)), hangReveal = true)
+            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reveal(monday.customerId)
+
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            assertEquals(setOf(monday.customerId), state.revealingCustomerIds)
+        }
+
+    @Test
+    fun `revealing the same customer twice sends exactly one server call`() =
+        runTest(dispatcher) {
+            val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday)), hangReveal = true)
+            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reveal(monday.customerId)
+            dispatcher.scheduler.runCurrent()
+            viewModel.reveal(monday.customerId)
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, api.revealCalls.size)
+        }
+
+    @Test
+    fun `a successful reveal unmasks every row across every day and worker sharing that customer id`() =
+        runTest(dispatcher) {
+            // Two bookings for the identical customer, on two different days with two different masters -
+            // the shape `ConfirmedBookingsViewModel.replacePhone` has to walk both nesting levels for.
+            val monday =
+                booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова", customerId = "c1")
+            val tuesday =
+                booking(id = "b2", localDate = "2026-09-29", weekday = 2, workerId = "w2", workerName = "Пётр Иванов", customerId = "c1")
+            val api =
+                FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday, tuesday))).apply {
+                    revealResult = RevealPhoneResult.Revealed("+79991234567")
+                }
+            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reveal("c1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("c1" to BookingRevealSurface.ANDROID_BOOKINGS), api.revealCalls)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            val allRows = state.days.flatMap { it.workers }.flatMap { it.rows }
+            assertEquals(2, allRows.size)
+            allRows.forEach { row ->
+                assertEquals("+79991234567", row.phone)
+                assertEquals(false, row.masked)
+            }
+            assertEquals(emptySet<String>(), state.revealingCustomerIds)
+        }
+
+    @Test
+    fun `a refusal leaves the masked value in place and shows the server's own detail`() =
+        runTest(dispatcher) {
+            val monday = booking(id = "b1", localDate = "2026-09-28", weekday = 1, workerId = "w1", workerName = "Ирина Соколова")
+            val api =
+                FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(listOf(monday))).apply {
+                    revealResult = RevealPhoneResult.Refused("Недостаточно прав для просмотра номера.")
+                }
+            val viewModel = ConfirmedBookingsViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.reveal(monday.customerId)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            assertEquals(
+                BookingActionErrorUi.ServerRefusal("Недостаточно прав для просмотра номера."),
+                state.actionError,
+            )
+            // The masked value is untouched - a refusal never guesses at an unmasked number.
+            val row =
+                state.days
+                    .single()
+                    .workers
+                    .single()
+                    .rows
+                    .single()
+            assertEquals(monday.phone, row.phone)
+        }
+
     private fun booking(
         id: String,
         localDate: String,
         weekday: Int,
         workerId: String,
         workerName: String,
+        customerId: String = "customer-$id",
     ) = ConfirmedBooking(
         bookingId = id,
         calendarId = "calendar-1",
@@ -147,20 +239,25 @@ class ConfirmedBookingsViewModelTest {
         workerDisplayName = workerName,
         serviceId = "service-1",
         serviceName = "Стрижка",
-        customerId = "customer-$id",
+        customerId = customerId,
         customerDisplayName = null,
         startsAt = "${localDate}T09:00:00Z",
         endsAt = "${localDate}T09:30:00Z",
         localDate = localDate,
         weekday = weekday,
+        phone = "+7***5678",
+        masked = true,
     )
 
     private class FakeBookingsApi(
         var result: ConfirmedBookingsResult = ConfirmedBookingsResult.NotConfigured,
         private val hangFetch: Boolean = false,
+        var revealResult: RevealPhoneResult = RevealPhoneResult.Revealed("+79991234567"),
+        private val hangReveal: Boolean = false,
     ) : BookingsApi {
         var confirmedFetchCalls: Int = 0
             private set
+        val revealCalls: MutableList<Pair<String, String>> = mutableListOf()
 
         // `26-51`'s own [ConfirmedBookingsViewModel] never calls this - the sibling pending-queue read.
         override suspend fun fetchPendingQueue(): PendingBookingsResult = throw UnsupportedOperationException("not used by this class")
@@ -189,11 +286,16 @@ class ConfirmedBookingsViewModelTest {
         override suspend fun markNoShow(bookingId: String): BookingActionResult =
             throw UnsupportedOperationException("not used by this class")
 
-        // `26-53` widened `BookingsApi` with a fifth method this class has no test of its own for.
+        // `26-117`: [ConfirmedBookingsViewModel.reveal]'s own call - the identical fake shape
+        // `ContactsViewModelTest`'s own `FakeBookingsApi` already establishes for the sibling screen.
         override suspend fun revealCustomerPhone(
             customerId: String,
             surface: String,
-        ): RevealPhoneResult = throw UnsupportedOperationException("not used by this class")
+        ): RevealPhoneResult {
+            revealCalls.add(customerId to surface)
+            if (hangReveal) awaitCancellation()
+            return revealResult
+        }
 
         // `26-96` widened `BookingsApi` with the service dictionary and its edit - neither of which
         // this class reads or writes.

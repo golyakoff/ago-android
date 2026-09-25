@@ -75,6 +75,18 @@ class AgoIconsTest {
     }
 
     @Test
+    fun `26-117's call icon is Feather's own phone path, node for node`() {
+        assertTranscribed(
+            AgoIcons.Call,
+            0,
+            "M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6" +
+                " 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81" +
+                "a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45" +
+                "c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z",
+        )
+    }
+
+    @Test
     fun `i-sliders' four rules are the mockup's own path data, node for node`() {
         assertTranscribed(AgoIcons.Sliders, 0, "M4 7h10")
         assertTranscribed(AgoIcons.Sliders, 1, "M18 7h2")
@@ -132,6 +144,7 @@ class AgoIconsTest {
                 AgoIcons.Send,
                 AgoIcons.Sliders,
                 AgoIcons.Logout,
+                AgoIcons.Call,
             )
         icons.forEach { icon ->
             assertEquals(icon.name, 24f, icon.viewportWidth, 0f)

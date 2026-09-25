@@ -245,6 +245,56 @@
         <item>Sat</item>
     </string-array>
 
+    <!-- `26-117`: index 0 = January, matching `values/strings.xml`'s own convention. English has no
+         genitive month form, so `bookings_month_genitive` repeats these verbatim rather than declining
+         them - the identical "no distinction where the language draws none" choice this file already
+         makes elsewhere. -->
+    <string-array name="bookings_month_full">
+        <item>January</item>
+        <item>February</item>
+        <item>March</item>
+        <item>April</item>
+        <item>May</item>
+        <item>June</item>
+        <item>July</item>
+        <item>August</item>
+        <item>September</item>
+        <item>October</item>
+        <item>November</item>
+        <item>December</item>
+    </string-array>
+    <string-array name="bookings_month_genitive">
+        <item>January</item>
+        <item>February</item>
+        <item>March</item>
+        <item>April</item>
+        <item>May</item>
+        <item>June</item>
+        <item>July</item>
+        <item>August</item>
+        <item>September</item>
+        <item>October</item>
+        <item>November</item>
+        <item>December</item>
+    </string-array>
+    <string-array name="bookings_weekday_full">
+        <item>Sunday</item>
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+    </string-array>
+
+    <string name="bookings_confirmed_identity_no_name">No name</string>
+    <string name="bookings_confirmed_open_dialog_action">Go to dialog</string>
+    <string name="bookings_confirmed_call_action">Phone</string>
+    <string name="bookings_confirmed_close_action">Close</string>
+    <string name="bookings_confirmed_detail_phone_label">Phone</string>
+    <string name="bookings_confirmed_detail_sms_label">Confirmed by SMS</string>
+    <string name="bookings_confirmed_detail_source_label">Source</string>
+
     <string name="bookings_tab_clients">Clients</string>
     <string name="bookings_contacts_empty">This tenant has no customers yet.</string>
     <string name="bookings_contacts_load_failed_unexpected">Couldn\'t load customers. Try again.</string>

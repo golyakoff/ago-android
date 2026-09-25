@@ -415,6 +415,80 @@
     </string-array>
 
     <!--
+        `26-117`: `docs/backlog/26-117-*.md`'s own hard requirement 4 - the month+year label riding
+        inside the day strip's own scrolling container. Nominative case ("Сентябрь", not "сентября"),
+        matching the mockup's own literal example ("Сентябрь 2026" / "Октябрь 2026") - a standalone label
+        naming a month, not a month modifying a day the way the detail sheet's own date line does.
+        Index 0 = January, `java.time.LocalDate.getMonthValue() - 1` - see
+        `ConfirmedBookingsMonthLabel`'s own doc comment (`:core:domain`).
+    -->
+    <string-array name="bookings_month_full">
+        <item>Январь</item>
+        <item>Февраль</item>
+        <item>Март</item>
+        <item>Апрель</item>
+        <item>Май</item>
+        <item>Июнь</item>
+        <item>Июль</item>
+        <item>Август</item>
+        <item>Сентябрь</item>
+        <item>Октябрь</item>
+        <item>Ноябрь</item>
+        <item>Декабрь</item>
+    </string-array>
+    <!-- `26-117`: the booking-detail sheet's own date line needs the genitive case a day-of-month takes
+         in Russian ("29 сентября", never "29 Сентябрь") - a second array rather than one Kotlin-side
+         declension rule, the identical "no logic that guesses at Russian grammar" posture
+         `confirmedBookingsCountLabel`'s own doc comment already states for "N записи". Same index
+         convention as `bookings_month_full` above. -->
+    <string-array name="bookings_month_genitive">
+        <item>января</item>
+        <item>февраля</item>
+        <item>марта</item>
+        <item>апреля</item>
+        <item>мая</item>
+        <item>июня</item>
+        <item>июля</item>
+        <item>августа</item>
+        <item>сентября</item>
+        <item>октября</item>
+        <item>ноября</item>
+        <item>декабря</item>
+    </string-array>
+    <!-- `26-117`: the detail sheet's own header date line needs the full weekday name
+         («Вторник, 29 сентября 2026»), not `bookings_weekday_short`'s two-letter chip label - index 0 =
+         Sunday, the identical convention `bookings_weekday_short` above already uses and
+         `ConfirmedBooking.weekday` already carries, so a row's own `weekday` indexes this array with no
+         remapping either. -->
+    <string-array name="bookings_weekday_full">
+        <item>Воскресенье</item>
+        <item>Понедельник</item>
+        <item>Вторник</item>
+        <item>Среда</item>
+        <item>Четверг</item>
+        <item>Пятница</item>
+        <item>Суббота</item>
+    </string-array>
+
+    <!-- `26-117`: `docs/backlog/26-117-*.md`'s own hard requirements 1-2 - the row's own client-line
+         fallback once neither a name nor a phone is a real fact (`confirmedBookingIdentity`'s own
+         `NoName` arm, `:core:domain`) - never the hex customer id. -->
+    <string name="bookings_confirmed_identity_no_name">Без имени</string>
+    <!-- `26-117`: hard requirement 5 - both icons' own content descriptions, and (for the chat one) the
+         identical action's own button text on the detail sheet (hard requirement 11), reused rather than
+         restated so the row's icon and the sheet's own primary action can never drift into two different
+         wordings for one action. -->
+    <string name="bookings_confirmed_open_dialog_action">Перейти к диалогу</string>
+    <string name="bookings_confirmed_call_action">Телефон</string>
+    <string name="bookings_confirmed_close_action">Закрыть</string>
+    <!-- `26-117`: hard requirement 8 - «Мастер»/«Услуга» reuse `bookings_card_worker_label`/
+         `bookings_card_service_label` verbatim (the identical fact, the identical word, on a second
+         screen); «Телефон»/«Подтверждён по SMS»/«Источник» are new to this sheet. -->
+    <string name="bookings_confirmed_detail_phone_label">Телефон</string>
+    <string name="bookings_confirmed_detail_sms_label">Подтверждён по SMS</string>
+    <string name="bookings_confirmed_detail_source_label">Источник</string>
+
+    <!--
         `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only
         (`docs/backlog/26-52-*.md`'s own Scope: "lists this tenant's real customers, read-only, with
         phones left masked"). Gated on `calendar:configure` or `customer:read`, matching
