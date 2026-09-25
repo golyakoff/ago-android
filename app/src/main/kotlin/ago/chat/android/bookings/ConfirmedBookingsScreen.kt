@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.util.Locale
 
 /**
  * `26-51`: Утверждены's own body — the date strip, then the selected day's rows grouped by master. See
@@ -278,10 +279,23 @@ private fun ConfirmedDayList(
     }
 }
 
+/**
+ * `26-125` bug 2: the mockup's own `.grouphdr` renders this whole line through CSS
+ * `text-transform: uppercase` (`docs/design/assets/26-112-bookings-refined-mockup.html`) — the *source*
+ * string stays sentence case (`confirmedBookingsCountLabel`'s own Russian plural agreement is computed
+ * on the un-uppercased word), and the transform is applied here at render time, the identical split
+ * [ago.chat.android.ui.components.SectionLabel]'s own doc comment states for its own `.slabel` uppercase.
+ * `Locale.forLanguageTag("ru")` rather than the no-arg locale-invariant overload
+ * ([ago.chat.android.ui.components.AccountAvatarAction]'s own reasoning for avoiding a fixed locale
+ * doesn't apply here — Cyrillic has no Turkish-style dotless-I ambiguity, and this app is Russian-only)
+ * — the identical explicit `"ru"` tag [ago.chat.android.analytics.PhoneRevealsReportScreen]'s own
+ * `OCCURRED_AT_FORMAT` and [ago.chat.android.analytics.AnalyticsDateRange]'s own `DATE_STAMP_FORMAT`
+ * already pin for the same reason.
+ */
 @Composable
 private fun WorkerGroupHeader(worker: WorkerGroup) {
     Text(
-        text = "${worker.workerDisplayName} · ${confirmedBookingsCountLabel(worker.rows.size)}",
+        text = "${worker.workerDisplayName} · ${confirmedBookingsCountLabel(worker.rows.size)}".uppercase(RU_LOCALE),
         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -319,7 +333,15 @@ private fun ConfirmedBookingRow(
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
-            modifier = Modifier.width(RowTimeColumnWidth).padding(start = 8.dp),
+            // `26-125` bug 1: `.padding(start = 8.dp).width(RowTimeColumnWidth)` — padding OUTSIDE the
+            // width, not inside it. `Modifier.width(w).padding(start = p)` (the order this shipped with)
+            // makes the *outer* box exactly `w` wide and then insets the `Text`'s own measured space by
+            // `p` inside that same box, so the text itself only ever got `w - p` — 32.dp for the shipped
+            // 40.dp/8.dp pair, not enough for bold "10:00" at `bodySmall`, clipping to "10:0". Reordering
+            // gives the padding its own space outside the box the `Text` measures into, so `RowTimeColumnWidth`
+            // means what its own doc comment below already claims: the text's full width, not
+            // text-plus-eaten-padding.
+            modifier = Modifier.padding(start = 8.dp).width(RowTimeColumnWidth),
         )
         Column(modifier = Modifier.weight(1f).padding(horizontal = RowLineGap)) {
             Text(
@@ -327,19 +349,36 @@ private fun ConfirmedBookingRow(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
+            // `26-125` bug 3: the shipped `Arrangement.spacedBy` + `Modifier.weight(1f)` on the service
+            // `Text` alone (no `fill = false`) forced that `Text` to claim the *entire* remaining row
+            // width regardless of how short "Стрижка" actually is, then left-aligned its own short string
+            // inside that oversized box — so the duration landed hard against the row's trailing edge with
+            // a wide empty gap before it ("Услуга␣␣длительность"), never touching it. `26-117`'s own hard
+            // requirement 1 asks for one joined sub-line («Стрижка · 60 мин»), so this restores a literal
+            // middot between the two — the identical `"$a · $b"` join this same file's own
+            // [WorkerGroupHeader] and [ago.chat.android.ui.components.VisitorEmojiPairName] already use —
+            // rather than two ends of a space-between row. `weight(1f, fill = false)` (not the shipped
+            // `weight(1f)`) lets a long service name still ellipsize instead of pushing the dot/duration
+            // off-row, without forcing a short one to stretch.
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = RowLineGap),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(RowLineGap),
             ) {
                 Text(
                     text = row.serviceName ?: "—",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    modifier = Modifier.weight(1f),
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 confirmedDurationMinutesOrNull(row.startsAt, row.endsAt)?.let { minutes ->
+                    Text(
+                        text = " · ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
                     Text(
                         text = stringResource(R.string.bookings_duration_minutes, minutes.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()),
                         style = MaterialTheme.typography.labelMedium,
@@ -541,3 +580,9 @@ private val RowLineGap = 8.dp
 // `26-117`: the row's own leading time column - wide enough for "10:00" in `bodySmall`, bold, with no
 // truncation on any locale this app renders (Russian-only today, `docs/architecture.md`).
 private val RowTimeColumnWidth = 40.dp
+
+// `26-125` bug 2: pinned rather than the device's own configured locale - this screen is Russian-only
+// (`docs/architecture.md`), the identical reason `PhoneRevealsReportScreen`'s own `OCCURRED_AT_FORMAT`
+// and `AnalyticsDateRange`'s own `DATE_STAMP_FORMAT` pin the same tag for their own locale-sensitive
+// formatting.
+private val RU_LOCALE: Locale = Locale.forLanguageTag("ru")
