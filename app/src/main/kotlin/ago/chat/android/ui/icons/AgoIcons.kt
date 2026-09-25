@@ -34,19 +34,24 @@ import androidx.compose.ui.unit.dp
  * must go through `Icon(...)` (which tints) rather than `Image(...)` (which does not).
  */
 public object AgoIcons {
-    /** `i-chat` — «Диалоги». A speech bubble with a tail, one continuous subpath. */
+    /**
+     * `26-126`: «Диалоги» and every other chat affordance (bottom-nav tab, the Записи row's chat
+     * button). The round speech bubble the mockup once carried is replaced by the Material Symbols
+     * `chat_bubble` shape the mini-site's own `#i-chat` was already corrected to: a rounded rectangle
+     * with a small downward tail. Two subpaths — the frame as this file's `roundedRect` primitive
+     * (`<rect x="3.5" y="4.5" width="17" height="12" rx="3.2"/>`) and the tail as its own stroke
+     * (`<path d="M8 16.5v4l5-4"/>`) — kept stroke-only, so it stays consistent with the icon family.
+     */
     public val Chat: ImageVector =
         strokeIcon(
             "AgoChat",
-            // M21 12a8 8 0 0 1-8 8H7l-4 3 1-4.5A8 8 0 1 1 21 12z
+            // <rect x="3.5" y="4.5" width="17" height="12" rx="3.2"/>
+            { roundedRect(left = 3.5f, top = 4.5f, width = 17f, height = 12f, radius = 3.2f) },
+            // M8 16.5v4l5-4
             {
-                moveTo(21f, 12f)
-                arcToRelative(8f, 8f, 0f, isMoreThanHalf = false, isPositiveArc = true, -8f, 8f)
-                horizontalLineTo(7f)
-                lineToRelative(-4f, 3f)
-                lineToRelative(1f, -4.5f)
-                arcTo(8f, 8f, 0f, isMoreThanHalf = true, isPositiveArc = true, 21f, 12f)
-                close()
+                moveTo(8f, 16.5f)
+                verticalLineToRelative(4f)
+                lineToRelative(5f, -4f)
             },
         )
 
@@ -181,6 +186,10 @@ public object AgoIcons {
      * (`fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round`) already matches this
      * family's own stroke treatment almost exactly (this file's [STROKE_WIDTH] is 1.8, not 2), which is
      * why this is a transcription rather than a redraw from scratch the way [TrashForever] needed to be.
+     *
+     * `26-126`: mirrored horizontally (`mirrored = true`, the mockup's own `matrix(-1,0,0,1,24,0)`) so
+     * the handset points as if under the *right* hand — the phone icon sits at the trailing (right) end
+     * of every row it appears in. The Feather path itself is untouched; only the wrapping group flips it.
      */
     public val Call: ImageVector =
         strokeIcon(
@@ -209,6 +218,7 @@ public object AgoIcons {
                 arcTo(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 22f, 16.92f)
                 close()
             },
+            mirrored = true,
         )
 
     /** `i-send` — the composer's send control. */
@@ -467,6 +477,7 @@ private fun strokeIcon(
     name: String,
     vararg subpaths: PathBuilder.() -> Unit,
     strokeWidth: Float = STROKE_WIDTH,
+    mirrored: Boolean = false,
 ): ImageVector {
     val builder =
         ImageVector.Builder(
@@ -476,6 +487,13 @@ private fun strokeIcon(
             viewportWidth = VIEWPORT,
             viewportHeight = VIEWPORT,
         )
+    // `26-126`: a horizontal flip expressed as the mockup's own `matrix(-1,0,0,1,24,0)` — a group
+    // transform (`scaleX = -1`, `translationX = 24`) wrapping the subpaths verbatim, so the glyph's
+    // geometry stays a faithful transcription and only its display is mirrored. Compose composes the
+    // group matrix as `translate(translationX) · scale(scaleX)`, i.e. x → 24 − x, exactly the SVG matrix.
+    if (mirrored) {
+        builder.addGroup(scaleX = -1f, scaleY = 1f, translationX = VIEWPORT)
+    }
     subpaths.forEach { subpath ->
         builder.path(
             fill = null,
@@ -485,6 +503,9 @@ private fun strokeIcon(
             strokeLineJoin = StrokeJoin.Round,
             pathBuilder = subpath,
         )
+    }
+    if (mirrored) {
+        builder.clearGroup()
     }
     return builder.build()
 }

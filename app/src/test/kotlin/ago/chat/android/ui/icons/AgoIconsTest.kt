@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.vector.VectorGroup
+import androidx.compose.ui.graphics.vector.VectorNode
 import androidx.compose.ui.graphics.vector.VectorPath
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -33,8 +35,12 @@ import org.junit.Test
  */
 class AgoIconsTest {
     @Test
-    fun `i-chat is the mockup's own path data, node for node`() {
-        assertTranscribed(AgoIcons.Chat, 0, "M21 12a8 8 0 0 1-8 8H7l-4 3 1-4.5A8 8 0 1 1 21 12z")
+    fun `i-chat is the mockup's rounded chat_bubble frame and its own tail path`() {
+        // `26-126`: <rect x="3.5" y="4.5" width="17" height="12" rx="3.2"/> is a primitive (see this
+        // class's own doc comment) — held to its structure, the frame plus the tail = two subpaths.
+        assertEquals(2, paths(AgoIcons.Chat).size)
+        // <path d="M8 16.5v4l5-4"/> — the tail, held to the parser node-for-node.
+        assertTranscribed(AgoIcons.Chat, 1, "M8 16.5v4l5-4")
     }
 
     @Test
@@ -76,6 +82,8 @@ class AgoIconsTest {
 
     @Test
     fun `26-117's call icon is Feather's own phone path, node for node`() {
+        // `26-126` mirrors this glyph with a wrapping group (`matrix(-1,0,0,1,24,0)`); the path nodes
+        // themselves are untouched, so this transcription still holds exactly as before.
         assertTranscribed(
             AgoIcons.Call,
             0,
@@ -171,5 +179,20 @@ class AgoIconsTest {
         assertEquals("${icon.name} subpath $subpathIndex", expected, actual)
     }
 
-    private fun paths(icon: ImageVector): List<VectorPath> = icon.root.filterIsInstance<VectorPath>()
+    /**
+     * Every [VectorPath] under an icon, in draw order, descending into nested [VectorGroup]s.
+     * `26-126` wraps [AgoIcons.Call] in a mirror group (`matrix(-1,0,0,1,24,0)`), so its path is no
+     * longer a direct child of `root`; recursing keeps every assertion above — its own transcription
+     * included, since the group flips only the display and leaves the path's nodes untouched — working
+     * for grouped and ungrouped icons alike.
+     */
+    private fun paths(icon: ImageVector): List<VectorPath> = collectPaths(icon.root)
+
+    private fun collectPaths(group: VectorGroup): List<VectorPath> =
+        group.flatMap { node: VectorNode ->
+            when (node) {
+                is VectorPath -> listOf(node)
+                is VectorGroup -> collectPaths(node)
+            }
+        }
 }
