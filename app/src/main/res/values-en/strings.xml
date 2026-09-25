@@ -289,6 +289,8 @@
 
     <string name="bookings_confirmed_identity_no_name">No name</string>
     <string name="bookings_confirmed_open_dialog_action">Go to dialog</string>
+    <!-- `26-135`: shortened primary label for the detail sheet's single-row action pair (see the RU file). -->
+    <string name="bookings_confirmed_open_dialog_short_action">To dialog</string>
     <string name="bookings_confirmed_call_action">Phone</string>
     <string name="bookings_confirmed_close_action">Close</string>
     <string name="bookings_confirmed_detail_phone_label">Phone</string>

@@ -479,6 +479,9 @@
          restated so the row's icon and the sheet's own primary action can never drift into two different
          wordings for one action. -->
     <string name="bookings_confirmed_open_dialog_action">Перейти к диалогу</string>
+    <!-- `26-135`: the shortened primary label for the detail sheet's own single-row action pair, where
+         «Перейти к диалогу» + «Закрыть» share the width and the full label would not fit at ~360dp. -->
+    <string name="bookings_confirmed_open_dialog_short_action">К диалогу</string>
     <string name="bookings_confirmed_call_action">Телефон</string>
     <string name="bookings_confirmed_close_action">Закрыть</string>
     <!-- `26-117`: hard requirement 8 - «Мастер»/«Услуга» reuse `bookings_card_worker_label`/
