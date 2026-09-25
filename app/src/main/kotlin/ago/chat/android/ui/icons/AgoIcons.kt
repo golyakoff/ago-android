@@ -310,8 +310,12 @@ public object AgoIcons {
      * `check` glyph, for the identical "redraw in this family's stroke treatment, never import a filled
      * shape" reasoning this file's own header gives for [TrashForever] below. Transcribed from Feather's
      * own `check` glyph (`<polyline points="20 6 9 17 4 12"/>`) — already this file's precedent for
-     * borrowing a Feather primitive verbatim when it already matches the 1.8-stroke/round-cap/round-join
-     * treatment exactly, the same reasoning [Call] above states for Feather's `phone`.
+     * borrowing a Feather primitive verbatim, the same reasoning [Call] above states for Feather's `phone`.
+     *
+     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8 — this glyph is only ever
+     * rendered shrunk inside `SettingsScreen`'s own status circle, where the 1.8 stroke read hair-thin on a
+     * real device; the geometry is still Feather's verbatim, only the weight is heavier. See that constant's
+     * own doc comment for why these two glyphs, and only these two, deviate from the uniform family stroke.
      */
     public val Check: ImageVector =
         strokeIcon(
@@ -322,6 +326,7 @@ public object AgoIcons {
                 lineTo(9f, 17f)
                 lineToRelative(-5f, -5f)
             },
+            strokeWidth = STATUS_GLYPH_STROKE_WIDTH,
         )
 
     /**
@@ -335,6 +340,11 @@ public object AgoIcons {
      * Feather convention, not a guess: a stroked line one hundredth of a unit long still draws, because
      * [STROKE_WIDTH]'s round cap gives it a radius — the line's own zero-ish length only decides how much
      * that round cap is allowed to stretch into an oval, not whether it draws at all.
+     *
+     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8 — like [Check] above, this
+     * glyph is only ever rendered shrunk inside `SettingsScreen`'s own status circle, where the 1.8 stroke
+     * was barely visible on a real device. The heavier weight also fattens the round-cap dot (its radius is
+     * half the stroke width), so the mark reads as an exclamation at badge size rather than a faint tick.
      */
     public val Exclamation: ImageVector =
         strokeIcon(
@@ -349,6 +359,7 @@ public object AgoIcons {
                 moveTo(12f, 16f)
                 lineToRelative(0.01f, 0f)
             },
+            strokeWidth = STATUS_GLYPH_STROKE_WIDTH,
         )
 
     /**
@@ -432,6 +443,17 @@ public object AgoIcons {
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */
 private const val VIEWPORT = 24f
 private const val STROKE_WIDTH = 1.8f
+
+/**
+ * `26-137`: the deliberately heavier weight [AgoIcons.Check] and [AgoIcons.Exclamation] alone are drawn at.
+ * Those two are the only glyphs in the set rendered *shrunk* — inside `SettingsScreen`'s own ~13dp status
+ * circle rather than at the family's usual 24dp — and at that size the family's 1.8 stroke came out hair-thin
+ * and barely legible on a real device (the `26-128` follow-up this item fixes). 3.0 is the heaviest this
+ * viewport carries before a check's two arms or the exclamation's stem-and-dot start to merge: pushed to
+ * the maximum the style allows so the status cue reads clearly at badge size, while every full-size glyph
+ * keeps the uniform 1.8 the icon family's identity depends on.
+ */
+private const val STATUS_GLYPH_STROKE_WIDTH = 3.0f
 private val IconSize = 24.dp
 
 /**
@@ -444,6 +466,7 @@ private val IconSize = 24.dp
 private fun strokeIcon(
     name: String,
     vararg subpaths: PathBuilder.() -> Unit,
+    strokeWidth: Float = STROKE_WIDTH,
 ): ImageVector {
     val builder =
         ImageVector.Builder(
@@ -457,7 +480,7 @@ private fun strokeIcon(
         builder.path(
             fill = null,
             stroke = SolidColor(Color.Black),
-            strokeLineWidth = STROKE_WIDTH,
+            strokeLineWidth = strokeWidth,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
             pathBuilder = subpath,

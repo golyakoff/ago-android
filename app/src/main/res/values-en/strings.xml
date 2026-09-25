@@ -498,7 +498,10 @@
     <string name="settings_battery_mode_title_restricted">Operating mode: Battery saver</string>
     <string name="settings_battery_mode_current_unrestricted">Currently: No restrictions</string>
     <string name="settings_battery_mode_current_restricted">Currently: Battery saver</string>
-    <string name="settings_battery_mode_list_caption">This opens the system\'s app list — find "AGO Chat" and choose "No restrictions".</string>
+    <string name="settings_battery_mode_list_caption">This opens this app\'s own battery screen — choose "No restrictions".</string>
+
+    <string name="settings_app_suspend_note">On some phones (e.g. Xiaomi/MIUI), App info has a "Pause app activity if unused" option — turning it off is recommended, otherwise notifications may be delayed or not arrive. Android gives no way to read or open this option directly, so this is a recommendation, not a verified fact.</string>
+    <string name="settings_app_info_action">App info</string>
 
     <string name="settings_autostart_title_ok">Autostart: On</string>
     <string name="settings_autostart_title_needs_attention">Autostart: Off</string>

@@ -3,24 +3,78 @@ package ago.chat.android.devices
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 
 /**
- * `26-128`: opens the system's own battery-optimisation list —
- * `Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`, the permission-free list every app may open,
- * deliberately *not* `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (a one-tap per-app dialog that needs the
- * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest permission this item's own "Out of scope" refuses to
- * add). The operator finds this app in the list themselves; there is no per-app dialog this intent can
- * open without that permission. Shared between [ago.chat.android.shell.SettingsRoute]'s own expanded
- * «Режим работы» card and the first-launch sheet, which open the identical screen for the identical
- * reason, rather than each inlining its own copy of the same three lines.
+ * `26-137` (fixing `26-128`): opens **AGO Chat's own** per-app battery-optimisation screen directly —
+ * `Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` scoped to `package:$packageName`, the identical
+ * intent [ago.chat.android.MainActivity]'s own first-launch exemption launcher already fires (and the
+ * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest permission already declared for it). `26-128` shipped
+ * `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` here instead — the permission-free *global* list — which on
+ * a real MIUI device dropped the operator onto "Расход заряда батареи приложением", forcing them to hunt
+ * for AGO Chat and drill in themselves; the per-app intent opens the «С оптимизацией»/«Без ограничений»
+ * choice for this app in one step.
+ *
+ * The two fallbacks below are a graceful degradation, not defensive boilerplate: an OEM build that does not
+ * resolve the per-app request activity falls back to `26-128`'s own global list
+ * (`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`), and failing even that, to the always-present App-info
+ * screen (`ACTION_APPLICATION_DETAILS_SETTINGS`) where the battery entry lives one tap deeper — the same
+ * "no crash, no loop" contract [ago.chat.android.MainActivity]'s own launcher catch already keeps, extended
+ * to prefer the most direct screen that actually resolves rather than silently doing nothing.
+ *
+ * Shared between [ago.chat.android.shell.SettingsRoute]'s own expanded «Режим работы» card and the
+ * first-launch sheet, which open the identical screen for the identical reason.
  */
 public fun openBatteryOptimizationSettings(context: Context) {
+    val packageUri = Uri.parse("package:${context.packageName}")
+    startFirstResolvable(
+        context,
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, packageUri),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+    )
+}
+
+/**
+ * `26-137`: opens this app's own App-info screen (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`), the one
+ * screen every Android build resolves. It is where MIUI keeps «Приостановить работу приложения, если оно не
+ * используется» — a toggle Android exposes no reliable way to read or deep-link to on its own, so the
+ * caller can only recommend turning it off and land the operator on the screen that holds it, never assert
+ * or flip it. The `try`/`catch` is the identical fail-quiet contract [openBatteryOptimizationSettings]
+ * above keeps.
+ */
+public fun openAppInfoSettings(context: Context) {
     try {
-        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")),
+        )
     } catch (missing: ActivityNotFoundException) {
-        // The identical "no crash, no loop" contract `MainActivity.openInBrowser`'s own catch already
-        // applies - a build with no such system screen is not this app's bug to retry.
+        // A build with no App-info screen at all - the identical "no crash, no loop" contract as above.
+    }
+}
+
+/**
+ * Starts the first [candidates] intent that resolves, in order — a per-app screen preferred over a global
+ * list preferred over App-info. A candidate that does not resolve (its activity is absent, or an OEM guards
+ * it behind a signature-level permission this app cannot hold) is skipped rather than crashing the app;
+ * exhausting the list does nothing, the same fail-quiet outcome [ago.chat.android.MainActivity]'s own
+ * battery launcher already accepts for a build that resolves none of them.
+ */
+private fun startFirstResolvable(
+    context: Context,
+    vararg candidates: Intent,
+) {
+    for (intent in candidates) {
+        try {
+            context.startActivity(intent)
+            return
+        } catch (missing: ActivityNotFoundException) {
+            // Try the next, more widely-supported candidate.
+        } catch (denied: SecurityException) {
+            // Some OEM builds guard a battery activity behind a signature-level permission this app cannot
+            // hold - skip to the next candidate rather than crash, the same reasoning as the missing case.
+        }
     }
 }
 
