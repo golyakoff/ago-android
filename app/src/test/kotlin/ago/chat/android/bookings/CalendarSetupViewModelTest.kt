@@ -7,7 +7,6 @@ import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
 import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
 import ago.chat.android.core.domain.calendarsetup.TenantSetup
 import ago.chat.android.core.domain.calendarsetup.TenantSetupResult
-import ago.chat.android.session.OidcConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -24,9 +23,13 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * `26-142`: the Настройка / Календари screen's own read and its two independent write surfaces (the
- * allowed origins, the calendar roster) — the identical `StandardTestDispatcher`/`Dispatchers.setMain`
- * shape every sibling view-model test in this package already establishes ([MastersViewModelTest]).
+ * `26-142`: the Настройка / Календари screen's own read and its calendar-roster write surface — the
+ * identical `StandardTestDispatcher`/`Dispatchers.setMain` shape every sibling view-model test in this
+ * package already establishes ([MastersViewModelTest]).
+ *
+ * `26-158`: the embed-snippet and allowed-origins assertions this class used to carry are gone with those
+ * surfaces themselves — they are now a chat/channel setting covered by `InstallWidgetViewModelTest`, not
+ * this calendar screen.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CalendarSetupViewModelTest {
@@ -54,7 +57,7 @@ class CalendarSetupViewModelTest {
         }
 
     @Test
-    fun `the setup arrives, the embed snippet composed from the public key and the origins seeded`() =
+    fun `the setup arrives and the calendar roster is seeded`() =
         runTest(dispatcher) {
             val api = FakeCalendarSetupApi(result = loaded())
             val viewModel = viewModel(api)
@@ -62,10 +65,7 @@ class CalendarSetupViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.state.value as CalendarSetupUiState.Loaded
-            assertEquals("Shop", state.tenantName)
-            assertEquals("<script src=\"https://api.example/widget/widget.js\" data-site=\"pk_1\" async></script>", state.embedSnippet)
-            assertEquals("https://a.example\nhttps://b.example", state.originsText)
-            assertEquals(1, state.calendars.size)
+            assertEquals(listOf(calendar()), state.calendars)
         }
 
     @Test
@@ -88,21 +88,6 @@ class CalendarSetupViewModelTest {
             advanceUntilIdle()
 
             assertEquals(CalendarSetupUiState.Failed(BookingsQueueFailure.Transport), viewModel.state.value)
-        }
-
-    @Test
-    fun `saving origins splits the text into trimmed non-blank lines and re-reads`() =
-        runTest(dispatcher) {
-            val api = FakeCalendarSetupApi(result = loaded())
-            val viewModel = viewModel(api)
-            advanceUntilIdle()
-
-            viewModel.onOriginsTextChanged("  https://c.example \n\n https://d.example  \n")
-            viewModel.saveOrigins()
-            advanceUntilIdle()
-
-            assertEquals(listOf(listOf("https://c.example", "https://d.example")), api.saveOriginsCalls)
-            assertEquals(2, api.fetchCalls)
         }
 
     @Test
@@ -170,18 +155,7 @@ class CalendarSetupViewModelTest {
             assertEquals(BookingActionErrorUi.ServerRefusal("A calendar name is required."), state.actionError)
         }
 
-    private fun viewModel(api: FakeCalendarSetupApi) = CalendarSetupViewModel(api = api, config = config(), ioDispatcher = dispatcher)
-
-    private fun config() =
-        OidcConfig(
-            issuer = "https://kc.example/realms/ago",
-            clientId = "ago-android",
-            redirectUri = "ago-android://callback",
-            postLogoutRedirectUri = "ago-android://logout-callback",
-            apiBaseUrl = "https://api.example",
-            consoleUrl = "https://console.example",
-            calendarApiBaseUrl = "https://cal.example",
-        )
+    private fun viewModel(api: FakeCalendarSetupApi) = CalendarSetupViewModel(api = api, ioDispatcher = dispatcher)
 
     private fun calendar() = ConfiguredCalendar(id = "cal1", name = "Chair 1", timeZone = "Europe/Moscow", published = true)
 
@@ -198,13 +172,11 @@ class CalendarSetupViewModelTest {
     private class FakeCalendarSetupApi(
         var result: TenantSetupResult = TenantSetupResult.NotConfigured,
         private val hangFetch: Boolean = false,
-        var saveOriginsResult: BookingActionResult = BookingActionResult.Succeeded,
         var createResult: BookingActionResult = BookingActionResult.Succeeded,
         var updateResult: BookingActionResult = BookingActionResult.Succeeded,
     ) : CalendarSetupApi {
         var fetchCalls: Int = 0
             private set
-        val saveOriginsCalls: MutableList<List<String>> = mutableListOf()
         val createCalls: MutableList<Pair<CalendarDraft, String>> = mutableListOf()
         val updateCalls: MutableList<Pair<String, CalendarDraft>> = mutableListOf()
 
@@ -214,10 +186,9 @@ class CalendarSetupViewModelTest {
             return result
         }
 
-        override suspend fun saveAllowedOrigins(origins: List<String>): BookingActionResult {
-            saveOriginsCalls.add(origins)
-            return saveOriginsResult
-        }
+        // `26-158`: still part of the port (the console keeps this write), but no longer driven from this
+        // calendar screen - the app's origins editing moved to «Установка виджета» (`26-159`).
+        override suspend fun saveAllowedOrigins(origins: List<String>): BookingActionResult = BookingActionResult.Succeeded
 
         override suspend fun createCalendar(
             draft: CalendarDraft,

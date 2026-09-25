@@ -6,38 +6,26 @@ import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
 /**
  * `26-142`: [CalendarSetupViewModel]'s whole state — the identical four-arm shape
  * [MastersUiState]/[ServicesUiState]/[ago.chat.android.schedule.WorkingHoursUiState] already establish,
- * restated rather than shared because [Loaded] carries this screen's own two write surfaces (the embed's
- * allowed origins and the calendar roster) that no sibling state has a field for.
+ * restated rather than shared because [Loaded] carries this screen's own write surface (the calendar
+ * roster) that no sibling state has a field for.
+ *
+ * `26-158`: the embed snippet and allowed origins are gone from here — they were a chat/channel setting
+ * wrongly shown on this calendar screen, and now live in the «Установка виджета» screen under «Ещё»
+ * ([ago.chat.android.channels.InstallWidgetUiState], `26-159`). This state now owns only the calendars.
  */
 internal sealed interface CalendarSetupUiState {
     data object Loading : CalendarSetupUiState
 
     /**
-     * @param tenantName the shop's own name, shown read-only for context.
-     * @param embedSnippet the ready-to-paste `<script>` tag, composed once in the view model from the
-     *   tenant's [ago.chat.android.core.domain.calendarsetup.TenantSetup.publicKey] and the widget host —
-     *   shown read-only, never editable, the identical "the console is the only place the key appears"
-     *   posture the port's own `publicKey` doc comment records.
-     * @param originsText the allowed-origins field's *current* text — one origin per line, seeded from the
-     *   server list and edited freely. A copy the field owns, not a live view of [calendars] or the server
-     *   list: the list underneath stays what the server last said while the operator types, the identical
-     *   discipline [ServicesUiState.Loaded.editing] records for its own form.
      * @param calendars every calendar this tenant has, in the server's own order — a card each.
      * @param calendarForm the calendar create/edit form, or `null` when the roster is showing. A create
      *   form when [CalendarForm.isCreating]; an edit form otherwise.
-     * @param originsBusy whether the allowed-origins save is in flight — its own flag, separate from
-     *   [calendarFormBusy], because the two write surfaces submit independently and one being out on the
-     *   network must not disable the other.
      * @param calendarFormBusy whether the open calendar form's own create/update is in flight.
      * @param actionError the one banner a refused or failed write shows, above everything else.
      */
     data class Loaded(
-        val tenantName: String,
-        val embedSnippet: String,
-        val originsText: String,
         val calendars: List<ConfiguredCalendar>,
         val calendarForm: CalendarForm? = null,
-        val originsBusy: Boolean = false,
         val calendarFormBusy: Boolean = false,
         val actionError: BookingActionErrorUi? = null,
     ) : CalendarSetupUiState

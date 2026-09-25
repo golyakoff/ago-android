@@ -4,10 +4,8 @@ import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.calendarsetup.CalendarDraft
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
 import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
-import ago.chat.android.core.domain.calendarsetup.TenantSetup
 import ago.chat.android.core.domain.calendarsetup.TenantSetupResult
 import ago.chat.android.di.IoDispatcher
-import ago.chat.android.session.OidcConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,37 +19,31 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * `26-142`: the Настройка / Календари screen — the tenant-configuration writes a single Setup screen
- * owns (the embed's allowed origins, and the calendar roster), over [CalendarSetupApi]. A sibling of
- * [MastersViewModel]/[ServicesViewModel], not a merge into either: it reads and writes a different noun
- * through a different port, gated server-side on `calendar:configure` alone. Constructed only for an
- * operator holding that permission ([ago.chat.android.shell.AppShellScreen] computes the gate once and
- * [BookingsRoute] calls `hiltViewModel()` only inside that branch), the identical "does not even ask the
- * server for it" gate [MastersViewModel]'s own doc comment states.
+ * `26-142`: the Настройка / Календари screen — the calendar roster a single Setup screen owns, over
+ * [CalendarSetupApi]. A sibling of [MastersViewModel]/[ServicesViewModel], not a merge into either: it
+ * reads and writes a different noun through a different port, gated server-side on `calendar:configure`
+ * alone. Constructed only for an operator holding that permission
+ * ([ago.chat.android.shell.AppShellScreen] computes the gate once and [BookingsRoute] calls
+ * `hiltViewModel()` only inside that branch), the identical "does not even ask the server for it" gate
+ * [MastersViewModel]'s own doc comment states.
  *
- * **Two independent write surfaces, one discipline.** The allowed-origins save ([saveOrigins]) and the
- * calendar create/update the form submits ([submitCalendar]) carry separate busy flags
- * ([CalendarSetupUiState.Loaded.originsBusy] versus [CalendarSetupUiState.Loaded.calendarFormBusy]) so one
- * being out on the network never disables the other. Every one of them re-reads through
- * [CalendarSetupApi.fetchSetup] on success rather than patching state from an echo, the identical
+ * **The calendar create/update the form submits ([submitCalendar]) re-reads through
+ * [CalendarSetupApi.fetchSetup] on success** rather than patching state from an echo, the identical
  * "the authoritative answer is always the next read" discipline the sibling view models follow.
  *
- * **[OidcConfig] is injected only to compose the embed snippet.** The `<script>` tag is built here, once,
- * from the tenant's `publicKey` and the widget host ([OidcConfig.apiBaseUrl]) — the identical shape
- * `ago-console`'s own `InstallSnippetPage` builds it, `${apiBaseUrl}/widget/widget.js` with the key as
- * `data-site`. It is composed in the view model rather than the composable so the [CalendarSetupBody] stays
- * a pure renderer of a ready string, with no config dependency of its own.
+ * `26-158`: the allowed-origins save and the embed snippet this screen used to carry are gone — they were
+ * a chat/channel setting wrongly shown here, now owned by the «Установка виджета» screen
+ * ([ago.chat.android.channels.InstallWidgetViewModel], `26-159`). With them went this view model's only
+ * reason to hold [ago.chat.android.session.OidcConfig] (it composed the `<script>` tag), so that
+ * dependency is dropped too.
  */
 @HiltViewModel
 internal class CalendarSetupViewModel
     @Inject
     constructor(
         private val api: CalendarSetupApi,
-        config: OidcConfig,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
-        private val widgetHost: String = config.apiBaseUrl.trimEnd('/')
-
         private val mutableState = MutableStateFlow<CalendarSetupUiState>(CalendarSetupUiState.Loading)
         val state: StateFlow<CalendarSetupUiState> = mutableState.asStateFlow()
 
@@ -65,44 +57,6 @@ internal class CalendarSetupViewModel
             mutableState.update { CalendarSetupUiState.Loading }
             viewModelScope.launch {
                 applyResult(withContext(ioDispatcher) { api.fetchSetup() }, actionError = null)
-            }
-        }
-
-        /** Every keystroke in the allowed-origins field — the whole text, replaced. Held on the Loaded
-         * state rather than in the composable so a re-read after a save can re-seed it from the server's
-         * own answer. */
-        fun onOriginsTextChanged(text: String) {
-            mutableState.update { current ->
-                (current as? CalendarSetupUiState.Loaded)?.copy(originsText = text) ?: current
-            }
-        }
-
-        /**
-         * `26-142`: «Сохранить источники» — replaces the whole allowed-origins list
-         * ([CalendarSetupApi.saveAllowedOrigins]'s own replace semantics). The text is split into one origin
-         * per line, trimmed, blanks dropped — the identical parse `ago-console`'s own `OriginsForm` submit
-         * performs. Every rule about what a valid origin is belongs to the server and comes back as a
-         * [BookingActionResult.Refused] in its own words; this app invents no origin validation of its own.
-         */
-        fun saveOrigins() {
-            val loaded = mutableState.value as? CalendarSetupUiState.Loaded ?: return
-            if (loaded.originsBusy) return
-
-            val origins =
-                loaded.originsText
-                    .split("\n")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-
-            mutableState.update { loaded.copy(originsBusy = true, actionError = null) }
-            viewModelScope.launch {
-                when (val result = withContext(ioDispatcher) { api.saveAllowedOrigins(origins) }) {
-                    BookingActionResult.Succeeded ->
-                        applyResult(withContext(ioDispatcher) { api.fetchSetup() }, actionError = null)
-
-                    is BookingActionResult.Refused -> failOrigins(BookingActionErrorUi.ServerRefusal(result.detail))
-                    is BookingActionResult.Failed -> failOrigins(BookingActionErrorUi.Unavailable(result.reason))
-                }
             }
         }
 
@@ -168,13 +122,6 @@ internal class CalendarSetupViewModel
             }
         }
 
-        /** A refused or failed origins save keeps the typed text and shows the error above it. */
-        private fun failOrigins(error: BookingActionErrorUi) {
-            mutableState.update { current ->
-                (current as? CalendarSetupUiState.Loaded)?.copy(originsBusy = false, actionError = error) ?: current
-            }
-        }
-
         /** A refused or failed calendar write leaves the form open with what the operator typed still in
          * it — blanking it would throw away the very edit they now have to fix. */
         private fun failForm(error: BookingActionErrorUi) {
@@ -184,9 +131,9 @@ internal class CalendarSetupViewModel
         }
 
         /** Turns one [TenantSetupResult] into the matching [CalendarSetupUiState] — the single funnel that
-         * keeps [refresh] and the write paths from building [CalendarSetupUiState.Loaded] slightly
-         * differently. Re-seeds the origins text and closes any open form on every Loaded arm: a fresh read
-         * is exactly the moment the server's own answer becomes the truth again. */
+         * keeps [refresh] and the write path from building [CalendarSetupUiState.Loaded] slightly
+         * differently. Closes any open form on every Loaded arm: a fresh read is exactly the moment the
+         * server's own answer becomes the truth again. */
         private fun applyResult(
             result: TenantSetupResult,
             actionError: BookingActionErrorUi?,
@@ -195,12 +142,8 @@ internal class CalendarSetupViewModel
                 when (result) {
                     is TenantSetupResult.Loaded ->
                         CalendarSetupUiState.Loaded(
-                            tenantName = result.setup.tenantName,
-                            embedSnippet = embedSnippet(result.setup),
-                            originsText = result.setup.allowedOrigins.joinToString("\n"),
                             calendars = result.setup.calendars,
                             calendarForm = null,
-                            originsBusy = false,
                             calendarFormBusy = false,
                             actionError = actionError,
                         )
@@ -210,7 +153,4 @@ internal class CalendarSetupViewModel
                 }
             }
         }
-
-        private fun embedSnippet(setup: TenantSetup): String =
-            "<script src=\"$widgetHost/widget/widget.js\" data-site=\"${setup.publicKey}\" async></script>"
     }
