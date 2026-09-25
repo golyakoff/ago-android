@@ -355,6 +355,41 @@
     <string name="masters_delete_title">Delete this master?</string>
     <string name="masters_delete_message">Only a master with no bookings can be deleted outright. If a master has bookings, deactivate them instead - the booking history is kept.</string>
 
+    <!-- `26-142`: English half of Записи's own «Настройка» screen - see `values/strings.xml`'s own doc
+         comment on this same key block for the full reasoning. -->
+    <string name="calendar_setup_tab">Setup</string>
+    <string name="calendar_setup_load_failed_unexpected">Couldn\'t load the setup. Try again.</string>
+    <string name="calendar_setup_section_embed">Embedding</string>
+    <string name="calendar_setup_section_calendars">Calendars</string>
+    <string name="calendar_setup_embed_caption">This embed snippet is filled in for you. Paste it into your site\'s page to show the widget.</string>
+    <string name="calendar_setup_embed_snippet_label">Embed snippet</string>
+    <string name="calendar_setup_origins_field_label">Allowed origins</string>
+    <string name="calendar_setup_origins_hint">One address per line. The widget will load only from these origins.</string>
+    <string name="calendar_setup_action_save_origins">Save origins</string>
+    <string name="calendar_setup_calendars_empty">This tenant has no calendars yet.</string>
+    <string name="calendar_setup_action_add_calendar">Add calendar</string>
+    <string name="calendar_setup_action_edit">Edit</string>
+    <string name="calendar_setup_action_create">Create</string>
+    <string name="calendar_setup_action_save">Save</string>
+    <string name="calendar_setup_field_name">Name</string>
+    <string name="calendar_setup_field_zone">Time zone</string>
+    <string name="calendar_setup_field_published">Published</string>
+    <string name="calendar_setup_status_published">published</string>
+    <string name="calendar_setup_status_unpublished">not published</string>
+    <string name="calendar_setup_calendar_summary">%1$s · %2$s</string>
+    <string name="calendar_setup_zone_label">%1$s (%2$s)</string>
+    <string name="calendar_zone_europe_kaliningrad">Europe/Kaliningrad</string>
+    <string name="calendar_zone_europe_moscow">Europe/Moscow</string>
+    <string name="calendar_zone_europe_samara">Europe/Samara</string>
+    <string name="calendar_zone_asia_yekaterinburg">Asia/Yekaterinburg</string>
+    <string name="calendar_zone_asia_omsk">Asia/Omsk</string>
+    <string name="calendar_zone_asia_krasnoyarsk">Asia/Krasnoyarsk</string>
+    <string name="calendar_zone_asia_irkutsk">Asia/Irkutsk</string>
+    <string name="calendar_zone_asia_yakutsk">Asia/Yakutsk</string>
+    <string name="calendar_zone_asia_vladivostok">Asia/Vladivostok</string>
+    <string name="calendar_zone_asia_magadan">Asia/Magadan</string>
+    <string name="calendar_zone_asia_kamchatka">Asia/Kamchatka</string>
+
     <string name="analytics_from_field_label">From</string>
     <string name="analytics_to_field_label">To</string>
     <string name="analytics_apply_button">Apply</string>

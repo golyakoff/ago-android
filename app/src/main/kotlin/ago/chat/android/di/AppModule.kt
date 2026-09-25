@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
@@ -32,6 +33,7 @@ import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
+import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
 import ago.chat.android.core.network.contactdetails.KtorContactDetailsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
@@ -488,6 +490,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): WorkersApi = KtorWorkersApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-142`: [ago.chat.android.bookings.CalendarSetupViewModel]'s own port — a fourth `@Provides`
+     * against the same calendar origin as [provideBookingsApi]/[provideWorkingHoursApi]/[provideWorkersApi],
+     * for the reason [CalendarSetupApi]'s own doc comment gives: the tenant-configuration writes (allowed
+     * origins, the calendar roster) are a different noun behind the same `calendar:configure` gate, not a
+     * fifth method on [BookingsApi]. Always constructs, including when [OidcConfig.calendarApiBaseUrl] is
+     * `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideCalendarSetupApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): CalendarSetupApi = KtorCalendarSetupApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-55`: [ago.chat.android.team.PeopleViewModel]'s own port — plain REST on the chat API this app

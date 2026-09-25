@@ -69,7 +69,27 @@ class BookingsConfigMenuEntriesTest {
     fun `no entry earned means an empty list - the menu control itself must not be drawn`() {
         assertEquals(
             emptyList<BookingsTab>(),
-            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = false, showHoursSegment = false),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = false,
+                showMastersSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
+        )
+    }
+
+    /** `26-142`'s own Done-when: the Настройка (Календари) entry appears exactly on `calendar:configure`.
+     * An operator without it earns no config entry at all - the whole `⋮` stays hidden (the case above). */
+    @Test
+    fun `Calendars alone is a real combination, gated on calendar-configure`() {
+        assertEquals(
+            listOf(BookingsTab.Calendars),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = true,
+                showMastersSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -79,15 +99,25 @@ class BookingsConfigMenuEntriesTest {
     fun `Masters alone is a real combination, gated on calendar-configure`() {
         assertEquals(
             listOf(BookingsTab.Masters),
-            visibleBookingsConfigMenuEntries(showMastersSegment = true, showServicesSegment = false, showHoursSegment = false),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = false,
+                showMastersSegment = true,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
         )
     }
 
     @Test
-    fun `Services without Masters or Hours is a real combination`() {
+    fun `Services without the others is a real combination`() {
         assertEquals(
             listOf(BookingsTab.Services),
-            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = true, showHoursSegment = false),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = false,
+                showMastersSegment = false,
+                showServicesSegment = true,
+                showHoursSegment = false,
+            ),
         )
     }
 
@@ -95,17 +125,28 @@ class BookingsConfigMenuEntriesTest {
     fun `Hours alone is a real combination too`() {
         assertEquals(
             listOf(BookingsTab.Hours),
-            visibleBookingsConfigMenuEntries(showMastersSegment = false, showServicesSegment = false, showHoursSegment = true),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = false,
+                showMastersSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = true,
+            ),
         )
     }
 
-    /** `26-140`: the fill/readiness order is Мастера before Услуги before Часы (Календари, when `26-142`
-     * lands, will lead). */
+    /** `26-142`: the fill/readiness order is Настройка (Календари) before Мастера before Услуги before
+     * Часы - Календари leads, because a calendar is the thing a worker, a service and a working-hours rule
+     * all hang off. */
     @Test
-    fun `all entries are drawn, Masters before Services before Hours`() {
+    fun `all entries are drawn, Calendars before Masters before Services before Hours`() {
         assertEquals(
-            listOf(BookingsTab.Masters, BookingsTab.Services, BookingsTab.Hours),
-            visibleBookingsConfigMenuEntries(showMastersSegment = true, showServicesSegment = true, showHoursSegment = true),
+            listOf(BookingsTab.Calendars, BookingsTab.Masters, BookingsTab.Services, BookingsTab.Hours),
+            visibleBookingsConfigMenuEntries(
+                showSetupSegment = true,
+                showMastersSegment = true,
+                showServicesSegment = true,
+                showHoursSegment = true,
+            ),
         )
     }
 }

@@ -211,11 +211,13 @@ internal fun AppShellScreen(
     // server-side), kept as its own parameter rather than reusing the third: `showClientsSegment` is
     // `calendar:configure` **or** `customer:read`, so an operator holding only `customer:read` would
     // otherwise be offered an edit the server will refuse. `26-140` adds a fifth, `showMastersSegment`
-    // (`calendar:configure` alone), threaded before the Услуги one for the same reason — the worker
-    // dictionary's own writes check that permission independently server-side.
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
+    // (`calendar:configure` alone), threaded before the Услуги one. `26-142` adds a sixth,
+    // `showSetupSegment` (`calendar:configure` alone), for the tenant-configuration writes — threaded
+    // ahead of the others, since Настройка (Календари) is the first entry in the `⋮` hub.
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit = {
         showConfirmedSegment,
         showClientsSegment,
+        showSetupSegment,
         showMastersSegment,
         showServicesSegment,
         showHoursSegment,
@@ -224,6 +226,7 @@ internal fun AppShellScreen(
         BookingsRoute(
             showConfirmedSegment = showConfirmedSegment,
             showClientsSegment = showClientsSegment,
+            showSetupSegment = showSetupSegment,
             showMastersSegment = showMastersSegment,
             showServicesSegment = showServicesSegment,
             showHoursSegment = showHoursSegment,
@@ -331,10 +334,10 @@ private fun AppShellContent(
     unreadConversationsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
-    // `26-96`/`26-97`/`26-140`: the third, fourth and fifth `Boolean` are `calendar:configure` alone,
+    // `26-96`/`26-97`/`26-140`/`26-142`: the third through sixth `Boolean` are `calendar:configure` alone,
     // each its own gate rather than a reuse of the Клиенты one - see [AppShellScreen]'s own `bookingsTab`
     // parameter.
-    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
+    bookingsTab: @Composable (Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, onOpenSettings: () -> Unit) -> Unit,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
@@ -528,6 +531,10 @@ private fun AppShellContent(
                 bookingsTab(
                     permissions.holds(Permission.CUSTOMER_READ),
                     permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                    // `26-142`: `calendar:configure` alone - the gate the tenant-configuration writes
+                    // (allowed origins, the calendar roster) check server-side. Its own parameter, threaded
+                    // first because Настройка (Календари) is the first entry in the `⋮` hub.
+                    permissions.holds(Permission.CALENDAR_CONFIGURE),
                     // `26-140`: `calendar:configure` alone - the gate the worker-dictionary writes check
                     // server-side, its own parameter for the same reason each config-menu gate below is
                     // (an operator holding only `customer:read` may read the customer base without

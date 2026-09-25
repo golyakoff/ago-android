@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmationCountdown
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.confirmationCountdown
+import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.schedule.WorkingHoursBody
@@ -77,6 +78,7 @@ import java.time.format.DateTimeFormatter
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
@@ -173,6 +175,42 @@ public fun BookingsRoute(
         onSubmitService = {}
     }
 
+    // `26-142`: the identical Hilt-avoidance-when-ungated shape the branches above establish, applied to
+    // [CalendarSetupViewModel] - an operator lacking `calendar:configure` never constructs it and never
+    // triggers its `init`-time read of the tenant configuration.
+    val calendarSetupState: CalendarSetupUiState?
+    val onRetryCalendarSetup: () -> Unit
+    val onOriginsTextChanged: (String) -> Unit
+    val onSaveOrigins: () -> Unit
+    val onAddCalendar: () -> Unit
+    val onEditCalendar: (ConfiguredCalendar) -> Unit
+    val onCalendarFormChanged: (CalendarForm) -> Unit
+    val onCancelCalendarEdit: () -> Unit
+    val onSubmitCalendar: (CalendarForm) -> Unit
+    if (showSetupSegment) {
+        val calendarSetupViewModel: CalendarSetupViewModel = hiltViewModel()
+        val collectedCalendarSetupState by calendarSetupViewModel.state.collectAsStateWithLifecycle()
+        calendarSetupState = collectedCalendarSetupState
+        onRetryCalendarSetup = calendarSetupViewModel::refresh
+        onOriginsTextChanged = calendarSetupViewModel::onOriginsTextChanged
+        onSaveOrigins = calendarSetupViewModel::saveOrigins
+        onAddCalendar = calendarSetupViewModel::startAddCalendar
+        onEditCalendar = calendarSetupViewModel::editCalendar
+        onCalendarFormChanged = calendarSetupViewModel::onCalendarFormChanged
+        onCancelCalendarEdit = calendarSetupViewModel::cancelCalendarEdit
+        onSubmitCalendar = calendarSetupViewModel::submitCalendar
+    } else {
+        calendarSetupState = null
+        onRetryCalendarSetup = {}
+        onOriginsTextChanged = {}
+        onSaveOrigins = {}
+        onAddCalendar = {}
+        onEditCalendar = {}
+        onCalendarFormChanged = {}
+        onCancelCalendarEdit = {}
+        onSubmitCalendar = {}
+    }
+
     // `26-140`: the identical Hilt-avoidance-when-ungated shape the branches above establish, applied to
     // [MastersViewModel] - an operator lacking `calendar:configure` never constructs it and never triggers
     // its `init`-time read of the worker dictionary.
@@ -234,6 +272,7 @@ public fun BookingsRoute(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
+        showSetupSegment = showSetupSegment,
         showMastersSegment = showMastersSegment,
         showServicesSegment = showServicesSegment,
         showHoursSegment = showHoursSegment,
@@ -257,6 +296,15 @@ public fun BookingsRoute(
         onCancelServiceEdit = onCancelServiceEdit,
         onServiceDraftChanged = onServiceDraftChanged,
         onSubmitService = onSubmitService,
+        calendarSetupState = calendarSetupState,
+        onRetryCalendarSetup = onRetryCalendarSetup,
+        onOriginsTextChanged = onOriginsTextChanged,
+        onSaveOrigins = onSaveOrigins,
+        onAddCalendar = onAddCalendar,
+        onEditCalendar = onEditCalendar,
+        onCalendarFormChanged = onCalendarFormChanged,
+        onCancelCalendarEdit = onCancelCalendarEdit,
+        onSubmitCalendar = onSubmitCalendar,
         mastersState = mastersState,
         onRetryMasters = onRetryMasters,
         onAddMaster = onAddMaster,
@@ -302,6 +350,7 @@ internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
@@ -325,6 +374,15 @@ internal fun BookingsScreen(
     onCancelServiceEdit: () -> Unit,
     onServiceDraftChanged: (ServiceDraft) -> Unit,
     onSubmitService: (ServiceDraft) -> Unit,
+    calendarSetupState: CalendarSetupUiState?,
+    onRetryCalendarSetup: () -> Unit,
+    onOriginsTextChanged: (String) -> Unit,
+    onSaveOrigins: () -> Unit,
+    onAddCalendar: () -> Unit,
+    onEditCalendar: (ConfiguredCalendar) -> Unit,
+    onCalendarFormChanged: (CalendarForm) -> Unit,
+    onCancelCalendarEdit: () -> Unit,
+    onSubmitCalendar: (CalendarForm) -> Unit,
     mastersState: MastersUiState?,
     onRetryMasters: () -> Unit,
     onAddMaster: () -> Unit,
@@ -350,7 +408,8 @@ internal fun BookingsScreen(
     // `rememberTickingNow`).
     val now = rememberTickingNow()
     val segments = visibleBookingsSegments(showConfirmedSegment, showClientsSegment)
-    val configMenuEntries = visibleBookingsConfigMenuEntries(showMastersSegment, showServicesSegment, showHoursSegment)
+    val configMenuEntries =
+        visibleBookingsConfigMenuEntries(showSetupSegment, showMastersSegment, showServicesSegment, showHoursSegment)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -466,6 +525,24 @@ internal fun BookingsScreen(
                             ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
                         }
 
+                    // `26-142`: the identical "non-null exactly when selectable" invariant the branches
+                    // around it state, for `showSetupSegment`. Kept stateless here rather than calling
+                    // `hiltViewModel()` inline, for this file's own Route/Screen-split reason.
+                    BookingsTab.Calendars ->
+                        calendarSetupState?.let {
+                            CalendarSetupBody(
+                                state = it,
+                                onRetry = onRetryCalendarSetup,
+                                onOriginsTextChanged = onOriginsTextChanged,
+                                onSaveOrigins = onSaveOrigins,
+                                onAddCalendar = onAddCalendar,
+                                onEditCalendar = onEditCalendar,
+                                onCalendarFormChanged = onCalendarFormChanged,
+                                onCancelCalendarEdit = onCancelCalendarEdit,
+                                onSubmitCalendar = onSubmitCalendar,
+                            )
+                        }
+
                     // `26-140`: the identical "non-null exactly when selectable" invariant the branches
                     // around it state, for `showMastersSegment`. Kept stateless here rather than calling
                     // `hiltViewModel()` inline, for this file's own Route/Screen-split reason.
@@ -574,6 +651,7 @@ private fun bookingsTabLabel(
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
+        BookingsTab.Calendars -> buildAnnotatedString { append(stringResource(R.string.calendar_setup_tab)) }
         BookingsTab.Masters -> buildAnnotatedString { append(stringResource(R.string.masters_tab)) }
         BookingsTab.Services -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_services)) }
         BookingsTab.Hours -> buildAnnotatedString { append(stringResource(R.string.working_hours_tab)) }
