@@ -4,26 +4,36 @@ import ago.chat.android.BuildConfig
 import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
+import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.NotificationSettingsRoute
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.PushUnavailableReason
+import ago.chat.android.devices.batteryModeStatus
+import ago.chat.android.devices.openAutostartSettings
+import ago.chat.android.devices.openBatteryOptimizationSettings
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.applyAppLanguage
 import ago.chat.android.ui.theme.ThemeMode
+import ago.chat.android.ui.theme.agoWarningColors
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,6 +57,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -95,6 +110,7 @@ public fun SettingsRoute(
     val switching by viewModel.switching.collectAsStateWithLifecycle()
     val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
+    val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -120,7 +136,14 @@ public fun SettingsRoute(
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshNotificationPermission()
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshNotificationPermission()
+                    // `26-128`: [SettingsViewModel.batteryUnrestricted]'s own doc comment states why this
+                    // needs the identical `ON_RESUME` re-read as the notification permission above -
+                    // «Настройки батареи» opens exactly the system screen an operator would flip this
+                    // from and come straight back.
+                    viewModel.refreshBatteryOptimization()
+                }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -144,6 +167,11 @@ public fun SettingsRoute(
             )
         },
         onManageNotificationChannels = { showingNotificationSettings = true },
+        batteryUnrestricted = batteryUnrestricted,
+        onOpenBatterySettings = { openBatteryOptimizationSettings(context) },
+        autostartStatus = viewModel.autostartStatus,
+        autostartSettingsTarget = viewModel.autostartSettingsTarget,
+        onOpenAutostartSettings = { openAutostartSettings(context, viewModel.autostartSettingsTarget) },
         onBack = onBack,
     )
 }
@@ -181,8 +209,27 @@ internal fun SettingsScreen(
     notificationsEnabled: Boolean = true,
     onOpenNotificationSettings: () -> Unit = {},
     onManageNotificationChannels: () -> Unit = {},
+    // `26-128`: the identical "defaulted trailing parameter" convention `26-92`'s own comment above
+    // states, for the same reason - `SettingsScreenTest`'s pre-existing call sites name every parameter
+    // up through `onBack` and none of the ones after it, so five more defaulted parameters cost them
+    // nothing. Defaults read as "nothing to flag" (unrestricted, autostart presumed fine, no known OEM
+    // target) rather than "the more common real-world value", matching every other defaulted parameter
+    // on this signature.
+    batteryUnrestricted: Boolean = true,
+    onOpenBatterySettings: () -> Unit = {},
+    autostartStatus: DeviceModeStatus = DeviceModeStatus.Ok,
+    autostartSettingsTarget: AutostartSettingsTarget = AutostartSettingsTarget.None,
+    onOpenAutostartSettings: () -> Unit = {},
 ) {
     val switchableSites = (tenancies as? TenancyListing.Known)?.tenancies.orEmpty()
+    // `26-128`: each row's own inline expand/collapse - the identical `rememberSaveable` boolean shape
+    // `SettingsRoute`'s own `showingNotificationSettings` uses one level up, restated here for a row that
+    // stays inline inside this same `LazyColumn` rather than drilling into a second screen. Two
+    // independent booleans, not one shared "which row is open" id, because both cards can be read at once
+    // with nothing about one depending on the other - unlike `MoreScreen`'s own single `openRowId`, which
+    // exists precisely because Ещё's rows each replace the whole screen and only one can be showing.
+    var batteryModeExpanded by rememberSaveable { mutableStateOf(false) }
+    var autostartExpanded by rememberSaveable { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -293,6 +340,146 @@ internal fun SettingsScreen(
                     )
                 }
 
+                // `26-128`: «Режим работы» - the battery-optimisation row. [StatusGlyph] reads
+                // [batteryUnrestricted] directly (a real `PowerManager` value, refreshed on `ON_RESUME`
+                // upstream), unlike the «Автозапуск» row below it, whose identical-looking glyph reads a
+                // guess instead - see that row's own comment for why the two nonetheless share one glyph
+                // composable rather than drawing two visually different indicators for "verified" versus
+                // "recommended".
+                item {
+                    val status = batteryModeStatus(batteryUnrestricted)
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { batteryModeExpanded = !batteryModeExpanded }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        StatusGlyph(status = status)
+                        val titleRes =
+                            if (batteryUnrestricted) {
+                                R.string.settings_battery_mode_title_unrestricted
+                            } else {
+                                R.string.settings_battery_mode_title_restricted
+                            }
+                        Text(
+                            text = stringResource(titleRes),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f).padding(start = 12.dp),
+                        )
+                        ExpandChevron(expanded = batteryModeExpanded)
+                    }
+                }
+                if (batteryModeExpanded) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (batteryUnrestricted) {
+                                            R.string.settings_battery_mode_current_unrestricted
+                                        } else {
+                                            R.string.settings_battery_mode_current_restricted
+                                        },
+                                    ),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.battery_awareness_battery_explanation),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                            )
+                            OutlinedButton(onClick = onOpenBatterySettings) {
+                                Text(text = stringResource(R.string.battery_awareness_battery_action))
+                            }
+                            Text(
+                                text = stringResource(R.string.settings_battery_mode_list_caption),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+                item { HorizontalDivider() }
+
+                // `26-128`: «Автозапуск» - see [AutostartAdvisor]'s own doc comment for why [autostartStatus]
+                // is a recommendation this row must never present as a confirmed reading, unlike the
+                // «Режим работы» row above it. `settings_autostart_limitation_note` in the expanded card
+                // below is what keeps that distinction visible to the operator, not merely to a future
+                // reader of this file's own comments.
+                item {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { autostartExpanded = !autostartExpanded }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        StatusGlyph(status = autostartStatus)
+                        val titleRes =
+                            if (autostartStatus == DeviceModeStatus.Ok) {
+                                R.string.settings_autostart_title_ok
+                            } else {
+                                R.string.settings_autostart_title_needs_attention
+                            }
+                        Text(
+                            text = stringResource(titleRes),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f).padding(start = 12.dp),
+                        )
+                        ExpandChevron(expanded = autostartExpanded)
+                    }
+                }
+                if (autostartExpanded) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            Text(
+                                text = stringResource(R.string.settings_autostart_recommendation_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.battery_awareness_autostart_explanation),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                            )
+                            // `26-128`: [AutostartSettingsTarget.None] (Samsung, or any unrecognised
+                            // manufacturer) renders plain text instead of a button that would open
+                            // nothing - the identical "hidden, not shown-disabled" convention this
+                            // screen's own doc comment already states for `switchableSites.size > 1` and
+                            // the push-unavailable rows below, read onto a button instead of a section.
+                            if (autostartSettingsTarget is AutostartSettingsTarget.OemComponent) {
+                                OutlinedButton(onClick = onOpenAutostartSettings) {
+                                    Text(text = stringResource(R.string.battery_awareness_autostart_action))
+                                }
+                                Text(
+                                    text = stringResource(R.string.settings_autostart_open_caption),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.settings_autostart_not_needed_text),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.settings_autostart_limitation_note),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 10.dp),
+                            )
+                        }
+                    }
+                }
+                item { HorizontalDivider() }
+
                 // `26-18`: "checkPushAvailability() returning Unavailable produces a state the operator
                 // can act on, naming which condition failed" / "denying POST_NOTIFICATIONS leaves the
                 // app usable and states what it can no longer do". Hidden entirely rather than shown as
@@ -350,6 +537,70 @@ private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
         PushUnavailableReason.Unauthorized -> stringResource(R.string.push_unavailable_unauthorized)
         PushUnavailableReason.Unknown -> stringResource(R.string.push_unavailable_unknown)
     }
+
+/**
+ * `26-128`: the left status circle both new rows share — [DeviceModeStatus.Ok] a green circle around
+ * Material `check`, [DeviceModeStatus.NeedsAttention] an orange circle around Material `exclamation`
+ * (never a triangle: round 3 of the approved mockup singled out a triangle-in-a-circle as "looks wrong" —
+ * [ago.chat.android.shell.BatteryAwarenessSheet]'s own header keeps the triangle, this circle never does).
+ * Deliberately smaller than round 3's own mockup circle (`docs/backlog/26-128-*.md`'s "circles slightly
+ * smaller" tweak) — 20dp, not 26dp, with an 11dp glyph inside rather than 15dp, the same two-thirds ratio
+ * scaled down.
+ *
+ * **Why the fill colours are computed, not read from `MaterialTheme.colorScheme` for both states.** The
+ * green fill reads `colorScheme.tertiary`/`onTertiary` — a real Material 3 role pair `Theme.kt` already
+ * wires to `AgoSuccessLight`/`AgoSuccessDark`, with `onTertiary` already tuned per theme for contrast
+ * against it. The orange fill has no such pair: `agoWarningColors().warning` is `26-90`'s own token,
+ * designed as ink-coloured *text* on a pale tint (a status pill), not as a saturated fill a white icon
+ * sits on — in dark mode that value is a *bright* amber, so a white icon on it would be unreadable. Rather
+ * than force that pill-text token into a fill it was never designed for, this computes the glyph's own
+ * tint from the fill's actual relative luminance ([androidx.compose.ui.graphics.luminance]) — a real,
+ * theme-independent contrast guarantee, not an assumption. The green branch does not need the same
+ * treatment because `onTertiary` already *is* that guarantee, supplied by the design system rather than
+ * computed here.
+ */
+@Composable
+private fun StatusGlyph(status: DeviceModeStatus) {
+    val background =
+        when (status) {
+            DeviceModeStatus.Ok -> MaterialTheme.colorScheme.tertiary
+            DeviceModeStatus.NeedsAttention -> agoWarningColors().warning
+        }
+    val iconTint =
+        when (status) {
+            DeviceModeStatus.Ok -> MaterialTheme.colorScheme.onTertiary
+            DeviceModeStatus.NeedsAttention -> if (background.luminance() > 0.5f) Color.Black else Color.White
+        }
+    val icon: ImageVector =
+        when (status) {
+            DeviceModeStatus.Ok -> AgoIcons.Check
+            DeviceModeStatus.NeedsAttention -> AgoIcons.Exclamation
+        }
+    Box(
+        modifier = Modifier.size(20.dp).clip(CircleShape).background(background),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Decorative: the row's own visible text already states the full sentence
+        // ("Режим работы: ..."/"Автозапуск: ...") this glyph is only a colour cue for.
+        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(11.dp))
+    }
+}
+
+/** `26-128`: the expandable row's own chevron — [AgoIcons.ChevronRight] rotated a quarter turn while
+ * [expanded], the same glyph [SettingsScreen]'s own top-app-bar precedent (`AgoIcons.Back`) already
+ * establishes for "a real vector, never a literal arrow character". */
+@Composable
+private fun ExpandChevron(expanded: Boolean) {
+    Icon(
+        imageVector = AgoIcons.ChevronRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier
+                .size(20.dp)
+                .rotate(if (expanded) 90f else 0f),
+    )
+}
 
 @Composable
 private fun themeModeLabel(mode: ThemeMode): String =

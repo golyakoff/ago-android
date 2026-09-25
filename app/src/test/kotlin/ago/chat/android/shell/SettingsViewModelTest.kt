@@ -14,6 +14,10 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.realtime.SendMessageResult
 import ago.chat.android.core.network.realtime.TeamHistoryPage
 import ago.chat.android.core.network.realtime.TeamMessageDto
+import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.BatteryOptimizationChecker
+import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
@@ -266,6 +270,54 @@ class SettingsViewModelTest {
             assertEquals(false, viewModel.notificationsEnabled.value)
         }
 
+    // -------------------------------------------------------------------------------- battery mode
+
+    @Test
+    fun `batteryUnrestricted starts at the checker's own live answer`() =
+        runTest(dispatcher) {
+            val checker = FakeBatteryOptimizationChecker(initial = false)
+            val viewModel = viewModelWith(batteryOptimizationChecker = checker)
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.batteryUnrestricted.value)
+        }
+
+    @Test
+    fun `refreshBatteryOptimization re-reads the live system truth rather than trusting the cached value`() =
+        runTest(dispatcher) {
+            val checker = FakeBatteryOptimizationChecker(initial = true)
+            val viewModel = viewModelWith(batteryOptimizationChecker = checker)
+            advanceUntilIdle()
+            assertEquals(true, viewModel.batteryUnrestricted.value)
+
+            // The operator left this screen, opened «Настройки батареи», turned the mode off, and came
+            // back - simulated here by flipping the fake's own answer and asking this class to look again.
+            checker.answer = false
+            viewModel.refreshBatteryOptimization()
+
+            assertEquals(false, viewModel.batteryUnrestricted.value)
+        }
+
+    // ----------------------------------------------------------------------------------- autostart
+
+    @Test
+    fun `autostartStatus and autostartSettingsTarget relay AutostartAdvisor's own answers`() =
+        runTest(dispatcher) {
+            val advisor =
+                FakeAutostartAdvisor(
+                    status = DeviceModeStatus.NeedsAttention,
+                    target = AutostartSettingsTarget.OemComponent("com.example.oem", "com.example.oem.AutostartActivity"),
+                )
+            val viewModel = viewModelWith(autostartAdvisor = advisor)
+            advanceUntilIdle()
+
+            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus)
+            assertEquals(
+                AutostartSettingsTarget.OemComponent("com.example.oem", "com.example.oem.AutostartActivity"),
+                viewModel.autostartSettingsTarget,
+            )
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -276,6 +328,8 @@ class SettingsViewModelTest {
         languagePreferences: AppLanguagePreferences = FakeAppLanguagePreferences(),
         deviceRegistrar: DeviceRegistrar = FakeSettingsDeviceRegistrar(),
         notificationPermissionChecker: NotificationPermissionChecker = FakeNotificationPermissionChecker(),
+        batteryOptimizationChecker: BatteryOptimizationChecker = FakeBatteryOptimizationChecker(),
+        autostartAdvisor: AutostartAdvisor = FakeAutostartAdvisor(),
     ): SettingsViewModel =
         SettingsViewModel(
             identity = identity,
@@ -285,8 +339,33 @@ class SettingsViewModelTest {
             languagePreferences = languagePreferences,
             deviceRegistrar = deviceRegistrar,
             notificationPermissionChecker = notificationPermissionChecker,
+            batteryOptimizationChecker = batteryOptimizationChecker,
+            autostartAdvisor = autostartAdvisor,
             ioDispatcher = dispatcher,
         )
+
+    /** [FakeNotificationPermissionChecker]'s own shape, restated for [BatteryOptimizationChecker] -
+     * starts at whatever [initial] says, and only ever changes when [SettingsViewModel
+     * .refreshBatteryOptimization] asks again. */
+    private class FakeBatteryOptimizationChecker(
+        var initial: Boolean = true,
+    ) : BatteryOptimizationChecker {
+        var answer: Boolean = initial
+
+        override fun isIgnoringBatteryOptimizations(): Boolean = answer
+    }
+
+    /** A fixed answer for both of [AutostartAdvisor]'s methods - this class is a manufacturer-based
+     * guess in production ([ManufacturerAutostartAdvisor][ago.chat.android.devices.ManufacturerAutostartAdvisor]),
+     * never re-read for the life of a process, so this fake has no reason to change its answer either. */
+    private class FakeAutostartAdvisor(
+        private val status: DeviceModeStatus = DeviceModeStatus.Ok,
+        private val target: AutostartSettingsTarget = AutostartSettingsTarget.None,
+    ) : AutostartAdvisor {
+        override fun recommendation(): DeviceModeStatus = status
+
+        override fun settingsTarget(): AutostartSettingsTarget = target
+    }
 
     /** `26-18`: [SignInViewModelTest][ago.chat.android.signin.SignInViewModelTest]'s own
      * `FakeDeviceRegistrar`, restated - this file's own name for it, since a `private class` cannot be

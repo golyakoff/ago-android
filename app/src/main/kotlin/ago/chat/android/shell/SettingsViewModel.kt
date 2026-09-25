@@ -4,6 +4,10 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.devices.AutostartAdvisor
+import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.BatteryOptimizationChecker
+import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
@@ -63,6 +67,8 @@ public class SettingsViewModel
         private val languagePreferences: AppLanguagePreferences,
         private val deviceRegistrar: DeviceRegistrar,
         private val notificationPermissionChecker: NotificationPermissionChecker,
+        private val batteryOptimizationChecker: BatteryOptimizationChecker,
+        private val autostartAdvisor: AutostartAdvisor,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         public val themeMode: StateFlow<ThemeMode> =
@@ -105,6 +111,25 @@ public class SettingsViewModel
          * `init` and never again would go stale the moment an operator backgrounds this screen, changes
          * it, and comes back. */
         public val notificationsEnabled: StateFlow<Boolean> = mutableNotificationsEnabled.asStateFlow()
+
+        private val mutableBatteryUnrestricted = MutableStateFlow(batteryOptimizationChecker.isIgnoringBatteryOptimizations())
+
+        /** `26-128`: Settings → «Режим работы»'s own live value - the identical "read once at
+         * construction, re-read on [refreshBatteryOptimization]" shape [notificationsEnabled] above
+         * already is, for the identical reason: an operator can flip this from system Settings while this
+         * screen is backgrounded. */
+        public val batteryUnrestricted: StateFlow<Boolean> = mutableBatteryUnrestricted.asStateFlow()
+
+        /** `26-128`: Settings → «Автозапуск»'s own status - never re-read, unlike [batteryUnrestricted]
+         * above: [AutostartAdvisor.recommendation] is a pure function of [android.os.Build.MANUFACTURER],
+         * which cannot change for the life of this process, so there is nothing an `ON_RESUME` refresh
+         * could ever pick up that `init` did not already see. */
+        public val autostartStatus: DeviceModeStatus = autostartAdvisor.recommendation()
+
+        /** `26-128`: where «Настройки автозапуска» leads - `SettingsRoute`'s own click handler reads this
+         * to build the `Intent`, since building it needs a `Context` this `ViewModel` may never hold
+         * (rule 2). */
+        public val autostartSettingsTarget: AutostartSettingsTarget = autostartAdvisor.settingsTarget()
 
         private val mutableTenancies = MutableStateFlow<TenancyListing>(TenancyListing.Known(emptyList()))
         public val tenancies: StateFlow<TenancyListing> = mutableTenancies.asStateFlow()
@@ -150,6 +175,13 @@ public class SettingsViewModel
          * this needs re-reading rather than trusting the value [init] captured once. */
         public fun refreshNotificationPermission() {
             mutableNotificationsEnabled.value = notificationPermissionChecker.areNotificationsEnabled()
+        }
+
+        /** `SettingsRoute`'s own `ON_RESUME` call, alongside [refreshNotificationPermission] - see
+         * [batteryUnrestricted]'s own doc comment for why this needs re-reading rather than trusting the
+         * value [init] captured once. */
+        public fun refreshBatteryOptimization() {
+            mutableBatteryUnrestricted.value = batteryOptimizationChecker.isIgnoringBatteryOptimizations()
         }
 
         private fun loadTenancies() {

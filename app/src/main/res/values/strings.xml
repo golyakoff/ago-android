@@ -785,6 +785,39 @@
          are, since channel state and quiet hours are worth configuring regardless of either. -->
     <string name="settings_notifications_manage_action">Настроить уведомления</string>
 
+    <!-- `26-128`: shared between the first-launch sheet and the two Settings rows below - the same
+         explanation and the same button, whichever screen the operator reads it on. -->
+    <string name="battery_awareness_battery_explanation">Уведомления о новых сообщениях могут не доходить при текущих настройках телефона. Рекомендуется режим экономии батареи «Без ограничений».</string>
+    <string name="battery_awareness_battery_action">Настройки батареи</string>
+    <string name="battery_awareness_autostart_explanation">Также рекомендуется установить программу в автозапуск, чтобы не пропустить уведомления после перезагрузки.</string>
+    <string name="battery_awareness_autostart_action">Настройки автозапуска</string>
+
+    <!-- `26-128`: the first-launch sheet's own checkbox and caption - shown once, never blocking. -->
+    <string name="battery_awareness_sheet_dont_show_again">Больше не показывать это окно</string>
+    <string name="battery_awareness_sheet_caption">Это можно изменить позже в Настройки → Режим работы.</string>
+    <string name="battery_awareness_sheet_close">Закрыть</string>
+
+    <!-- `26-128`: Settings → «Уведомления»'s own two new rows. `settings_battery_mode_title_*`/
+         `settings_autostart_title_*` are the row's own one-line summary; the `_current_*`/
+         `_recommendation_label` pair is the expanded card's own smaller heading above the identical
+         explanation text above. -->
+    <string name="settings_battery_mode_title_unrestricted">Режим работы: Без ограничений</string>
+    <string name="settings_battery_mode_title_restricted">Режим работы: Экономия энергии</string>
+    <string name="settings_battery_mode_current_unrestricted">Сейчас: Без ограничений</string>
+    <string name="settings_battery_mode_current_restricted">Сейчас: Экономия энергии</string>
+    <string name="settings_battery_mode_list_caption">Откроется системный список приложений — найдите «АГО Чат» и выберите «Без ограничений».</string>
+
+    <!-- `26-128`: «Автозапуск» never claims a verified status - see `AutostartAdvisor`'s own doc comment
+         for why Android gives this app no way to read it. `settings_autostart_title_*` still speaks in
+         the same on/off shape `settings_battery_mode_title_*` above does, but `_recommendation_label` and
+         `_limitation_note` below are what keep the expanded card honest about what that value actually is. -->
+    <string name="settings_autostart_title_ok">Автозапуск: Включено</string>
+    <string name="settings_autostart_title_needs_attention">Автозапуск: Выключено</string>
+    <string name="settings_autostart_recommendation_label">Рекомендация</string>
+    <string name="settings_autostart_open_caption">Откроются настройки автозапуска для этого телефона.</string>
+    <string name="settings_autostart_not_needed_text">На этом телефоне отдельная настройка автозапуска, скорее всего, не нужна — обычно достаточно общих настроек батареи.</string>
+    <string name="settings_autostart_limitation_note">Android не даёт единого способа прочитать этот статус на большинстве телефонов — точное состояние подтвердить нельзя, поэтому здесь показана рекомендация, а не проверенный факт.</string>
+
     <!-- `26-18`: `PushUnavailableReason`'s own four values - `RuStorePushClient.checkPushAvailability()`'s
          real, named causes (`docs/architecture/push-notifications.md`'s own "What the operator's phone
          has to satisfy"), never a single generic "push doesn't work" sentence. -->

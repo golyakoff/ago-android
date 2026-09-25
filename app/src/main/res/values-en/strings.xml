@@ -483,6 +483,28 @@
     <string name="settings_notifications_open_settings_action">Open notification settings</string>
     <string name="settings_notifications_manage_action">Manage notifications</string>
 
+    <string name="battery_awareness_battery_explanation">New-message notifications may not arrive with this phone\'s current settings. The battery-saving mode "No restrictions" is recommended.</string>
+    <string name="battery_awareness_battery_action">Battery settings</string>
+    <string name="battery_awareness_autostart_explanation">It\'s also worth allowing the app to start automatically, so notifications aren\'t missed right after a restart.</string>
+    <string name="battery_awareness_autostart_action">Autostart settings</string>
+
+    <string name="battery_awareness_sheet_dont_show_again">Don\'t show this again</string>
+    <string name="battery_awareness_sheet_caption">You can change this later in Settings → Operating mode.</string>
+    <string name="battery_awareness_sheet_close">Close</string>
+
+    <string name="settings_battery_mode_title_unrestricted">Operating mode: No restrictions</string>
+    <string name="settings_battery_mode_title_restricted">Operating mode: Battery saver</string>
+    <string name="settings_battery_mode_current_unrestricted">Currently: No restrictions</string>
+    <string name="settings_battery_mode_current_restricted">Currently: Battery saver</string>
+    <string name="settings_battery_mode_list_caption">This opens the system\'s app list — find "AGO Chat" and choose "No restrictions".</string>
+
+    <string name="settings_autostart_title_ok">Autostart: On</string>
+    <string name="settings_autostart_title_needs_attention">Autostart: Off</string>
+    <string name="settings_autostart_recommendation_label">Recommendation</string>
+    <string name="settings_autostart_open_caption">This opens this phone\'s autostart settings.</string>
+    <string name="settings_autostart_not_needed_text">This phone most likely has no separate autostart setting — the general battery settings above are usually enough.</string>
+    <string name="settings_autostart_limitation_note">Android has no single way to read this status on most phones — the exact state can\'t be confirmed, so this is shown as a recommendation, not a verified fact.</string>
+
     <string name="push_unavailable_host_app_not_installed">RuStore, which notifications come through, isn\'t installed on this phone.</string>
     <string name="push_unavailable_background_work_not_granted">RuStore isn\'t allowed to run in the background, so notifications may arrive late.</string>
     <string name="push_unavailable_unauthorized">This phone isn\'t signed in to a RuStore account, so notifications can\'t arrive.</string>

@@ -305,6 +305,90 @@ public object AgoIcons {
         )
 
     /**
+     * `26-128`: the battery-mode/autostart status glyph's own OK state — drawn *inside* this app's own
+     * coloured circle badge (`SettingsScreen.kt`'s own `StatusGlyph`), not Material Symbols' filled
+     * `check` glyph, for the identical "redraw in this family's stroke treatment, never import a filled
+     * shape" reasoning this file's own header gives for [TrashForever] below. Transcribed from Feather's
+     * own `check` glyph (`<polyline points="20 6 9 17 4 12"/>`) — already this file's precedent for
+     * borrowing a Feather primitive verbatim when it already matches the 1.8-stroke/round-cap/round-join
+     * treatment exactly, the same reasoning [Call] above states for Feather's `phone`.
+     */
+    public val Check: ImageVector =
+        strokeIcon(
+            "AgoCheck",
+            // M20 6 9 17l-5-5
+            {
+                moveTo(20f, 6f)
+                lineTo(9f, 17f)
+                lineToRelative(-5f, -5f)
+            },
+        )
+
+    /**
+     * `26-128`: the status glyph's own "needs attention" state — a plain exclamation mark (stem + dot),
+     * matching Material Symbols' `priority_high` **in shape** (a bare mark, no enclosing circle — this
+     * app's own coloured circle badge already supplies that framing, so importing a glyph that drew its
+     * own circle too would double it) and, like [Check] above, transcribed rather than imported: Feather's
+     * `alert-circle` draws the identical stem-plus-dot interior
+     * (`<line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`) around its own
+     * circle stroke, which this glyph keeps and that glyph's own circle drops. The dot is a real, working
+     * Feather convention, not a guess: a stroked line one hundredth of a unit long still draws, because
+     * [STROKE_WIDTH]'s round cap gives it a radius — the line's own zero-ish length only decides how much
+     * that round cap is allowed to stretch into an oval, not whether it draws at all.
+     */
+    public val Exclamation: ImageVector =
+        strokeIcon(
+            "AgoExclamation",
+            // M12 8v4
+            {
+                moveTo(12f, 8f)
+                verticalLineToRelative(4f)
+            },
+            // M12 16h.01
+            {
+                moveTo(12f, 16f)
+                lineToRelative(0.01f, 0f)
+            },
+        )
+
+    /**
+     * `26-128`: the first-launch battery/autostart sheet's own header glyph — the one place this item
+     * keeps a warning **triangle** at all (round 3 of the approved mockup singled this glyph out to keep
+     * it, while replacing every *circular* status badge's own triangle with [Exclamation] instead:
+     * "triangle-in-a-circle looks wrong"). Transcribed from Feather's `alert-triangle`, the identical
+     * "borrow the Feather primitive verbatim" precedent [Call]/[Check]/[Exclamation] already establish —
+     * its own outline (a rounded-corner triangle drawn as two arcs and three straight edges) already
+     * matches this family's 1.8-stroke/round-cap/round-join treatment with nothing to redraw, and its
+     * interior stem-plus-dot is the identical exclamation mark [Exclamation] above already transcribes,
+     * restated here as part of one continuous icon rather than shared geometry between two `ImageVector`s.
+     */
+    public val Warning: ImageVector =
+        strokeIcon(
+            "AgoWarning",
+            // M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z
+            {
+                moveTo(10.29f, 3.86f)
+                lineTo(1.82f, 18f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, 1.71f, 3f)
+                horizontalLineToRelative(16.94f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, 1.71f, -3f)
+                lineTo(13.71f, 3.86f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, -3.42f, 0f)
+                close()
+            },
+            // M12 9v4
+            {
+                moveTo(12f, 9f)
+                verticalLineToRelative(4f)
+            },
+            // M12 17h.01
+            {
+                moveTo(12f, 17f)
+                lineToRelative(0.01f, 0f)
+            },
+        )
+
+    /**
      * `i-trash-forever` — the «Все» tab's own swipe-revealed destructive action (`26-90`). Material
      * Symbols' `delete_forever` **in shape** — a bin carrying a large X rather than the three vertical
      * rules of the ordinary `delete` — and **redrawn**, not imported: Material ships that glyph as a
