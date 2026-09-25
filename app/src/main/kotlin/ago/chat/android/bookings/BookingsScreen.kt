@@ -222,8 +222,9 @@ public fun BookingsRoute(
  *
  * `26-103`: [visibleBookingsSegments] never returns more than three entries any more — five wrapped on a
  * real device once `26-96`/`26-97` each added one. [showServicesSegment]/[showHoursSegment] still arrive
- * here unchanged, but now feed [visibleBookingsConfigMenuEntries] instead, drawn beside the segmented
- * row by [BookingsConfigMenu] rather than as a fourth/fifth [SegmentedButton].
+ * here unchanged, but now feed [visibleBookingsConfigMenuEntries] instead, drawn by [BookingsConfigMenu]
+ * rather than as a fourth/fifth [SegmentedButton]. `26-109` moved that menu out of the segment row (it
+ * was crowding the segments again) and into the `TopAppBar` `actions`, left of the avatar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,6 +276,16 @@ internal fun BookingsScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.nav_bookings)) },
                     actions = {
+                        // `26-109`: the overflow moved out of the segment row and into the top bar, left
+                        // of the persistent avatar action (Material convention: overflow before identity) -
+                        // sharing the row was crowding the segmented control, wrapping «Утверждены» to two
+                        // lines. `BookingsConfigMenu` still hides itself when [configMenuEntries] is empty,
+                        // so nothing changes when there is nothing to show.
+                        BookingsConfigMenu(
+                            entries = configMenuEntries,
+                            labelFor = { tab -> bookingsTabLabel(tab = tab, pendingState = state) },
+                            onSelect = onTabSelected,
+                        )
                         // `26-77`: Записи had neither a presence dot nor a menu before this item - the
                         // avatar is this screen's first `actions` content of any kind.
                         AccountAvatarAction(
@@ -290,30 +301,20 @@ internal fun BookingsScreen(
             },
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                Row(
+                // `26-109`: the segmented row now holds only the segments - `BookingsConfigMenu` moved to
+                // the `TopAppBar` `actions` above, so the row no longer shares its width with the overflow.
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                        segments.forEachIndexed { index, tab ->
-                            SegmentedButton(
-                                selected = selectedTab == tab,
-                                onClick = { onTabSelected(tab) },
-                                shape = SegmentedButtonDefaults.itemShape(index, segments.size),
-                                label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
-                                icon = {},
-                            )
-                        }
+                    segments.forEachIndexed { index, tab ->
+                        SegmentedButton(
+                            selected = selectedTab == tab,
+                            onClick = { onTabSelected(tab) },
+                            shape = SegmentedButtonDefaults.itemShape(index, segments.size),
+                            label = { Text(text = bookingsTabLabel(tab = tab, pendingState = state)) },
+                            icon = {},
+                        )
                     }
-                    // `26-103`: Услуги/Часы no longer earn a fourth/fifth segment - they are reached from
-                    // here instead, and this control itself is absent whenever [configMenuEntries] is
-                    // empty (`BookingsConfigMenu`'s own doc comment: "hide, don't disable").
-                    BookingsConfigMenu(
-                        entries = configMenuEntries,
-                        labelFor = { tab -> bookingsTabLabel(tab = tab, pendingState = state) },
-                        onSelect = onTabSelected,
-                        modifier = Modifier.padding(start = 4.dp),
-                    )
                 }
 
                 when (selectedTab) {
