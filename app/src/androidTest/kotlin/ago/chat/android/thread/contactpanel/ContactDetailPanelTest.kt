@@ -107,6 +107,8 @@ class ContactDetailPanelTest {
                 visitorId = "01a0c839-1111-1111-1111-111111111111",
                 conversationState = "Assigned",
                 onRetrySummary = {},
+                onRevealContactDetail = {},
+                onRetryContactDetails = {},
                 onDismiss = { showPanel = false },
             )
         }

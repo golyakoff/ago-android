@@ -242,6 +242,8 @@ public fun ThreadRoute(
             visitorId = visitorId,
             conversationState = conversationState,
             onRetrySummary = contactPanelViewModel::retry,
+            onRevealContactDetail = contactPanelViewModel::revealContactDetail,
+            onRetryContactDetails = contactPanelViewModel::retryContactDetails,
             onDismiss = { showContactPanel = false },
         )
     }

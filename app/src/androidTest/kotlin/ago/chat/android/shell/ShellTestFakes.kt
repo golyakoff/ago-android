@@ -173,6 +173,13 @@ internal class FakeThreadHubEvents(
         pageSize: Int,
     ): HistoryPage = HistoryPage()
 
+    override suspend fun getVisitorHistoryConversation(
+        conversationId: String,
+        historicalConversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage = error("not used by the thread screen")
+
     override suspend fun sendMessage(
         conversationId: String,
         body: String,

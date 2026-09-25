@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.conversations.ConversationStateLabel
 import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
+import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.visitorEmojiPairName
@@ -82,6 +83,8 @@ internal fun ContactDetailPanel(
     visitorId: String?,
     conversationState: String?,
     onRetrySummary: () -> Unit,
+    onRevealContactDetail: (String) -> Unit,
+    onRetryContactDetails: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -117,6 +120,14 @@ internal fun ContactDetailPanel(
             // order (КОНТАКТНЫЕ ДАННЫЕ, tags, «Заметки команды», «Прошлые диалоги», «Приём файлов от
             // посетителя», «Закрыть диалог»/«Ограничить»). See this file's own doc comment for the
             // convention. Nothing above this line changes to add one.
+
+            // `26-148` (S-F): the first section - КОНТАКТНЫЕ ДАННЫЕ. Reads its own arm off the same state
+            // and takes its callbacks from the same VM, the additive convention documented above.
+            ContactDetailsSection(
+                state = state.contactDetails,
+                onReveal = onRevealContactDetail,
+                onRetry = onRetryContactDetails,
+            )
 
             Spacer(modifier = Modifier.height(SectionSpacing))
         }

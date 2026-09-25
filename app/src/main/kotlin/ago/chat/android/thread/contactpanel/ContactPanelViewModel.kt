@@ -1,5 +1,8 @@
 package ago.chat.android.thread.contactpanel
 
+import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
+import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
+import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryResult
 import ago.chat.android.di.IoDispatcher
@@ -16,10 +19,12 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * `26-147`: the contact-detail panel's own view model — for now, only the header's async half (H4/H5),
- * read once through [VisitorSummaryApi] (`26-143`). The join point `26-148`…`26-153` grow: each section
- * that needs a server read adds its own port here beside [visitorSummaryApi] and its own load method,
- * folding a new arm into [ContactPanelUiState] rather than restructuring this class.
+ * `26-147`: the contact-detail panel's own view model. It began holding only the header's async half
+ * (H4/H5), read once through [VisitorSummaryApi] (`26-143`); `26-148` grew it the way its own doc comment
+ * prescribes for the section slices — a second port ([ContactDetailsApi], `26-115`) beside
+ * [visitorSummaryApi], its own load/retry/reveal methods, and a new arm
+ * ([ContactPanelUiState.contactDetails]) folded into the state rather than a restructure of this class.
+ * The remaining sections (`26-149`…`26-153`) grow it the identical way.
  *
  * **Opened, not injected-with-an-id.** [open] hands the conversation id in, the identical shape
  * [ago.chat.android.thread.ThreadViewModel.open] already establishes — this class is scoped to the open
@@ -39,6 +44,7 @@ public class ContactPanelViewModel
     @Inject
     constructor(
         private val visitorSummaryApi: VisitorSummaryApi,
+        private val contactDetailsApi: ContactDetailsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ContactPanelUiState())
@@ -50,26 +56,120 @@ public class ContactPanelViewModel
         private var loadedConversationId: String? = null
 
         /**
-         * Opens the panel on one conversation and fetches its visitor summary. Called from
-         * [ago.chat.android.thread.ThreadRoute] the moment the operator taps the open affordance. A
-         * repeat call for the conversation already loaded is a no-op — unless the previous attempt failed,
-         * in which case re-opening the sheet is itself the retry (the header's inline retry calls [retry]
-         * directly; this covers the "close, reopen" path landing on a fresh attempt too).
+         * Opens the panel on one conversation and fetches everything it reads for the first time: the
+         * visitor summary (H4/H5, `26-147`) and the КОНТАКТНЫЕ ДАННЫЕ rows (`26-148`). Called from
+         * [ago.chat.android.thread.ThreadRoute] the moment the operator taps the open affordance —
+         * itself only ever present when the operator holds `conversation:read`, which is the same
+         * capability the contact-details read is gated on server-side
+         * ([ago.chat.android.core.domain.contactdetails.ContactDetailsApi]'s own contract), so no
+         * second gate is needed here.
+         *
+         * A repeat call for the conversation already loaded re-issues **only** the arms that are sitting
+         * in a `Failed` state — so reopening the sheet after a section failed is itself a retry, while a
+         * plain reopen of a healthy panel is a no-op and never re-reads a section that already landed. A
+         * genuinely different conversation reloads both arms fresh.
          */
         public fun open(conversationId: String) {
-            if (loadedConversationId == conversationId && mutableState.value.summary !is HeaderSummaryState.Failed) return
+            val sameConversation = loadedConversationId == conversationId
             loadedConversationId = conversationId
-            load(conversationId)
+            if (!sameConversation || mutableState.value.summary is HeaderSummaryState.Failed) {
+                loadSummary(conversationId)
+            }
+            if (!sameConversation || mutableState.value.contactDetails is ContactDetailsSectionState.Failed) {
+                loadContactDetails(conversationId)
+            }
         }
 
         /** The header's own inline retry (§4: per-section retry, never a whole-sheet failure) — re-reads
          * the summary for whatever conversation is currently open, a no-op before the first [open]. */
         public fun retry() {
             val conversationId = loadedConversationId ?: return
-            load(conversationId)
+            loadSummary(conversationId)
         }
 
-        private fun load(conversationId: String) {
+        /** `26-148`: the КОНТАКТНЫЕ ДАННЫЕ section's own inline retry — the section's sibling of [retry],
+         * re-reading only its own rows and leaving the header untouched (§4: a slow or failed section never
+         * fails the whole sheet). A no-op before the first [open]. */
+        public fun retryContactDetails() {
+            val conversationId = loadedConversationId ?: return
+            loadContactDetails(conversationId)
+        }
+
+        /**
+         * `26-148`: reveals one masked contact-detail row's real value. Reuses `26-115`'s reveal-result
+         * idiom exactly:
+         *
+         * - A row already in [ContactDetailsSectionState.Loaded.revealingIds] is a no-op — one deliberate
+         *   tap, one server call per row.
+         * - On [RevealContactDetailResult.Revealed] the row is replaced in place with the server's own
+         *   unmasked value; nothing here unmasks a value client-side.
+         * - On [RevealContactDetailResult.Refused] the masked value stays and the server's `detail` is
+         *   surfaced verbatim under that one row.
+         * - On [RevealContactDetailResult.Failed] the masked value stays and a generic transport line is
+         *   surfaced under that one row.
+         *
+         * A no-op unless the section is currently [ContactDetailsSectionState.Loaded] (there is no masked
+         * row to reveal otherwise).
+         */
+        public fun revealContactDetail(contactDetailId: String) {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.contactDetails as? ContactDetailsSectionState.Loaded ?: return
+            if (contactDetailId in loaded.revealingIds) return
+            mutableState.update {
+                it.copy(
+                    contactDetails =
+                        loaded.copy(
+                            revealingIds = loaded.revealingIds + contactDetailId,
+                            // A stale error about a previous attempt on this row has no business staying
+                            // once a new attempt starts - the same "clear the row's error the moment a new
+                            // reveal begins" moment the calendar's own reveal establishes.
+                            revealErrors = loaded.revealErrors - contactDetailId,
+                        ),
+                )
+            }
+
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) { contactDetailsApi.revealContactDetail(conversationId, contactDetailId) }
+                // Drop a late answer for a conversation the panel has since moved off, the same guard the
+                // reads apply.
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded =
+                        current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                    val nextRevealing = currentLoaded.revealingIds - contactDetailId
+                    val nextContactDetails =
+                        when (result) {
+                            is RevealContactDetailResult.Revealed ->
+                                currentLoaded.copy(
+                                    details =
+                                        currentLoaded.details.map {
+                                            if (it.id == contactDetailId) result.contactDetail else it
+                                        },
+                                    revealingIds = nextRevealing,
+                                    revealErrors = currentLoaded.revealErrors - contactDetailId,
+                                )
+
+                            is RevealContactDetailResult.Refused ->
+                                currentLoaded.copy(
+                                    revealingIds = nextRevealing,
+                                    revealErrors =
+                                        currentLoaded.revealErrors + (contactDetailId to RowRevealError.Refused(result.detail)),
+                                )
+
+                            is RevealContactDetailResult.Failed ->
+                                currentLoaded.copy(
+                                    revealingIds = nextRevealing,
+                                    revealErrors =
+                                        currentLoaded.revealErrors + (contactDetailId to RowRevealError.Failed(result.reason)),
+                                )
+                        }
+                    current.copy(contactDetails = nextContactDetails)
+                }
+            }
+        }
+
+        private fun loadSummary(conversationId: String) {
             mutableState.update { it.copy(summary = HeaderSummaryState.Loading) }
             viewModelScope.launch {
                 val result = withContext(ioDispatcher) { visitorSummaryApi.fetchVisitorSummary(conversationId) }
@@ -83,6 +183,23 @@ public class ContactPanelViewModel
                             when (result) {
                                 is VisitorSummaryResult.Loaded -> HeaderSummaryState.Loaded(result.summary)
                                 is VisitorSummaryResult.Failed -> HeaderSummaryState.Failed(result.reason)
+                            },
+                    )
+                }
+            }
+        }
+
+        private fun loadContactDetails(conversationId: String) {
+            mutableState.update { it.copy(contactDetails = ContactDetailsSectionState.Loading) }
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { contactDetailsApi.fetchContactDetails(conversationId) }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update {
+                    it.copy(
+                        contactDetails =
+                            when (result) {
+                                is ContactDetailsResult.Loaded -> ContactDetailsSectionState.Loaded(result.details)
+                                is ContactDetailsResult.Failed -> ContactDetailsSectionState.Failed(result.reason)
                             },
                     )
                 }

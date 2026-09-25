@@ -174,6 +174,17 @@
     <string name="contact_panel_conversation_count_many">%1$d conversations</string>
     <string name="contact_panel_summary_load_failed">Couldn\'t load</string>
 
+    <!-- `26-148`: contact-detail panel КОНТАКТНЫЕ ДАННЫЕ section (fields + reveal). -->
+    <string name="contact_details_section_title">Contact details</string>
+    <string name="contact_details_label_name">Name</string>
+    <string name="contact_details_label_phone">Phone</string>
+    <string name="contact_details_label_email">Email</string>
+    <string name="contact_details_reveal">Show</string>
+    <string name="contact_details_revealing">Showing…</string>
+    <string name="contact_details_empty">No contact details</string>
+    <string name="contact_details_load_failed">Couldn\'t load contact details</string>
+    <string name="contact_details_reveal_failed">Couldn\'t show</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>
