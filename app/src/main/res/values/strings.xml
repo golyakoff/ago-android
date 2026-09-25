@@ -525,6 +525,11 @@
     <string name="bookings_confirmed_detail_phone_label">Телефон</string>
     <string name="bookings_confirmed_detail_sms_label">Подтверждён по SMS</string>
     <string name="bookings_confirmed_detail_source_label">Источник</string>
+    <!-- `26-121`: the «Источник» row's own value when a booking carries an origin conversation
+         (`ConfirmedBookingResponse.OriginConversationId`). The calendar treats the chat origin opaquely
+         (`adr/0184`/`adr/0065`), so it can only say a booking arrived through a chat conversation, never
+         which channel within chat - hence one honest «Из чата», not a widget/Telegram/Max breakdown. -->
+    <string name="bookings_confirmed_detail_source_chat">Из чата</string>
 
     <!--
         `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only

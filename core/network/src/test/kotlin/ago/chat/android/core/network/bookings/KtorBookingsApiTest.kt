@@ -162,7 +162,7 @@ class KtorBookingsApiTest {
                             "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина Соколова",
                             "serviceId":"s1","serviceName":"Стрижка","customerId":"c1","customerDisplayName":"Анна",
                             "startsAt":"2026-09-24T09:00:00Z","endsAt":"2026-09-24T09:30:00Z",
-                            "localDate":"2026-09-24","weekday":4
+                            "localDate":"2026-09-24","weekday":4,"originConversationId":"conv1"
                           }
                         ]
                         """.trimIndent(),
@@ -189,6 +189,8 @@ class KtorBookingsApiTest {
                             endsAt = "2026-09-24T09:30:00Z",
                             localDate = "2026-09-24",
                             weekday = 4,
+                            // `26-121`: the origin conversation now decodes from the wire.
+                            originConversationId = "conv1",
                         ),
                     ),
                 ),

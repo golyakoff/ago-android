@@ -20,12 +20,12 @@ package ago.chat.android.core.domain.bookings
  *   (`ConsoleContracts.cs`'s own remarks: "Always populated — masked or real"), so [phone] is a plain
  *   `String`; the empty-string default below exists only for the wire DTO's own forward-compatibility,
  *   never as a value this app expects a real response to send.
- * - [originConversationId] is **not on the wire response at all yet** — `docs/design/26-112-*.md`'s own
- *   GAP-C1, a separate `ago-calendar` ticket (provisionally `26-156`) that stores the chat-supplied
- *   conversation id on the booking and echoes it here. Declared now, defaulted to `null`, so the day that
- *   field ships this app's dialog-navigation affordance (`docs/backlog/26-117-*.md`'s own "Dialog link")
- *   switches itself on with no further Android change — until then every row's own [originConversationId]
- *   is `null` and the affordance stays disabled, honestly.
+ * - [originConversationId] is **on the wire as of `26-121`** — `ConfirmedBookingResponse.OriginConversationId`,
+ *   the chat conversation a booking arrived through, or `null` for a booking with no chat origin. It drives
+ *   both the detail sheet's «Источник» row (present → «Из чата») and this app's dialog-navigation affordance
+ *   (`docs/backlog/26-117-*.md`'s own "Dialog link"), which now switches itself on for a real chat-origin
+ *   booking instead of staying permanently disabled. The default below stays `null` for the wire DTO's own
+ *   forward-compatibility, and honestly reflects a booking that carries no origin conversation.
  */
 public data class ConfirmedBooking(
     val bookingId: String,

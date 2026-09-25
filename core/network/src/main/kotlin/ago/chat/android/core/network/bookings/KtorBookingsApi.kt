@@ -515,9 +515,10 @@ private fun PendingBookingWireDto.toDomain() =
  * identical `ignoreUnknownKeys`-adjacent resilience [PendingBookingWireDto]'s own doc comment already
  * relies on for fields this adapter has no use for, applied here to fields it does read.
  *
- * [originConversationId] is genuinely not on the wire yet — see [ConfirmedBooking]'s own doc comment for
- * the backend ticket that adds it. Defaulted to `null` so today's real response (which has no such key at
- * all) still decodes.
+ * [originConversationId] is on the wire as of `26-121` (`ConfirmedBookingResponse.OriginConversationId`) —
+ * see [ConfirmedBooking]'s own doc comment. Still defaulted to `null`: the server sends the key as JSON
+ * `null` for a booking with no chat origin, and the default also lets an older response that omits the key
+ * entirely keep decoding.
  */
 @Serializable
 private data class ConfirmedBookingWireDto(

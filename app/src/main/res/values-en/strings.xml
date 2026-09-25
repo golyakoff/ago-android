@@ -316,6 +316,8 @@
     <string name="bookings_confirmed_detail_phone_label">Phone</string>
     <string name="bookings_confirmed_detail_sms_label">Confirmed by SMS</string>
     <string name="bookings_confirmed_detail_source_label">Source</string>
+    <!-- `26-121`: the «Источник» row's own value when a booking carries an origin conversation (see the RU file). -->
+    <string name="bookings_confirmed_detail_source_chat">From chat</string>
 
     <string name="bookings_tab_clients">Clients</string>
     <string name="bookings_contacts_empty">This tenant has no customers yet.</string>
