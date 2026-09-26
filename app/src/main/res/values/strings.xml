@@ -464,22 +464,26 @@
     <string name="bookings_not_configured">Бэкенд календаря пока не настроен для этого окружения, поэтому этот экран здесь недоступен.</string>
     <string name="bookings_load_failed_transport">Не удалось связаться с AGO Calendar. Проверьте подключение и попробуйте ещё раз.</string>
     <string name="bookings_load_failed_unexpected">Не удалось загрузить очередь записей. Попробуйте ещё раз.</string>
-    <!-- The mockup's own wording, verbatim (`docs/backlog/26-48-*.md`'s own Scope item 4). -->
+    <!-- The mockup's own wording, verbatim (`docs/backlog/26-48-*.md`'s own Scope item 4). `26-163`: the
+         detail sheet's own line; the list row carries the short form below. -->
     <string name="bookings_confirms_in_hours">Подтвердится через %d ч</string>
+    <!-- `26-163`: the row's trailing form of the same fact - the verb is already the screen's own caption
+         (`bookings_auto_confirms_caption`), so the row does not repeat it. -->
+    <string name="bookings_pending_confirms_in_hours_short">через %d ч</string>
     <string name="bookings_deadline_unknown">срок неизвестен</string>
     <string name="bookings_duration_minutes">%d мин</string>
+    <!-- `26-163`: «Когда»/«Календарь» left with the `26-48` card they labelled - the redesigned row carries
+         the time and date in its leading column, and the calendar id is an id, never a thing to show. -->
     <string name="bookings_card_service_label">Услуга</string>
-    <string name="bookings_card_when_label">Когда</string>
     <string name="bookings_card_worker_label">Мастер</string>
-    <string name="bookings_card_calendar_label">Календарь</string>
     <!-- `docs/backlog/26-49-*.md`'s own Scope item 4, quoting the mockup's own caption verbatim - the
          one sentence that explains why this screen draws no «Подтвердить» control anywhere. -->
     <string name="bookings_auto_confirms_caption">Всё подтверждается автоматически.</string>
     <!-- `20-04`/`CalendarQueuePage.tsx`'s own verb, restated: the queue is a veto list, not an approval
-         list - confirmation is what happens when nobody acts. -->
+         list - confirmation is what happens when nobody acts. `26-163`: «Не пришёл» is gone from this
+         screen - `Event.MarkNoShow` accepts only a `Booked` row, so a pending row can never take it. -->
     <string name="bookings_action_reject">Отклонить</string>
     <string name="bookings_action_cancel">Отменить</string>
-    <string name="bookings_action_no_show">Не пришёл</string>
 
     <!--
         `26-51`: Записи's own «Утверждены» segment - one chosen day's confirmed bookings, grouped by

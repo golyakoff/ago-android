@@ -1,5 +1,6 @@
 package ago.chat.android.core.domain.bookings
 
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
@@ -32,5 +33,24 @@ import java.time.format.DateTimeFormatter
  */
 public fun businessLocalTimeOrNull(iso: String): String? =
     runCatching { OffsetDateTime.parse(iso).toLocalTime().format(BUSINESS_CLOCK_FORMAT) }.getOrNull()
+
+/**
+ * `26-163`: the weekday of a business-local `YYYY-MM-DD`, in the `0 = Sunday` convention every
+ * `bookings_weekday_*` array and `ConfirmedBookingResponse.Weekday` already share - or `null` when the
+ * date fails to parse, the identical "never invented, rendered honestly" posture [businessLocalTimeOrNull]
+ * takes above.
+ *
+ * **A date-only derivation, on purpose, and why that is not the trap `docs/conventions/date-and-time.md`
+ * warns about.** [ConfirmedBooking.weekday] is computed server-side because the console's own JavaScript
+ * would otherwise parse a bare date string as UTC midnight and, west of Greenwich, land on the previous
+ * day. That trap needs an *instant* to fall into: a `YYYY-MM-DD` read as a [LocalDate] carries no
+ * instant, no offset and no zone, so its weekday is a calendrical fact that cannot move with the device -
+ * `2026-09-29` is a Tuesday everywhere. `PendingBookingResponse` carries no `weekday` of its own, and this
+ * is the one honest way to render the pending sheet's «Вторник, 29 сентября 2026» line without asking the
+ * calendar for a field whose whole value is guarding against a mistake [LocalDate] cannot make.
+ *
+ * [java.time.DayOfWeek] numbers Monday `1` through Sunday `7`; the modulo folds Sunday onto `0`.
+ */
+public fun businessLocalWeekdayOrNull(localDate: String): Int? = runCatching { LocalDate.parse(localDate).dayOfWeek.value % 7 }.getOrNull()
 
 private val BUSINESS_CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")

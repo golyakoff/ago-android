@@ -32,9 +32,13 @@ class BookingsOrderingTest {
         bookingId = id,
         calendarId = "calendar-$id",
         workerId = "worker-$id",
+        workerDisplayName = "Мастер $id",
         serviceId = "service-$id",
+        serviceName = "Услуга $id",
+        customerId = "person-$id",
         startsAt = "2026-09-22T09:00:00Z",
         endsAt = "2026-09-22T09:30:00Z",
+        localDate = "2026-09-22",
         confirmationDeadline = confirmationDeadline,
     )
 }

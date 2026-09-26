@@ -47,8 +47,63 @@ class KtorBookingsApiTest {
                         """
                         [
                           {
-                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","serviceId":"s1",
-                            "startsAt":"2026-09-22T09:00:00Z","endsAt":"2026-09-22T09:30:00Z",
+                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина Соколова",
+                            "serviceId":"s1","serviceName":"Стрижка","personId":"p1",
+                            "startsAt":"2026-09-22T09:00:00Z","endsAt":"2026-09-22T09:30:00Z","localDate":"2026-09-22",
+                            "confirmationDeadline":"2026-09-22T10:00:00Z","isOverdue":false,
+                            "phone":"+7•••••••••29","masked":true
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchPendingQueue()
+
+            // `26-163`: the names `26-50` put on the wire come through, and `personId` lands on
+            // `customerId` with `customerDisplayName` left `null` for the view model's own display-merge -
+            // the identical mapping the confirmed read already makes.
+            assertEquals(
+                PendingBookingsResult.Loaded(
+                    listOf(
+                        PendingBooking(
+                            bookingId = "b1",
+                            calendarId = "cal1",
+                            workerId = "w1",
+                            workerDisplayName = "Ирина Соколова",
+                            serviceId = "s1",
+                            serviceName = "Стрижка",
+                            customerId = "p1",
+                            startsAt = "2026-09-22T09:00:00Z",
+                            endsAt = "2026-09-22T09:30:00Z",
+                            localDate = "2026-09-22",
+                            confirmationDeadline = "2026-09-22T10:00:00Z",
+                            customerDisplayName = null,
+                            phone = "+7•••••••••29",
+                            masked = true,
+                        ),
+                    ),
+                ),
+                result,
+            )
+            assertEquals("$baseUrl/api/v1/console/pending-bookings", requestedUrl)
+        }
+
+    @Test
+    fun `an unknown field on the wire does not break the read, and a null phone is the no-permission state`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """
+                        [
+                          {
+                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина Соколова",
+                            "serviceId":"s1","serviceName":null,"personId":"p1",
+                            "somethingNewerThanThisBuild":42,"isOverdue":false,"phone":null,"masked":false,
+                            "startsAt":"2026-09-22T09:00:00Z","endsAt":"2026-09-22T09:30:00Z","localDate":"2026-09-22",
                             "confirmationDeadline":"2026-09-22T10:00:00Z"
                           }
                         ]
@@ -60,47 +115,13 @@ class KtorBookingsApiTest {
 
             val result = api.fetchPendingQueue()
 
-            assertEquals(
-                PendingBookingsResult.Loaded(
-                    listOf(
-                        PendingBooking(
-                            bookingId = "b1",
-                            calendarId = "cal1",
-                            workerId = "w1",
-                            serviceId = "s1",
-                            startsAt = "2026-09-22T09:00:00Z",
-                            endsAt = "2026-09-22T09:30:00Z",
-                            confirmationDeadline = "2026-09-22T10:00:00Z",
-                        ),
-                    ),
-                ),
-                result,
-            )
-            assertEquals("$baseUrl/api/v1/console/pending-bookings", requestedUrl)
-        }
-
-    @Test
-    fun `an unknown field on the wire does not break the read`() =
-        runTest {
-            val api =
-                apiFor(baseUrl) {
-                    respond(
-                        """
-                        [
-                          {
-                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","serviceId":"s1",
-                            "customerId":"c1","localDate":"2026-09-22","isOverdue":false,"phone":null,"masked":false,
-                            "startsAt":"2026-09-22T09:00:00Z","endsAt":"2026-09-22T09:30:00Z",
-                            "confirmationDeadline":"2026-09-22T10:00:00Z"
-                          }
-                        ]
-                        """.trimIndent(),
-                        HttpStatusCode.OK,
-                        headersOf("Content-Type", ContentType.Application.Json.toString()),
-                    )
-                }
-
-            assertTrue(api.fetchPendingQueue() is PendingBookingsResult.Loaded)
+            assertTrue(result is PendingBookingsResult.Loaded)
+            val booking = (result as PendingBookingsResult.Loaded).bookings.single()
+            // `PendingBookingResponse.Phone` is JSON `null` exactly when the caller lacks `customer:read` -
+            // carried as `null`, never coerced to an empty string that would read as "no phone recorded".
+            assertEquals(null, booking.phone)
+            assertEquals(false, booking.masked)
+            assertEquals(null, booking.serviceName)
         }
 
     @Test

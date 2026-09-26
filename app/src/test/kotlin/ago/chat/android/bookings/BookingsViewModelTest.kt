@@ -10,6 +10,10 @@ import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -27,6 +31,10 @@ import org.junit.Test
  * `26-48`: the whole state machine — load once, land on one of the four [BookingsUiState] arms, and
  * retry on demand. The `StandardTestDispatcher`/`Dispatchers.setMain` shape
  * `ConversationListViewModelTest` already establishes.
+ *
+ * `26-163`: the display-merge tests at the bottom mirror `ConfirmedBookingsViewModelTest`'s own for the
+ * identical `PersonsApi` merge, restated for [PendingBooking]; the fixture's `personsApi` defaults to an
+ * empty answer so every pre-existing test keeps asserting the bare, un-merged rows it always did.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookingsViewModelTest {
@@ -46,7 +54,7 @@ class BookingsViewModelTest {
     fun `starts Loading before the first answer comes back`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(hangFetch = true)
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
 
             dispatcher.scheduler.runCurrent()
 
@@ -59,7 +67,7 @@ class BookingsViewModelTest {
             val soon = booking(id = "soon", confirmationDeadline = "2026-09-22T10:00:00Z")
             val later = booking(id = "later", confirmationDeadline = "2026-09-22T12:00:00Z")
             val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(later, soon)))
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
 
             advanceUntilIdle()
 
@@ -70,7 +78,7 @@ class BookingsViewModelTest {
     fun `NotConfigured passes straight through`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PendingBookingsResult.NotConfigured)
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
 
             advanceUntilIdle()
 
@@ -81,7 +89,7 @@ class BookingsViewModelTest {
     fun `a failure carries its own classification through, unedited`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PendingBookingsResult.Failed(BookingsQueueFailure.Transport))
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
 
             advanceUntilIdle()
 
@@ -92,7 +100,7 @@ class BookingsViewModelTest {
     fun `refresh asks the server again`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PendingBookingsResult.Failed(BookingsQueueFailure.Unexpected))
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
             assertEquals(1, api.fetchCalls)
 
@@ -110,7 +118,7 @@ class BookingsViewModelTest {
             val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
             val b = booking(id = "b", confirmationDeadline = "2026-09-22T12:00:00Z")
             val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b)), hangAction = true)
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
 
             viewModel.reject("a")
@@ -126,7 +134,7 @@ class BookingsViewModelTest {
         runTest(dispatcher) {
             val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
             val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a)), hangAction = true)
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
 
             viewModel.reject("a")
@@ -150,7 +158,7 @@ class BookingsViewModelTest {
                 FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b))).apply {
                     onAction = { result = PendingBookingsResult.Loaded(listOf(b)) }
                 }
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
 
             viewModel.reject("a")
@@ -169,7 +177,7 @@ class BookingsViewModelTest {
                 FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a))).apply {
                     actionResult = BookingActionResult.Refused("Запись уже подтверждена сборщиком.")
                 }
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
 
             viewModel.cancel("a")
@@ -177,7 +185,7 @@ class BookingsViewModelTest {
 
             assertEquals(listOf("a"), api.cancelCalls)
             // `docs/backlog/26-49-*.md`'s own Scope item 3: the queue is re-read (still one call ahead of
-            // the reject/cancel/no-show call itself) before the refusal is ever shown.
+            // the reject/cancel call itself) before the refusal is ever shown.
             assertEquals(2, api.fetchCalls)
             assertEquals(
                 BookingsUiState.Loaded(
@@ -196,13 +204,13 @@ class BookingsViewModelTest {
                 FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a))).apply {
                     actionResult = BookingActionResult.Failed(BookingsQueueFailure.Transport)
                 }
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
 
-            viewModel.markNoShow("a")
+            viewModel.reject("a")
             advanceUntilIdle()
 
-            assertEquals(listOf("a"), api.noShowCalls)
+            assertEquals(listOf("a"), api.rejectCalls)
             assertEquals(
                 BookingsUiState.Loaded(listOf(a), actionError = BookingActionErrorUi.Unavailable(BookingsQueueFailure.Transport)),
                 viewModel.state.value,
@@ -214,7 +222,7 @@ class BookingsViewModelTest {
         runTest(dispatcher) {
             val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
             val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a)))
-            val viewModel = BookingsViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = viewModel(api)
             advanceUntilIdle()
             api.actionResult = BookingActionResult.Refused("на секунду опоздали")
             viewModel.cancel("a")
@@ -231,16 +239,109 @@ class BookingsViewModelTest {
             assertEquals(BookingsUiState.Loaded(listOf(a)), viewModel.state.value)
         }
 
+    // `26-163`/`adr/0184`: the chat-registry display-merge, restated from `ConfirmedBookingsViewModelTest`.
+
+    @Test
+    fun `a loaded queue asks the person registry once for every distinct person, and merges the names it knows`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z", customerId = "p1")
+            val b = booking(id = "b", confirmationDeadline = "2026-09-22T11:00:00Z", customerId = "p2")
+            val c = booking(id = "c", confirmationDeadline = "2026-09-22T12:00:00Z", customerId = "p1")
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b, c)))
+            val personsApi =
+                FakePersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(
+                                PersonProfile(personId = "p1", displayName = "Анна Ковалёва"),
+                                // A person with nobody's name recorded yet - left alone, never invented.
+                                PersonProfile(personId = "p2", displayName = null),
+                            ),
+                        ),
+                )
+            val viewModel = viewModel(api, personsApi)
+
+            advanceUntilIdle()
+
+            assertEquals(1, personsApi.fetchCalls)
+            assertEquals(listOf("p1", "p2"), personsApi.requestedIds)
+            assertEquals(
+                BookingsUiState.Loaded(
+                    listOf(
+                        a.copy(customerDisplayName = "Анна Ковалёва"),
+                        b,
+                        c.copy(customerDisplayName = "Анна Ковалёва"),
+                    ),
+                ),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `an unreachable person registry leaves the queue loaded with bare rows, never an error`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z")
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a)))
+            val viewModel = viewModel(api, FakePersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection)))
+
+            advanceUntilIdle()
+
+            assertEquals(BookingsUiState.Loaded(listOf(a)), viewModel.state.value)
+        }
+
+    @Test
+    fun `an empty queue never asks the person registry at all`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = PendingBookingsResult.Loaded(emptyList()))
+            val personsApi = FakePersonsApi()
+            viewModel(api, personsApi)
+
+            advanceUntilIdle()
+
+            assertEquals(0, personsApi.fetchCalls)
+        }
+
+    @Test
+    fun `the re-read after a veto is merged too, so a surviving row keeps its name`() =
+        runTest(dispatcher) {
+            val a = booking(id = "a", confirmationDeadline = "2026-09-22T10:00:00Z", customerId = "p1")
+            val b = booking(id = "b", confirmationDeadline = "2026-09-22T12:00:00Z", customerId = "p2")
+            val api =
+                FakeBookingsApi(result = PendingBookingsResult.Loaded(listOf(a, b))).apply {
+                    onAction = { result = PendingBookingsResult.Loaded(listOf(b)) }
+                }
+            val personsApi =
+                FakePersonsApi(result = PersonsResult.Loaded(listOf(PersonProfile(personId = "p2", displayName = "Мария Орлова"))))
+            val viewModel = viewModel(api, personsApi)
+            advanceUntilIdle()
+
+            viewModel.reject("a")
+            advanceUntilIdle()
+
+            assertEquals(2, personsApi.fetchCalls)
+            assertEquals(BookingsUiState.Loaded(listOf(b.copy(customerDisplayName = "Мария Орлова"))), viewModel.state.value)
+        }
+
+    private fun viewModel(
+        api: BookingsApi,
+        personsApi: PersonsApi = FakePersonsApi(),
+    ) = BookingsViewModel(api = api, personsApi = personsApi, ioDispatcher = dispatcher)
+
     private fun booking(
         id: String,
         confirmationDeadline: String,
+        customerId: String = "person-$id",
     ) = PendingBooking(
         bookingId = id,
         calendarId = "calendar-$id",
         workerId = "worker-$id",
+        workerDisplayName = "Ирина Соколова",
         serviceId = "service-$id",
+        serviceName = "Стрижка",
+        customerId = customerId,
         startsAt = "2026-09-22T09:00:00Z",
         endsAt = "2026-09-22T09:30:00Z",
+        localDate = "2026-09-22",
         confirmationDeadline = confirmationDeadline,
     )
 
@@ -259,7 +360,6 @@ class BookingsViewModelTest {
             private set
         val rejectCalls: MutableList<String> = mutableListOf()
         val cancelCalls: MutableList<String> = mutableListOf()
-        val noShowCalls: MutableList<String> = mutableListOf()
 
         override suspend fun fetchPendingQueue(): PendingBookingsResult {
             fetchCalls++
@@ -293,10 +393,10 @@ class BookingsViewModelTest {
             return respondToAction()
         }
 
-        override suspend fun markNoShow(bookingId: String): BookingActionResult {
-            noShowCalls.add(bookingId)
-            return respondToAction()
-        }
+        // `26-163`: `BookingsViewModel` no longer marks a no-show - `Event.MarkNoShow` accepts only a
+        // `Booked` row, so a pending queue has nothing to aim this at. Throwing here is what proves it.
+        override suspend fun markNoShow(bookingId: String): BookingActionResult =
+            throw UnsupportedOperationException("a pending booking can never be a no-show")
 
         private suspend fun respondToAction(): BookingActionResult {
             if (hangAction) awaitCancellation()
@@ -324,5 +424,23 @@ class BookingsViewModelTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
+    }
+
+    /** `26-163`: the identical fake `ConfirmedBookingsViewModelTest`/`ContactsViewModelTest` already
+     * establish - a single canned answer, no server-shaped state to fake. Defaults to an empty
+     * [PersonsResult.Loaded] so every pre-existing test above keeps asserting bare, un-merged rows. */
+    private class FakePersonsApi(
+        var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+    ) : PersonsApi {
+        var fetchCalls: Int = 0
+            private set
+        var requestedIds: List<String> = emptyList()
+            private set
+
+        override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+            fetchCalls++
+            requestedIds = personIds
+            return result
+        }
     }
 }
