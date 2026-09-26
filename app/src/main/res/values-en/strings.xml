@@ -761,7 +761,6 @@
     <string name="settings_autostart_limitation_note">Android has no single way to read this status on most phones — the exact state can\'t be confirmed, so this is shown as a recommendation, not a verified fact.</string>
     <string name="settings_autostart_manual_confirm_checkbox">Autostart is on — don\'t remind me</string>
     <string name="settings_autostart_manual_confirmed_note">You marked autostart as on.</string>
-    <string name="settings_autostart_manual_confirm_undo">Remind me again</string>
 
     <string name="push_unavailable_host_app_not_installed">RuStore, which notifications come through, isn\'t installed on this phone.</string>
     <string name="push_unavailable_background_work_not_granted">RuStore isn\'t allowed to run in the background, so notifications may arrive late.</string>
