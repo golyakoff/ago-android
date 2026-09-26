@@ -211,6 +211,14 @@ internal fun AppShellScreen(
             // `conversation:read`: there is no read-only fallback for this one section
             // ([ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection]'s own doc comment).
             canGrantAttachmentUpload = permissions.holds(Permission.CONVERSATION_ATTACHMENT_UPLOAD_GRANT),
+            // `26-153`: `conversation:close` gates the contact-panel's «Закрыть диалог» button
+            // (hide-not-disable, design Q7) - computed here, once, from the same permission set, the
+            // identical shape `canGrantAttachmentUpload` above uses.
+            canCloseConversation = permissions.holds(Permission.CONVERSATION_CLOSE),
+            // `26-153`: `conversation:block` gates the contact-panel's reversible «Ограничить»/
+            // «Снять ограничение» button (hide-not-disable, design Q7) - computed the same way, independent
+            // of `canCloseConversation` above: an operator may hold either, both, or neither.
+            canRestrictVisitor = permissions.holds(Permission.CONVERSATION_BLOCK),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for

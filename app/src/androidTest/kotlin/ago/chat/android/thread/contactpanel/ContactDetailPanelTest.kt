@@ -126,6 +126,11 @@ class ContactDetailPanelTest {
                 canGrantAttachmentUpload = false,
                 onToggleAttachmentUpload = {},
                 onRetryAttachmentUpload = {},
+                canClose = false,
+                onClose = {},
+                canRestrict = false,
+                onToggleRestriction = {},
+                onRetryRestriction = {},
                 onDismiss = { showPanel = false },
             )
         }

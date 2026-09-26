@@ -399,6 +399,41 @@
     <string name="attachment_upload_toggle_failed">Не удалось изменить разрешение на загрузку файлов</string>
 
     <!--
+        `26-153`: the contact-detail panel's sixth and final section - «Закрыть диалог» + the reversible
+        «Ограничить»/«Снять ограничение» action (`docs/design/26-111-contact-panel-slices.md`, S-K).
+        `conversation_actions_close_*` mirror `ago-console`'s own `closeConversationButton`/
+        `closeConversationDialogTitle`/`closeConversationDialogBody`/`closeItButton` near-verbatim - the
+        same action, described the same way on both surfaces. `conversation_actions_restrict_*` mirror the
+        console's own `blockVisitorButton`/`blockVisitorDialogTitle`/`blockVisitorDialogBody`/
+        `blockVisitorConfirmButton` the same way, restated under the mockup's own «Ограничить» wording
+        rather than the console's admin-page "заблокировать" verb (Author decision #2: one reversible
+        action, named by its two states). `conversation_actions_lift_*` are this panel's own - the console
+        lifts from an admin table with a plain button and no dialog, but this ticket's own scope asks for a
+        confirm dialog on both directions of the reversible action, not only the forward one.
+        `conversation_actions_restriction_load_failed`/`conversation_actions_restriction_action_failed` are
+        the section's own inline read-failure and generic write-failure lines - a genuine server refusal on
+        either write shows the server's own sentence verbatim instead (design §4).
+    -->
+    <string name="conversation_actions_close_button">Закрыть диалог</string>
+    <string name="conversation_actions_closing_button">Закрытие…</string>
+    <string name="conversation_actions_close_confirm_title">Закрыть этот диалог?</string>
+    <string name="conversation_actions_close_confirm_body">Чат с посетителем завершится, и этот диалог нельзя будет открыть заново. Закрытие также освобождает вашу нагрузку, поэтому вам может сразу назначиться новый диалог.</string>
+    <string name="conversation_actions_close_confirm_action">Закрыть</string>
+    <string name="conversation_actions_close_failed">Не удалось закрыть диалог</string>
+    <string name="conversation_actions_restrict_button">Ограничить</string>
+    <string name="conversation_actions_restricting_button">Ограничение…</string>
+    <string name="conversation_actions_lift_button">Снять ограничение</string>
+    <string name="conversation_actions_lifting_button">Снятие ограничения…</string>
+    <string name="conversation_actions_restrict_confirm_title">Заблокировать этого посетителя?</string>
+    <string name="conversation_actions_restrict_confirm_body">Этот посетитель будет заблокирован на этом сайте бессрочно. Каждый новый диалог, который он начнёт, тихо не дойдёт до оператора, пока вы не снимете блокировку. Сам этот диалог не закрывается. Посетителю ничего не показывается.</string>
+    <string name="conversation_actions_restrict_confirm_action">Да, заблокировать</string>
+    <string name="conversation_actions_lift_confirm_title">Снять ограничение с этого посетителя?</string>
+    <string name="conversation_actions_lift_confirm_body">Посетитель снова сможет писать оператору на этом сайте без ограничений. Отменить это действие нельзя - при необходимости ограничение можно наложить заново.</string>
+    <string name="conversation_actions_lift_confirm_action">Да, снять ограничение</string>
+    <string name="conversation_actions_restriction_load_failed">Не удалось загрузить статус ограничения</string>
+    <string name="conversation_actions_restriction_action_failed">Не удалось изменить ограничение</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

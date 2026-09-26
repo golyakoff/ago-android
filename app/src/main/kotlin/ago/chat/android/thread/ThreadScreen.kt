@@ -167,6 +167,18 @@ public fun ThreadRoute(
     // ([ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection]'s own doc comment). `false`
     // (the default every direct-construction test still gets) hides the section entirely.
     canGrantAttachmentUpload: Boolean = false,
+    // `26-153`: `conversation:close`, computed once from the operator's permission set by
+    // `AppShellScreen`'s own `conversationsTab` default and threaded down through `ConversationsTabHost`
+    // alongside `canReadContactDetail`/`canTagConversation`/`canWriteNote`/`canGrantAttachmentUpload`.
+    // Gates the contact-panel's «Закрыть диалог» button hide-not-disable (design Q7); independent of
+    // `canRestrictVisitor` below - an operator may hold either, both, or neither. `false` (the default
+    // every direct-construction test still gets) hides the button.
+    canCloseConversation: Boolean = false,
+    // `26-153`: `conversation:block`, computed the same way and threaded down alongside
+    // `canCloseConversation`. Gates the contact-panel's reversible «Ограничить»/«Снять ограничение»
+    // button hide-not-disable (design Q7). `false` (the default every direct-construction test still
+    // gets) hides the button.
+    canRestrictVisitor: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -255,7 +267,22 @@ public fun ThreadRoute(
         // own same-id guard makes a repeat a no-op.
         val contactPanelViewModel: ContactPanelViewModel = hiltViewModel()
         val contactPanelState by contactPanelViewModel.state.collectAsStateWithLifecycle()
-        LaunchedEffect(conversationId) { contactPanelViewModel.open(conversationId) }
+        // `26-153`: keyed on `visitorId` too, not only `conversationId` - `ContactPanelViewModel.open`'s
+        // own doc comment on why the restriction section needs a fresh call when a restored thread's
+        // `visitorId` resolves from `null` to a real value with no `conversationId` change of its own to
+        // key a repeat call on.
+        LaunchedEffect(conversationId, visitorId) { contactPanelViewModel.open(conversationId, visitorId) }
+        // `26-153`: the one-shot signal that «Закрыть диалог» succeeded - dismisses this sheet and then
+        // reuses the identical `leaveThread` path the back arrow/gesture already takes (hub cleanup +
+        // `onBack`), so a closed conversation returns the operator to the queue exactly the way any other
+        // "leave this thread" does. Collected only while the sheet is up, the same scope every other
+        // panel-specific effect here already has.
+        LaunchedEffect(contactPanelViewModel) {
+            contactPanelViewModel.conversationClosed.collect {
+                showContactPanel = false
+                leaveThread()
+            }
+        }
         ContactDetailPanel(
             state = contactPanelState,
             emojiCreature = emojiCreature,
@@ -295,6 +322,16 @@ public fun ThreadRoute(
             canGrantAttachmentUpload = canGrantAttachmentUpload,
             onToggleAttachmentUpload = contactPanelViewModel::toggleAttachmentUpload,
             onRetryAttachmentUpload = contactPanelViewModel::retryAttachmentUpload,
+            // `26-153`: the panel's own final section - «Закрыть диалог» + reversible
+            // «Ограничить»/«Снять ограничение» - its two callbacks + their independent gates, wired the
+            // same way the sections above are. The success path for close is the `conversationClosed`
+            // collector above, not a callback here - the VM reports the write landed, `ThreadRoute` owns
+            // what leaving the thread means.
+            canClose = canCloseConversation,
+            onClose = contactPanelViewModel::closeConversation,
+            canRestrict = canRestrictVisitor,
+            onToggleRestriction = contactPanelViewModel::toggleRestriction,
+            onRetryRestriction = contactPanelViewModel::retryRestriction,
             onDismiss = { showContactPanel = false },
         )
     }

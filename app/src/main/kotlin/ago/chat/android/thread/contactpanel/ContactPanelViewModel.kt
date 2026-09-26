@@ -11,6 +11,9 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.notes.ConversationNotesResult
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionStatusResult
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.ConversationTagsResult
@@ -29,9 +32,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -83,15 +89,39 @@ public class ContactPanelViewModel
         // port for the grant/revoke writes themselves — reused as-is, never rebuilt.
         private val conversationsApi: ConversationsApi,
         private val conversationActionsApi: ConversationActionsApi,
+        // `26-153`: [visitorRestrictionApi] is `26-145`'s own shipped port for the reversible
+        // «Ограничить»/«Снять ограничение» action (block/lift/is-restricted) — reused as-is, never
+        // rebuilt, the identical "grow the constructor with one more collaborator" shape every section
+        // slice above already takes.
+        private val visitorRestrictionApi: VisitorRestrictionApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ContactPanelUiState())
         public val state: StateFlow<ContactPanelUiState> = mutableState.asStateFlow()
 
+        /** `26-153`: a one-shot signal that «Закрыть диалог» succeeded — a [Channel], not a [StateFlow],
+         * the identical "an event, not a state, or a rotation replays it" reasoning
+         * [ago.chat.android.signin.SignInViewModel]'s own `authorizationIntents`/`signOutIntents` already
+         * establish for this codebase's other fire-once signals. [ago.chat.android.thread.ThreadRoute]
+         * collects this to dismiss the sheet and leave the thread, returning the operator to the queue —
+         * navigation this view model has no way to perform itself, and should not: it only ever reports
+         * that the write landed. */
+        private val conversationClosedEvents = Channel<Unit>(Channel.BUFFERED)
+        public val conversationClosed: Flow<Unit> = conversationClosedEvents.receiveAsFlow()
+
         /** The conversation the header is currently loaded (or loading) for — `null` before the first
          * [open]. Guards a re-open of the same conversation from re-issuing the read, while still letting
          * a *different* conversation, or a retry after a failure, start a fresh one. */
         private var loadedConversationId: String? = null
+
+        /** `26-153`: the visitor id [open] was last called with — `null` whenever the current conversation
+         * has none (`ThreadRoute`'s own `identityUnavailable` edge case), which is exactly when
+         * [RestrictionSectionState.Unavailable] applies and [toggleRestriction]'s own `lift` call has no
+         * visitor id to address. Held separately from [loadedConversationId] because
+         * [ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.lift] and
+         * [ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.isRestricted] are addressed by
+         * *visitor*, not by conversation — the one section on this panel that needs both ids in hand. */
+        private var loadedVisitorId: String? = null
 
         /**
          * Opens the panel on one conversation and fetches everything it reads for the first time: the
@@ -106,10 +136,24 @@ public class ContactPanelViewModel
          * in a `Failed` state — so reopening the sheet after a section failed is itself a retry, while a
          * plain reopen of a healthy panel is a no-op and never re-reads a section that already landed. A
          * genuinely different conversation reloads both arms fresh.
+         *
+         * `26-153`: [visitorId] is a second, independent key beside [conversationId], because the
+         * restriction section alone needs the *visitor's* id, not just the conversation's — and
+         * [ago.chat.android.thread.ThreadRoute]'s own `visitorId` can genuinely change from `null` to a
+         * real value on the *same* conversation once a restored thread's matching queue row lands
+         * (`ThreadRoute`'s own doc comment on `identityUnavailable`), with no `conversationId` change to
+         * key a fresh call on. [loadRestriction] therefore reloads whenever the visitor id itself changed,
+         * even when [conversationId] did not — every other section here still only cares whether the
+         * conversation changed.
          */
-        public fun open(conversationId: String) {
+        public fun open(
+            conversationId: String,
+            visitorId: String? = null,
+        ) {
             val sameConversation = loadedConversationId == conversationId
+            val sameVisitor = sameConversation && loadedVisitorId == visitorId
             loadedConversationId = conversationId
+            loadedVisitorId = visitorId
             if (!sameConversation || mutableState.value.summary is HeaderSummaryState.Failed) {
                 loadSummary(conversationId)
             }
@@ -127,6 +171,9 @@ public class ContactPanelViewModel
             }
             if (!sameConversation || mutableState.value.attachmentUpload is AttachmentUploadSectionState.Failed) {
                 loadAttachmentUpload(conversationId)
+            }
+            if (!sameVisitor || mutableState.value.restriction is RestrictionSectionState.Failed) {
+                loadRestriction(conversationId, visitorId)
             }
         }
 
@@ -250,6 +297,111 @@ public class ContactPanelViewModel
                                     ),
                             )
                         }
+                }
+            }
+        }
+
+        /** `26-153`: the reversible «Ограничить»/«Снять ограничение» section's own inline retry — the
+         * sibling of [retry]/[retryContactDetails]/[retryTags]/[retryNotes]/[retryPastDialogs]/
+         * [retryAttachmentUpload], re-reading only the restriction status and leaving the rest of the
+         * sheet untouched (§4). A no-op before the first [open]. */
+        public fun retryRestriction() {
+            val conversationId = loadedConversationId ?: return
+            loadRestriction(conversationId, loadedVisitorId)
+        }
+
+        /**
+         * `26-153`: flips the visitor's block status the other way — blocks when currently unrestricted,
+         * lifts when currently restricted, through [visitorRestrictionApi] (`26-145`, reused as-is). A
+         * no-op while a toggle is already [RestrictionSectionState.Loaded.toggling] (one confirm dialog,
+         * one server call) or before the section has landed [RestrictionSectionState.Loaded] — there is
+         * nothing to flip before that, and [RestrictionSectionState.Unavailable] never reaches this method
+         * at all (the UI draws no button to tap in that arm — [ago.chat.android.thread.contactpanel.sections.ConversationActionsSection]'s
+         * own doc comment).
+         *
+         * **Update-after-`2xx`, from the write's own known shape, not a re-read.** Unlike
+         * [toggleAttachmentUpload]'s own re-read after a successful write, this method flips
+         * [RestrictionSectionState.Loaded.restricted] to the value it *asked for* the moment
+         * [VisitorRestrictionActionResult.Succeeded] lands, rather than calling
+         * [VisitorRestrictionApi.isRestricted] again — that read is a keyset-paged walk of every active
+         * restriction on the site ([VisitorRestrictionApi.isRestricted]'s own doc comment: "the adapter
+         * follows the cursor to the end"), a genuinely expensive re-read for a fact this call already
+         * knows for certain: a `Succeeded` [VisitorRestrictionApi.block] leaves the visitor blocked, a
+         * `Succeeded` [VisitorRestrictionApi.lift] leaves them not. On
+         * [VisitorRestrictionActionResult.Refused]/[VisitorRestrictionActionResult.Failed] the flag is left
+         * exactly as it was and the error is surfaced beneath the button — the identical refused-verbatim
+         * / failed-generic split every other write on this class already draws.
+         */
+        public fun toggleRestriction() {
+            val conversationId = loadedConversationId ?: return
+            val visitorId = loadedVisitorId ?: return
+            val loaded = mutableState.value.restriction as? RestrictionSectionState.Loaded ?: return
+            if (loaded.toggling) return
+            val blocking = !loaded.restricted
+
+            mutableState.update { current ->
+                val currentLoaded = current.restriction as? RestrictionSectionState.Loaded ?: return@update current
+                current.copy(restriction = currentLoaded.copy(toggling = true, actionError = null))
+            }
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        if (blocking) visitorRestrictionApi.block(conversationId) else visitorRestrictionApi.lift(visitorId)
+                    }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded = current.restriction as? RestrictionSectionState.Loaded ?: return@update current
+                    val next =
+                        when (result) {
+                            VisitorRestrictionActionResult.Succeeded ->
+                                currentLoaded.copy(restricted = blocking, toggling = false, actionError = null)
+
+                            is VisitorRestrictionActionResult.Refused ->
+                                currentLoaded.copy(toggling = false, actionError = RestrictionActionError.Refused(result.detail))
+
+                            is VisitorRestrictionActionResult.Failed ->
+                                currentLoaded.copy(toggling = false, actionError = RestrictionActionError.Failed(result.reason))
+                        }
+                    current.copy(restriction = next)
+                }
+            }
+        }
+
+        /**
+         * `26-153`: «Закрыть диалог» — the panel's own copy of the ordinary close action
+         * ([ago.chat.android.conversations.ConversationListViewModel]'s own `requestErasure` is the
+         * closest sibling shape, a confirm-then-write with no `Loading`/`Loaded` arm of its own), reached
+         * only after the confirm dialog
+         * ([ago.chat.android.thread.contactpanel.sections.ConversationActionsSection]'s own doc comment).
+         * A no-op while [ContactPanelUiState.closing] is already `true` (one confirm dialog, one server
+         * call) or before the first [open].
+         *
+         * On [ConversationActionResult.Succeeded] this method does not touch [ContactPanelUiState.closing]
+         * back to `false` before firing [conversationClosedEvents] — the sheet is about to be dismissed by
+         * the collector on the other end
+         * ([ago.chat.android.thread.ThreadViewModel]'s own [ago.chat.android.thread.ThreadRoute] doc
+         * comment on why the panel VM is only ever read while the sheet is up), so there is no button left
+         * on screen for a lingering `closing = true` to disable. On
+         * [ConversationActionResult.Refused]/[ConversationActionResult.Failed] the sheet stays up exactly
+         * as it was and the error is surfaced beneath the button — the identical refused-verbatim /
+         * failed-generic split every other write on this class already draws.
+         */
+        public fun closeConversation() {
+            val conversationId = loadedConversationId ?: return
+            if (mutableState.value.closing) return
+
+            mutableState.update { it.copy(closing = true, closeError = null) }
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { conversationActionsApi.close(conversationId) }
+                if (loadedConversationId != conversationId) return@launch
+                when (result) {
+                    ConversationActionResult.Succeeded -> conversationClosedEvents.send(Unit)
+
+                    is ConversationActionResult.Refused ->
+                        mutableState.update { it.copy(closing = false, closeError = CloseActionError.Refused(result.detail)) }
+
+                    is ConversationActionResult.Failed ->
+                        mutableState.update { it.copy(closing = false, closeError = CloseActionError.Failed(result.reason)) }
                 }
             }
         }
@@ -847,6 +999,38 @@ public class ContactPanelViewModel
                 }
 
                 is QueueResult.Failed -> AttachmentUploadSectionState.Failed(result.reason)
+            }
+        }
+
+        /** `26-153`: reads the restriction section's own initial state on [open] — sets
+         * [RestrictionSectionState.Unavailable] outright when [visitorId] is `null` (this type's own doc
+         * comment on why that is a distinct arm from [RestrictionSectionState.Failed]), otherwise
+         * [RestrictionSectionState.Loading] then [visitorRestrictionApi]'s answer, dropped if the panel has
+         * since moved to a different conversation (the same guard every other `load*` method on this class
+         * applies). */
+        private fun loadRestriction(
+            conversationId: String,
+            visitorId: String?,
+        ) {
+            if (visitorId == null) {
+                mutableState.update { it.copy(restriction = RestrictionSectionState.Unavailable) }
+                return
+            }
+            mutableState.update { it.copy(restriction = RestrictionSectionState.Loading) }
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { visitorRestrictionApi.isRestricted(visitorId) }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update {
+                    it.copy(
+                        restriction =
+                            when (result) {
+                                is VisitorRestrictionStatusResult.Loaded ->
+                                    RestrictionSectionState.Loaded(restricted = result.restricted)
+
+                                is VisitorRestrictionStatusResult.Failed -> RestrictionSectionState.Failed(result.reason)
+                            },
+                    )
+                }
             }
         }
 
