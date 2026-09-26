@@ -925,7 +925,7 @@
         `26-158`: the embed snippet and allowed origins are NOT here either - they are a chat/channel
         setting that now lives in the «Установка виджета» screen under «Ещё» (`26-159`, `channels_install_*`).
     -->
-    <string name="calendar_setup_tab">Настройка</string>
+    <string name="calendar_setup_tab">Календари</string>
     <string name="calendar_setup_load_failed_unexpected">Не удалось загрузить настройку. Попробуйте ещё раз.</string>
     <string name="calendar_setup_section_calendars">Календари</string>
     <string name="calendar_setup_calendars_empty">У этого тенанта пока нет календарей.</string>

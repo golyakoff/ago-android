@@ -538,7 +538,7 @@
 
     <!-- `26-142`: English half of Записи's own «Настройка» screen - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->
-    <string name="calendar_setup_tab">Setup</string>
+    <string name="calendar_setup_tab">Calendars</string>
     <string name="calendar_setup_load_failed_unexpected">Couldn\'t load the setup. Try again.</string>
     <string name="calendar_setup_section_calendars">Calendars</string>
     <string name="calendar_setup_calendars_empty">This tenant has no calendars yet.</string>

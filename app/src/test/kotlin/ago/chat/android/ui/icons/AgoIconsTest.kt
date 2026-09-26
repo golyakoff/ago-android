@@ -128,6 +128,38 @@ class AgoIconsTest {
     }
 
     /**
+     * `26-176`: the five Записи `⋮` hub glyphs — held to the same structural check as
+     * [AgoIcons.Bookings]/[AgoIcons.Team]/[AgoIcons.More]/[AgoIcons.Sliders] above, never
+     * [assertTranscribed]: unlike every other icon in this file, these five are not a transcription of a
+     * mockup's own `d` string or a borrowed Feather path — they are this app's own redrawing of a named
+     * Material Symbols outlined glyph in the family's stroke treatment (each one's own doc comment in
+     * `AgoIcons.kt` names which), so there is no source `d` attribute for [PathParser] to check them
+     * against, only the shape this file's own construction implies.
+     */
+    @Test
+    fun `the 26-176 config-menu icons keep the shape count their construction implies`() {
+        // <circle/> (task_alt's ring) + one checkmark path
+        assertEquals(2, paths(AgoIcons.Readiness).size)
+        assertEquals(4, paths(AgoIcons.Readiness)[0].pathData.size)
+
+        // <rect .../> (frame) + header rule/rings + the 3x2 date grid
+        assertEquals(3, paths(AgoIcons.Calendars).size)
+
+        // <circle/> (head) + one shoulder-arc path
+        assertEquals(2, paths(AgoIcons.Masters).size)
+
+        // three <circle/> bullets, each interleaved with its own line - six shapes, matching Sliders'
+        // own "rules plus knobs" count above
+        assertEquals(6, paths(AgoIcons.Services).size)
+        paths(AgoIcons.Services).filterIndexed { index, _ -> index % 2 == 0 }.forEach { dot ->
+            assertEquals(4, dot.pathData.size)
+        }
+
+        // <circle/> (face) + one two-segment hand path
+        assertEquals(2, paths(AgoIcons.Hours).size)
+    }
+
+    /**
      * The mockup's whole icon family shares one treatment — `fill:none; stroke:currentColor;
      * stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round` — and an icon that quietly drops
      * one of those reads as a different family rather than as a bug, which is why every glyph is held
@@ -153,6 +185,11 @@ class AgoIconsTest {
                 AgoIcons.Sliders,
                 AgoIcons.Logout,
                 AgoIcons.Call,
+                AgoIcons.Readiness,
+                AgoIcons.Calendars,
+                AgoIcons.Masters,
+                AgoIcons.Services,
+                AgoIcons.Hours,
             )
         icons.forEach { icon ->
             assertEquals(icon.name, 24f, icon.viewportWidth, 0f)

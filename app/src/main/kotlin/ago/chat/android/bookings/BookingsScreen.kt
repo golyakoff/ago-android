@@ -13,6 +13,7 @@ import ago.chat.android.schedule.WorkingHoursUiState
 import ago.chat.android.schedule.WorkingHoursViewModel
 import ago.chat.android.shell.rememberPendingConversationOpener
 import ago.chat.android.ui.components.AccountAvatarAction
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -1117,6 +1118,14 @@ private fun BookingsConfigModalPage(
  * labelling function is reused verbatim for both the segmented row and this menu — a fourth Услуги/Часы
  * label worded differently between the two surfaces is exactly the kind of drift a shared function
  * exists to rule out.
+ *
+ * `26-176`: each row now carries a [leadingIcon][DropdownMenuItem] too — [configMenuIconFor] below — one
+ * outlined glyph per entry, matching the mockup rather than five identical text-only rows.
+ *
+ * `26-177`: the plain `DropdownMenu` this used to call is now [ScrimmedDropdownMenu] — Material3's own
+ * `DropdownMenu` draws no scrim, so nothing used to dim the Записи view while this menu was open, unlike
+ * every `ModalBottomSheet` this screen's own sibling files already show. [ScrimmedDropdownMenu]'s own doc
+ * comment states why that fix lives in one shared composable rather than here.
  */
 @Composable
 private fun BookingsConfigMenu(
@@ -1136,10 +1145,11 @@ private fun BookingsConfigMenu(
         )
     }
 
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         entries.forEach { entry ->
             DropdownMenuItem(
                 text = { Text(text = labelFor(entry)) },
+                leadingIcon = { Icon(imageVector = configMenuIconFor(entry), contentDescription = null) },
                 onClick = {
                     expanded = false
                     onSelect(entry)
@@ -1148,6 +1158,21 @@ private fun BookingsConfigMenu(
         }
     }
 }
+
+/** `26-176`: one outlined [AgoIcons] glyph per `⋮` hub row — [BookingsConfigMenu]'s own
+ * [DropdownMenuItem.leadingIcon], matching the mockup. `Readiness`/`Calendars`/`Masters`/`Services`/`Hours`
+ * are the only members [visibleBookingsConfigMenuEntries] ever returns (its own doc comment), so this
+ * `when` never needs an `else` — the three operational segments never reach a menu row at all. */
+private fun configMenuIconFor(tab: BookingsTab): ImageVector =
+    when (tab) {
+        BookingsTab.Readiness -> AgoIcons.Readiness
+        BookingsTab.Calendars -> AgoIcons.Calendars
+        BookingsTab.Masters -> AgoIcons.Masters
+        BookingsTab.Services -> AgoIcons.Services
+        BookingsTab.Hours -> AgoIcons.Hours
+        BookingsTab.Pending, BookingsTab.Confirmed, BookingsTab.Clients ->
+            error("$tab is never a ⋮ hub entry — visibleBookingsConfigMenuEntries never returns it")
+    }
 
 @Composable
 private fun bookingsTabLabel(

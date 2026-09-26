@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -98,7 +97,9 @@ public fun AccountAvatarAction(
                     .semantics { contentDescription = openMenuLabel },
         )
 
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        // `26-177`: [ScrimmedDropdownMenu] in place of a plain `DropdownMenu` - see its own doc comment for
+        // why this menu, like every other in the app, now dims the screen behind it while open.
+        ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             // `26-77` follow-up, 2026-09-23, both from the author's own live-device review: the header
             // row's own avatar shrank to [AvatarSize] - the same circle size as the trigger just
             // tapped, not a second, larger drawing of it - and it carries no presence dot of its own.
