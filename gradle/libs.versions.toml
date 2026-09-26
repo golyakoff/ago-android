@@ -195,6 +195,15 @@ firebaseMessaging = "25.1.3"
 # 2026-09-25.
 playServicesBase = "18.11.0"
 
+# `26-191`/`C4` (`docs/design/tenant-channels-android.md` §3.5): the Каналы → Почта logo preview - the
+# app's first remote image, and its one call site (`BrandingScreen`'s own `AsyncImage`). The alternative
+# is hand-rolling a bytes-fetch + `BitmapFactory` + a `remember`ed painter with its own lifecycle,
+# cancellation and caching - reinventing what Coil already is, worse; that doc section's own
+# "justification (required by the no-package rule)" is the standing record for this bump. 3.6.3 is the
+# `<release>`/`<latest>` in `repo1.maven.org/maven2/io/coil-kt/coil3/coil-compose/maven-metadata.xml`,
+# read 2026-09-26.
+coil = "3.6.3"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -286,6 +295,11 @@ androidx-work-testing = { group = "androidx.work", name = "work-testing", versio
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
 # `26-100`: `GoogleApiAvailability` — see the `playServicesBase` version row above.
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
+
+# `26-191`/`C4`: Coil 3 — see the `coil` version row above. `-compose` for `AsyncImage`; `-network-okhttp`
+# so it fetches over this app's own OkHttp engine rather than pulling in a second HTTP stack.
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

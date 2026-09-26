@@ -400,6 +400,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
+    // `26-191`/`C4`: Каналы → Почта's own logo preview - the app's first remote image and its one call
+    // site (`gradle/libs.versions.toml`'s own `coil` row states the no-package-rule justification).
+    // `-network-okhttp` so image fetches ride this app's own OkHttp engine rather than a second stack.
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 
