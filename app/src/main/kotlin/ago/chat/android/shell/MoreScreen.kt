@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.automation.OfflineAutoReplyRoute
 import ago.chat.android.channels.BrandingRoute
 import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
@@ -47,12 +48,11 @@ import androidx.compose.ui.unit.dp
  * `settingsScreen` parameter at all, since nothing inside it opens Settings any more —
  * [AppShellScreen]'s own `NavHost` owns that now, one level up.
  *
- * **Every row below is honest about not existing yet.** [buildMoreRows] returns four rows —
- * Автоматизация's «Готовые ответы»/«Автоответ вне смены», Администрирование's «Операторы и роли»/
- * «Тариф и оплата» — each opening [PlaceholderDestinationScreen], because none of their own real
- * screens are built in this app yet. Каналы still has none at all, so it still does not appear
- * ([buildMoreSections]' own "a section with no rows is not returned at all" rule, ported from
- * `ago-console/src/shell/consoleNav.ts`'s `buildSection`) — unchanged from every wave before this one.
+ * **Every row without its own branch below is honest about not existing yet.** Автоматизация's «Готовые
+ * ответы» and Администрирование's «Операторы и роли»/«Тариф и оплата» still open
+ * [PlaceholderDestinationScreen], because none of their own real screens are built in this app yet.
+ * `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real branch
+ * ([OfflineAutoReplyRoute]), so it is no longer one of them.
  *
  * ## Back-button contract clause 2
  *
@@ -113,6 +113,10 @@ internal fun MoreScreen(
             // per-tenant credential to connect (unlike the three token channels above). Back returns to
             // the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
             CHANNELS_EMAIL_ROW_ID -> BrandingRoute(onBack = { openRowId = null })
+            // `26-192`/`C5`: Автоматизация → «Автоответ вне смены» - the offline auto-reply editor,
+            // replacing this row's own `PlaceholderDestinationScreen` branch (`26-77`'s own stopgap).
+            // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            AUTOMATION_AFTER_HOURS_ROW_ID -> OfflineAutoReplyRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -306,13 +310,21 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 section = MoreSectionId.Automation,
             ),
         )
-        add(
-            MoreRow(
-                id = AUTOMATION_AFTER_HOURS_ROW_ID,
-                labelRes = R.string.more_automation_after_hours_row,
-                section = MoreSectionId.Automation,
-            ),
-        )
+        // `26-192`/`C5`: unlike the still-unbuilt «Готовые ответы» row above, this row now opens a real
+        // screen (`OfflineAutoReplyRoute`) gated on `site:configure` behind the server the identical way
+        // - so it moves under the same `canConfigureSite` gate the six Каналы rows already use, matching
+        // the console rail's own Автоматизация section (`docs/design/tenant-channels-android.md` §4.4).
+        // Added right after Готовые ответы rather than inside the block above, so the Автоматизация
+        // section's own row order is unchanged from before this item when `canConfigureSite` is true.
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = AUTOMATION_AFTER_HOURS_ROW_ID,
+                    labelRes = R.string.more_automation_after_hours_row,
+                    section = MoreSectionId.Automation,
+                ),
+            )
+        }
         add(
             MoreRow(
                 id = ADMINISTRATION_OPERATORS_ROW_ID,

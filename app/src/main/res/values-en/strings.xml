@@ -788,6 +788,30 @@
     <string name="widget_config_action_save">Save</string>
     <string name="widget_config_saved">Saved</string>
 
+    <!-- `26-192`/`C5`: Automation → "Offline auto-reply". See the ru strings for the full note. -->
+    <string name="automation_auto_reply_description">Rules are checked top to bottom — the first match wins.</string>
+    <string name="automation_auto_reply_enabled_label">Reply automatically when nobody is online</string>
+    <string name="automation_auto_reply_fallback_label">Default reply</string>
+    <string name="automation_auto_reply_rules_section">Keyword rules</string>
+    <string name="automation_auto_reply_rule_index">Rule %1$d</string>
+    <string name="automation_auto_reply_rule_keyword_label">Keyword</string>
+    <string name="automation_auto_reply_rule_reply_label">Reply</string>
+    <string name="automation_auto_reply_remove_rule_action">Remove</string>
+    <string name="automation_auto_reply_add_rule_action">Add rule</string>
+    <string name="automation_auto_reply_drag_handle_description">Drag to reorder</string>
+    <string name="automation_auto_reply_move_up_action">Move rule up</string>
+    <string name="automation_auto_reply_move_down_action">Move rule down</string>
+    <string name="automation_auto_reply_action_save">Save</string>
+    <string name="automation_auto_reply_action_saving">Saving…</string>
+    <string name="automation_auto_reply_saved">Saved</string>
+    <string name="automation_auto_reply_validation_needs_fallback">An enabled auto-reply needs something to say — fill in the default reply.</string>
+    <string name="automation_auto_reply_validation_fallback_too_long">The default reply cannot exceed %1$d characters.</string>
+    <string name="automation_auto_reply_validation_too_many_rules">A site cannot have more than %1$d keyword rules.</string>
+    <string name="automation_auto_reply_validation_keyword_required">A keyword rule needs a keyword.</string>
+    <string name="automation_auto_reply_validation_reply_required">The rule for \"%1$s\" needs a reply.</string>
+    <string name="automation_auto_reply_validation_keyword_too_long">A keyword cannot exceed %1$d characters.</string>
+    <string name="automation_auto_reply_validation_reply_too_long">A reply cannot exceed %1$d characters.</string>
+
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
     <string name="account_menu_fallback_initial">?</string>
