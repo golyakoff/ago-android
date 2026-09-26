@@ -115,10 +115,26 @@ public fun ConversationsTabHost(
     // first one this composition ever saw. [PendingConversationOpener.consume] is what stops a later,
     // unrelated recomposition (a rotation, a tab revisit) from re-opening the identical conversation a
     // second time.
+    //
+    // `26-174`: **the identical [ConversationListViewModel.onRowOpened] call an in-app row tap makes,
+    // not a second, weaker open.** `ConversationListRoute`'s own wrapped `onOpenConversation` (that
+    // file's own doc comment) is what clears a row's «Новое» pill and unread count the instant a tap
+    // opens it — [newlyAssignedIds]/[unreadBumps]/[locallyReadIds] never touched by anything a push
+    // does, because a push reaches this composable by writing [PendingConversationOpener] and never
+    // passes through `ConversationListRoute`'s composition at all. Before this, a push-opened
+    // conversation's row kept showing «Новое» after the operator went back to the list — read, by every
+    // other signal (the thread's own `markReadUpTo`, driven by `MessageList`), but this screen's own
+    // optimistic badge never heard about it and had nothing forcing a re-fetch to catch up either. Called
+    // on [viewModel] directly, the identical instance [ConversationListRoute] shares below, rather than
+    // duplicated onto some push-only copy of the same bookkeeping - `onRowOpened` is idempotent (its own
+    // doc comment: "unconditional... the common case... must clear exactly the same way"), so nothing
+    // about calling it a second time were `ConversationListRoute` ever also reachable for the identical
+    // id changes what either call does.
     val pendingConversationOpener = rememberPendingConversationOpener()
-    LaunchedEffect(pendingConversationOpener) {
+    LaunchedEffect(pendingConversationOpener, viewModel) {
         pendingConversationOpener.pendingConversationId.collect { pendingConversationId ->
             if (pendingConversationId != null) {
+                viewModel.onRowOpened(pendingConversationId)
                 openConversationId = pendingConversationId
                 // `26-98`: a push notification always opens the ordinary, writable thread - never the
                 // «Все» list's read-only one, which nothing about a push carries a signal for anyway.
