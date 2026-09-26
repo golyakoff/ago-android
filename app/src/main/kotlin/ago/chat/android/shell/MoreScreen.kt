@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.channels.BrandingRoute
 import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
 import ago.chat.android.channels.TelegramChannelRoute
@@ -108,6 +109,10 @@ internal fun MoreScreen(
             // [ago.chat.android.channels.ChannelConnectScreen]. Back returns to the Ещё list (clause 2) via
             // the same `openRowId = null` every drill-in uses.
             CHANNELS_VK_ROW_ID -> VkChannelRoute(onBack = { openRowId = null })
+            // `26-191`/`C4`: Каналы → Почта - the site's own brand company name and logo upload, no
+            // per-tenant credential to connect (unlike the three token channels above). Back returns to
+            // the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            CHANNELS_EMAIL_ROW_ID -> BrandingRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -216,6 +221,7 @@ internal const val CHANNELS_WIDGET_ROW_ID: String = "channels-widget-config"
 internal const val CHANNELS_MAX_ROW_ID: String = "channels-max"
 internal const val CHANNELS_TELEGRAM_ROW_ID: String = "channels-telegram"
 internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
+internal const val CHANNELS_EMAIL_ROW_ID: String = "channels-email"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
@@ -240,7 +246,13 @@ internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billi
  *
  * `26-193`: «Виджет на сайте» takes its own place directly after «Установка виджета» and before MAX - the
  * row order `docs/design/tenant-widget-android.md` §8.1 states (Установка виджета · **Виджет на сайте** ·
- * MAX · Telegram · VK · Почта), filling the gap the channels doc's own §5.2 deliberately left. */
+ * MAX · Telegram · VK · Почта), filling the gap the channels doc's own §5.2 deliberately left.
+ *
+ * `26-191`/`C4`: Почта closes out the whole Каналы section, directly after VK - the last row
+ * `docs/design/tenant-channels-android.md` §5.2's own order names, and the last one that section still
+ * had left unbuilt. Unlike the three token channels, Почта has no per-tenant credential to connect - it
+ * is a settings form (company name + logo), so it opens straight into
+ * [ago.chat.android.channels.BrandingRoute] with no connect/disconnect state to speak of. */
 internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
@@ -276,6 +288,13 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = CHANNELS_VK_ROW_ID,
                     labelRes = R.string.channels_vk_title,
+                    section = MoreSectionId.Channels,
+                ),
+            )
+            add(
+                MoreRow(
+                    id = CHANNELS_EMAIL_ROW_ID,
+                    labelRes = R.string.channels_email_title,
                     section = MoreSectionId.Channels,
                 ),
             )

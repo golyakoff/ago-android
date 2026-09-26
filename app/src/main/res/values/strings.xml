@@ -1217,6 +1217,32 @@
          (`docs/design/tenant-channels-android.md` §2.3's own edge case: never a silently omitted panel). -->
     <string name="channels_vk_secrets_shown_once_hint">Callback URL и секрет вебхука показываются только один раз, сразу после подключения. Чтобы получить их снова, отключите канал и подключите сообщество заново с новым токеном.</string>
 
+    <!-- `26-191`/`C4` (`docs/design/tenant-channels-android.md` §3): Каналы → Почта - unlike the three
+         token channels above, this one has no per-tenant credential to connect: it is a settings form
+         over the site's own brand company name and logo. Two independent writes, two independent
+         success/error states - never one full-DTO round trip the way «Виджет на сайте» is. -->
+    <string name="channels_email_title">Почта</string>
+    <string name="channels_email_refresh_action">Обновить</string>
+    <string name="channels_email_company_name_label">Название компании</string>
+    <string name="channels_email_action_save">Сохранить</string>
+    <string name="channels_email_action_saving">Сохранение…</string>
+    <string name="channels_email_name_saved">Сохранено</string>
+    <string name="channels_email_logo_section">Логотип</string>
+    <string name="channels_email_logo_pick_action">Выбрать изображение</string>
+    <string name="channels_email_logo_uploading_action">Загрузка…</string>
+    <string name="channels_email_logo_preview_description">Логотип</string>
+    <string name="channels_email_logo_status_ready">Готов</string>
+    <string name="channels_email_logo_status_pending">Проверяется</string>
+    <string name="channels_email_logo_status_rejected">Отклонён</string>
+    <!-- `docs/design/tenant-channels-android.md` §3.4: the client-side courtesy check's own four
+         reasons, mirroring `emailChannelLogoValidation.ts` - never the authority
+         (`Ago.Chat.Worker.SiteLogoValidator`, `adr/0177`, is), so these only stop an obviously-wrong
+         file before a round trip. -->
+    <string name="channels_email_logo_invalid_format">Неподдерживаемый формат файла. Разрешены PNG, JPEG и GIF.</string>
+    <string name="channels_email_logo_too_large">Файл слишком большой. Максимальный размер — 200 КБ.</string>
+    <string name="channels_email_logo_invalid_dimensions">Изображение слишком большое. Максимальный размер — 100×100 пикселей.</string>
+    <string name="channels_email_logo_undecodable">Не удалось распознать файл как изображение.</string>
+
     <!-- `26-193` (`docs/design/tenant-widget-android.md`): Каналы → «Виджет на сайте» - the widget's own
          on-site appearance/behaviour/consent config, read/written over `Ago.Chat.Api`
          (`GET`/`PUT /api/v1/sites/{siteId}/widget-config`). One resource for the Ещё row label and the

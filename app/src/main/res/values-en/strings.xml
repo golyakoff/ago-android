@@ -746,6 +746,25 @@
     <string name="channels_vk_share">Share</string>
     <string name="channels_vk_secrets_shown_once_hint">The callback URL and webhook secret are shown only once, right after connecting. To see them again, disconnect and reconnect the community with a fresh token.</string>
 
+    <!-- `26-191`/`C4`: Channels → Mail (branding). See the ru strings for the full note. -->
+    <string name="channels_email_title">Mail</string>
+    <string name="channels_email_refresh_action">Refresh</string>
+    <string name="channels_email_company_name_label">Company name</string>
+    <string name="channels_email_action_save">Save</string>
+    <string name="channels_email_action_saving">Saving…</string>
+    <string name="channels_email_name_saved">Saved</string>
+    <string name="channels_email_logo_section">Logo</string>
+    <string name="channels_email_logo_pick_action">Choose an image</string>
+    <string name="channels_email_logo_uploading_action">Uploading…</string>
+    <string name="channels_email_logo_preview_description">Logo</string>
+    <string name="channels_email_logo_status_ready">Ready</string>
+    <string name="channels_email_logo_status_pending">Checking</string>
+    <string name="channels_email_logo_status_rejected">Rejected</string>
+    <string name="channels_email_logo_invalid_format">Unsupported file format. PNG, JPEG and GIF are allowed.</string>
+    <string name="channels_email_logo_too_large">The file is too large. Maximum size is 200 KB.</string>
+    <string name="channels_email_logo_invalid_dimensions">The image is too large. Maximum size is 100×100 pixels.</string>
+    <string name="channels_email_logo_undecodable">Couldn\'t recognise the file as an image.</string>
+
     <!-- `26-193`: Channels → «Widget on site». See the ru strings for the full note. -->
     <string name="widget_config_hub_title">Widget on site</string>
     <string name="widget_config_hub_intro">Changes will reach a visitor the next time their page loads.</string>
