@@ -116,7 +116,13 @@ class BackContractMoreScreenTest {
 
     /** Ещё's own list-of-lists no longer carries a Настройки row at all - `26-77`'s own Done-when
      * ("the old single 'Настройки' row is gone"), and Автоматизация/Администрирование now show real
-     * rows rather than nothing. */
+     * rows rather than nothing.
+     *
+     * `26-192`/`C5`: «Автоответ вне смены» is no longer one of the unconditional rows this test proves -
+     * it moved under the `site:configure` gate (`docs/design/tenant-channels-android.md` §4.4), and
+     * `OfflineAutoReplyGatingTest` is where its own with/without-permission cases live, the identical
+     * split `WidgetInstallGatingTest` already establishes for «Установка виджета». This test keeps
+     * proving the rows that are still unconditional. */
     @Test
     fun theMoreListShowsTheNewAutomationAndAdministrationRowsAndNoSettingsRow() {
         composeTestRule.setContent {
@@ -137,11 +143,12 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Настройки").assertDoesNotExist()
         // `SectionLabel` uppercases its own text at render time (its own doc comment: "Uppercase is
         // applied here, not in strings.xml") - these two are section headings, so they need
-        // `ignoreCase = true` against the resource's own sentence-case source string. The four row
-        // labels below are plain `Text`, not `SectionLabel`, and match verbatim.
+        // `ignoreCase = true` against the resource's own sentence-case source string. The row labels
+        // below are plain `Text`, not `SectionLabel`, and match verbatim.
         composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Готовые ответы").assertExists()
-        composeTestRule.onNodeWithText("Автоответ вне смены").assertExists()
+        // No `site:configure` - `OfflineAutoReplyGatingTest` proves the row's own with-permission case.
+        composeTestRule.onNodeWithText("Автоответ вне смены").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()
         composeTestRule.onNodeWithText("Тариф и оплата").assertExists()

@@ -204,6 +204,15 @@ playServicesBase = "18.11.0"
 # read 2026-09-26.
 coil = "3.6.3"
 
+# `26-192`/`C5` (`docs/design/tenant-channels-android.md` §4.3): the offline-auto-reply rule list's own
+# drag-to-reorder - the brief calls for drag handles specifically, not up/down buttons, and hand-rolling
+# drag-reorder in a `Column` (pointer math, autoscroll, item-key animation) is fiddly and a common source
+# of bugs. `sh.calvin.reorderable` is a tiny, purpose-built, actively-maintained Compose library that does
+# exactly this and nothing else - that doc section's own "reorder-library decision (no-package rule)" is
+# the standing record for this addition. 3.1.0 is the `<release>`/`<latest>` in
+# `repo1.maven.org/maven2/sh/calvin/reorderable/reorderable/maven-metadata.xml`, read 2026-09-26.
+reorderable = "3.1.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -300,6 +309,10 @@ play-services-base = { group = "com.google.android.gms", name = "play-services-b
 # so it fetches over this app's own OkHttp engine rather than pulling in a second HTTP stack.
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# `26-192`/`C5`: drag-to-reorder for the offline-auto-reply rule list - see the `reorderable` version row
+# above.
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
