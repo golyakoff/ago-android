@@ -611,6 +611,34 @@ public object AgoIcons {
         )
 
     /**
+     * `26-187`: the «Автозапуск» row's own third, *neutral* status state (`SettingsScreen`'s `StatusGlyph`
+     * counterpart for [ago.chat.android.devices.AutostartUiState.Recommended]) — the honest "we cannot
+     * confirm this, please check" this row was always limited to, drawn as its own glyph instead of
+     * borrowing [CheckCircle]'s green or [ErrorCircle]'s red for a state that is neither. Modelled on
+     * Material Symbols Outlined `info` — the same `circle(12, 12, 9)` ring [CheckCircle]/[ErrorCircle]
+     * share, so all three status glyphs read as one flat family at 24dp, enclosing a stem-and-dot mark that
+     * is [Exclamation]'s own convention *upside down*: the dot sits above the stem here (an "i"), where
+     * [ErrorCircle]'s stem-then-dot below reads as an exclamation mark. Tinted `onSurfaceVariant` at its
+     * call site, never `dangerIcon` — a guess is not a fact worth alarming over.
+     */
+    public val InfoCircle: ImageVector =
+        strokeIcon(
+            "AgoInfoCircle",
+            // <circle cx="12" cy="12" r="9"/>
+            { circle(centreX = 12f, centreY = 12f, radius = 9f) },
+            // M12 8h.01
+            {
+                moveTo(12f, 8f)
+                lineToRelative(0.01f, 0f)
+            },
+            // M12 11v5
+            {
+                moveTo(12f, 11f)
+                verticalLineToRelative(5f)
+            },
+        )
+
+    /**
      * `26-176`: the Записи `⋮` hub's own «Часы» row, its leading icon. Modelled on Material Symbols
      * outlined `schedule` — a clock face with two hands meeting at the centre, drawn as one continuous
      * stroke (12-o'clock tip down to centre, then out toward 4 o'clock) rather than two separate subpaths,

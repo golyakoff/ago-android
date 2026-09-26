@@ -749,12 +749,16 @@
     <string name="settings_app_info_action">App info</string>
 
     <string name="settings_autostart_title_ok">Autostart: On</string>
-    <string name="settings_autostart_title_needs_attention">Autostart: Off</string>
+    <string name="settings_autostart_title_recommended">Autostart: check recommended</string>
+    <string name="settings_autostart_title_blocked">Autostart: not starting</string>
     <string name="settings_autostart_blocked_after_reboot">Didn\'t start automatically after the last restart</string>
     <string name="settings_autostart_recommendation_label">Recommendation</string>
     <string name="settings_autostart_open_caption">This opens this phone\'s autostart settings.</string>
     <string name="settings_autostart_not_needed_text">This phone most likely has no separate autostart setting — the general battery settings above are usually enough.</string>
     <string name="settings_autostart_limitation_note">Android has no single way to read this status on most phones — the exact state can\'t be confirmed, so this is shown as a recommendation, not a verified fact.</string>
+    <string name="settings_autostart_manual_confirm_checkbox">Autostart is on — don\'t remind me</string>
+    <string name="settings_autostart_manual_confirmed_note">You marked autostart as on.</string>
+    <string name="settings_autostart_manual_confirm_undo">Remind me again</string>
 
     <string name="push_unavailable_host_app_not_installed">RuStore, which notifications come through, isn\'t installed on this phone.</string>
     <string name="push_unavailable_background_work_not_granted">RuStore isn\'t allowed to run in the background, so notifications may arrive late.</string>

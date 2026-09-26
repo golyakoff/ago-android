@@ -81,11 +81,13 @@ import ago.chat.android.devices.AndroidNotificationPermissionChecker
 import ago.chat.android.devices.AppForegroundTracker
 import ago.chat.android.devices.AutostartAdvisor
 import ago.chat.android.devices.AutostartInferenceReader
+import ago.chat.android.devices.AutostartManualConfirmStore
 import ago.chat.android.devices.BatteryAwarenessPromptPreferences
 import ago.chat.android.devices.BatteryOptimizationChecker
 import ago.chat.android.devices.BootAutostartMarkerStore
 import ago.chat.android.devices.BootTimeSource
 import ago.chat.android.devices.ConversationRefreshSignal
+import ago.chat.android.devices.DataStoreAutostartManualConfirmStore
 import ago.chat.android.devices.DataStoreBatteryAwarenessPromptPreferences
 import ago.chat.android.devices.DataStoreBootAutostartMarkerStore
 import ago.chat.android.devices.DataStoreInstallationId
@@ -884,6 +886,13 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideBootAutostartMarkerStore(store: DataStoreBootAutostartMarkerStore): BootAutostartMarkerStore = store
+
+    /** `26-187`: the operator's own "autostart is on, don't remind me" claim - see
+     * [AutostartManualConfirmStore]'s own doc comment for why this is a sibling port to
+     * [provideBootAutostartMarkerStore] above rather than a third field folded into that one. */
+    @Provides
+    @Singleton
+    public fun provideAutostartManualConfirmStore(store: DataStoreAutostartManualConfirmStore): AutostartManualConfirmStore = store
 
     /** `26-129`: the approximate last-boot wall-clock read shared by the receiver and the inference reader -
      * behind a port for the identical rule-2 reason [provideLocalClock] below is. */
