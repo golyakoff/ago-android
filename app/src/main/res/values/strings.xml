@@ -354,6 +354,28 @@
     <string name="notes_add_failed">Не удалось добавить заметку</string>
 
     <!--
+        `26-151`: the contact-detail panel's «Прошлые диалоги» row + its own read-only history sub-screen
+        (`docs/design/26-111-thread-contact-detail-panel.md`, P1; Q6: read-only, no composer, no actions).
+        `past_dialogs_row_title` names both the row and the sub-screen's own header. The count trio is the
+        row's own trailing text, pluralised the same way `notes_row_count_*` is (the count is simply the
+        fetched list's own length, the identical Q8 convention `26-150` already applies). `past_dialogs_row_load_failed`
+        is the row's own inline failure text; `past_dialogs_empty` is the list sub-screen's empty state;
+        `past_dialogs_load_more` pages a further batch of the visitor's other conversations onto the list.
+        `past_dialogs_history_load_failed` is the transcript's own inline failure text (opening one past
+        conversation, or paging it further back); `past_dialogs_history_empty` is a past conversation with
+        no messages at all - honestly rendered rather than a blank screen.
+    -->
+    <string name="past_dialogs_row_title">Прошлые диалоги</string>
+    <string name="past_dialogs_row_count_one">%1$d диалог</string>
+    <string name="past_dialogs_row_count_few">%1$d диалога</string>
+    <string name="past_dialogs_row_count_many">%1$d диалогов</string>
+    <string name="past_dialogs_row_load_failed">Не удалось загрузить прошлые диалоги</string>
+    <string name="past_dialogs_empty">Прошлых диалогов нет</string>
+    <string name="past_dialogs_load_more">Показать ещё</string>
+    <string name="past_dialogs_history_load_failed">Не удалось загрузить переписку</string>
+    <string name="past_dialogs_history_empty">Сообщений нет</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

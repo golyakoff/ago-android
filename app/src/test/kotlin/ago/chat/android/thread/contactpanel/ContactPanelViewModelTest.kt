@@ -15,12 +15,27 @@ import ago.chat.android.core.domain.tags.ConversationTagsResult
 import ago.chat.android.core.domain.tags.Tag
 import ago.chat.android.core.domain.tags.TagActionResult
 import ago.chat.android.core.domain.tags.TagVocabularyResult
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryConversation
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryPage
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryResult
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryResult
+import ago.chat.android.core.network.realtime.ConversationAssignedDto
+import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
+import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.core.network.realtime.TeamHistoryPage
+import ago.chat.android.core.network.realtime.TeamMessageDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -58,11 +73,15 @@ class ContactPanelViewModelTest {
         contactDetailsApi: ContactDetailsApi = FakeContactDetailsApi(),
         conversationTagsApi: ConversationTagsApi = FakeConversationTagsApi(),
         conversationNotesApi: ConversationNotesApi = FakeConversationNotesApi(),
+        visitorHistoryApi: VisitorHistoryApi = FakeVisitorHistoryApi(),
+        hubEvents: OperatorHubEvents = FakeOperatorHubEvents(),
     ) = ContactPanelViewModel(
         visitorSummaryApi = summaryApi,
         contactDetailsApi = contactDetailsApi,
         conversationTagsApi = conversationTagsApi,
         conversationNotesApi = conversationNotesApi,
+        visitorHistoryApi = visitorHistoryApi,
+        hubEvents = hubEvents,
         ioDispatcher = dispatcher,
     )
 
@@ -450,6 +469,292 @@ class ContactPanelViewModelTest {
 
             assertEquals(0, api.addCalls)
         }
+
+    // ─── 26-151: past dialogs section ──────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `open loads the past-dialogs list into the Loaded arm`() =
+        runTest(dispatcher) {
+            val conversations = listOf(historyConversation(id = "h1"))
+            val api =
+                FakeVisitorHistoryApi(
+                    results = mutableListOf(VisitorHistoryResult.Loaded(VisitorHistoryPage(conversations, nextBeforeId = "h1"))),
+                )
+            val viewModel = viewModel(visitorHistoryApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(
+                PastDialogsSectionState.Loaded(conversations = conversations, nextBeforeId = "h1"),
+                viewModel.state.value.pastDialogs,
+            )
+        }
+
+    @Test
+    fun `a failed past-dialogs read becomes the Failed arm, and its retry asks again`() =
+        runTest(dispatcher) {
+            val api = FakeVisitorHistoryApi(results = mutableListOf(VisitorHistoryResult.Failed(NetworkFailure.NoConnection)))
+            val viewModel = viewModel(visitorHistoryApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            assertEquals(PastDialogsSectionState.Failed(NetworkFailure.NoConnection), viewModel.state.value.pastDialogs)
+
+            viewModel.retryPastDialogs()
+            advanceUntilIdle()
+
+            assertEquals(2, api.calls)
+        }
+
+    @Test
+    fun `loadMorePastDialogs appends a further page and advances the cursor`() =
+        runTest(dispatcher) {
+            val first = historyConversation(id = "h1")
+            val second = historyConversation(id = "h2")
+            val api =
+                FakeVisitorHistoryApi(
+                    results =
+                        mutableListOf(
+                            VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(first), nextBeforeId = "h1")),
+                            VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(second), nextBeforeId = null)),
+                        ),
+                )
+            val viewModel = viewModel(visitorHistoryApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.loadMorePastDialogs()
+            advanceUntilIdle()
+
+            assertEquals(
+                PastDialogsSectionState.Loaded(conversations = listOf(first, second), nextBeforeId = null),
+                viewModel.state.value.pastDialogs,
+            )
+            assertEquals(listOf(null, "h1"), api.beforeIds)
+        }
+
+    @Test
+    fun `loadMorePastDialogs is a no-op once the cursor is exhausted`() =
+        runTest(dispatcher) {
+            val api =
+                FakeVisitorHistoryApi(
+                    results = mutableListOf(VisitorHistoryResult.Loaded(VisitorHistoryPage(emptyList(), nextBeforeId = null))),
+                )
+            val viewModel = viewModel(visitorHistoryApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.loadMorePastDialogs()
+            advanceUntilIdle()
+
+            assertEquals(1, api.calls)
+        }
+
+    @Test
+    fun `openPastDialog fetches the transcript and lands it Loaded`() =
+        runTest(dispatcher) {
+            val conversation = historyConversation(id = "h1")
+            val listApi =
+                FakeVisitorHistoryApi(
+                    results = mutableListOf(VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(conversation), nextBeforeId = null))),
+                )
+            val message = MessageDto(id = "m1", sequence = 1, body = "Привет", authorKind = "Visitor")
+            val hub = FakeOperatorHubEvents().apply { historyResults += HistoryPage(messages = listOf(message), nextBeforeSequence = null) }
+            val viewModel = viewModel(visitorHistoryApi = listApi, hubEvents = hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.openPastDialog("h1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.pastDialogs as PastDialogsSectionState.Loaded
+            assertEquals("h1", loaded.selectedConversationId)
+            assertEquals(PastDialogHistoryState.Loaded(messages = listOf(message), nextBeforeSequence = null), loaded.history)
+            assertEquals(listOf(Triple("c1", "h1", null)), hub.historyCalls)
+        }
+
+    @Test
+    fun `closePastDialogHistory returns to the list`() =
+        runTest(dispatcher) {
+            val listApi =
+                FakeVisitorHistoryApi(
+                    results =
+                        mutableListOf(
+                            VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(historyConversation("h1")), nextBeforeId = null)),
+                        ),
+                )
+            val hub = FakeOperatorHubEvents().apply { historyResults += HistoryPage() }
+            val viewModel = viewModel(visitorHistoryApi = listApi, hubEvents = hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.openPastDialog("h1")
+            advanceUntilIdle()
+            viewModel.closePastDialogHistory()
+
+            val loaded = viewModel.state.value.pastDialogs as PastDialogsSectionState.Loaded
+            assertEquals(null, loaded.selectedConversationId)
+            assertEquals(null, loaded.history)
+        }
+
+    @Test
+    fun `a failed transcript fetch becomes Failed, and retryPastDialogHistory asks again`() =
+        runTest(dispatcher) {
+            val listApi =
+                FakeVisitorHistoryApi(
+                    results =
+                        mutableListOf(
+                            VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(historyConversation("h1")), nextBeforeId = null)),
+                        ),
+                )
+            val hub = FakeOperatorHubEvents().apply { historyFailures += java.io.IOException("boom") }
+            val viewModel = viewModel(visitorHistoryApi = listApi, hubEvents = hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.openPastDialog("h1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.pastDialogs as PastDialogsSectionState.Loaded
+            assertEquals(PastDialogHistoryState.Failed(NetworkFailure.NoConnection), loaded.history)
+
+            hub.historyResults += HistoryPage(messages = listOf(MessageDto(id = "m1", sequence = 1)))
+            viewModel.retryPastDialogHistory()
+            advanceUntilIdle()
+
+            val retried = viewModel.state.value.pastDialogs as PastDialogsSectionState.Loaded
+            assertEquals(2, hub.historyCalls.size)
+            assertTrue(retried.history is PastDialogHistoryState.Loaded)
+        }
+
+    @Test
+    fun `loadOlderPastDialogHistory prepends an older page`() =
+        runTest(dispatcher) {
+            val listApi =
+                FakeVisitorHistoryApi(
+                    results =
+                        mutableListOf(
+                            VisitorHistoryResult.Loaded(VisitorHistoryPage(listOf(historyConversation("h1")), nextBeforeId = null)),
+                        ),
+                )
+            val newer = MessageDto(id = "m2", sequence = 2)
+            val older = MessageDto(id = "m1", sequence = 1)
+            val hub =
+                FakeOperatorHubEvents().apply {
+                    historyResults += HistoryPage(messages = listOf(newer), nextBeforeSequence = 2L)
+                    historyResults += HistoryPage(messages = listOf(older), nextBeforeSequence = null)
+                }
+            val viewModel = viewModel(visitorHistoryApi = listApi, hubEvents = hub)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.openPastDialog("h1")
+            advanceUntilIdle()
+            viewModel.loadOlderPastDialogHistory()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.pastDialogs as PastDialogsSectionState.Loaded
+            assertEquals(
+                PastDialogHistoryState.Loaded(messages = listOf(older, newer), nextBeforeSequence = null),
+                loaded.history,
+            )
+            assertEquals(listOf<Long?>(null, 2L), hub.historyCalls.map { it.third })
+        }
+
+    private fun historyConversation(id: String): VisitorHistoryConversation =
+        VisitorHistoryConversation(
+            conversationId = id,
+            state = "Closed",
+            startedAt = null,
+            closedAt = null,
+            previewBody = null,
+            previewAuthorKind = null,
+            previewCreatedAt = null,
+        )
+
+    private class FakeVisitorHistoryApi(
+        private val results: MutableList<VisitorHistoryResult> = mutableListOf(),
+    ) : VisitorHistoryApi {
+        var calls = 0
+        val beforeIds: MutableList<String?> = mutableListOf()
+
+        override suspend fun fetchVisitorHistory(
+            conversationId: String,
+            beforeId: String?,
+            pageSize: Int,
+        ): VisitorHistoryResult {
+            calls++
+            beforeIds.add(beforeId)
+            return if (results.isNotEmpty()) results.removeAt(0) else VisitorHistoryResult.Loaded(VisitorHistoryPage(emptyList(), null))
+        }
+    }
+
+    /** A minimal [OperatorHubEvents] fake — only [getVisitorHistoryConversation] is exercised by this view
+     * model; every other member either returns an inert default (the `Flow`s) or fails loudly if this
+     * class ever calls it, the identical "not used by this screen" posture `ThreadViewModelTest`'s own
+     * `FakeOperatorHubEvents` establishes for the methods it does not exercise either. */
+    private class FakeOperatorHubEvents : OperatorHubEvents {
+        override val state: MutableStateFlow<OperatorHubConnectionState> = MutableStateFlow(OperatorHubConnectionState.Connected)
+        override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+        override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 16)
+        override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 16)
+        override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 16)
+        override val teamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+        override val teamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+
+        val historyResults: MutableList<HistoryPage> = mutableListOf()
+        val historyFailures: MutableList<Exception> = mutableListOf()
+
+        /** Every [getVisitorHistoryConversation] call, as `(conversationId, historicalConversationId,
+         * beforeSequence)` - `26-151`'s own tests assert on this to prove the two-id arity and the
+         * `beforeSequence` cursor are sent exactly as the port's own contract states. */
+        val historyCalls: MutableList<Triple<String, String, Long?>> = mutableListOf()
+
+        override suspend fun joinConversation(conversationId: String): HistoryPage = error("not used by this view model")
+
+        override fun leaveConversation() = Unit
+
+        override suspend fun loadOlderHistory(
+            conversationId: String,
+            beforeSequence: Long,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this view model")
+
+        override suspend fun getVisitorHistoryConversation(
+            conversationId: String,
+            historicalConversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage {
+            historyCalls.add(Triple(conversationId, historicalConversationId, beforeSequence))
+            if (historyFailures.isNotEmpty()) throw historyFailures.removeAt(0)
+            return if (historyResults.isNotEmpty()) historyResults.removeAt(0) else HistoryPage()
+        }
+
+        override suspend fun sendMessage(
+            conversationId: String,
+            body: String,
+            clientMessageId: String,
+            attachmentId: String?,
+        ): SendMessageResult = error("not used by this view model")
+
+        override suspend fun reconnectToActiveSite() = error("not used by this view model")
+
+        override suspend fun getTeamHistory(
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): TeamHistoryPage = error("not used by this view model")
+
+        override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage = error("not used by this view model")
+
+        override suspend fun sendTeamMessage(
+            body: String,
+            clientMessageId: String,
+        ): SendMessageResult = error("not used by this view model")
+
+        override suspend fun removeTeamMessage(teamMessageId: String) = error("not used by this view model")
+    }
 
     private class FakeVisitorSummaryApi(
         private val result: VisitorSummaryResult = VisitorSummaryResult.Failed(NetworkFailure.Unexpected),

@@ -3,6 +3,7 @@ package ago.chat.android.thread.contactpanel
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
+import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.notes.ConversationNotesResult
@@ -11,12 +12,17 @@ import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.ConversationTagsResult
 import ago.chat.android.core.domain.tags.TagActionResult
 import ago.chat.android.core.domain.tags.TagVocabularyResult
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryResult
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryResult
+import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.thread.HISTORY_PAGE_SIZE
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,8 +40,13 @@ import javax.inject.Inject
  * [visitorSummaryApi], its own load/retry/reveal methods, and a new arm
  * ([ContactPanelUiState.contactDetails]) folded into the state rather than a restructure of this class.
  * `26-149` (tags) and `26-150` (notes) grow it the identical way, each its own port
- * ([ConversationTagsApi]/[ConversationNotesApi]) beside the ones already here. The remaining sections
- * (`26-151`…`26-153`) grow it the same way again.
+ * ([ConversationTagsApi]/[ConversationNotesApi]) beside the ones already here. `26-151` (past dialogs)
+ * grows it once more, with **two** collaborators rather than one — [VisitorHistoryApi] for the list
+ * (`26-144`'s REST port) and [OperatorHubEvents] for opening one past conversation read-only
+ * ([OperatorHubEvents.getVisitorHistoryConversation], the same hub connection [ago.chat.android.thread.ThreadViewModel]
+ * already depends on for the *live* conversation) — because the design itself splits the two that way
+ * (`VisitorHistoryApi`'s own doc comment: "a thin REST list, a hub read to open one"). The remaining
+ * sections (`26-152`…`26-153`) grow it the same additive way again.
  *
  * **Opened, not injected-with-an-id.** [open] hands the conversation id in, the identical shape
  * [ago.chat.android.thread.ThreadViewModel.open] already establishes — this class is scoped to the open
@@ -58,6 +69,8 @@ public class ContactPanelViewModel
         private val contactDetailsApi: ContactDetailsApi,
         private val conversationTagsApi: ConversationTagsApi,
         private val conversationNotesApi: ConversationNotesApi,
+        private val visitorHistoryApi: VisitorHistoryApi,
+        private val hubEvents: OperatorHubEvents,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ContactPanelUiState())
@@ -97,6 +110,9 @@ public class ContactPanelViewModel
             if (!sameConversation || mutableState.value.notes is NotesSectionState.Failed) {
                 loadNotes(conversationId)
             }
+            if (!sameConversation || mutableState.value.pastDialogs is PastDialogsSectionState.Failed) {
+                loadPastDialogs(conversationId)
+            }
         }
 
         /** The header's own inline retry (§4: per-section retry, never a whole-sheet failure) — re-reads
@@ -128,6 +144,200 @@ public class ContactPanelViewModel
         public fun retryNotes() {
             val conversationId = loadedConversationId ?: return
             loadNotes(conversationId)
+        }
+
+        /** `26-151`: the «Прошлые диалоги» row's own inline retry — the sibling of [retry]/
+         * [retryContactDetails]/[retryTags]/[retryNotes], re-reading only the past-dialogs list and
+         * leaving the rest of the sheet untouched (§4). A no-op before the first [open]. */
+        public fun retryPastDialogs() {
+            val conversationId = loadedConversationId ?: return
+            loadPastDialogs(conversationId)
+        }
+
+        /**
+         * `26-151`: pages one further batch of past dialogs onto the list already on screen — a no-op
+         * unless the section is [PastDialogsSectionState.Loaded], the cursor is not yet exhausted
+         * ([PastDialogsSectionState.Loaded.nextBeforeId] non-null), and no such fetch is already in
+         * flight ([PastDialogsSectionState.Loaded.loadingMore]), the identical single-flight guard
+         * [applyTag]/[removeTag] apply per-tag and [revealContactDetail] applies per-row, here for the
+         * section's one list instead. A failed page leaves [PastDialogsSectionState.Loaded.nextBeforeId]
+         * exactly as it was — a tap on the same "load more" control simply asks again — rather than
+         * inventing a dedicated error arm for a read that is not the section's primary content (the
+         * identical "a secondary read degrades non-destructively" posture [loadTags]'s own doc comment
+         * states for a failed vocabulary read).
+         */
+        public fun loadMorePastDialogs() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.pastDialogs as? PastDialogsSectionState.Loaded ?: return
+            val beforeId = loaded.nextBeforeId ?: return
+            if (loaded.loadingMore) return
+
+            mutableState.update { current ->
+                val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                current.copy(pastDialogs = currentLoaded.copy(loadingMore = true))
+            }
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        visitorHistoryApi.fetchVisitorHistory(conversationId, beforeId = beforeId, pageSize = PAST_DIALOGS_PAGE_SIZE)
+                    }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                    val next =
+                        when (result) {
+                            is VisitorHistoryResult.Loaded ->
+                                currentLoaded.copy(
+                                    conversations = currentLoaded.conversations + result.page.conversations,
+                                    nextBeforeId = result.page.nextBeforeId,
+                                    loadingMore = false,
+                                )
+
+                            is VisitorHistoryResult.Failed -> currentLoaded.copy(loadingMore = false)
+                        }
+                    current.copy(pastDialogs = next)
+                }
+            }
+        }
+
+        /**
+         * `26-151`: opens one past conversation's read-only transcript — sets
+         * [PastDialogsSectionState.Loaded.selectedConversationId] and starts
+         * [PastDialogsSectionState.Loaded.history] at [PastDialogHistoryState.Loading], then fetches its
+         * most recent page ([beforeSequence] `null`, [OperatorHubEvents.getVisitorHistoryConversation]'s
+         * own "initial page" convention). A no-op unless the list itself is
+         * [PastDialogsSectionState.Loaded] — there is nothing to open before it lands.
+         */
+        public fun openPastDialog(historicalConversationId: String) {
+            val conversationId = loadedConversationId ?: return
+            mutableState.update { current ->
+                val loaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                current.copy(
+                    pastDialogs =
+                        loaded.copy(
+                            selectedConversationId = historicalConversationId,
+                            history = PastDialogHistoryState.Loading,
+                        ),
+                )
+            }
+            fetchPastDialogHistory(conversationId, historicalConversationId, beforeSequence = null, appendOlder = false)
+        }
+
+        /** `26-151`: leaves the transcript and returns to the past-dialogs list — the sub-screen's own
+         * nested "back", never dismissing the sub-screen itself (that is [ContactDetailPanel]'s / the
+         * section's own outer dismiss). A no-op unless the list is [PastDialogsSectionState.Loaded]. */
+        public fun closePastDialogHistory() {
+            mutableState.update { current ->
+                val loaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                current.copy(pastDialogs = loaded.copy(selectedConversationId = null, history = null))
+            }
+        }
+
+        /** `26-151`: the open transcript's own inline retry, the sibling of [retry]/[retryContactDetails]/
+         * [retryTags]/[retryNotes]/[retryPastDialogs] one level deeper — re-fetches the same past
+         * conversation's most recent page. A no-op unless a transcript is actually open. */
+        public fun retryPastDialogHistory() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.pastDialogs as? PastDialogsSectionState.Loaded ?: return
+            val historicalConversationId = loaded.selectedConversationId ?: return
+            mutableState.update { current ->
+                val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                current.copy(pastDialogs = currentLoaded.copy(history = PastDialogHistoryState.Loading))
+            }
+            fetchPastDialogHistory(conversationId, historicalConversationId, beforeSequence = null, appendOlder = false)
+        }
+
+        /**
+         * `26-151`: the open transcript's own manual "load older messages" affordance — the identical
+         * shape [ago.chat.android.thread.ThreadViewModel.loadOlder] takes for the *live* conversation,
+         * restated for a read-only one: a no-op while already loading or once the cursor is exhausted,
+         * and older pages are **prepended** ([PastDialogHistoryState.Loaded.messages] stays ascending by
+         * sequence, [ContactPanelUiState.kt]'s own doc comment on that field).
+         */
+        public fun loadOlderPastDialogHistory() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.pastDialogs as? PastDialogsSectionState.Loaded ?: return
+            val historicalConversationId = loaded.selectedConversationId ?: return
+            val history = loaded.history as? PastDialogHistoryState.Loaded ?: return
+            val beforeSequence = history.nextBeforeSequence ?: return
+            if (history.loadingOlder) return
+
+            mutableState.update { current ->
+                val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                val currentHistory = currentLoaded.history as? PastDialogHistoryState.Loaded ?: return@update current
+                current.copy(
+                    pastDialogs = currentLoaded.copy(history = currentHistory.copy(loadingOlder = true, historyError = null)),
+                )
+            }
+            fetchPastDialogHistory(conversationId, historicalConversationId, beforeSequence = beforeSequence, appendOlder = true)
+        }
+
+        /**
+         * The one place [OperatorHubEvents.getVisitorHistoryConversation] is actually called, shared by
+         * [openPastDialog] (fresh, [appendOlder] `false`), [retryPastDialogHistory] (fresh, after a
+         * failure) and [loadOlderPastDialogHistory] ([appendOlder] `true`, prepending onto what is already
+         * loaded). Unlike the REST ports on this class, the hub call is a plain `suspend` returning
+         * [ago.chat.android.core.network.realtime.HistoryPage] rather than a two-arm sealed result, so this
+         * function classifies a thrown exception into [NetworkFailure] itself — the identical
+         * try/catch-and-classify shape [ago.chat.android.thread.ThreadViewModel.loadOlder] already uses for
+         * the same hub connection's [OperatorHubEvents.loadOlderHistory].
+         *
+         * Two guards keep a stale answer from corrupting a screen the operator has since moved off:
+         * dropped outright if the panel has since opened a *different conversation*
+         * ([loadedConversationId] changed — the same guard every other read on this class applies), and
+         * folded back only if [historicalConversationId] still matches
+         * [PastDialogsSectionState.Loaded.selectedConversationId] — an operator can close a transcript and
+         * open a *different* one before a slow fetch for the first returns, and that first answer must
+         * never overwrite the second transcript's own state.
+         */
+        private fun fetchPastDialogHistory(
+            conversationId: String,
+            historicalConversationId: String,
+            beforeSequence: Long?,
+            appendOlder: Boolean,
+        ) {
+            viewModelScope.launch {
+                try {
+                    val page =
+                        withContext(ioDispatcher) {
+                            hubEvents.getVisitorHistoryConversation(
+                                conversationId,
+                                historicalConversationId,
+                                beforeSequence,
+                                HISTORY_PAGE_SIZE,
+                            )
+                        }
+                    if (loadedConversationId != conversationId) return@launch
+                    mutableState.update { current ->
+                        val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                        if (currentLoaded.selectedConversationId != historicalConversationId) return@update current
+                        val existing = currentLoaded.history as? PastDialogHistoryState.Loaded
+                        val nextHistory =
+                            PastDialogHistoryState.Loaded(
+                                messages = if (appendOlder) page.messages + (existing?.messages ?: emptyList()) else page.messages,
+                                nextBeforeSequence = page.nextBeforeSequence,
+                            )
+                        current.copy(pastDialogs = currentLoaded.copy(history = nextHistory))
+                    }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (failure: Exception) {
+                    if (loadedConversationId != conversationId) return@launch
+                    mutableState.update { current ->
+                        val currentLoaded = current.pastDialogs as? PastDialogsSectionState.Loaded ?: return@update current
+                        if (currentLoaded.selectedConversationId != historicalConversationId) return@update current
+                        val existing = currentLoaded.history as? PastDialogHistoryState.Loaded
+                        val reason = NetworkFailure.from(failure)
+                        val nextHistory =
+                            if (appendOlder && existing != null) {
+                                existing.copy(loadingOlder = false, historyError = reason)
+                            } else {
+                                PastDialogHistoryState.Failed(reason)
+                            }
+                        current.copy(pastDialogs = currentLoaded.copy(history = nextHistory))
+                    }
+                }
+            }
         }
 
         /** `26-150`: every keystroke in the notes sub-screen's composer. A no-op unless the section is
@@ -461,10 +671,46 @@ public class ContactPanelViewModel
             }
         }
 
+        /** `26-151`: reads the first page of the past-dialogs list — [PAST_DIALOGS_PAGE_SIZE] items,
+         * newest first ([ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi]'s own keyset
+         * convention), landing [PastDialogsSectionState.Loaded] with an empty [PastDialogsSectionState.Loaded.selectedConversationId]
+         * — the list, never a transcript, is what a fresh [open] or [retryPastDialogs] always returns to. */
+        private fun loadPastDialogs(conversationId: String) {
+            mutableState.update { it.copy(pastDialogs = PastDialogsSectionState.Loading) }
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        visitorHistoryApi.fetchVisitorHistory(conversationId, beforeId = null, pageSize = PAST_DIALOGS_PAGE_SIZE)
+                    }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update {
+                    it.copy(
+                        pastDialogs =
+                            when (result) {
+                                is VisitorHistoryResult.Loaded ->
+                                    PastDialogsSectionState.Loaded(
+                                        conversations = result.page.conversations,
+                                        nextBeforeId = result.page.nextBeforeId,
+                                    )
+
+                                is VisitorHistoryResult.Failed -> PastDialogsSectionState.Failed(result.reason)
+                            },
+                    )
+                }
+            }
+        }
+
         private companion object {
             /** `Ago.Chat.Domain.TagSource`'s wire spelling for a tag an operator applied — the value a
              * freshly-applied tag carries in [ConversationTag.source], mirrored here because a `204`-only
              * apply returns no entity to read it from (this port's own doc comment). */
             const val OPERATOR_TAG_SOURCE = "Operator"
+
+            /** `26-151`: the past-dialogs list's own page size — the server's own default
+             * ([ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi.fetchVisitorHistory]'s own
+             * doc comment: "the server defaults it to 20... but this port always states it"), stated here
+             * rather than relied on. A separate constant from [HISTORY_PAGE_SIZE] on purpose: that one is
+             * a *message* page size or `ago-console`'s own parity value, an unrelated wire contract. */
+            const val PAST_DIALOGS_PAGE_SIZE = 20
         }
     }

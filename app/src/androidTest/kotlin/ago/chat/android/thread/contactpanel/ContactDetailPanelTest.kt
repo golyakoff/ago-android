@@ -117,6 +117,12 @@ class ContactDetailPanelTest {
                 onNoteDraftChanged = {},
                 onAddNote = {},
                 onRetryNotes = {},
+                onRetryPastDialogs = {},
+                onLoadMorePastDialogs = {},
+                onOpenPastDialog = {},
+                onClosePastDialogHistory = {},
+                onRetryPastDialogHistory = {},
+                onLoadOlderPastDialogHistory = {},
                 onDismiss = { showPanel = false },
             )
         }
