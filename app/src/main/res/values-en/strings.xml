@@ -305,6 +305,9 @@
 
     <string name="bookings_tab_pending">Waiting</string>
     <string name="bookings_queue_empty">Nothing\'s waiting.</string>
+    <string name="nav_bookings_pending_one">%1$d booking awaiting confirmation</string>
+    <string name="nav_bookings_pending_few">%1$d bookings awaiting confirmation</string>
+    <string name="nav_bookings_pending_many">%1$d bookings awaiting confirmation</string>
     <string name="bookings_not_configured">The calendar backend isn\'t set up for this environment yet, so this screen isn\'t available here.</string>
     <string name="bookings_load_failed_transport">Couldn\'t reach AGO Calendar. Check your connection and try again.</string>
     <string name="bookings_load_failed_unexpected">Couldn\'t load the booking queue. Try again.</string>

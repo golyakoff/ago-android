@@ -544,6 +544,13 @@
     -->
     <string name="bookings_tab_pending">Ожидают</string>
     <string name="bookings_queue_empty">Ничего не ожидает.</string>
+    <!-- `26-179`: Записи's own footer-badge announcement - the pending-bookings queue's own size, spoken
+         the same way `conversation_row_unread_*` already speaks the Диалоги badge's count
+         (`ago.chat.android.shell.AppShellScreen`'s own `contentDescription` clause), worded for a
+         booking rather than a message since the two counts answer different questions. -->
+    <string name="nav_bookings_pending_one">%1$d запись ожидает подтверждения</string>
+    <string name="nav_bookings_pending_few">%1$d записи ожидают подтверждения</string>
+    <string name="nav_bookings_pending_many">%1$d записей ожидают подтверждения</string>
     <!-- `ago-console`'s own `calendarNotConfigured`, verbatim - the identical fact about the identical
          backend, worded once rather than twice. -->
     <string name="bookings_not_configured">Бэкенд календаря пока не настроен для этого окружения, поэтому этот экран здесь недоступен.</string>

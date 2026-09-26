@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.data.bookings.PendingBookingsCount
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.presence.OperatorPresenceController
 import ago.chat.android.session.OperatorIdentity
@@ -210,17 +211,61 @@ class AppShellViewModelTest {
             assertEquals(0, viewModel.unreadConversationsTotal.value)
         }
 
+    // ----------------------------------------------------------------- `26-179`: pending-bookings badge
+
+    @Test
+    fun `pendingBookingsTotal starts at whatever the source already holds`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    pendingBookingsCount = FakePendingBookingsCount(initial = null),
+                )
+
+            assertNull(viewModel.pendingBookingsTotal.value)
+        }
+
+    @Test
+    fun `pendingBookingsTotal relays a live update from the source, without a restart`() =
+        runTest(dispatcher) {
+            val pendingBookingsCount = FakePendingBookingsCount(initial = null)
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true), pendingBookingsCount = pendingBookingsCount)
+            advanceUntilIdle()
+            assertNull(viewModel.pendingBookingsTotal.value)
+
+            pendingBookingsCount.emit(4)
+            advanceUntilIdle()
+
+            assertEquals(4, viewModel.pendingBookingsTotal.value)
+        }
+
+    @Test
+    fun `pendingBookingsTotal can go back to zero - a real answer, never re-rendered as unknown`() =
+        runTest(dispatcher) {
+            val pendingBookingsCount = FakePendingBookingsCount(initial = 2)
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true), pendingBookingsCount = pendingBookingsCount)
+            advanceUntilIdle()
+            assertEquals(2, viewModel.pendingBookingsTotal.value)
+
+            pendingBookingsCount.emit(0)
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.pendingBookingsTotal.value)
+        }
+
     private fun viewModelWith(
         api: OperatorPermissionsApi,
         identityProvider: OperatorIdentityProvider = FakeOperatorIdentityProvider(null),
         presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
         unreadTotal: ConversationsUnreadTotal = FakeConversationsUnreadTotal(),
+        pendingBookingsCount: PendingBookingsCount = FakePendingBookingsCount(),
     ): AppShellViewModel =
         AppShellViewModel(
             api = api,
             identityProvider = identityProvider,
             presenceController = presenceController,
             unreadTotal = unreadTotal,
+            pendingBookingsCount = pendingBookingsCount,
             ioDispatcher = dispatcher,
         )
 
@@ -271,5 +316,21 @@ class AppShellViewModelTest {
         }
 
         override fun observeTotal(): Flow<Int?> = total
+    }
+
+    /** `26-179`: the identical shape [FakeConversationsUnreadTotal] above already is, restated for
+     * [PendingBookingsCount] - a plain [MutableStateFlow] this class's own tests write to directly,
+     * standing in for [ago.chat.android.data.bookings.PendingBookingsPoller]'s own timer, which
+     * `PendingBookingsPollerTest` (JVM, `data/bookings/`) is what actually proves. */
+    private class FakePendingBookingsCount(
+        initial: Int? = null,
+    ) : PendingBookingsCount {
+        private val total = MutableStateFlow(initial)
+
+        fun emit(value: Int?) {
+            total.value = value
+        }
+
+        override fun observeCount(): Flow<Int?> = total
     }
 }

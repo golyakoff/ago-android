@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.data.bookings.PendingBookingsCount
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.presence.OperatorPresenceController
@@ -46,6 +47,11 @@ import javax.inject.Inject
  * from [unreadTotal] — [ConversationsUnreadTotal]'s own doc comment states why that port, not a second
  * fetch of anything `ConversationListViewModel` already holds, is what backs it.
  *
+ * `26-179`: the identical "outlives every bottom-tab switch" scope is what lets this class also own
+ * Записи's own poll-driven [pendingBookingsTotal] - a second footer badge, a different kind of source
+ * ([PendingBookingsCount] an active poll rather than [ConversationsUnreadTotal]'s passive Room read), and
+ * the same scope long enough to keep it alive whichever tab is actually showing.
+ *
  * ## The three states this class ever publishes, and what each one renders
  *
  * [OperatorPermissions.Unknown] is not a state to compute a navigation bar from — it is the
@@ -69,6 +75,7 @@ public class AppShellViewModel
         private val identityProvider: OperatorIdentityProvider,
         private val presenceController: OperatorPresenceController,
         private val unreadTotal: ConversationsUnreadTotal,
+        private val pendingBookingsCount: PendingBookingsCount,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
@@ -81,6 +88,16 @@ public class AppShellViewModel
          * collecting" window in which it would be correct to let this go cold. */
         public val unreadConversationsTotal: StateFlow<Int?> =
             unreadTotal.observeTotal().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+        /** `26-179`: Записи's own badge count - the identical `null`-until-first-answer,
+         * `SharingStarted.Eagerly` shape [unreadConversationsTotal] above already uses, restated for
+         * [PendingBookingsCount] instead of [ConversationsUnreadTotal]. Collecting
+         * [PendingBookingsCount.observeCount] here, eagerly, in `viewModelScope`, is what actually starts
+         * [ago.chat.android.data.bookings.PendingBookingsPoller]'s own poll loop - see that class's doc
+         * comment for why no separate `start()` call is needed, and why cancelling `viewModelScope` (the
+         * shell tearing down) is what stops it. */
+        public val pendingBookingsTotal: StateFlow<Int?> =
+            pendingBookingsCount.observeCount().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
         private val mutableLoadError = MutableStateFlow<NetworkFailure?>(null)
 
