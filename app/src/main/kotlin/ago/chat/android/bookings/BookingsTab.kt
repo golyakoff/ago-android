@@ -17,9 +17,16 @@ internal enum class BookingsTab {
     Confirmed,
     Clients,
 
+    /** `26-164`: the booking-readiness hub (menu label «Готовность», page title the full question «Может
+     * ли клиент записаться прямо сейчас?») — the six-step chain, per calendar, that decides whether a
+     * client can book right now. A `⋮` config entry, never a segment, and now the *very first* one offered
+     * — ahead of [Calendars] — see [visibleBookingsConfigMenuEntries]'s own doc comment for why: it is the
+     * "where am I" screen a tenant opens *before* the four fill screens, not one more fill screen itself. */
+    Readiness,
+
     /** `26-142`: the tenant-configuration screen (menu label «Настройка», primary section «Календари») —
-     * the embed's allowed origins and the calendar roster. A `⋮` config entry, never a segment, and the
-     * first one offered — see [visibleBookingsConfigMenuEntries]. */
+     * the embed's allowed origins and the calendar roster. A `⋮` config entry, never a segment — see
+     * [visibleBookingsConfigMenuEntries]. */
     Calendars,
 
     /** `26-140`: the worker dictionary, with the full create/edit/delete this product had no screen for
@@ -104,14 +111,23 @@ internal fun visibleBookingsSegments(
  * **"Hide, don't disable" one level up.** An empty result here is what makes `BookingsConfigMenu` draw
  * no `⋮` at all when no entry applies (`docs/backlog/26-103-*.md`'s own Done-when) — the same rule
  * [ago.chat.android.analytics.AnalyticsReportsOverflowMenu] already follows for Аналитика's own `⋮`.
+ *
+ * `26-164`: [showReadinessEntry] adds [BookingsTab.Readiness] **first**, ahead of Настройка (Календари) —
+ * the accepted product decision (`docs/design/26-154-*.md`, author-accepted 2026-09-26): Готовность is the
+ * "can a client book right now, and what's missing" hub a tenant opens *before* deciding which of the four
+ * fill screens to open next, so it leads the fill order rather than following it. Its own parameter for the
+ * same reason each gate below is one — `calendar:configure` alone, the permission
+ * `GetBookingReadinessHandler` itself checks server-side, not a reuse of another entry's boolean.
  */
 internal fun visibleBookingsConfigMenuEntries(
+    showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
+        if (showReadinessEntry) add(BookingsTab.Readiness)
         if (showSetupSegment) add(BookingsTab.Calendars)
         if (showMastersSegment) add(BookingsTab.Masters)
         if (showServicesSegment) add(BookingsTab.Services)

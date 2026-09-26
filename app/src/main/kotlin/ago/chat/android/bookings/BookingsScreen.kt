@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
+import ago.chat.android.core.domain.readiness.BookingPrecondition
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.schedule.WorkingHoursBody
@@ -69,6 +70,7 @@ import java.time.OffsetDateTime
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
@@ -94,6 +96,29 @@ public fun BookingsRoute(
     // enum is saveable here the same way `selectedTab` above is. Reported up via [onConfigScreenChanged].
     var activeConfigTab by rememberSaveable { mutableStateOf<BookingsTab?>(null) }
     LaunchedEffect(activeConfigTab) { onConfigScreenChanged(activeConfigTab != null) }
+
+    // `26-164`: the identical Hilt-avoidance-when-ungated shape the branches below establish, applied to
+    // [ReadinessViewModel] - an operator lacking `calendar:configure` never constructs it and never
+    // triggers its `init`-time read of the booking-readiness chain.
+    val readinessState: ReadinessUiState?
+    val onRefreshReadiness: () -> Unit
+    if (showReadinessEntry) {
+        val readinessViewModel: ReadinessViewModel = hiltViewModel()
+        val collectedReadinessState by readinessViewModel.state.collectAsStateWithLifecycle()
+        readinessState = collectedReadinessState
+        onRefreshReadiness = readinessViewModel::refresh
+    } else {
+        readinessState = null
+        onRefreshReadiness = {}
+    }
+    // `26-164`: "re-read on every open of the screen" (`docs/design/26-154-*.md`'s own accepted Q4) -
+    // [ReadinessViewModel] persists for as long as this whole Записи route does (it is obtained above,
+    // gated on the permission alone, not on `activeConfigTab`), so a fresh read on every *reopen* of the
+    // «Готовность» screen specifically needs an explicit trigger here, keyed on the one state that knows
+    // when that happens.
+    LaunchedEffect(activeConfigTab) {
+        if (activeConfigTab == BookingsTab.Readiness) onRefreshReadiness()
+    }
 
     // `26-51`: [ConfirmedBookingsViewModel] is obtained by `hiltViewModel()` only inside this branch, so
     // an operator lacking `customer:read` never constructs it and never triggers its `init`-time read
@@ -269,6 +294,7 @@ public fun BookingsRoute(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
+        showReadinessEntry = showReadinessEntry,
         showSetupSegment = showSetupSegment,
         showMastersSegment = showMastersSegment,
         showServicesSegment = showServicesSegment,
@@ -315,6 +341,8 @@ public fun BookingsRoute(
         onRetryWorkingHours = onRetryWorkingHours,
         onSaveWorkingHours = onSaveWorkingHours,
         onDeleteWorkingHours = onDeleteWorkingHours,
+        readinessState = readinessState,
+        onRetryReadiness = onRefreshReadiness,
         hubConnectionState = hubConnectionState,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -347,6 +375,7 @@ internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
@@ -398,6 +427,8 @@ internal fun BookingsScreen(
     onRetryWorkingHours: () -> Unit,
     onSaveWorkingHours: (String, Int, String, String) -> Unit,
     onDeleteWorkingHours: (String) -> Unit,
+    readinessState: ReadinessUiState?,
+    onRetryReadiness: () -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
@@ -415,6 +446,13 @@ internal fun BookingsScreen(
             configTab = activeConfigTab,
             pendingState = state,
             onBack = onCloseConfig,
+            readinessState = readinessState,
+            onRetryReadiness = onRetryReadiness,
+            // `26-164`: «Исправить»/«Слоты» is an in-hub swap to another config screen, expressed here as
+            // [onConfigSelected] itself - the identical navigation this menu's own entries already use to
+            // open a screen. [BookingPrecondition.fixTargetTab]'s own `null` (only [BookingPrecondition.Unknown])
+            // is a no-op: [ReadinessRow] never draws a button for it in the first place.
+            onFixReadiness = { precondition -> precondition.fixTargetTab()?.let(onConfigSelected) },
             calendarSetupState = calendarSetupState,
             onRetryCalendarSetup = onRetryCalendarSetup,
             onAddCalendar = onAddCalendar,
@@ -452,7 +490,13 @@ internal fun BookingsScreen(
     val now = rememberTickingNow()
     val segments = visibleBookingsSegments(showConfirmedSegment, showClientsSegment)
     val configMenuEntries =
-        visibleBookingsConfigMenuEntries(showSetupSegment, showMastersSegment, showServicesSegment, showHoursSegment)
+        visibleBookingsConfigMenuEntries(
+            showReadinessEntry,
+            showSetupSegment,
+            showMastersSegment,
+            showServicesSegment,
+            showHoursSegment,
+        )
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -570,9 +614,10 @@ internal fun BookingsScreen(
                             ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
                         }
 
-                    // `26-157`: the four configuration tabs are never a `selectedTab` - they are opened as a
-                    // modal page tracked by `activeConfigTab` (handled above), never selected in the
-                    // operational segmented view - so there is nothing for the operational `when` to draw.
+                    // `26-157`/`26-164`: the five configuration tabs are never a `selectedTab` - they are
+                    // opened as a modal page tracked by `activeConfigTab` (handled above), never selected in
+                    // the operational segmented view - so there is nothing for the operational `when` to draw.
+                    BookingsTab.Readiness,
                     BookingsTab.Calendars,
                     BookingsTab.Masters,
                     BookingsTab.Services,
@@ -603,6 +648,9 @@ private fun BookingsConfigModalPage(
     configTab: BookingsTab,
     pendingState: BookingsUiState,
     onBack: () -> Unit,
+    readinessState: ReadinessUiState?,
+    onRetryReadiness: () -> Unit,
+    onFixReadiness: (BookingPrecondition) -> Unit,
     calendarSetupState: CalendarSetupUiState?,
     onRetryCalendarSetup: () -> Unit,
     onAddCalendar: () -> Unit,
@@ -642,12 +690,31 @@ private fun BookingsConfigModalPage(
                             )
                         }
                     },
-                    title = { Text(text = bookingsTabLabel(tab = configTab, pendingState = pendingState)) },
+                    // `26-164`: Готовность is the one config tab whose page title is not the short menu
+                    // label - the accepted design decision is a short `«Готовность»` `DropdownMenuItem`
+                    // with the full question as the page title (`docs/design/26-154-*.md`'s own Q2), so
+                    // this is the one place [bookingsTabLabel] is not reused for a page title as-is.
+                    title = {
+                        Text(
+                            text =
+                                if (configTab == BookingsTab.Readiness) {
+                                    buildAnnotatedString { append(stringResource(R.string.readiness_page_title)) }
+                                } else {
+                                    bookingsTabLabel(tab = configTab, pendingState = pendingState)
+                                },
+                        )
+                    },
                 )
             },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 when (configTab) {
+                    // `26-164`: Готовность.
+                    BookingsTab.Readiness ->
+                        readinessState?.let {
+                            ReadinessBody(state = it, onRetry = onRetryReadiness, onFix = onFixReadiness)
+                        }
+
                     // `26-142`: Календари - kept stateless here rather than calling `hiltViewModel()`
                     // inline, for this file's own Route/Screen-split reason.
                     BookingsTab.Calendars ->
@@ -767,6 +834,9 @@ private fun bookingsTabLabel(
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
+        // `26-164`: the short menu label - see `BookingsConfigModalPage`'s own `title` for why the page
+        // itself renders the full question instead of reusing this string.
+        BookingsTab.Readiness -> buildAnnotatedString { append(stringResource(R.string.readiness_tab)) }
         BookingsTab.Calendars -> buildAnnotatedString { append(stringResource(R.string.calendar_setup_tab)) }
         BookingsTab.Masters -> buildAnnotatedString { append(stringResource(R.string.masters_tab)) }
         BookingsTab.Services -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_services)) }

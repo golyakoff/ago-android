@@ -70,6 +70,23 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             emptyList<BookingsTab>(),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = false,
+                showSetupSegment = false,
+                showMastersSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
+        )
+    }
+
+    /** `26-164`'s own Done-when: the Готовность entry appears exactly on `calendar:configure`. An operator
+     * without it earns no config entry at all - the whole `⋮` stays hidden (the case above). */
+    @Test
+    fun `Readiness alone is a real combination, gated on calendar-configure`() {
+        assertEquals(
+            listOf(BookingsTab.Readiness),
+            visibleBookingsConfigMenuEntries(
+                showReadinessEntry = true,
                 showSetupSegment = false,
                 showMastersSegment = false,
                 showServicesSegment = false,
@@ -85,6 +102,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Calendars),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = false,
                 showSetupSegment = true,
                 showMastersSegment = false,
                 showServicesSegment = false,
@@ -100,6 +118,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Masters),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = true,
                 showServicesSegment = false,
@@ -113,6 +132,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Services),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = false,
                 showServicesSegment = true,
@@ -126,6 +146,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Hours),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = false,
                 showServicesSegment = false,
@@ -134,14 +155,21 @@ class BookingsConfigMenuEntriesTest {
         )
     }
 
-    /** `26-142`: the fill/readiness order is Настройка (Календари) before Мастера before Услуги before
-     * Часы - Календари leads, because a calendar is the thing a worker, a service and a working-hours rule
-     * all hang off. */
+    /** `26-164`: the accepted product decision (`docs/design/26-154-*.md`'s own Q1/Q2, author-accepted
+     * 2026-09-26) - Готовность now leads the hub, ahead of Настройка (Календари) before Мастера before
+     * Услуги before Часы. */
     @Test
-    fun `all entries are drawn, Calendars before Masters before Services before Hours`() {
+    fun `all entries are drawn, Readiness before Calendars before Masters before Services before Hours`() {
         assertEquals(
-            listOf(BookingsTab.Calendars, BookingsTab.Masters, BookingsTab.Services, BookingsTab.Hours),
+            listOf(
+                BookingsTab.Readiness,
+                BookingsTab.Calendars,
+                BookingsTab.Masters,
+                BookingsTab.Services,
+                BookingsTab.Hours,
+            ),
             visibleBookingsConfigMenuEntries(
+                showReadinessEntry = true,
                 showSetupSegment = true,
                 showMastersSegment = true,
                 showServicesSegment = true,
