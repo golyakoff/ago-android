@@ -160,9 +160,10 @@ sign-in (`SignInViewModel.routeNow()`'s `Operator` arm), from `AgoPushMessagingS
 provider's own rotation callback), and from a periodic `WorkManager` job
 (`DeviceRegistrationWorker`/`WorkManagerDeviceRegistrationScheduler`) — the third one exists because
 `onNewToken` cannot fire for an app that was not running when a rotation happened.
-`DeviceRegistrationCoordinator` is the one place that sequence — read the installation id, ask the SDK
-for the current token, write it — is expressed, precisely so the three call sites cannot quietly drift
-from one another (`26-59`'s own history is the reason that drift is worth naming as a risk at all).
+`DeviceRegistrationCoordinator` is the one place that sequence — read the installation id and the device
+id, ask the SDK for the current token, write it — is expressed, precisely so the three call sites cannot
+quietly drift from one another (`26-59`'s own history is the reason that drift is worth naming as a risk
+at all).
 
 **The periodic job runs every 24 hours, with a `NetworkType.CONNECTED` constraint.** Not the 15-minute
 floor `PeriodicWorkRequest` itself allows: `onNewToken` already handles a rotation in real time while
@@ -176,10 +177,13 @@ sign-in never resets its clock), and deliberately never explicitly cancelled on 
 idle endpoint costs less than the coupling cancelling it would add to `AgoAuthSession`.
 
 **`installation_id` lives in its own, unencrypted `DataStore` file — never `SessionStore`'s.** It has to
-survive exactly the sign-out that empties `SessionStore` (`docs/architecture/push-notifications.md`'s
-own reason `installation_id` exists: the server row's identity is `(operator_id, installation_id)`, not
-`(operator_id, token)`), and it is not a credential, so it costs nothing `EncryptedSharedPreferences`
-would be buying.
+survive exactly the sign-out that empties `SessionStore`, and it is not a credential, so it costs nothing
+`EncryptedSharedPreferences` would be buying. **`26-122`: it is no longer the server row's identity.** A
+reinstall regenerates it, which is exactly why `26-83` found one operator holding five stale rows from
+repeated reinstalls — the row's identity moved to `DeviceIdProvider`'s own value (`Settings.Secure.
+ANDROID_ID`, chosen over a second stored UUID because it survives a reinstall this one does not), and
+`installation_id` is now diagnostic only, kept current on the row so a later sign-out `DELETE` from
+whichever install currently holds it still finds it.
 
 **The RuStore SDK is reached through one seam, `PushRegistrationGateway`**, declared in `:app` rather
 than `:core:domain` — unlike `DeviceRegistrationApi` (a REST port, `:core:domain`, the identical

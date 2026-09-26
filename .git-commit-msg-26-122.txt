@@ -1,0 +1,34 @@
+feat(26-122): send a stable device id so a reinstall replaces its prior registration
+
+Client half of 26-122. DataStoreInstallationId's own value is per-install
+(a reinstall wipes the app's private storage and mints a fresh one), which
+is exactly why 26-83 found one operator holding five stale operator_devices
+rows from repeated reinstalls/re-logins - the server had nothing stable to
+dedup on across a reinstall.
+
+Added DeviceIdProvider (:core:domain, framework-neutral like
+InstallationIdProvider) and its implementation AndroidIdDeviceIdProvider
+(:app), which reads Settings.Secure.ANDROID_ID - stable per (signing key,
+app, user, device) since Android 8 (this app's minSdk), requires no
+permission, and survives a reinstall of this exact app. Falls back to the
+existing InstallationIdProvider (a stored UUID) only for the narrow
+invalid-value case: a null/blank read, or the documented all-devices
+sentinel 9774d56d682e549c a small population of real devices report
+verbatim - both mean the platform value cannot be trusted as a device
+identity, not merely absent. That fallback degrades to the pre-26-122
+same-install-only behaviour, with 26-123's time-based prune (separate,
+not in this change) as its own backstop. Namespaced "android:<id>" so the
+two id spaces can never collide by coincidence. HardwareIds lint warning
+suppressed at the one call site that intentionally reads it, with the
+trade-off recorded in DeviceIdProvider's own doc comment.
+
+DeviceRegistrationCoordinator now reads both ids on every registration
+(sign-in, onNewToken, the periodic worker) and DeviceRegistrationApi/
+KtorDeviceRegistrationApi send deviceId alongside the existing
+installationId/token/provider body - installationId still addresses the
+row on the wire (DELETE still revokes by it), deviceId is what the server
+now dedups on (Ago.Chat.Api's own PUT /api/v1/me/devices/{installationId}).
+
+Tests updated for the new port and the new register() parameter;
+docs/architecture.md's stale "installation_id is the row's identity" claim
+corrected. 26-123 (the prune safety net) is out of scope here.
