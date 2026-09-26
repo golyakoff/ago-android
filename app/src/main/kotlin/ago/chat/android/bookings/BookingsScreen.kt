@@ -61,6 +61,19 @@ import java.time.Duration
 import java.time.OffsetDateTime
 
 /**
+ * `26-171` (`26-155` part 3): which of the two Мастера drill-down pages `mastersDrillDownWorkerId`
+ * refers to — `26-170` shipped this state as a bare `String?` because «Слоты» did not exist yet, so
+ * there was only ever one kind of drill-down to be in. This item is the second kind, so the "which
+ * screen" question now needs an answer of its own rather than being implied. A plain UI-layer enum, the
+ * identical reason [BookingsTab] itself is one (that enum's own doc comment) — nothing outside this
+ * file's own composables and view-model wiring needs to know these names exist.
+ */
+internal enum class MastersDrillDownKind {
+    Schedule,
+    Slots,
+}
+
+/**
  * `26-48`: Записи, for real — replaces `ago.chat.android.shell.BookingsPlaceholderScreen` at
  * `AppShellScreen.kt`'s own `NavHost`. Obtains its own [BookingsViewModel] via [hiltViewModel] — the
  * identical wiring [ago.chat.android.conversations.ConversationListRoute] already establishes for
@@ -106,6 +119,13 @@ public fun BookingsRoute(
     // survives a rotation (Q8, `docs/design/26-155-*.md`: back from it returns to Masters, not exits
     // the drill-down on every configuration change).
     var mastersDrillDownWorkerId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // `26-171`: which of the two drill-down pages [mastersDrillDownWorkerId] refers to - see
+    // [MastersDrillDownKind]'s own doc comment. Read only while [mastersDrillDownWorkerId] is non-null;
+    // its value the rest of the time is never drawn from, so there is nothing to reset when a drill-down
+    // closes (`onCloseConfig`/`onConfigSelected` below still clear [mastersDrillDownWorkerId] itself,
+    // which is what actually hides both pages).
+    var mastersDrillDownKind by rememberSaveable { mutableStateOf(MastersDrillDownKind.Schedule) }
 
     // `26-164`: the identical Hilt-avoidance-when-ungated shape the branches below establish, applied to
     // [ReadinessViewModel] - an operator lacking `calendar:configure` never constructs it and never
@@ -280,22 +300,24 @@ public fun BookingsRoute(
     }
 
     // `26-170` (`26-155` part 2): the «График» drill-down's own view model - the identical
-    // Hilt-avoidance-when-ungated shape [mastersState] above establishes, gated on *both*
-    // `showMastersSegment` (an operator lacking `calendar:configure` never even opens Мастера) and
-    // `mastersDrillDownWorkerId` (a Мастера operator who has not opened «График» yet never triggers
-    // this class's own `init`-free but still network-holding [WorkerScheduleApi]/[RecutApi] pair). This
-    // is also what the `26-162` androidTest landmine requires: `hiltViewModel()` for
-    // [WorkerScheduleViewModel] happens only in this branch of [BookingsRoute], never inside
-    // [BookingsScreen] itself, which every shell/back-contract test drives under a plain
-    // `ComponentActivity` with `bookingsTab` substituted for a marker `Text` - a route this branch is
-    // never part of, since substituting `bookingsTab` skips [BookingsRoute] entirely.
+    // Hilt-avoidance-when-ungated shape [mastersState] above establishes, gated on `showMastersSegment`
+    // (an operator lacking `calendar:configure` never even opens Мастера), `mastersDrillDownWorkerId`
+    // (a Мастера operator who has not opened a drill-down yet never triggers this class's own
+    // `init`-free but still network-holding [WorkerScheduleApi]/[RecutApi] pair) and, since `26-171`,
+    // `mastersDrillDownKind` (an operator who opened «Слоты» rather than «График» never constructs this
+    // class either - [WorkerSlotsViewModel] is its own sibling branch below). This is also what the
+    // `26-162` androidTest landmine requires: `hiltViewModel()` for [WorkerScheduleViewModel] happens
+    // only in this branch of [BookingsRoute], never inside [BookingsScreen] itself, which every
+    // shell/back-contract test drives under a plain `ComponentActivity` with `bookingsTab` substituted
+    // for a marker `Text` - a route this branch is never part of, since substituting `bookingsTab` skips
+    // [BookingsRoute] entirely.
     val workerScheduleState: WorkerScheduleUiState?
     val onRetryWorkerSchedule: () -> Unit
     val onWorkerScheduleFormChanged: (WorkerScheduleForm) -> Unit
     val onSubmitWorkerSchedule: () -> Unit
     val onPreviewWorkerScheduleRecut: () -> Unit
     val onDismissWorkerScheduleRecutPreview: () -> Unit
-    if (showMastersSegment && mastersDrillDownWorkerId != null) {
+    if (showMastersSegment && mastersDrillDownWorkerId != null && mastersDrillDownKind == MastersDrillDownKind.Schedule) {
         val workerScheduleViewModel: WorkerScheduleViewModel = hiltViewModel()
         val collectedWorkerScheduleState by workerScheduleViewModel.state.collectAsStateWithLifecycle()
         workerScheduleState = collectedWorkerScheduleState
@@ -320,9 +342,35 @@ public fun BookingsRoute(
         onPreviewWorkerScheduleRecut = {}
         onDismissWorkerScheduleRecutPreview = {}
     }
-    // The drill-down page's own app-bar title (`«График» — {displayName}`) - resolved from the roster
-    // [MastersViewModel] already holds rather than a second read, and `null` (a bare fallback title)
-    // whenever the roster has not answered yet or no longer lists this worker.
+
+    // `26-171` (`26-155` part 3): the «Слоты» drill-down's own view model - the identical
+    // Hilt-avoidance-when-ungated shape [workerScheduleState] above establishes, gated the identical way
+    // except on [MastersDrillDownKind.Slots] instead - an operator who opened «График» never constructs
+    // this class either, and the identical `26-162` androidTest landmine applies for the identical
+    // reason.
+    val workerSlotsState: WorkerSlotsUiState?
+    val onRetryWorkerSlots: () -> Unit
+    val onRevealWorkerSlot: (String) -> Unit
+    if (showMastersSegment && mastersDrillDownWorkerId != null && mastersDrillDownKind == MastersDrillDownKind.Slots) {
+        val workerSlotsViewModel: WorkerSlotsViewModel = hiltViewModel()
+        val collectedWorkerSlotsState by workerSlotsViewModel.state.collectAsStateWithLifecycle()
+        workerSlotsState = collectedWorkerSlotsState
+        onRetryWorkerSlots = workerSlotsViewModel::refresh
+        onRevealWorkerSlot = workerSlotsViewModel::reveal
+        // `26-170`'s own `drillDownWorkerId` switch, restated for this sibling view model.
+        val drillDownWorkerId = mastersDrillDownWorkerId
+        LaunchedEffect(drillDownWorkerId) {
+            if (drillDownWorkerId != null) workerSlotsViewModel.open(drillDownWorkerId)
+        }
+    } else {
+        workerSlotsState = null
+        onRetryWorkerSlots = {}
+        onRevealWorkerSlot = {}
+    }
+
+    // The drill-down page's own app-bar title (`«График»`/«Слоты» — {displayName}`) - resolved from the
+    // roster [MastersViewModel] already holds rather than a second read, and `null` (a bare fallback
+    // title) whenever the roster has not answered yet or no longer lists this worker.
     val mastersDrillDownWorkerName =
         (mastersState as? MastersUiState.Loaded)?.workers?.firstOrNull { it.workerId == mastersDrillDownWorkerId }?.displayName
 
@@ -405,8 +453,16 @@ public fun BookingsRoute(
         onMasterFormChanged = onMasterFormChanged,
         onSubmitMaster = onSubmitMaster,
         mastersDrillDownWorkerId = mastersDrillDownWorkerId,
+        mastersDrillDownKind = mastersDrillDownKind,
         mastersDrillDownWorkerName = mastersDrillDownWorkerName,
-        onOpenMastersSchedule = { worker -> mastersDrillDownWorkerId = worker.workerId },
+        onOpenMastersSchedule = { worker ->
+            mastersDrillDownWorkerId = worker.workerId
+            mastersDrillDownKind = MastersDrillDownKind.Schedule
+        },
+        onOpenMastersSlots = { worker ->
+            mastersDrillDownWorkerId = worker.workerId
+            mastersDrillDownKind = MastersDrillDownKind.Slots
+        },
         onCloseMastersDrillDown = { mastersDrillDownWorkerId = null },
         // `26-170`: the weekly-hours note's own in-hub swap (Q2's own sibling note, worded like
         // [BookingsScreen]'s own `onFixReadiness`) - leaves Мастера's roster underneath untouched and
@@ -421,6 +477,9 @@ public fun BookingsRoute(
         onSubmitWorkerSchedule = onSubmitWorkerSchedule,
         onPreviewWorkerScheduleRecut = onPreviewWorkerScheduleRecut,
         onDismissWorkerScheduleRecutPreview = onDismissWorkerScheduleRecutPreview,
+        workerSlotsState = workerSlotsState,
+        onRetryWorkerSlots = onRetryWorkerSlots,
+        onRevealWorkerSlot = onRevealWorkerSlot,
         workingHoursState = workingHoursState,
         onRetryWorkingHours = onRetryWorkingHours,
         onSaveWorkingHours = onSaveWorkingHours,
@@ -507,12 +566,15 @@ internal fun BookingsScreen(
     onCancelMasterEdit: () -> Unit,
     onMasterFormChanged: (WorkerForm) -> Unit,
     onSubmitMaster: (WorkerForm) -> Unit,
-    // `26-170` (`26-155` part 2): the Мастера segment's own second-level «График» drill-down - `null`
+    // `26-170` (`26-155` part 2): the Мастера segment's own second-level drill-down - `null`
     // for the Masters list. See [BookingsRoute]'s own doc comment on `mastersDrillDownWorkerId` for why
-    // it lives one level up rather than inside [MastersUiState].
+    // it lives one level up rather than inside [MastersUiState]. `26-171` adds [mastersDrillDownKind] -
+    // see [MastersDrillDownKind]'s own doc comment for why a second «Слоты» page needs it.
     mastersDrillDownWorkerId: String?,
+    mastersDrillDownKind: MastersDrillDownKind,
     mastersDrillDownWorkerName: String?,
     onOpenMastersSchedule: (Worker) -> Unit,
+    onOpenMastersSlots: (Worker) -> Unit,
     onCloseMastersDrillDown: () -> Unit,
     onSwitchMastersDrillDownToHours: () -> Unit,
     workerScheduleState: WorkerScheduleUiState?,
@@ -521,6 +583,9 @@ internal fun BookingsScreen(
     onSubmitWorkerSchedule: () -> Unit,
     onPreviewWorkerScheduleRecut: () -> Unit,
     onDismissWorkerScheduleRecutPreview: () -> Unit,
+    workerSlotsState: WorkerSlotsUiState?,
+    onRetryWorkerSlots: () -> Unit,
+    onRevealWorkerSlot: (String) -> Unit,
     workingHoursState: WorkingHoursUiState?,
     onRetryWorkingHours: () -> Unit,
     onSaveWorkingHours: (String, Int, String, String) -> Unit,
@@ -539,26 +604,39 @@ internal fun BookingsScreen(
     // non-null is the whole switch; the operational Записи view (Ожидают/Утверждены/Клиенты) is drawn
     // otherwise, unchanged. System back closes the page before the shell's own back handling ever runs.
     if (activeConfigTab != null) {
-        // `26-170`: the «График» drill-down is a *third* level of modal page - over Мастера, itself
-        // over Записи - so it is checked, and returns, before `BookingsConfigModalPage` (the Мастера
-        // list's own page) ever renders. Structuring the two as mutually-exclusive early returns, rather
-        // than one [BackHandler] each with an `enabled` flag, means exactly one `BackHandler` is ever
-        // live at a time - there is nothing to stack, since only one of these two composes on any given
-        // frame (Q8: back from the drill-down always lands on the Masters list underneath it, never one
-        // level further).
+        // `26-170`/`26-171`: a drill-down («График» or «Слоты») is a *third* level of modal page - over
+        // Мастера, itself over Записи - so it is checked, and returns, before `BookingsConfigModalPage`
+        // (the Мастера list's own page) ever renders. Structuring the two as mutually-exclusive early
+        // returns, rather than one [BackHandler] each with an `enabled` flag, means exactly one
+        // [BackHandler] is ever live at a time - there is nothing to stack, since only one of these two
+        // composes on any given frame (Q8: back from either drill-down always lands on the Masters list
+        // underneath it, never one level further). Which of the two pages renders is
+        // [mastersDrillDownKind] - [MastersDrillDownKind]'s own doc comment.
         if (activeConfigTab == BookingsTab.Masters && mastersDrillDownWorkerId != null) {
             BackHandler(onBack = onCloseMastersDrillDown)
-            WorkerScheduleDrillDownPage(
-                workerDisplayName = mastersDrillDownWorkerName,
-                state = workerScheduleState ?: WorkerScheduleUiState.Loading,
-                onBack = onCloseMastersDrillDown,
-                onRetry = onRetryWorkerSchedule,
-                onFormChanged = onWorkerScheduleFormChanged,
-                onSubmit = onSubmitWorkerSchedule,
-                onSwitchToHours = onSwitchMastersDrillDownToHours,
-                onPreviewRecut = onPreviewWorkerScheduleRecut,
-                onDismissRecutPreview = onDismissWorkerScheduleRecutPreview,
-            )
+            when (mastersDrillDownKind) {
+                MastersDrillDownKind.Schedule ->
+                    WorkerScheduleDrillDownPage(
+                        workerDisplayName = mastersDrillDownWorkerName,
+                        state = workerScheduleState ?: WorkerScheduleUiState.Loading,
+                        onBack = onCloseMastersDrillDown,
+                        onRetry = onRetryWorkerSchedule,
+                        onFormChanged = onWorkerScheduleFormChanged,
+                        onSubmit = onSubmitWorkerSchedule,
+                        onSwitchToHours = onSwitchMastersDrillDownToHours,
+                        onPreviewRecut = onPreviewWorkerScheduleRecut,
+                        onDismissRecutPreview = onDismissWorkerScheduleRecutPreview,
+                    )
+
+                MastersDrillDownKind.Slots ->
+                    WorkerSlotsDrillDownPage(
+                        workerDisplayName = mastersDrillDownWorkerName,
+                        state = workerSlotsState ?: WorkerSlotsUiState.Loading,
+                        onBack = onCloseMastersDrillDown,
+                        onRetry = onRetryWorkerSlots,
+                        onReveal = onRevealWorkerSlot,
+                    )
+            }
             return
         }
         BackHandler(onBack = onCloseConfig)
@@ -590,6 +668,7 @@ internal fun BookingsScreen(
             onMasterFormChanged = onMasterFormChanged,
             onSubmitMaster = onSubmitMaster,
             onOpenMastersSchedule = onOpenMastersSchedule,
+            onOpenMastersSlots = onOpenMastersSlots,
             servicesState = servicesState,
             onRetryServices = onRetryServices,
             onEditService = onEditService,
@@ -789,6 +868,7 @@ private fun BookingsConfigModalPage(
     onMasterFormChanged: (WorkerForm) -> Unit,
     onSubmitMaster: (WorkerForm) -> Unit,
     onOpenMastersSchedule: (Worker) -> Unit,
+    onOpenMastersSlots: (Worker) -> Unit,
     servicesState: ServicesUiState?,
     onRetryServices: () -> Unit,
     onEditService: (ConfiguredService) -> Unit,
@@ -866,6 +946,7 @@ private fun BookingsConfigModalPage(
                                 onFormChanged = onMasterFormChanged,
                                 onSubmit = onSubmitMaster,
                                 onOpenSchedule = onOpenMastersSchedule,
+                                onOpenSlots = onOpenMastersSlots,
                             )
                         }
 

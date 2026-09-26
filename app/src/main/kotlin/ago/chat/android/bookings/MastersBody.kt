@@ -66,6 +66,9 @@ internal fun MastersBody(
     // parity). A callback, not a `NavHost` route - [BookingsScreen]'s own `MastersDrillDown` state is
     // what this ends up flipping, one level up.
     onOpenSchedule: (Worker) -> Unit,
+    // `26-171` (`26-155` part 3): the sibling «Слоты» entry - 26-170 shipped this button disabled
+    // ([WorkerCard]'s own doc comment on why); this item is what wires it.
+    onOpenSlots: (Worker) -> Unit,
 ) {
     // Which worker's delete is being confirmed, if any. Held here rather than in [MastersUiState] for the
     // reason every other transient dialog in this app is: it is a property of this composition, not a
@@ -111,6 +114,7 @@ internal fun MastersBody(
                             onToggleActive = onToggleActive,
                             onDelete = { confirmingDelete = it },
                             onOpenSchedule = onOpenSchedule,
+                            onOpenSlots = onOpenSlots,
                         )
                     }
                 }
@@ -153,6 +157,7 @@ private fun MastersList(
     onToggleActive: (Worker) -> Unit,
     onDelete: (Worker) -> Unit,
     onOpenSchedule: (Worker) -> Unit,
+    onOpenSlots: (Worker) -> Unit,
 ) {
     val serviceNames = remember(services) { services.associate { it.serviceId to it.name } }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -187,6 +192,7 @@ private fun MastersList(
                         onToggleActive = { onToggleActive(worker) },
                         onDelete = { onDelete(worker) },
                         onOpenSchedule = { onOpenSchedule(worker) },
+                        onOpenSlots = { onOpenSlots(worker) },
                     )
                     HorizontalDivider()
                 }
@@ -205,14 +211,14 @@ private fun MastersList(
  * booked can be removed outright, and the confirmation dialog plus the server's own refusal for a booked
  * worker are what make that safe ([MastersViewModel.delete]'s own doc comment).
  *
- * **`26-170`: «График»/«Слоты» are a second row, below the roster actions above.** Two card buttons
- * (Q1, console row-action parity), not a third `⋮` menu entry — the identical reasoning
+ * **`26-170`/`26-171`: «График»/«Слоты» are a second row, below the roster actions above.** Two card
+ * buttons (Q1, console row-action parity), not a third `⋮` menu entry — the identical reasoning
  * [ago.chat.android.bookings.MastersViewModel]'s own sibling `WorkersApi` gate needs no restating, since
- * both open a drill-down over this same screen rather than a different permission surface. **«Слоты» is
- * disabled this slice** — its own screen is `26-155`'s follow-up ticket
- * (`docs/design/26-155-*.md`'s ticket split) — a disabled button states "not yet" without a dead tap
- * target that silently does nothing, the same "the reason it cannot be tapped is stated" idiom
- * [MastersList]'s own disabled Add button already follows for a missing calendar.
+ * both open a drill-down over this same screen rather than a different permission surface. **«Слоты»
+ * shipped disabled in `26-170`** — its own screen was `26-155`'s follow-up ticket
+ * (`docs/design/26-155-*.md`'s ticket split) — and `26-171` is that follow-up landing, wiring the button
+ * to the sibling drill-down [WorkerScheduleScreen.kt][WorkerScheduleDrillDownPage] already established
+ * the nav mechanism for.
  */
 @Composable
 private fun WorkerCard(
@@ -223,6 +229,7 @@ private fun WorkerCard(
     onToggleActive: () -> Unit,
     onDelete: () -> Unit,
     onOpenSchedule: () -> Unit,
+    onOpenSlots: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -273,8 +280,9 @@ private fun WorkerCard(
                 )
             }
         }
-        // `26-170`: the drill-down entry row - a second row rather than crowding the roster actions
-        // above, since these two open a whole different screen rather than acting on this row in place.
+        // `26-170`/`26-171`: the drill-down entry row - a second row rather than crowding the roster
+        // actions above, since these two open a whole different screen rather than acting on this row in
+        // place.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -282,8 +290,7 @@ private fun WorkerCard(
             TextButton(onClick = onOpenSchedule, enabled = !busy) {
                 Text(text = stringResource(R.string.masters_action_open_schedule))
             }
-            // Disabled, not omitted - see this composable's own doc comment for why.
-            TextButton(onClick = {}, enabled = false) {
+            TextButton(onClick = onOpenSlots, enabled = !busy) {
                 Text(text = stringResource(R.string.masters_action_open_slots))
             }
         }

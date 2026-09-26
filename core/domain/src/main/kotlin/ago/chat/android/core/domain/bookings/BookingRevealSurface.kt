@@ -37,4 +37,12 @@ public object BookingRevealSurface {
      * with two different surface labels, on purpose, never collapsed into one.
      */
     public const val ANDROID_BOOKINGS: String = "AndroidBookings"
+
+    /**
+     * `26-171` (`26-155` part 3): the «Слоты» drill-down's own reveal — Q7's accepted vocabulary
+     * (`docs/design/26-155-*.md`), a distinct string from every sibling above for the identical reason
+     * each of them is its own constant: this screen is a fourth, genuinely different caller, and the
+     * audit trail's whole reason to carry `surface` is telling them apart.
+     */
+    public const val ANDROID_WORKER_SLOTS: String = "AndroidWorkerSlots"
 }
