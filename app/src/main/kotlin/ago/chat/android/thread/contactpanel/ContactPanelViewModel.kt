@@ -3,6 +3,9 @@ package ago.chat.android.thread.contactpanel
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
+import ago.chat.android.core.domain.notes.AddNoteResult
+import ago.chat.android.core.domain.notes.ConversationNotesApi
+import ago.chat.android.core.domain.notes.ConversationNotesResult
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.ConversationTagsResult
@@ -30,7 +33,9 @@ import javax.inject.Inject
  * prescribes for the section slices — a second port ([ContactDetailsApi], `26-115`) beside
  * [visitorSummaryApi], its own load/retry/reveal methods, and a new arm
  * ([ContactPanelUiState.contactDetails]) folded into the state rather than a restructure of this class.
- * The remaining sections (`26-149`…`26-153`) grow it the identical way.
+ * `26-149` (tags) and `26-150` (notes) grow it the identical way, each its own port
+ * ([ConversationTagsApi]/[ConversationNotesApi]) beside the ones already here. The remaining sections
+ * (`26-151`…`26-153`) grow it the same way again.
  *
  * **Opened, not injected-with-an-id.** [open] hands the conversation id in, the identical shape
  * [ago.chat.android.thread.ThreadViewModel.open] already establishes — this class is scoped to the open
@@ -52,6 +57,7 @@ public class ContactPanelViewModel
         private val visitorSummaryApi: VisitorSummaryApi,
         private val contactDetailsApi: ContactDetailsApi,
         private val conversationTagsApi: ConversationTagsApi,
+        private val conversationNotesApi: ConversationNotesApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ContactPanelUiState())
@@ -88,6 +94,9 @@ public class ContactPanelViewModel
             if (!sameConversation || mutableState.value.tags is TagsSectionState.Failed) {
                 loadTags(conversationId)
             }
+            if (!sameConversation || mutableState.value.notes is NotesSectionState.Failed) {
+                loadNotes(conversationId)
+            }
         }
 
         /** The header's own inline retry (§4: per-section retry, never a whole-sheet failure) — re-reads
@@ -111,6 +120,74 @@ public class ContactPanelViewModel
         public fun retryTags() {
             val conversationId = loadedConversationId ?: return
             loadTags(conversationId)
+        }
+
+        /** `26-150`: the «Заметки команды» row's own inline retry — the sibling of [retry]/
+         * [retryContactDetails]/[retryTags], re-reading only the notes list and leaving the rest of the
+         * sheet untouched (§4). A no-op before the first [open]. */
+        public fun retryNotes() {
+            val conversationId = loadedConversationId ?: return
+            loadNotes(conversationId)
+        }
+
+        /** `26-150`: every keystroke in the notes sub-screen's composer. A no-op unless the section is
+         * currently [NotesSectionState.Loaded] — there is no composer to type into before the notes list
+         * itself has landed. */
+        public fun onNoteDraftChanged(text: String) {
+            mutableState.update { current ->
+                val loaded = current.notes as? NotesSectionState.Loaded ?: return@update current
+                current.copy(notes = loaded.copy(draft = text))
+            }
+        }
+
+        /**
+         * `26-150`: submits the composer's current draft as a new team note. Mirrors [applyTag]'s write
+         * idiom: a no-op while an add is already [NotesSectionState.Loaded.addingNote] (one tap, one
+         * server call), and a no-op for a blank (or whitespace-only) draft — the same "nothing to send"
+         * guard [ago.chat.android.thread.ThreadViewModel.sendClicked] applies to the message composer. On
+         * [AddNoteResult.Added] the server's own created row is appended to [NotesSectionState.Loaded.notes]
+         * and the draft is cleared; on [AddNoteResult.Refused] the server's `detail` is surfaced verbatim
+         * and on [AddNoteResult.Failed] a generic transport line is surfaced — in both non-success cases the
+         * typed [NotesSectionState.Loaded.draft] is deliberately left exactly as it was (that state's own
+         * doc comment), so a refused note is fixable rather than retyped from scratch. Update-after-`2xx`,
+         * not optimistic: the list only grows once the server confirms, the identical shape
+         * [revealContactDetail]/[applyTag] already establish for their own writes.
+         */
+        public fun addNote() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.notes as? NotesSectionState.Loaded ?: return
+            if (loaded.addingNote) return
+            val body = loaded.draft.trim()
+            if (body.isEmpty()) return
+
+            mutableState.update { current ->
+                val currentLoaded = current.notes as? NotesSectionState.Loaded ?: return@update current
+                current.copy(notes = currentLoaded.copy(addingNote = true, addNoteError = null))
+            }
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { conversationNotesApi.addNote(conversationId, body) }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded = current.notes as? NotesSectionState.Loaded ?: return@update current
+                    val next =
+                        when (result) {
+                            is AddNoteResult.Added ->
+                                currentLoaded.copy(
+                                    notes = currentLoaded.notes + result.note,
+                                    draft = "",
+                                    addingNote = false,
+                                    addNoteError = null,
+                                )
+
+                            is AddNoteResult.Refused ->
+                                currentLoaded.copy(addingNote = false, addNoteError = AddNoteError.Refused(result.detail))
+
+                            is AddNoteResult.Failed ->
+                                currentLoaded.copy(addingNote = false, addNoteError = AddNoteError.Failed(result.reason))
+                        }
+                    current.copy(notes = next)
+                }
+            }
         }
 
         /**
@@ -359,6 +436,25 @@ public class ContactPanelViewModel
                                     )
 
                                 is ConversationTagsResult.Failed -> TagsSectionState.Failed(appliedResult.reason)
+                            },
+                    )
+                }
+            }
+        }
+
+        /** `26-150`: reads the notes list — the row's count is simply this list's own size (design Q8:
+         * "fetch the notes list on open … no separate count field"), never a second read. */
+        private fun loadNotes(conversationId: String) {
+            mutableState.update { it.copy(notes = NotesSectionState.Loading) }
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { conversationNotesApi.fetchNotes(conversationId) }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update {
+                    it.copy(
+                        notes =
+                            when (result) {
+                                is ConversationNotesResult.Loaded -> NotesSectionState.Loaded(notes = result.notes)
+                                is ConversationNotesResult.Failed -> NotesSectionState.Failed(result.reason)
                             },
                     )
                 }

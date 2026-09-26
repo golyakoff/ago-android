@@ -151,6 +151,14 @@ public fun ThreadRoute(
     // never gates the section's existence (reading tags rides `conversation:read`, the panel's own gate).
     // `false` (the default every direct-construction test still gets) hides the add/remove controls.
     canTagConversation: Boolean = false,
+    // `26-150`: `conversation:note_write`, computed once from the operator's permission set by
+    // `AppShellScreen`'s own `conversationsTab` default and threaded down through `ConversationsTabHost`
+    // alongside `canReadContactDetail`/`canTagConversation`. Gates only the notes sub-screen's own
+    // composer hide-not-disable (design Q7); it never gates the «Заметки команды» row or its count/list
+    // (reading notes rides `conversation:read`, the panel's own gate, the identical split
+    // `canTagConversation` above draws for the tags section). `false` (the default every direct-construction
+    // test still gets) hides the composer.
+    canWriteNote: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -257,6 +265,13 @@ public fun ThreadRoute(
             onAddTag = contactPanelViewModel::applyTag,
             onRemoveTag = contactPanelViewModel::removeTag,
             onRetryTags = contactPanelViewModel::retryTags,
+            // `26-150`: the notes section's own callbacks + its `conversation:note_write` gate, wired the
+            // same way the tags callbacks above are - the VM stays permission-agnostic, the gate lives
+            // here in the UI layer where the permission set is known.
+            canWriteNote = canWriteNote,
+            onNoteDraftChanged = contactPanelViewModel::onNoteDraftChanged,
+            onAddNote = contactPanelViewModel::addNote,
+            onRetryNotes = contactPanelViewModel::retryNotes,
             onDismiss = { showContactPanel = false },
         )
     }

@@ -199,6 +199,12 @@ internal fun AppShellScreen(
             // reading a conversation's tags and being allowed to change them are two capabilities the server
             // checks separately too.
             canTagConversation = permissions.holds(Permission.CONVERSATION_TAG),
+            // `26-150`: `conversation:note_write` gates the contact-panel notes sub-screen's own composer
+            // (hide-not-disable, design Q7) - computed here, once, from the same permission set, the
+            // identical shape `canTagConversation` above uses. A separate check from `conversation:read`:
+            // reading a conversation's notes and being allowed to add one are two capabilities the server
+            // checks separately too.
+            canWriteNote = permissions.holds(Permission.CONVERSATION_NOTE_WRITE),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for

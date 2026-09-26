@@ -193,6 +193,18 @@
     <string name="tags_remove">Remove tag %1$s</string>
     <string name="tags_action_failed">Couldn\'t update tags</string>
 
+    <!-- `26-150`: contact-detail panel «Заметки команды» row + its own notes sub-screen. -->
+    <string name="notes_row_title">Team notes</string>
+    <string name="notes_row_count_one">%1$d note</string>
+    <string name="notes_row_count_few">%1$d notes</string>
+    <string name="notes_row_count_many">%1$d notes</string>
+    <string name="notes_row_load_failed">Couldn\'t load notes</string>
+    <string name="notes_empty">No notes yet</string>
+    <string name="notes_composer_placeholder">New note…</string>
+    <string name="notes_add_button">Add</string>
+    <string name="notes_adding_button">Adding…</string>
+    <string name="notes_add_failed">Couldn\'t add the note</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>

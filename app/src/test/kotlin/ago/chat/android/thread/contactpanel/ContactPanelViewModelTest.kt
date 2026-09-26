@@ -5,6 +5,10 @@ import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.notes.AddNoteResult
+import ago.chat.android.core.domain.notes.ConversationNote
+import ago.chat.android.core.domain.notes.ConversationNotesApi
+import ago.chat.android.core.domain.notes.ConversationNotesResult
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.ConversationTagsResult
@@ -53,10 +57,12 @@ class ContactPanelViewModelTest {
         summaryApi: VisitorSummaryApi = FakeVisitorSummaryApi(),
         contactDetailsApi: ContactDetailsApi = FakeContactDetailsApi(),
         conversationTagsApi: ConversationTagsApi = FakeConversationTagsApi(),
+        conversationNotesApi: ConversationNotesApi = FakeConversationNotesApi(),
     ) = ContactPanelViewModel(
         visitorSummaryApi = summaryApi,
         contactDetailsApi = contactDetailsApi,
         conversationTagsApi = conversationTagsApi,
+        conversationNotesApi = conversationNotesApi,
         ioDispatcher = dispatcher,
     )
 
@@ -340,6 +346,111 @@ class ContactPanelViewModelTest {
             assertEquals(TagActionError.Refused("Not entitled"), loaded.actionError)
         }
 
+    // ─── 26-150: notes section ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `open loads the notes list into the Loaded arm`() =
+        runTest(dispatcher) {
+            val notes = listOf(ConversationNote(id = "n1", authorId = "op1", body = "Позвонить завтра", createdAt = "2026-03-14T09:00:00Z"))
+            val viewModel = viewModel(conversationNotesApi = FakeConversationNotesApi(listResult = ConversationNotesResult.Loaded(notes)))
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(NotesSectionState.Loaded(notes = notes), viewModel.state.value.notes)
+        }
+
+    @Test
+    fun `a failed notes read becomes the Failed arm, and its retry asks again`() =
+        runTest(dispatcher) {
+            val api = FakeConversationNotesApi(listResult = ConversationNotesResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(conversationNotesApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            assertEquals(NotesSectionState.Failed(NetworkFailure.NoConnection), viewModel.state.value.notes)
+
+            viewModel.retryNotes()
+            advanceUntilIdle()
+
+            assertEquals(2, api.listCalls)
+        }
+
+    @Test
+    fun `onNoteDraftChanged updates the composer draft`() =
+        runTest(dispatcher) {
+            val api = FakeConversationNotesApi(listResult = ConversationNotesResult.Loaded(emptyList()))
+            val viewModel = viewModel(conversationNotesApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.onNoteDraftChanged("Позвонить завтра")
+
+            val loaded = viewModel.state.value.notes as NotesSectionState.Loaded
+            assertEquals("Позвонить завтра", loaded.draft)
+        }
+
+    @Test
+    fun `addNote appends the server's created row and clears the draft on success`() =
+        runTest(dispatcher) {
+            val created = ConversationNote(id = "n1", authorId = "op1", body = "Позвонить завтра", createdAt = "2026-03-14T09:00:00Z")
+            val api =
+                FakeConversationNotesApi(
+                    listResult = ConversationNotesResult.Loaded(emptyList()),
+                    addResult = AddNoteResult.Added(created),
+                )
+            val viewModel = viewModel(conversationNotesApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.onNoteDraftChanged("Позвонить завтра")
+            viewModel.addNote()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.notes as NotesSectionState.Loaded
+            assertEquals(listOf(created), loaded.notes)
+            assertEquals("", loaded.draft)
+            assertTrue(!loaded.addingNote)
+            assertEquals(null, loaded.addNoteError)
+        }
+
+    @Test
+    fun `a refused add keeps the notes list and the draft, and surfaces the server detail`() =
+        runTest(dispatcher) {
+            val api =
+                FakeConversationNotesApi(
+                    listResult = ConversationNotesResult.Loaded(emptyList()),
+                    addResult = AddNoteResult.Refused("Not entitled"),
+                )
+            val viewModel = viewModel(conversationNotesApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.onNoteDraftChanged("Позвонить завтра")
+            viewModel.addNote()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.notes as NotesSectionState.Loaded
+            assertTrue(loaded.notes.isEmpty())
+            assertEquals("Позвонить завтра", loaded.draft)
+            assertEquals(AddNoteError.Refused("Not entitled"), loaded.addNoteError)
+        }
+
+    @Test
+    fun `addNote is a no-op for a blank draft`() =
+        runTest(dispatcher) {
+            val api = FakeConversationNotesApi(listResult = ConversationNotesResult.Loaded(emptyList()))
+            val viewModel = viewModel(conversationNotesApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.onNoteDraftChanged("   ")
+            viewModel.addNote()
+            advanceUntilIdle()
+
+            assertEquals(0, api.addCalls)
+        }
+
     private class FakeVisitorSummaryApi(
         private val result: VisitorSummaryResult = VisitorSummaryResult.Failed(NetworkFailure.Unexpected),
         private val hang: Boolean = false,
@@ -409,6 +520,27 @@ class ContactPanelViewModelTest {
         ): TagActionResult {
             removeCalls++
             return removeResult
+        }
+    }
+
+    private class FakeConversationNotesApi(
+        private val listResult: ConversationNotesResult = ConversationNotesResult.Loaded(emptyList()),
+        private val addResult: AddNoteResult = AddNoteResult.Failed(NetworkFailure.Unexpected),
+    ) : ConversationNotesApi {
+        var listCalls = 0
+        var addCalls = 0
+
+        override suspend fun fetchNotes(conversationId: String): ConversationNotesResult {
+            listCalls++
+            return listResult
+        }
+
+        override suspend fun addNote(
+            conversationId: String,
+            body: String,
+        ): AddNoteResult {
+            addCalls++
+            return addResult
         }
     }
 }

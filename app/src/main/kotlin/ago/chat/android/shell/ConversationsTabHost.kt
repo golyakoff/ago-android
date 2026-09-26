@@ -65,6 +65,11 @@ public fun ConversationsTabHost(
     // section's write affordances on it (hide-not-disable). Defaulted to `false` so every back-contract
     // test constructing this composable directly compiles and behaves unchanged.
     canTagConversation: Boolean = false,
+    // `26-150`: `conversation:note_write`, computed by [AppShellScreen]'s own `conversationsTab` default
+    // and threaded straight through to [ThreadRoute] alongside `canReadContactDetail`/`canTagConversation`,
+    // which gates the notes sub-screen's own composer on it (hide-not-disable). Defaulted to `false` so
+    // every back-contract test constructing this composable directly compiles and behaves unchanged.
+    canWriteNote: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -153,6 +158,7 @@ public fun ConversationsTabHost(
                 identityUnavailable = identityUnavailable,
                 canReadContactDetail = canReadContactDetail,
                 canTagConversation = canTagConversation,
+                canWriteNote = canWriteNote,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null
