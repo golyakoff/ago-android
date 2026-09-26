@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,15 +83,18 @@ internal fun BatteryAwarenessSheet(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                // `26-128` round 3: the one place this feature keeps a warning *triangle* — every
-                // *circular* status badge on the Settings rows below uses `AgoIcons.Exclamation` instead
-                // (`StatusGlyph`'s own doc comment in `SettingsScreen.kt` states why the two glyphs are
-                // deliberately different shapes for deliberately different jobs).
+                // `26-184`: the warning *triangle* `26-128` round 3 kept here (while every *circular*
+                // status badge on the Settings rows below moved to `AgoIcons.Exclamation`) is retired in
+                // favour of the same flat `AgoIcons.ErrorCircle` those rows now use (`StatusGlyph`'s own
+                // doc comment in `SettingsScreen.kt`) — the sheet's own header is a danger/attention cue
+                // exactly like those rows are, so it now reads as the same glyph family instead of a
+                // third shape of its own. Meaning is unchanged; only the shape and tint (`dangerIcon`,
+                // not `warning` — see `StatusGlyph`'s doc comment for why the two roles differ) are.
                 Icon(
-                    imageVector = AgoIcons.Warning,
+                    imageVector = AgoIcons.ErrorCircle,
                     contentDescription = null,
-                    tint = agoStatusColors().warning,
-                    modifier = Modifier.padding(top = 2.dp),
+                    tint = agoStatusColors().dangerIcon,
+                    modifier = Modifier.padding(top = 2.dp).size(24.dp),
                 )
                 Text(
                     text = stringResource(R.string.battery_awareness_battery_explanation),

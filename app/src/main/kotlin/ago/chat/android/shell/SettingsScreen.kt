@@ -23,9 +23,7 @@ import ago.chat.android.ui.theme.agoStatusColors
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,10 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -579,53 +573,38 @@ private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
     }
 
 /**
- * `26-128`: the left status circle both new rows share — [DeviceModeStatus.Ok] a green circle around
- * Material `check`, [DeviceModeStatus.NeedsAttention] an orange circle around Material `exclamation`
- * (never a triangle: round 3 of the approved mockup singled out a triangle-in-a-circle as "looks wrong" —
- * [ago.chat.android.shell.BatteryAwarenessSheet]'s own header keeps the triangle, this circle never does).
- * Deliberately smaller than round 3's own mockup circle (`docs/backlog/26-128-*.md`'s "circles slightly
- * smaller" tweak) — a 20dp circle, not 26dp. `26-137` enlarges the glyph inside it from 11dp to 13dp and
- * (in [ago.chat.android.ui.icons.AgoIcons]) draws [AgoIcons.Check]/[AgoIcons.Exclamation] at a heavier
- * stroke weight than the rest of the family, because at 11dp with the family's 1.8 stroke both read
- * hair-thin and barely visible on a real device — the `26-128` follow-up this item fixes.
+ * `26-184`: the left status glyph both new rows share — a **flat** Material-Symbols-style
+ * `check_circle`/`error`, 24dp, no coloured circle behind it. This replaces `26-128`/`26-137`'s own
+ * coloured-circle-badge treatment (a 20dp filled `CircleShape` background with an 11dp-then-13dp glyph
+ * inside it, [DeviceModeStatus.Ok] green, [DeviceModeStatus.NeedsAttention] orange) — the author's own
+ * call was that the filled backing read as heavier emphasis than a status cue next to plain row text needed;
+ * [AgoIcons.CheckCircle]/[AgoIcons.ErrorCircle] draw the circle *as part of the glyph itself* instead, so
+ * "flat, tinted, 24dp" replaces "small glyph inside a filled badge" as this row's whole treatment.
  *
- * **Why the fill colours are computed, not read from `MaterialTheme.colorScheme` for both states.** The
- * green fill reads `colorScheme.tertiary`/`onTertiary` — a real Material 3 role pair `Theme.kt` already
- * wires to `AgoSuccessLight`/`AgoSuccessDark`, with `onTertiary` already tuned per theme for contrast
- * against it. The orange fill has no such pair: `agoStatusColors().warning` is `26-90`'s own token,
- * designed as ink-coloured *text* on a pale tint (a status pill), not as a saturated fill a white icon
- * sits on — in dark mode that value is a *bright* amber, so a white icon on it would be unreadable. Rather
- * than force that pill-text token into a fill it was never designed for, this computes the glyph's own
- * tint from the fill's actual relative luminance ([androidx.compose.ui.graphics.luminance]) — a real,
- * theme-independent contrast guarantee, not an assumption. The green branch does not need the same
- * treatment because `onTertiary` already *is* that guarantee, supplied by the design system rather than
- * computed here.
+ * **Why [DeviceModeStatus.NeedsAttention] is tinted `agoStatusColors().dangerIcon`, not `.warning`.**
+ * `26-90`'s `warning` token is ink-coloured *text* on a pale tint (a status pill) — right for that job,
+ * but not what the approved flat glyph asks for here. `dangerIcon` is `26-184`'s own new role, a more
+ * saturated red than `AgoStatusColors.dangerText` (on-surface danger *text*'s own tone): an icon can
+ * carry more saturation than text before it reads as shouting, and the author's explicit choice for this
+ * glyph is that more saturated tone (see `dangerIcon`'s own doc comment for the full reasoning). No
+ * luminance computation is needed any more either — a flat glyph's tint does not have to contrast against
+ * a fill it sits inside, unlike the retired coloured-circle badge.
  */
 @Composable
 private fun StatusGlyph(status: DeviceModeStatus) {
-    val background =
-        when (status) {
-            DeviceModeStatus.Ok -> MaterialTheme.colorScheme.tertiary
-            DeviceModeStatus.NeedsAttention -> agoStatusColors().warning
-        }
-    val iconTint =
-        when (status) {
-            DeviceModeStatus.Ok -> MaterialTheme.colorScheme.onTertiary
-            DeviceModeStatus.NeedsAttention -> if (background.luminance() > 0.5f) Color.Black else Color.White
-        }
     val icon: ImageVector =
         when (status) {
-            DeviceModeStatus.Ok -> AgoIcons.Check
-            DeviceModeStatus.NeedsAttention -> AgoIcons.Exclamation
+            DeviceModeStatus.Ok -> AgoIcons.CheckCircle
+            DeviceModeStatus.NeedsAttention -> AgoIcons.ErrorCircle
         }
-    Box(
-        modifier = Modifier.size(20.dp).clip(CircleShape).background(background),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Decorative: the row's own visible text already states the full sentence
-        // ("Режим работы: ..."/"Автозапуск: ...") this glyph is only a colour cue for.
-        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(13.dp))
-    }
+    val tint =
+        when (status) {
+            DeviceModeStatus.Ok -> MaterialTheme.colorScheme.tertiary
+            DeviceModeStatus.NeedsAttention -> agoStatusColors().dangerIcon
+        }
+    // Decorative: the row's own visible text already states the full sentence
+    // ("Режим работы: ..."/"Автозапуск: ...") this glyph is only a colour cue for.
+    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
 }
 
 /** `26-128`: the expandable row's own chevron — [AgoIcons.ChevronRight] rotated a quarter turn while

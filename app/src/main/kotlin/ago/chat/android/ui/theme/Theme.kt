@@ -157,12 +157,14 @@ public fun AgoChatTheme(
                 warning = AgoWarningDark,
                 warningTint = AgoWarningTintDark,
                 dangerText = AgoDangerTextDark,
+                dangerIcon = AgoDangerIconDark,
             )
         } else {
             AgoStatusColors(
                 warning = AgoWarningLight,
                 warningTint = AgoWarningTintLight,
                 dangerText = AgoDangerLight,
+                dangerIcon = AgoDangerIconLight,
             )
         }
     CompositionLocalProvider(LocalAgoStatusColors provides statusColors) {
