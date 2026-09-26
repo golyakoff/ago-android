@@ -406,6 +406,10 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // `26-192`/`C5`: the offline-auto-reply rule list's own drag-to-reorder - see
+    // `gradle/libs.versions.toml`'s own `reorderable` row for the no-package-rule justification.
+    implementation(libs.reorderable)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 

@@ -1277,6 +1277,45 @@
     <string name="widget_config_action_save">Сохранить</string>
     <string name="widget_config_saved">Сохранено</string>
 
+    <!-- `26-192`/`C5` (`docs/design/tenant-channels-android.md` §4): Автоматизация → «Автоответ вне
+         смены» - the offline auto-reply editor. Order is behaviour (the server matches first-rule-wins),
+         so the description line below states that plainly rather than leaving it implicit. The screen's
+         own app-bar title reuses `more_automation_after_hours_row` - the same "one resource, two call
+         sites" shape `channels_install_title`/`widget_config_hub_title` already take. -->
+    <string name="automation_auto_reply_description">Правила проверяются сверху вниз — срабатывает первое совпавшее.</string>
+    <string name="automation_auto_reply_enabled_label">Отвечать автоматически, когда никто не на связи</string>
+    <string name="automation_auto_reply_fallback_label">Ответ по умолчанию</string>
+    <string name="automation_auto_reply_rules_section">Правила по ключевым словам</string>
+    <!-- %1$d is the rule's own 1-based position - order is behaviour, so it is drawn explicitly rather
+         than left to the card's own position in the list to imply. -->
+    <string name="automation_auto_reply_rule_index">Правило %1$d</string>
+    <string name="automation_auto_reply_rule_keyword_label">Ключевое слово</string>
+    <string name="automation_auto_reply_rule_reply_label">Ответ</string>
+    <string name="automation_auto_reply_remove_rule_action">Удалить</string>
+    <string name="automation_auto_reply_add_rule_action">Добавить правило</string>
+    <!-- The drag handle itself has no TalkBack equivalent - these two content descriptions belong to the
+         real, independently focusable up/down buttons next to it
+         (`docs/design/tenant-channels-android.md` §4.3's own "keyboard/TalkBack users get a semantic
+         move up/down action"), not to the handle. -->
+    <string name="automation_auto_reply_drag_handle_description">Перетащить, чтобы изменить порядок</string>
+    <string name="automation_auto_reply_move_up_action">Переместить правило вверх</string>
+    <string name="automation_auto_reply_move_down_action">Переместить правило вниз</string>
+    <string name="automation_auto_reply_action_save">Сохранить</string>
+    <string name="automation_auto_reply_action_saving">Сохранение…</string>
+    <string name="automation_auto_reply_saved">Сохранено</string>
+    <!-- `docs/design/tenant-channels-android.md` §4.3: the client-side courtesy check's own seven
+         reasons, mirroring `offlineAutoReplyValidation.ts#validateDraft` in order - never the authority
+         (`UpdateOfflineAutoReplyHandler` is), so these only stop an obviously-invalid draft before a
+         round trip. %1$d below is always one of `OfflineAutoReplyBounds`' own constants. -->
+    <string name="automation_auto_reply_validation_needs_fallback">Включённый автоответ должен что-то отвечать — заполните ответ по умолчанию.</string>
+    <string name="automation_auto_reply_validation_fallback_too_long">Ответ по умолчанию не может превышать %1$d символов.</string>
+    <string name="automation_auto_reply_validation_too_many_rules">На сайте не может быть больше %1$d правил по ключевым словам.</string>
+    <string name="automation_auto_reply_validation_keyword_required">Правилу нужно ключевое слово.</string>
+    <!-- %1$s is that rule's own trimmed keyword, naming which rule needs a reply. -->
+    <string name="automation_auto_reply_validation_reply_required">Правилу «%1$s» нужен ответ.</string>
+    <string name="automation_auto_reply_validation_keyword_too_long">Ключевое слово не может превышать %1$d символов.</string>
+    <string name="automation_auto_reply_validation_reply_too_long">Ответ не может превышать %1$d символов.</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity

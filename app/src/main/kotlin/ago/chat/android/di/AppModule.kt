@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
+import ago.chat.android.core.domain.autoreply.OfflineAutoReplyApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.branding.SiteBrandingApi
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
@@ -44,6 +45,7 @@ import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
+import ago.chat.android.core.network.autoreply.KtorOfflineAutoReplyApi
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.branding.KtorSiteBrandingApi
 import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
@@ -529,6 +531,20 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteBrandingApi = KtorSiteBrandingApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-192`/`C5`: the Автоматизация → «Автоответ вне смены» screen's own port — the same
+     * `config.apiBaseUrl` [provideChannelConnectionApi] above reads, since
+     * `GET`/`PUT /api/v1/sites/{siteId}/offline-auto-reply` is one more endpoint on that same
+     * `Ago.Chat.Api` origin. Needs [ActiveSiteSelection], the identical shape [provideSiteBrandingApi]
+     * above already threads it through for — this endpoint too carries the site id in the URL itself.
+     */
+    @Provides
+    public fun provideOfflineAutoReplyApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): OfflineAutoReplyApi = KtorOfflineAutoReplyApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same
