@@ -5,6 +5,7 @@ import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
 import ago.chat.android.channels.TelegramChannelRoute
 import ago.chat.android.channels.VkChannelRoute
+import ago.chat.android.channels.WidgetConfigRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
@@ -90,6 +91,10 @@ internal fun MoreScreen(
             // mirroring `ago-console`'s own `InstallSnippetPage`. Back returns to the Ещё list (clause 2)
             // via the same `openRowId = null` this screen's own `BackHandler` above already uses.
             CHANNELS_INSTALL_ROW_ID -> InstallWidgetRoute(onBack = { openRowId = null })
+            // `26-193`: Каналы → «Виджет на сайте» - the widget's own on-site appearance/behaviour/consent
+            // config, a hub over its own three group editors (`docs/design/tenant-widget-android.md`).
+            // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            CHANNELS_WIDGET_ROW_ID -> WidgetConfigRoute(onBack = { openRowId = null })
             // `26-189`/`C2`: Каналы → MAX - the second of the three token channels this scaffold serves,
             // identical wiring to Telegram below with its own `ChannelKind`. Back returns to the Ещё list
             // (clause 2) via the same `openRowId = null` every drill-in uses.
@@ -207,6 +212,7 @@ internal data class MoreRow(
 )
 
 internal const val CHANNELS_INSTALL_ROW_ID: String = "channels-install"
+internal const val CHANNELS_WIDGET_ROW_ID: String = "channels-widget-config"
 internal const val CHANNELS_MAX_ROW_ID: String = "channels-max"
 internal const val CHANNELS_TELEGRAM_ROW_ID: String = "channels-telegram"
 internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
@@ -230,7 +236,11 @@ internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billi
  * Telegram - the row order stated in §5.2 is fixed regardless of the order the slices themselves land in.
  *
  * `26-190`/`C3`: VK closes out the three token channels, directly after Telegram and before the still
- * unbuilt Почта row. */
+ * unbuilt Почта row.
+ *
+ * `26-193`: «Виджет на сайте» takes its own place directly after «Установка виджета» and before MAX - the
+ * row order `docs/design/tenant-widget-android.md` §8.1 states (Установка виджета · **Виджет на сайте** ·
+ * MAX · Telegram · VK · Почта), filling the gap the channels doc's own §5.2 deliberately left. */
 internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
@@ -238,6 +248,13 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = CHANNELS_INSTALL_ROW_ID,
                     labelRes = R.string.channels_install_title,
+                    section = MoreSectionId.Channels,
+                ),
+            )
+            add(
+                MoreRow(
+                    id = CHANNELS_WIDGET_ROW_ID,
+                    labelRes = R.string.widget_config_hub_title,
                     section = MoreSectionId.Channels,
                 ),
             )

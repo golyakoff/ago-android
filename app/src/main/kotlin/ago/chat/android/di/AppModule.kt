@@ -33,6 +33,7 @@ import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
+import ago.chat.android.core.domain.widgetconfig.WidgetConfigApi
 import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleApi
 import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
@@ -66,6 +67,7 @@ import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi
 import ago.chat.android.core.network.visitorsummary.KtorVisitorSummaryApi
+import ago.chat.android.core.network.widgetconfig.KtorWidgetConfigApi
 import ago.chat.android.core.network.workers.KtorWorkersApi
 import ago.chat.android.core.network.workerschedule.KtorWorkerScheduleApi
 import ago.chat.android.core.network.workerslots.KtorWorkerSlotsApi
@@ -481,6 +483,20 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): InstallationApi = KtorInstallationApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-193`: [ago.chat.android.channels.WidgetConfigViewModel]'s own port — the same `config.apiBaseUrl`
+     * [provideInstallationApi] above reads, since `GET`/`PUT /api/v1/sites/{siteId}/widget-config` is one
+     * more endpoint on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection], the identical shape
+     * [provideInstallationApi] above already threads it through for — this endpoint too carries the site
+     * id in the URL itself.
+     */
+    @Provides
+    public fun provideWidgetConfigApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): WidgetConfigApi = KtorWidgetConfigApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-188`: the Каналы → Telegram/MAX/VK screens' own port — the same `config.apiBaseUrl`

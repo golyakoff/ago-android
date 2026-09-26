@@ -1217,6 +1217,40 @@
          (`docs/design/tenant-channels-android.md` §2.3's own edge case: never a silently omitted panel). -->
     <string name="channels_vk_secrets_shown_once_hint">Callback URL и секрет вебхука показываются только один раз, сразу после подключения. Чтобы получить их снова, отключите канал и подключите сообщество заново с новым токеном.</string>
 
+    <!-- `26-193` (`docs/design/tenant-widget-android.md`): Каналы → «Виджет на сайте» - the widget's own
+         on-site appearance/behaviour/consent config, read/written over `Ago.Chat.Api`
+         (`GET`/`PUT /api/v1/sites/{siteId}/widget-config`). One resource for the Ещё row label and the
+         hub's own app-bar title, the identical "one word, one string" shape `channels_install_title`
+         already takes. W1 wires only «Внешний вид» - «Поведение и приветствие»/«Согласие и запись» join
+         these keys when `W2`/`W3` land. -->
+    <string name="widget_config_hub_title">Виджет на сайте</string>
+    <string name="widget_config_hub_intro">Изменения появятся у посетителя при следующей загрузке страницы.</string>
+    <string name="widget_config_hub_section">Разделы</string>
+    <!-- Also the Внешний вид editor's own app-bar title - the same "one resource, two call sites" shape
+         `widget_config_hub_title` uses for the hub. -->
+    <string name="widget_config_group_appearance">Внешний вид</string>
+    <string name="widget_config_field_color_label">Основной цвет</string>
+    <string name="widget_config_field_color_invalid">Введите цвет в формате #RRGGBB</string>
+    <string name="widget_config_field_position_label">Расположение лаунчера</string>
+    <string name="widget_config_position_bottom_right">Справа внизу</string>
+    <string name="widget_config_position_bottom_left">Слева внизу</string>
+    <!-- The widget's own UI language - `English`/`Русский` are endonyms shown unlocalised at the call
+         site (never through a string resource), matching `ago-console`'s own `LOCALE_LABELS`; this string
+         is only the field's own label. -->
+    <string name="widget_config_field_locale_label">Язык виджета</string>
+    <string name="widget_config_field_panel_title_label">Заголовок панели</string>
+    <!-- %1$d/%2$d is the live character counter, UX-only (the server is the authoritative gate). -->
+    <string name="widget_config_field_panel_title_supporting">%1$d/%2$d · Если оставить пустым, будет показан текст по умолчанию.</string>
+    <string name="widget_config_field_channel_switcher_placement_label">Переключатель каналов</string>
+    <string name="widget_config_channel_switcher_above">Над полем ввода</string>
+    <string name="widget_config_channel_switcher_below">Под кнопкой</string>
+    <string name="widget_config_field_icon_size_label">Размер значков</string>
+    <string name="widget_config_icon_size_large">Крупные</string>
+    <string name="widget_config_icon_size_medium">Средние</string>
+    <string name="widget_config_icon_size_small">Мелкие</string>
+    <string name="widget_config_action_save">Сохранить</string>
+    <string name="widget_config_saved">Сохранено</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity
