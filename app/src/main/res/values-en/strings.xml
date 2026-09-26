@@ -388,6 +388,11 @@
     <string name="bookings_confirmed_detail_source_label">Source</string>
     <!-- `26-121`: the «Источник» row's own value when a booking carries an origin conversation (see the RU file). -->
     <string name="bookings_confirmed_detail_source_chat">From chat</string>
+    <!-- `26-209`/`adr/0187`: see the RU file. -->
+    <string name="bookings_confirmed_reschedule_action">Reschedule (operator)</string>
+    <string name="bookings_confirmed_reschedule_sheet_title">Reschedule (operator)</string>
+    <string name="bookings_confirmed_reschedule_empty">This worker has no available slots in the next two weeks.</string>
+    <string name="bookings_confirmed_reschedule_load_failed_unexpected">Couldn\'t load the available slots.</string>
 
     <string name="bookings_tab_clients">Clients</string>
     <string name="bookings_contacts_empty">This tenant has no customers yet.</string>

@@ -285,5 +285,10 @@ class PhoneRevealsReportViewModelTest {
             description: String?,
             isActive: Boolean,
         ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun rescheduleBooking(
+            bookingId: String,
+            newStartEventId: String,
+        ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
     }
 }

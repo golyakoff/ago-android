@@ -687,6 +687,12 @@
          (`adr/0184`/`adr/0065`), so it can only say a booking arrived through a chat conversation, never
          which channel within chat - hence one honest «Из чата», not a widget/Telegram/Max breakdown. -->
     <string name="bookings_confirmed_detail_source_chat">Из чата</string>
+    <!-- `26-209`/`adr/0187`: the confirmed booking detail sheet's own operator-initiated reschedule -
+         opens the «Перенести оператором» slot-pick sheet, wired to `POST .../reschedule`. -->
+    <string name="bookings_confirmed_reschedule_action">Перенести оператором</string>
+    <string name="bookings_confirmed_reschedule_sheet_title">Перенести оператором</string>
+    <string name="bookings_confirmed_reschedule_empty">У этого мастера нет свободных слотов в ближайшие две недели.</string>
+    <string name="bookings_confirmed_reschedule_load_failed_unexpected">Не удалось загрузить свободные слоты.</string>
 
     <!--
         `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only

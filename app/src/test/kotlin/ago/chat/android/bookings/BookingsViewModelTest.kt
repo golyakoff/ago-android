@@ -424,6 +424,13 @@ class BookingsViewModelTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
+
+        // `26-209` widened `BookingsApi` with the operator reschedule write - `BookingsViewModel` reads
+        // and vetoes the pending queue alone; it never reschedules a confirmed booking.
+        override suspend fun rescheduleBooking(
+            bookingId: String,
+            newStartEventId: String,
+        ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
     }
 
     /** `26-163`: the identical fake `ConfirmedBookingsViewModelTest`/`ContactsViewModelTest` already

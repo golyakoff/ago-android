@@ -702,6 +702,92 @@ class KtorBookingsApiTest {
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 
+    @Test
+    fun `a 204 reschedules the booking, against the right path, with the target event id as the body`() =
+        runTest {
+            var requestedUrl: String? = null
+            var requestedMethod: String? = null
+            var requestedBody: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    requestedMethod = request.method.value
+                    requestedBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            val result = api.rescheduleBooking("b1", "event-2")
+
+            assertEquals(BookingActionResult.Succeeded, result)
+            assertEquals("$baseUrl/api/v1/console/bookings/b1/reschedule", requestedUrl)
+            assertEquals("POST", requestedMethod)
+            assertEquals("""{"newStartEventId":"event-2"}""", requestedBody)
+        }
+
+    @Test
+    fun `a 409 slot-no-longer-available reschedule refusal is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"Booking.SlotNoLongerAvailable","detail":"Слот уже занят, выберите другое время."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.rescheduleBooking("b1", "event-2")
+
+            assertEquals(BookingActionResult.Refused("Слот уже занят, выберите другое время."), result)
+        }
+
+    @Test
+    fun `a 409 different-worker reschedule refusal is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"Booking.DifferentWorker","detail":"Слот принадлежит другому мастеру."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.rescheduleBooking("b1", "event-2")
+
+            assertEquals(BookingActionResult.Refused("Слот принадлежит другому мастеру."), result)
+        }
+
+    @Test
+    fun `a reschedule refusal with no problem-details body classifies as Unexpected, never a fabricated detail`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.NotFound) }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.rescheduleBooking("b1", "event-2"))
+        }
+
+    @Test
+    fun `a dropped connection on reschedule is Transport, not a silently retried write`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Transport), api.rescheduleBooking("b1", "event-2"))
+        }
+
+    @Test
+    fun `no calendar base URL configured fails a reschedule, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.rescheduleBooking("b1", "event-2"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
     private fun apiFor(
         calendarApiBaseUrl: String?,
         handler: MockRequestHandler,

@@ -187,5 +187,10 @@ class PendingBookingsPollerTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("PendingBookingsPoller never calls this")
+
+        override suspend fun rescheduleBooking(
+            bookingId: String,
+            newStartEventId: String,
+        ): BookingActionResult = throw UnsupportedOperationException("PendingBookingsPoller never calls this")
     }
 }

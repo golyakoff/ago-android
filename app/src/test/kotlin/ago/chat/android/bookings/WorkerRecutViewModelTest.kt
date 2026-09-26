@@ -502,4 +502,9 @@ private class FakeRecutBookingsApi(
         before: String?,
         limit: Int?,
     ) = throw UnsupportedOperationException()
+
+    override suspend fun rescheduleBooking(
+        bookingId: String,
+        newStartEventId: String,
+    ) = throw UnsupportedOperationException()
 }

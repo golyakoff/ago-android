@@ -327,5 +327,10 @@ class ServicesViewModelTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun rescheduleBooking(
+            bookingId: String,
+            newStartEventId: String,
+        ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
     }
 }

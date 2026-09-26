@@ -157,6 +157,33 @@ public interface BookingsApi {
         before: String?,
         limit: Int?,
     ): PhoneRevealsResult
+
+    /**
+     * `26-209`/`adr/0187`: `POST /api/v1/console/bookings/{bookingId}/reschedule`, body
+     * `{"newStartEventId": "<uuid>"}` — an operator-initiated move to a different slot for the *same*
+     * worker and service, applied as one transaction server-side (cancel the old claim, claim the new one
+     * in the one database transaction, `adr/0187`'s own title). [newStartEventId] names the target slot
+     * exactly the way [ago.chat.android.core.domain.workerslots.WorkerSlot.eventId] already names one on
+     * the wire — this port has no slot-listing read of its own to produce that id from;
+     * [ago.chat.android.core.domain.workerslots.WorkerSlotsApi.fetchSlots] is what a caller reads it from
+     * (`docs/backlog/26-209-*.md`'s own note: reuse that read rather than build a second slot source).
+     *
+     * A seventh adapter method on this same port, not a new one — [KtorBookingsApi]'s own class doc
+     * comment already states why a fourth/fifth/sixth write earned no separate adapter, and this write
+     * shares every one of those properties too (same base URL, same not-configured check, same
+     * classification).
+     *
+     * Reuses [BookingActionResult] rather than an eighth result type: the identical `204`-or-refusal-or-
+     * failure question [updateService]/[revealCustomerPhone] already answer with it, restated for a write
+     * with a body of its own. A refusal is shown verbatim — "the slot was claimed by someone else in the
+     * meantime" ([BookingLifecycleErrors.SlotNoLongerAvailable] on the server) or "that slot belongs to a
+     * different worker" ([BookingLifecycleErrors.DifferentWorker]) are both genuine server-authored
+     * sentences a fabricated client-side message would only ever approximate.
+     */
+    public suspend fun rescheduleBooking(
+        bookingId: String,
+        newStartEventId: String,
+    ): BookingActionResult
 }
 
 /**
