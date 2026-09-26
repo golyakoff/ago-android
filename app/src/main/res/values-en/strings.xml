@@ -498,10 +498,6 @@
     <string name="worker_schedule_recut_button">Re-cut</string>
     <string name="worker_schedule_action_create">Create schedule</string>
     <string name="worker_schedule_action_save">Save schedule</string>
-    <string name="worker_schedule_recut_preview_title">Re-cut preview</string>
-    <string name="worker_schedule_recut_preview_summary">Days in range: %1$d. Bookings needing a decision: %2$d.</string>
-    <string name="worker_schedule_recut_preview_note">The full re-cut screen with confirmation is coming in a later update.</string>
-    <string name="worker_schedule_recut_load_failed_unexpected">Couldn\'t load the re-cut preview. Try again.</string>
 
     <!-- `26-171` (`26-155` part 3): English half of the «Слоты» drill-down - see `values/strings.xml`'s
          own doc comment on this same key block for the full reasoning. -->
@@ -515,6 +511,30 @@
     <string name="worker_slots_status_cancelled">Cancelled</string>
     <string name="worker_slots_status_no_show">No-show</string>
     <string name="worker_slots_status_blocked">Blocked</string>
+
+    <!-- `26-172` (`26-155` part 4, the epic's own final part): English half of the «Пересчёт»
+         drill-down - see `values/strings.xml`'s own doc comment on this same key block for the full
+         reasoning. -->
+    <string name="worker_recut_tab">Re-cut</string>
+    <string name="worker_recut_page_title">Re-cut — %1$s</string>
+    <string name="worker_recut_from_label">Re-cut from</string>
+    <string name="worker_recut_preview_button">Preview</string>
+    <string name="worker_recut_nothing_generated_note">Nothing has been generated in this range yet - the re-cut will simply cut it fresh.</string>
+    <string name="worker_recut_day_slots_note">%1$d available slots will be deleted if this day is re-cut.</string>
+    <string name="worker_recut_no_bookings_note">There are no bookings on this day.</string>
+    <string name="worker_recut_day_kept_note">(will stay unchanged)</string>
+    <string name="worker_recut_decision_cancel">Cancel</string>
+    <string name="worker_recut_decision_keep">Keep</string>
+    <string name="worker_recut_already_no_show_note">Already happened as a no-show — this day is kept as is.</string>
+    <string name="worker_recut_review_and_confirm_button">Review and confirm</string>
+    <string name="worker_recut_choose_decision_note">Choose Cancel or Keep for every booking above before continuing.</string>
+    <string name="worker_recut_confirm_title">Confirm the re-cut</string>
+    <string name="worker_recut_confirm_message">This will clear and re-create %1$d day(s), deleting %2$d available slot(s) and cancelling %3$d booking(s). %4$d day(s) will stay exactly as they are, because they hold a booking you chose to keep, or a no-show that cannot be decided.</string>
+    <string name="worker_recut_cannot_be_undone">This cannot be undone.</string>
+    <string name="worker_recut_confirm_button">Confirm the re-cut</string>
+    <string name="worker_recut_done_title">Done</string>
+    <string name="worker_recut_result_summary">%1$d day(s) re-cut, %2$d day(s) left unchanged because they hold a kept booking. %3$d available slots deleted, %4$d inserted, %5$d bookings cancelled.</string>
+    <string name="worker_recut_result_left_in_old_grid">Left in the old grid: %1$s.</string>
 
     <!-- `26-142`: English half of Записи's own «Настройка» screen - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->

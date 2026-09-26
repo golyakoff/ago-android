@@ -22,11 +22,18 @@ internal sealed interface WorkingHoursUiState {
      *   replaces it and never auto-dismissed. This is `26-97`'s one hard constraint made visible —
      *   see [WorkingHoursViewModel] for why an edit is always allowed and therefore owes the operator
      *   this instead of a refusal.
+     * @param noticeWorkerId the [WorkingHoursRule.workerId] the write behind [notice] belonged to — `null`
+     *   exactly when [notice] is. `26-172` (`26-155` part 4) added this: the Часы `RecutNotice` became
+     *   tappable, opening the Masters «Пересчёт» drill-down for *that worker*, prefilled with
+     *   [WorkingHoursReconciliation.recutFrom] — a fact [WorkingHoursReconciliation] itself has no field
+     *   for (it is a per-write server answer with no worker id of its own on the wire), so
+     *   [WorkingHoursViewModel] carries it alongside the notice rather than inside it.
      */
     data class Loaded(
         val rules: List<WorkingHoursRule>,
         val busyRuleIds: Set<String> = emptySet(),
         val notice: WorkingHoursReconciliation? = null,
+        val noticeWorkerId: String? = null,
         val actionError: BookingActionErrorUi? = null,
     ) : WorkingHoursUiState
 

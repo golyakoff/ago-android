@@ -1,7 +1,6 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.R
-import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.workerschedule.ScheduleKind
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.components.russianPluralStringResource
@@ -17,10 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,8 +65,7 @@ internal fun WorkerScheduleDrillDownPage(
     onFormChanged: (WorkerScheduleForm) -> Unit,
     onSubmit: () -> Unit,
     onSwitchToHours: () -> Unit,
-    onPreviewRecut: () -> Unit,
-    onDismissRecutPreview: () -> Unit,
+    onOpenRecut: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -97,8 +93,7 @@ internal fun WorkerScheduleDrillDownPage(
                     onFormChanged = onFormChanged,
                     onSubmit = onSubmit,
                     onSwitchToHours = onSwitchToHours,
-                    onPreviewRecut = onPreviewRecut,
-                    onDismissRecutPreview = onDismissRecutPreview,
+                    onOpenRecut = onOpenRecut,
                 )
             }
         }
@@ -123,8 +118,7 @@ internal fun WorkerScheduleBody(
     onFormChanged: (WorkerScheduleForm) -> Unit,
     onSubmit: () -> Unit,
     onSwitchToHours: () -> Unit,
-    onPreviewRecut: () -> Unit,
-    onDismissRecutPreview: () -> Unit,
+    onOpenRecut: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (state is WorkerScheduleUiState.Loaded) {
@@ -147,14 +141,10 @@ internal fun WorkerScheduleBody(
                         onFormChanged = onFormChanged,
                         onSubmit = onSubmit,
                         onSwitchToHours = onSwitchToHours,
-                        onPreviewRecut = onPreviewRecut,
+                        onOpenRecut = onOpenRecut,
                     )
             }
         }
-    }
-
-    if (state is WorkerScheduleUiState.Loaded) {
-        RecutHookDialog(recut = state.recut, onDismiss = onDismissRecutPreview)
     }
 }
 
@@ -164,7 +154,7 @@ private fun WorkerScheduleFormFields(
     onFormChanged: (WorkerScheduleForm) -> Unit,
     onSubmit: () -> Unit,
     onSwitchToHours: () -> Unit,
-    onPreviewRecut: () -> Unit,
+    onOpenRecut: () -> Unit,
 ) {
     val form = state.form
     val busy = state.formBusy
@@ -319,7 +309,7 @@ private fun WorkerScheduleFormFields(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = onPreviewRecut, enabled = state.recut !is RecutHookUiState.Loading) {
+                TextButton(onClick = onOpenRecut) {
                     Text(text = stringResource(R.string.worker_schedule_recut_button))
                 }
             }
@@ -336,66 +326,6 @@ private fun WorkerScheduleFormFields(
             }
         }
     }
-}
-
-/**
- * `26-155` Q2's minimal re-cut hook, surfaced — a read-only summary of [RecutHookUiState.Loaded], never
- * a decision or a confirm/execute control (the full three-step «Пересчёт» screen is a follow-up slice,
- * [WorkerScheduleUiState.Loaded.recut]'s own doc comment).
- */
-@Composable
-private fun RecutHookDialog(
-    recut: RecutHookUiState,
-    onDismiss: () -> Unit,
-) {
-    if (recut is RecutHookUiState.Idle) return
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = stringResource(R.string.worker_schedule_recut_preview_title)) },
-        text = {
-            when (recut) {
-                RecutHookUiState.Idle -> Unit
-                RecutHookUiState.Loading -> CircularProgressIndicator()
-                is RecutHookUiState.Loaded -> {
-                    val decidableCount = recut.preview.days.sumOf { day -> day.bookings.count { it.canDecide } }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    R.string.worker_schedule_recut_preview_summary,
-                                    recut.preview.days.size,
-                                    decidableCount,
-                                ),
-                        )
-                        Text(
-                            text = stringResource(R.string.worker_schedule_recut_preview_note),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                is RecutHookUiState.Refused -> Text(text = recut.detail)
-                // `failureMessage` (`BookingsScreen.kt`) is `private` to that file - this restates its
-                // two-arm classification rather than widening that function's visibility for one more
-                // caller, the identical choice every sibling adapter's own `classify()` doc comment makes
-                // for not sharing a four-line function across a package boundary.
-                is RecutHookUiState.Failed ->
-                    Text(
-                        text =
-                            when (recut.reason) {
-                                BookingsQueueFailure.Transport -> stringResource(R.string.bookings_load_failed_transport)
-                                BookingsQueueFailure.Unexpected ->
-                                    stringResource(R.string.worker_schedule_recut_load_failed_unexpected)
-                            },
-                    )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_dismiss)) }
-        },
-    )
 }
 
 /**
@@ -499,14 +429,20 @@ private fun TimeField(
 /**
  * A single ISO `yyyy-MM-dd` field, picked through [DatePickerDialog] - the identical UTC-midnight round
  * trip [ago.chat.android.analytics.AnalyticsDateRangeControl] already establishes, restated here rather
- * than shared: that composable is `internal` to the `analytics` package and stateful over a *pair* of
- * dates with its own `Apply` button, a different shape than this file's one-field-at-a-time need
- * (the identical "restating a four-line date/millis round trip costs less than the coupling" call
+ * than shared with *that* composable: it is `internal` to the `analytics` package and stateful over a
+ * *pair* of dates with its own `Apply` button, a different shape than this file's one-field-at-a-time
+ * need (the identical "restating a four-line date/millis round trip costs less than the coupling" call
  * [AnalyticsDateRangeControl]'s own doc comment already makes for its sibling reports).
+ *
+ * `internal`, not `private`: `26-172` (`26-155` part 4) is a second caller within this package, the
+ * «Пересчёт» drill-down's own «Пересчитать с» field ([WorkerRecutScreen.kt][WorkerRecutBody]) - a third,
+ * unrelated *restatement* of the identical four-line round trip would be exactly the drift
+ * [durationMinutesOrNull]'s own doc comment (`BookingsScreen.kt`) already states the line for: two
+ * near-identical private copies are a coincidence, a third is a shared function overdue.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SingleDatePickerField(
+internal fun SingleDatePickerField(
     label: String,
     value: String,
     enabled: Boolean,

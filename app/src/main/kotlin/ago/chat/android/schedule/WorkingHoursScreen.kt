@@ -7,6 +7,7 @@ import ago.chat.android.bookings.LoadingBody
 import ago.chat.android.bookings.RefusalBody
 import ago.chat.android.core.domain.schedule.WorkingHoursReconciliation
 import ago.chat.android.core.domain.schedule.WorkingHoursRule
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,10 @@ internal fun WorkingHoursBody(
     onRetry: () -> Unit,
     onSave: (String, Int, String, String) -> Unit,
     onDelete: (String) -> Unit,
+    // `26-172` (`26-155` part 4): the notice's own new entry point into the Masters «Пересчёт»
+    // drill-down - [RecutNotice]'s own doc comment states why it needs both a `workerId` and the
+    // server's own `recutFrom`.
+    onOpenRecut: (workerId: String, from: String) -> Unit,
 ) {
     // Which rule's dialog is open, if any. Held here rather than in [WorkingHoursUiState] for the
     // reason every other transient dialog in this app is: it is a property of this composition, not a
@@ -70,7 +75,14 @@ internal fun WorkingHoursBody(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (state is WorkingHoursUiState.Loaded) {
-            state.notice?.let { RecutNotice(notice = it, modifier = Modifier.fillMaxWidth()) }
+            state.notice?.let { notice ->
+                RecutNotice(
+                    notice = notice,
+                    workerId = state.noticeWorkerId,
+                    onOpenRecut = onOpenRecut,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth()) }
         }
         Box(modifier = Modifier.weight(1f)) {
@@ -137,24 +149,38 @@ internal fun WorkingHoursBody(
 /**
  * `26-97`: what the correction did not reach, rendered from the server's own three numbers and nothing
  * else - no day arithmetic here, and no guess at whether re-cutting is worth it.
+ *
+ * **`26-172` (`26-155` part 4): tappable.** The notice already names the remedy in words ("пересчитайте
+ * расписание с {date}") with nowhere to act on it until this item - see `26-155`'s own scoping doc for
+ * why this was the one shipped touchpoint pointing at the missing re-cut screen. [workerId] is
+ * [WorkingHoursUiState.Loaded.noticeWorkerId] - `null` only when [notice] itself is (defensive; the two
+ * are set together), in which case the text renders inert rather than crash on a tap with nothing to
+ * open. Styled in the primary colour precisely because it is now a tap target, the identical affordance
+ * a [TextButton] gives its own label.
  */
 @Composable
 private fun RecutNotice(
     notice: WorkingHoursReconciliation,
+    workerId: String?,
+    onOpenRecut: (workerId: String, from: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val days = notice.alreadyCutDays.joinToString(", ")
     val from = notice.recutFrom ?: return
+    val text =
+        if (notice.liveBookingCount > 0) {
+            stringResource(R.string.working_hours_recut_notice, days, notice.liveBookingCount, from)
+        } else {
+            stringResource(R.string.working_hours_recut_notice_no_bookings, days, from)
+        }
     Text(
-        text =
-            if (notice.liveBookingCount > 0) {
-                stringResource(R.string.working_hours_recut_notice, days, notice.liveBookingCount, from)
-            } else {
-                stringResource(R.string.working_hours_recut_notice_no_bookings, days, from)
-            },
+        text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        color = if (workerId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            modifier
+                .let { base -> if (workerId != null) base.clickable { onOpenRecut(workerId, from) } else base }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 
