@@ -717,6 +717,13 @@
     <string name="channel_status_unreachable_body">Couldn\'t reach the provider right now. Wait a moment and refresh the status.</string>
     <string name="channel_status_refused">Not verified</string>
 
+    <!-- `26-189`/`C2`: Channels → MAX. See the ru strings for the full note. -->
+    <string name="channels_max_title">MAX</string>
+    <string name="channels_max_not_connected_body">Connect a MAX bot to receive messages from customers on this channel.</string>
+    <string name="channels_max_token_label">Bot token</string>
+    <string name="channels_max_token_hint">Get a token from your MAX bot settings</string>
+    <string name="channels_max_disconnect_dialog_body">Disconnect the MAX bot? Reconnecting will need a fresh token — the old one cannot be entered again.</string>
+
     <!-- `26-188`: Channels → Telegram. See the ru strings for the full note. -->
     <string name="channels_telegram_title">Telegram</string>
     <string name="channels_telegram_not_connected_body">Connect a Telegram bot to receive messages from customers on this channel.</string>

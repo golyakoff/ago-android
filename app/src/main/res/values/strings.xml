@@ -1173,6 +1173,17 @@
     <string name="channel_status_unreachable_body">Не удалось связаться с провайдером сейчас. Подождите немного и обновите статус.</string>
     <string name="channel_status_refused">Не подтверждено</string>
 
+    <!-- `26-189`/`C2`: Каналы → MAX - `MaxChannelPage` is `TelegramChannelPage` with the labels
+         swapped (the console's own description, repeated in `docs/design/tenant-channels-android.md`
+         §2.2), so this channel binds the identical scaffold with its own words. -->
+    <string name="channels_max_title">MAX</string>
+    <string name="channels_max_not_connected_body">Подключите MAX-бота, чтобы получать сообщения от клиентов в этом канале.</string>
+    <string name="channels_max_token_label">Токен бота</string>
+    <string name="channels_max_token_hint">Получите токен в настройках бота MAX</string>
+    <!-- The token never round-trips (`adr/0069`): reconnecting after a bad or expired token means
+         disconnecting and connecting again with a fresh one, never an edit. -->
+    <string name="channels_max_disconnect_dialog_body">Отключить MAX-бота? Чтобы подключить его снова, потребуется новый токен — прежний ввести повторно нельзя.</string>
+
     <!-- `26-188`: Каналы → Telegram - connect a bot token, watch its live status, disconnect. One
          resource for both the Ещё row label and the screen's own app-bar title, the identical
          "one word, one string" shape `channels_install_title` already takes. -->
