@@ -111,7 +111,12 @@ jobs:
     # in CI-failure notifications. Made advisory (removed from the `main` ruleset's required checks) and
     # `continue-on-error` so a flaky infra failure neither fails the workflow (no false alarm) nor
     # gates a merge. The job still runs and uploads its report, so a genuine regression is still visible.
-    # Revert both (re-require + drop this) once `26-160` stabilizes the emulator step.
+    #
+    # `26-160` (stabilisation): the emulator step itself is now hardened and retried once (see the "Run
+    # navigation-contract Compose UI tests" step below for the full account) so a transient device-offline
+    # self-heals without a human rerun. `continue-on-error` stays for now on purpose: re-requiring this
+    # check (and dropping this flag) is a deliberate, separate follow-up the author makes once the
+    # stabilised step has proven quiet over several real runs — not something to fold into this item.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
@@ -174,14 +179,47 @@ jobs:
       # useless as one gating a release - so the exclusion stays. `@FlakyOnCi` on that one class plus
       # `notAnnotation` here excludes only it; the other four `BackContract*Test` files (real,
       # dispatcher-based, and reliable across all three of those same runs) stay in the gate.
+      #
+      # `26-160`: the flake this item stabilises is the emulator itself, not these tests. The
+      # navigation-contract suite is already fully synchronised - every async wait goes through
+      # `composeTestRule.waitUntil { }`/`waitForIdle()`, back-press is driven in-process through the
+      # Activity's own `onBackPressedDispatcher` (`SystemBackPress.kt`), and there is no `Thread.sleep`,
+      # no `UiDevice`, and no reliance on wall-clock timing anywhere in the source set (verified across
+      # every file in `app/src/androidTest`). The observed CI flake was "diverse, unrelated tests fail
+      # together, then all pass on rerun" - the signature of the GitHub-hosted emulator going offline
+      # (`adb` exit 1) part-way through a run, not of any one test's own race. Marking those tests
+      # `@FlakyOnCi` would be the wrong tool (it would delete real, correct coverage to hide an infra
+      # fault, and would have to swallow most of the suite to do it), so the fix is here, on the
+      # emulator step, exactly as this job's own `26-160` comment above asks:
+      #
+      #   - `emulator-options` pinned explicitly rather than left to the action's default, so a run
+      #     always cold-boots (`-no-snapshot`: never restore a half-written snapshot from an earlier,
+      #     killed run) with no window, software GPU, no audio, no boot animation, no cameras and no
+      #     metrics phone-home - the smallest, most deterministic device this suite can render against.
+      #   - `emulator-boot-timeout` raised from the action's 600s default to 900s: a software-rendered
+      #     (swiftshader) boot on a loaded shared runner is slow, and a boot that is merely slow must
+      #     not be misread as a boot that failed.
+      #   - the whole step is retried once (the guarded second step below). A genuine "device offline"
+      #     needs the emulator *recreated*, which only a fresh invocation of this action does - retrying
+      #     `gradlew` alone against a dead device cannot. A real regression fails both cold-booted
+      #     attempts and still shows red (this job stays advisory - see its `26-160` comment above - so
+      #     that red is visible without blocking the merge); a transient infra hiccup self-heals on the
+      #     second attempt with no human rerun, which is the whole point of this item.
       - name: Run navigation-contract Compose UI tests
+        id: instrumented-attempt-1
+        # Let the retry step below run when this attempt hits an infra flake, instead of the whole job
+        # stopping here. `outcome` (which the retry's `if:` reads) is still `failure` on a real failure;
+        # only `conclusion` is masked to `success` by this flag.
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
-        with:
+        with: &instrumented-emulator
           api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
           # `26-91`: adding `values-en/strings.xml` made the app's own resource resolution do exactly
           # what it always would - an English-*locale* device now genuinely renders English, where it
           # used to fall back to the default `values/` set (Russian) for lack of any alternative. This
@@ -212,6 +250,17 @@ jobs:
           script: >-
             ./gradlew connectedDebugAndroidTest --no-daemon
             -Pandroid.testInstrumentationRunnerArguments.notAnnotation=ago.chat.android.testing.FlakyOnCi
+
+      # `26-160`: the one automatic retry. `*instrumented-emulator` reuses the first attempt's exact
+      # `with:` map via a YAML anchor, so the two attempts can never drift apart - a fresh, cold-booted
+      # emulator running the identical command. Runs only when the first attempt's `outcome` was
+      # `failure` (see that step's `continue-on-error` note); on a real regression it fails here too and
+      # the job goes red, on a transient device-offline it passes and no human rerun is needed. Its own
+      # report is uploaded by the `if: always()` step below, whichever attempt produced it.
+      - name: Run navigation-contract Compose UI tests (retry once)
+        if: steps.instrumented-attempt-1.outcome == 'failure'
+        uses: reactivecircus/android-emulator-runner@v2
+        with: *instrumented-emulator
 
       # `26-25`: this step already existed (`26-20`) but had a bare, fixed artifact name -
       # `actions/upload-artifact@v4+` refuses to create a second artifact with a name that already
