@@ -399,6 +399,47 @@ public class KtorBookingsApi(
             PhoneRevealsResult.Failed(classify(failure))
         }
     }
+
+    /**
+     * `26-209`/`adr/0187`: `POST /api/v1/console/bookings/{bookingId}/reschedule` — the identical
+     * `204`-or-refusal shape [updateService]/[revealCustomerPhone] establish for a write with a body of its
+     * own, not folded into [performBookingAction] because that helper only ever sends a bare `POST` with
+     * no body. [contentType]/[setBody] are required for the reason [revealCustomerPhone]'s own doc comment
+     * gives.
+     */
+    override suspend fun rescheduleBooking(
+        bookingId: String,
+        newStartEventId: String,
+    ): BookingActionResult {
+        val baseUrl = calendarApiBaseUrl ?: return BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$baseUrl/api/v1/console/bookings/$bookingId/reschedule") {
+                    contentType(ContentType.Application.Json)
+                    setBody(RescheduleBookingRequestWireDto(newStartEventId))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return BookingActionResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return BookingActionResult.Succeeded
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
 
 /** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
@@ -452,6 +493,14 @@ private data class UpdateServiceRequestWireDto(
 @Serializable
 private data class RevealCustomerPhoneRequestWireDto(
     val surface: String,
+)
+
+/** `26-209`/`adr/0187`: `Ago.Calendar.Contracts.RescheduleBookingRequest` - the one field that endpoint's
+ * own body carries, exactly [ago.chat.android.core.domain.workerslots.WorkerSlot.eventId]'s own wire name
+ * for the target slot. */
+@Serializable
+private data class RescheduleBookingRequestWireDto(
+    val newStartEventId: String,
 )
 
 /** `Ago.Calendar.Contracts.CustomerPhoneRevealResponse` - the one field a successful reveal's own body

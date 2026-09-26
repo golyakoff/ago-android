@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -111,6 +112,14 @@ internal fun ConfirmedBookingsBody(
             // row's own data to fall out of sync.
             var selectedBookingId by rememberSaveable { mutableStateOf<String?>(null) }
 
+            // `26-209`/`adr/0187`: which booking «Перенести оператором» opened for, and the same worker
+            // the target slot must belong to — `null` (both, together) whenever the reschedule sheet is
+            // closed. The identical "which sheet is open is UI, not network" local-state split
+            // `selectedBookingId` above already draws, one level deeper: this sheet stacks *over* the
+            // detail sheet rather than replacing it.
+            var reschedulingBookingId by rememberSaveable { mutableStateOf<String?>(null) }
+            var reschedulingWorkerId by rememberSaveable { mutableStateOf<String?>(null) }
+
             Column(modifier = Modifier.fillMaxSize()) {
                 state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth()) }
                 ConfirmedDateStrip(strip = state.strip, selectedDate = state.selectedDate, onSelectDay = onSelectDay)
@@ -146,7 +155,35 @@ internal fun ConfirmedBookingsBody(
                     revealing = selectedBooking.customerId in state.revealingCustomerIds,
                     onReveal = { onReveal(selectedBooking.customerId) },
                     onOpenDialog = { selectedBooking.originConversationId?.let(onOpenDialog) },
+                    onReschedule = {
+                        reschedulingBookingId = selectedBooking.bookingId
+                        reschedulingWorkerId = selectedBooking.workerId
+                    },
                     onDismiss = { selectedBookingId = null },
+                )
+            }
+
+            // `26-209`/`adr/0187`: stacked over the detail sheet above, never in place of it - both ids
+            // are set (or cleared) together, so this branch is exactly "the reschedule sheet is open".
+            val reschedulingBooking = reschedulingBookingId
+            val reschedulingWorker = reschedulingWorkerId
+            if (reschedulingBooking != null && reschedulingWorker != null) {
+                RescheduleBookingSheet(
+                    bookingId = reschedulingBooking,
+                    workerId = reschedulingWorker,
+                    onDismiss = {
+                        reschedulingBookingId = null
+                        reschedulingWorkerId = null
+                    },
+                    onRescheduled = {
+                        // The booking moved - both sheets close (the row the operator opened no longer
+                        // shows the time they just left), and `onRetry` re-reads the confirmed range so
+                        // the list reflects the new time on the very next frame.
+                        reschedulingBookingId = null
+                        reschedulingWorkerId = null
+                        selectedBookingId = null
+                        onRetry()
+                    },
                 )
             }
         }
@@ -554,6 +591,7 @@ private fun ConfirmedBookingDetailSheet(
     revealing: Boolean,
     onReveal: () -> Unit,
     onOpenDialog: () -> Unit,
+    onReschedule: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -565,6 +603,7 @@ private fun ConfirmedBookingDetailSheet(
             revealing = revealing,
             onReveal = onReveal,
             onOpenDialog = onOpenDialog,
+            onReschedule = onReschedule,
             onDismiss = onDismiss,
         )
     }
@@ -576,6 +615,7 @@ private fun ConfirmedBookingDetailBody(
     revealing: Boolean,
     onReveal: () -> Unit,
     onOpenDialog: () -> Unit,
+    onReschedule: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
@@ -674,6 +714,15 @@ private fun ConfirmedBookingDetailBody(
                     },
                 style = detailValueStyle,
             )
+        }
+
+        // `26-209`/`adr/0187`: «Перенести оператором» - a full-width secondary action of its own row,
+        // above the dialog/close pair rather than sharing their row, since a three-way split at ~360dp
+        // would leave every label cramped. Never disabled: every confirmed booking has a worker
+        // (`ConfirmedBooking.workerId` is non-nullable), so there is no "cannot reschedule this one" state
+        // for this button to reflect - unlike the dialog action's own `originConversationId`-gated enable.
+        OutlinedButton(onClick = onReschedule, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+            Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
         }
 
         // Hard requirement 11 (as revised by `26-135`): «К диалогу» (primary) and «Закрыть» (secondary)

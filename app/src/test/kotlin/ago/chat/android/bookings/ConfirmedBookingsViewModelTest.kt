@@ -365,6 +365,14 @@ class ConfirmedBookingsViewModelTest {
             before: String?,
             limit: Int?,
         ): PhoneRevealsResult = throw UnsupportedOperationException("not used by this class")
+
+        // `26-209` widened `BookingsApi` with the operator reschedule write - it is
+        // `RescheduleBookingViewModel`'s own call, never `ConfirmedBookingsViewModel`'s, which only ever
+        // reads and reveals on the confirmed range (`RescheduleBookingViewModelTest` covers this method).
+        override suspend fun rescheduleBooking(
+            bookingId: String,
+            newStartEventId: String,
+        ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
     }
 
     /** `26-162`: the identical fake `ContactsViewModelTest`'s own `FakePersonsApi` already establishes,
