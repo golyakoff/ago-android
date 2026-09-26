@@ -110,6 +110,23 @@ public class ThreadViewModel
          * conversation already open. */
         private var openConversationId: String? = null
 
+        /**
+         * `26-98`: `true` for exactly one shape of [open] - the «Все» list's own read-only thread mode,
+         * set once by [open]'s own `readOnly` parameter and never toggled independently afterwards. This
+         * instance is scoped to one open conversation for its whole life (`hiltViewModel()`'s own
+         * per-back-stack-entry scoping, `ThreadRoute`'s doc comment), so there is no "reopen the same
+         * instance with a different mode" case to reconcile - a genuinely different mode is always a
+         * fresh instance. Read by [launchJoin]/[loadOlder] to pick the read-only hub call
+         * ([ago.chat.android.core.network.realtime.OperatorHubEvents.getConversationHistoryAsSiteConfigureHolder])
+         * over the ordinary assign-then-read one, and by [markReadUpTo]/[sendClicked]/[retrySend] as a
+         * defence-in-depth guard - `ThreadRoute` already omits every affordance that would call those in
+         * this mode, but the guard here is what stops a future caller from doing so anyway and hitting the
+         * server-side `Forbidden`/thrown `HubException` this whole item exists to avoid
+         * (`Conversation.MarkReadByOperator`'s own participant check, in particular, throws for exactly
+         * this caller).
+         */
+        private var readOnly: Boolean = false
+
         init {
             // Relayed for exactly the reason `ConversationListScreen`'s own `HubConnectionDebugRow`
             // exists - this screen is the one place a dropped/retried send is actually observed, so
@@ -151,7 +168,10 @@ public class ThreadViewModel
          * every piece of this class's own state before joining - a screen reused for a second, different
          * conversation must never show the first one's messages or draft even for a frame.
          */
-        public fun open(conversationId: String) {
+        public fun open(
+            conversationId: String,
+            readOnly: Boolean = false,
+        ) {
             if (openConversationId == conversationId) return
             openConversationId?.let { previous ->
                 hubEvents.leaveConversation()
@@ -159,6 +179,7 @@ public class ThreadViewModel
             }
 
             openConversationId = conversationId
+            this.readOnly = readOnly
             openConversationTracker.conversationOpened(conversationId)
             byId.clear()
             nextBeforeSequence = null
@@ -242,7 +263,18 @@ public class ThreadViewModel
         private fun launchJoin(conversationId: String) {
             viewModelScope.launch {
                 try {
-                    val page = hubEvents.joinConversation(conversationId)
+                    // `26-98`: the «Все» list's own read-only mode never calls `joinConversation` -
+                    // that hub method assigns the conversation to the caller before it reads
+                    // (`OperatorHub.JoinConversationAsync`'s own remarks), which is exactly the write
+                    // this mode exists to avoid. `getConversationHistoryAsSiteConfigureHolder`'s
+                    // `beforeSequence: null` is the identical "most recent page" convention
+                    // `joinConversation` already returns.
+                    val page =
+                        if (readOnly) {
+                            hubEvents.getConversationHistoryAsSiteConfigureHolder(conversationId, null, HISTORY_PAGE_SIZE)
+                        } else {
+                            hubEvents.joinConversation(conversationId)
+                        }
                     if (openConversationId != conversationId) return@launch
                     nextBeforeSequence = page.nextBeforeSequence
                     mergeAndRender(page.messages)
@@ -313,6 +345,11 @@ public class ThreadViewModel
          * position sent, never a burst of intermediate ones.
          */
         public fun markReadUpTo(sequence: Long) {
+            // `26-98`: never for a read-only open - `Conversation.MarkReadByOperator`'s own participant
+            // check throws for a caller who is not the conversation's assigned operator, and this mode's
+            // whole caller is exactly that. `ThreadRoute` already never wires this in when [readOnly] -
+            // see this field's own doc comment for why the guard belongs here too.
+            if (readOnly) return
             val conversationId = openConversationId ?: return
             val alreadySent = lastMarkedReadSequence
             if (alreadySent != null && alreadySent >= sequence) return
@@ -348,7 +385,17 @@ public class ThreadViewModel
             mutableState.update { it.copy(loadingOlder = true, historyError = null) }
             viewModelScope.launch {
                 try {
-                    val page = withContext(ioDispatcher) { hubEvents.loadOlderHistory(conversationId, cursor, HISTORY_PAGE_SIZE) }
+                    // `26-98`: the identical read-only branch `launchJoin` above takes - `GetHistoryAsync`
+                    // (`loadOlderHistory`'s own hub method) still checks the caller's assignment, which
+                    // this mode never has.
+                    val page =
+                        withContext(ioDispatcher) {
+                            if (readOnly) {
+                                hubEvents.getConversationHistoryAsSiteConfigureHolder(conversationId, cursor, HISTORY_PAGE_SIZE)
+                            } else {
+                                hubEvents.loadOlderHistory(conversationId, cursor, HISTORY_PAGE_SIZE)
+                            }
+                        }
                     if (openConversationId != conversationId) return@launch
                     nextBeforeSequence = page.nextBeforeSequence
                     mergeAndRender(page.messages)
@@ -406,6 +453,10 @@ public class ThreadViewModel
          * deliberately starts a *new* send - [retrySend] is the only path that ever reuses one.
          */
         public fun sendClicked() {
+            // `26-98`: never for a read-only open - `ThreadScreen` never draws a composer in this mode
+            // ([readOnly]'s own doc comment), so nothing should ever reach this, but the guard is cheap
+            // defence-in-depth against a future caller finding another way to invoke it.
+            if (readOnly) return
             val conversationId = openConversationId ?: return
             val body = mutableState.value.draft.trim()
             if (body.isEmpty()) return
@@ -423,6 +474,8 @@ public class ThreadViewModel
          * on which id is safe to reuse and why.
          */
         public fun retrySend() {
+            // `26-98`: the identical guard [sendClicked] above takes, for the same reason.
+            if (readOnly) return
             val conversationId = openConversationId ?: return
             val pending = failedSend ?: return
             send(conversationId, pending.body, pending.clientMessageId)

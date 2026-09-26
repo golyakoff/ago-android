@@ -525,6 +525,12 @@ class SettingsViewModelTest {
             pageSize: Int,
         ): HistoryPage = error("not used by this screen")
 
+        override suspend fun getConversationHistoryAsSiteConfigureHolder(
+            conversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this screen")
+
         override suspend fun sendMessage(
             conversationId: String,
             body: String,

@@ -265,6 +265,30 @@ public class OperatorHubConnection(
             ).await()
 
     /**
+     * `26-98`: `GetConversationHistoryAsSiteConfigureHolderAsync` - the «Все» list's own read-only
+     * "open one". Deliberately **not** routed through [subscription] at all (no `join`, no
+     * `markAlreadyDelivered`), the identical reasoning [getVisitorHistoryConversation] above states for
+     * itself: this fetches a conversation the caller holds no live standing on, purely to display it, so
+     * touching the live subscription's record - or letting a later reconnect try to resume this
+     * conversation - would corrupt whatever conversation this connection is actually joined to. See
+     * [OperatorHubEvents.getConversationHistoryAsSiteConfigureHolder]'s own doc comment for the
+     * single-id shape and why `beforeSequence` is nullable.
+     */
+    public override suspend fun getConversationHistoryAsSiteConfigureHolder(
+        conversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage =
+        requireConnection()
+            .invoke(
+                HistoryPage::class.java,
+                GET_CONVERSATION_HISTORY_AS_SITE_CONFIGURE_HOLDER_METHOD,
+                conversationId,
+                beforeSequence,
+                pageSize,
+            ).await()
+
+    /**
      * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity
      * (`conversationId`, `body`, `attachmentId`, `clientMessageId`) every time — never fewer, per that
      * method's own comment on why appending is safe for a caller like this one but omitting a
@@ -549,6 +573,7 @@ public class OperatorHubConnection(
         const val JOIN_CONVERSATION_METHOD = "JoinConversationAsync"
         const val GET_HISTORY_METHOD = "GetHistoryAsync"
         const val GET_VISITOR_HISTORY_CONVERSATION_METHOD = "GetVisitorHistoryConversationAsync"
+        const val GET_CONVERSATION_HISTORY_AS_SITE_CONFIGURE_HOLDER_METHOD = "GetConversationHistoryAsSiteConfigureHolderAsync"
         const val SEND_MESSAGE_METHOD = "SendMessageAsync"
         const val MESSAGE_RECEIVED_METHOD = "MessageReceived"
         const val CONVERSATION_ASSIGNED_METHOD = "ConversationAssigned"

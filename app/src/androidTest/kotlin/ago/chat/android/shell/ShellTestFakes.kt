@@ -121,6 +121,12 @@ internal class FakeListHubEvents : OperatorHubEvents {
         pageSize: Int,
     ): HistoryPage = error("not used by the list screen")
 
+    override suspend fun getConversationHistoryAsSiteConfigureHolder(
+        conversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage = error("not used by the list screen")
+
     override suspend fun sendMessage(
         conversationId: String,
         body: String,
@@ -181,6 +187,17 @@ internal class FakeThreadHubEvents(
         beforeSequence: Long?,
         pageSize: Int,
     ): HistoryPage = error("not used by the thread screen")
+
+    // `26-98`: unlike [getVisitorHistoryConversation] right above, this one returns the identical
+    // fixed [page] [joinConversation] does rather than an unused stub - a read-only open
+    // (`ThreadRoute(readOnly = true)`) reaches this instead of [joinConversation], and this fake backs
+    // both shapes identically so a future back-contract test exercising the «Все» list's own open does
+    // not need a second thread fake.
+    override suspend fun getConversationHistoryAsSiteConfigureHolder(
+        conversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage = page
 
     override suspend fun sendMessage(
         conversationId: String,

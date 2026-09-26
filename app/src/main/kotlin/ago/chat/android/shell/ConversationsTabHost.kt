@@ -97,6 +97,14 @@ public fun ConversationsTabHost(
 ) {
     val listState by viewModel.state.collectAsStateWithLifecycle()
     var openConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+    // `26-98`: which open, if any, is the «Все» list's own read-only one - holds `openConversationId`'s
+    // own value again when it is, `null` otherwise, rather than a plain `Boolean`: a `Boolean` alone
+    // would stay `true` across a *different* conversation later opened the ordinary way unless every one
+    // of the three opening paths below remembered to reset it, and a value this hard to accidentally
+    // leave stale is worth the one extra string over a bit. `rememberSaveable` for the identical reason
+    // `openConversationId` itself is - it must survive a process death exactly as long as the id it
+    // qualifies does.
+    var readOnlyConversationId by rememberSaveable { mutableStateOf<String?>(null) }
     val stateHolder = rememberSaveableStateHolder()
 
     // `26-18`: the other half of "a tap opens the thread, never the list" -
@@ -112,6 +120,9 @@ public fun ConversationsTabHost(
         pendingConversationOpener.pendingConversationId.collect { pendingConversationId ->
             if (pendingConversationId != null) {
                 openConversationId = pendingConversationId
+                // `26-98`: a push notification always opens the ordinary, writable thread - never the
+                // «Все» list's read-only one, which nothing about a push carries a signal for anyway.
+                readOnlyConversationId = null
                 pendingConversationOpener.consume()
             }
         }
@@ -124,7 +135,19 @@ public fun ConversationsTabHost(
                 activeSiteId = activeSiteId,
                 hubConnectionState = hubConnectionState,
                 viewModel = viewModel,
-                onOpenConversation = { conversationId -> openConversationId = conversationId },
+                onOpenConversation = { conversationId ->
+                    openConversationId = conversationId
+                    readOnlyConversationId = null
+                },
+                // `26-98`: the «Все» list's own row tap - a genuinely different open than
+                // `onOpenConversation` above, not a second call into it, because only this path must
+                // set [readOnlyConversationId]. See `ConversationListRoute`'s own doc comment for why
+                // this bypasses `ConversationListViewModel.onRowOpened` (the «мои»/«ожидают»-only
+                // bookkeeping that callback does has nothing to say about an admin-wide row).
+                onOpenAllConversation = { conversationId ->
+                    openConversationId = conversationId
+                    readOnlyConversationId = conversationId
+                },
                 onSignOut = onSignOut,
                 operatorDisplayName = operatorDisplayName,
                 operatorEmail = operatorEmail,
@@ -134,11 +157,15 @@ public fun ConversationsTabHost(
             )
         }
     } else {
-        // `26-90`: deliberately still the two queue lists, not `listState.all` as well - a row on the
-        // «Все» tab cannot be opened at all (`ConversationListScreen.AllRow`'s own doc comment: the
-        // hub's own join assigns rather than reads), so searching that list here would be searching it
-        // for a conversation id it can never be asked about.
-        val row = (listState.mine + listState.waiting).firstOrNull { it.conversationId == currentlyOpen }
+        // `26-98`: `listState.all` joins `mine`/`waiting` in this lookup now that a row on the «Все» tab
+        // can genuinely be opened (read-only) - `26-90`'s own comment here, restated until this item,
+        // reasoned from a server limitation `GetConversationHistoryAsSiteConfigureHolderQuery` removes.
+        // Concatenation order matters only when the identical id somehow appears in more than one list at
+        // once (a supervisor's own assigned conversation also showing on the admin-wide list) - `mine`/
+        // `waiting` come first so that case still resolves to the live queue row's own data, not the
+        // «Все» list's copy of the same fact.
+        val readOnly = readOnlyConversationId == currentlyOpen
+        val row = (listState.mine + listState.waiting + listState.all).firstOrNull { it.conversationId == currentlyOpen }
         // `26-68`: the old fallback here (`row?.visitorId ?: currentlyOpen`) substituted the
         // conversation's own id into the visitor-id slot whenever `row` was not found yet - a restored
         // thread after process death, or any cold return before the first queue fetch lands - and
@@ -166,7 +193,18 @@ public fun ConversationsTabHost(
         // `ConversationListViewModel.refresh()`'s own `QueueResult.Loaded` branch, which is the one
         // place a real, whole-list answer actually landed (that class's own doc comment on `isStale`:
         // "stale until proven fresh"). No new state is introduced to tell these two cases apart.
-        val identityUnavailable = row == null && !listState.isStale
+        //
+        // `26-98`: a read-only open has no `isStale`-shaped freshness flag to lean on - «Все» is keyset-
+        // paged incrementally, never re-read whole the way `mine`/`waiting` are, so there is no single
+        // moment "the whole list is confirmed current" the way `isStale` clearing marks for the queue.
+        // `listState.allHasData` is the nearest fact this list does keep (`false` until its own first
+        // page has answered at all, `ConversationListUiState`'s own doc comment) - not "confirmed genuinely
+        // gone" so much as "at least one real answer has landed", which is enough here because a read-only
+        // open is always reached by tapping a row already rendered on screen: the row existed in `all`
+        // the instant this open began, so `allHasData` is already `true` by construction on every path
+        // except a restored thread after process death, which is exactly the case this flag exists to
+        // cover.
+        val identityUnavailable = row == null && (if (readOnly) listState.allHasData else !listState.isStale)
         stateHolder.SaveableStateProvider("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen") {
             ThreadRoute(
                 conversationId = currentlyOpen,
@@ -185,6 +223,7 @@ public fun ConversationsTabHost(
                 canGrantAttachmentUpload = canGrantAttachmentUpload,
                 canCloseConversation = canCloseConversation,
                 canRestrictVisitor = canRestrictVisitor,
+                readOnly = readOnly,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null

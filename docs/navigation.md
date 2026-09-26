@@ -366,12 +366,16 @@ Five decisions in that picture are worth stating rather than leaving to be infer
   `GetAllConversationsForSiteHandler` actually enforces, **not** `conversation:read`, which every
   operator holds — and an operator without it has a two-segment control, never a greyed-out third
   (`visibleConversationListTabs`).
-- **A row on that third segment does not open a thread, and this is a server fact.** The hub's own
-  `JoinConversationAsync` *assigns* before it reads, and `Conversation.AssignTo` accepts only a
-  `Waiting` conversation — so a tap would claim a queued conversation, or throw for one that is
-  assigned elsewhere or closed. `ago-console`'s own `AdminConversationsPage` is read-only for exactly
-  this reason. The tab says so in one line rather than offering a tap that cannot work; making an
-  administrator able to *read* any conversation's history is a server change nobody has funded yet.
+- **A row on that third segment opens a thread read-only, and this was a server fact both ways.**
+  Until `26-98`, the hub's own `JoinConversationAsync` *assigned* before it read, and
+  `Conversation.AssignTo` accepted only a `Waiting` conversation — so a tap would have claimed a
+  queued conversation, or thrown for one that was assigned elsewhere or closed. `26-98`'s own Option 1
+  added the server read that gap was missing (`GetConversationHistoryAsSiteConfigureHolderQuery`,
+  gated on the identical `site:configure` permission the list itself already requires, never calling
+  `AssignTo`), so the tab's tap now opens `ThreadScreen` in a read-only mode instead: no composer, no
+  contact-panel affordance, no mark-read. `ago-console`'s own `AdminConversationsPage` has not gained
+  the equivalent capability — it stays read-only summary data with no "open one" at all, so this is no
+  longer a parity claim between the two clients.
 - **The visitor context is a bottom sheet, not a route.** Everything in it — notes, tags, contact
   details, visitor history, channel identities, the block and upload-grant controls — is read *while*
   composing. A route would unmount the composer and lose the draft, which is exactly the loss the

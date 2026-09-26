@@ -186,6 +186,19 @@ public fun ThreadRoute(
     // button hide-not-disable (design Q7). `false` (the default every direct-construction test still
     // gets) hides the button.
     canRestrictVisitor: Boolean = false,
+    // `26-98`: the «Все» list's own read-only open - `true` only when `ConversationsTabHost` resolved
+    // this exact conversation id as one tapped from that admin-wide list rather than «Мои»/«Ожидают»
+    // (that composable's own doc comment). Hides every reply/action affordance this route would
+    // otherwise wire - the composer ([ThreadScreen]'s own `bottomBar`) and the contact panel affordance
+    // below - rather than disabling them, the identical hide-not-disable posture every permission-gated
+    // affordance in this file already takes; the difference is that this is not a permission gap but a
+    // deliberate mode this particular open was made in, so it overrides `canReadContactDetail` rather
+    // than being independent of it (a site:configure holder with no `conversation:read` at all must not
+    // see a contact-panel affordance either way, but one who *does* hold it must still not see it while
+    // reading a stranger's conversation read-only - see `viewModel.open`'s own remarks for why the
+    // server-side reads that panel needs would throw for this caller regardless). `false` (the default
+    // every direct-construction test still gets) preserves every existing caller's behaviour unchanged.
+    readOnly: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -217,7 +230,7 @@ public fun ThreadRoute(
     BackHandler(onBack = leaveThread)
 
     LaunchedEffect(conversationId) {
-        viewModel.open(conversationId)
+        viewModel.open(conversationId, readOnly)
     }
 
     // `ThreadViewModel`'s own doc comment on why `ON_STOP` is what actually has to fire the draft
@@ -251,7 +264,10 @@ public fun ThreadRoute(
         // `conversation:read`. Present only when they hold it; opening the sheet is all this does, and the
         // panel VM + its one visitor-summary read for H4/H5 are created lazily inside the sheet block
         // below (see the top-of-route comment on why the VM must not be created before then).
-        onOpenContactPanel = if (canReadContactDetail) ({ showContactPanel = true }) else null,
+        // `26-98`: `!readOnly` on top of `canReadContactDetail` - see this route's own `readOnly`
+        // parameter doc comment for why a read-only open hides this affordance even for a caller who
+        // otherwise holds `conversation:read`.
+        onOpenContactPanel = if (canReadContactDetail && !readOnly) ({ showContactPanel = true }) else null,
         onBack = leaveThread,
         onLoadOlder = viewModel::loadOlder,
         onRetryJoin = viewModel::retryJoin,
@@ -261,8 +277,11 @@ public fun ThreadRoute(
         onDismissSendRefusal = viewModel::dismissSendRefusal,
         // `26-80`: the one signal `MessageList` reports upward - see `ThreadViewModel.markReadUpTo`'s
         // own doc comment for why this has to come from the list's actual scroll state rather than
-        // simply `state.messages`' own newest entry.
-        onNewestVisibleSequenceChanged = viewModel::markReadUpTo,
+        // simply `state.messages`' own newest entry. `26-98`: never wired for a read-only open -
+        // `markReadUpTo` throws for a caller who is not this conversation's assigned operator, the exact
+        // shape [ThreadViewModel]'s own `readOnly` guard on that method also refuses defensively.
+        onNewestVisibleSequenceChanged = if (readOnly) ({ }) else viewModel::markReadUpTo,
+        readOnly = readOnly,
     )
 
     if (showContactPanel) {
@@ -381,6 +400,12 @@ internal fun ThreadScreen(
     // top-of-file doc comment predicted the visitor context sheet would land as, now that the sheet
     // exists. When `null`, the block stays the plain, non-interactive text it has always been.
     onOpenContactPanel: (() -> Unit)? = null,
+    // `26-98`: `true` only for the «Все» list's own read-only open - see [ThreadRoute]'s own parameter
+    // doc comment. Hides the composer entirely (this screen's own `bottomBar`) rather than disabling it,
+    // and draws [ThreadReadOnlyNote] in its place so the mode reads as a deliberate view rather than a
+    // broken composer. `false` (the default every direct-construction test still gets) renders exactly
+    // as before.
+    readOnly: Boolean = false,
 ) {
     // `26-40`: the app-bar subtitle's own age half - the mockup's short elapsed form, ticking on the
     // identical shared clock `ConversationListScreen`'s own row ages already read
@@ -439,17 +464,31 @@ internal fun ThreadScreen(
                     },
                 )
             },
+            // `26-98`: no composer at all in read-only mode - hide-not-disable, the identical posture
+            // this screen already takes for every permission-gated affordance, applied here to a mode
+            // rather than a missing permission. `Scaffold`'s own default `bottomBar` (nothing drawn) is
+            // what an omitted lambda produces, the same "hidden, not a disabled stand-in" shape
+            // `AllRow`'s own erase gesture takes in `ConversationListScreen`.
             bottomBar = {
-                Composer(
-                    draft = state.draft,
-                    sending = state.sending,
-                    hasAttachmentUploadGrant = hasAttachmentUploadGrant == true,
-                    onDraftChanged = onDraftChanged,
-                    onSend = onSend,
-                )
+                if (!readOnly) {
+                    Composer(
+                        draft = state.draft,
+                        sending = state.sending,
+                        hasAttachmentUploadGrant = hasAttachmentUploadGrant == true,
+                        onDraftChanged = onDraftChanged,
+                        onSend = onSend,
+                    )
+                }
             },
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // `26-98`: the «Все» list's own read-only open, named on screen rather than left to be
+                // inferred from the missing composer - the identical "an interim/limited state gets a
+                // quiet line saying so" posture `ConversationListScreen`'s own `AllReadOnlyNote` already
+                // takes for the list this thread was opened from.
+                if (readOnly) {
+                    ThreadReadOnlyNote()
+                }
                 if (state.pendingRetry) {
                     DismissibleBanner(
                         message = stringResource(R.string.thread_send_pending_retry),
@@ -523,6 +562,22 @@ internal fun ThreadScreen(
  * which still renders a blank title exactly as before, correctly, while it waits for the queue to
  * catch up.
  */
+@Composable
+private fun ThreadReadOnlyNote() {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+        Text(
+            text = stringResource(R.string.thread_read_only_note),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier.fillMaxWidth().padding(
+                    horizontal = ComposerHorizontalPadding,
+                    vertical = ThreadReadOnlyNoteVerticalPadding,
+                ),
+        )
+    }
+}
+
 @Composable
 private fun ThreadTitleBlock(
     emojiCreature: String?,
@@ -1060,6 +1115,10 @@ private val ComposerGap = 9.dp
 
 // `.field{height:40px}`
 private val ComposerFieldHeight = 40.dp
+
+// `26-98`: [ThreadReadOnlyNote]'s own vertical padding - not a mockup number (this note has none to
+// draw from), chosen to sit comfortably beside the identical `ComposerHorizontalPadding` it shares.
+private val ThreadReadOnlyNoteVerticalPadding = 8.dp
 
 // `.field{padding:0 14px}`
 private val ComposerFieldHorizontalPadding = 14.dp
