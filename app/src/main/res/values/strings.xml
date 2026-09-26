@@ -805,6 +805,63 @@
     <!-- Says what a delete does and does not do before it happens - and that a booked worker is
          deactivated, not deleted (the server refuses the delete for exactly that worker). -->
     <string name="masters_delete_message">Безвозвратно удалить можно только мастера без записей. Если у мастера есть записи, снимите его с активных - история записей сохранится.</string>
+    <!-- `26-170` (`26-155` part 2): the card's own drill-down entry row (Q1, console row-action parity).
+         «Слоты» is disabled this slice - its own screen is a follow-up ticket. -->
+    <string name="masters_action_open_schedule">График</string>
+    <string name="masters_action_open_slots">Слоты</string>
+
+    <!--
+        `26-170` (`26-155` part 2): the «График» drill-down over one master - read/edit/save that
+        worker's schedule template through the `26-168` `WorkerScheduleApi`, plus a minimal read-only
+        re-cut hook (Q2) over `RecutApi`. Wording carried over from `ago-console`'s own
+        `WorkerScheduleSection.tsx`/`i18n/ru.ts` (`calendarSchedule*`/`calendarCycle*`/`calendarRecut*`
+        keys) - the same facts, worded the same way on both surfaces. The full three-step «Пересчёт»
+        screen (decisions, confirm, result) is a follow-up slice; this hook is deliberately a read-only
+        preview with a note that says so.
+    -->
+    <string name="worker_schedule_tab">График</string>
+    <string name="worker_schedule_page_title">График — %1$s</string>
+    <string name="worker_schedule_load_failed_unexpected">Не удалось загрузить график. Попробуйте ещё раз.</string>
+    <string name="worker_schedule_empty_note">Расписания пока нет - этот мастер ничего не материализует, пока оно не сохранено.</string>
+    <string name="worker_schedule_field_template">Шаблон</string>
+    <string name="worker_schedule_template_weekly">Недельный (обычная неделя)</string>
+    <string name="worker_schedule_template_cycle">Цикл (N дней работы, M дней отдыха)</string>
+    <string name="worker_schedule_switching_to_weekly_note">Переключение на «Недельный» очистит настройки цикла при сохранении. Уже материализованные дни в любом случае не затрагиваются.</string>
+    <string name="worker_schedule_field_cycle_anchor">Дата привязки (первый рабочий день)</string>
+    <string name="worker_schedule_field_cycle_working_days">Рабочих дней</string>
+    <string name="worker_schedule_field_cycle_rest_days">Выходных дней</string>
+    <string name="worker_schedule_cycle_shift_pattern_note">«2 через 2» - это 2 рабочих / 2 выходных дня. «Сутки через трое» - это 1 рабочий / 3 выходных дня, плюс часы ниже - это не 24-часовое окно.</string>
+    <!-- The tappable in-hub swap to Часы (Q2's own sibling note) - a `TextButton` below this caption,
+         labelled with `working_hours_tab`, reused rather than a second «Часы» string. -->
+    <string name="worker_schedule_weekly_hours_note">Недельные часы задаются на экране «Часы», по дням недели.</string>
+    <string name="worker_schedule_field_slots">Слоты</string>
+    <string name="worker_schedule_field_slot_minutes">Длина слота (минуты)</string>
+    <string name="worker_schedule_slot_minutes_note">Услуга длиннее этого займёт больше одного слота, забронированных вместе как одна запись.</string>
+    <string name="worker_schedule_field_buffer_minutes">Перерыв между слотами (минуты)</string>
+    <string name="worker_schedule_field_buffers_count">Перерывы внутри длинной записи считаются рабочим временем</string>
+    <!-- The item's own worked example (`ConsecutiveRunFinder.ComputeSlotsNeeded`, display only): a
+         70-minute service, the resulting slot count and the illustrative 12:00-anchored time range. -->
+    <string name="worker_schedule_arithmetic_caption">При таких числах: услуга %1$d мин займёт %2$s, %3$s–%4$s.</string>
+    <string name="worker_schedule_slots_one">%1$d слот</string>
+    <string name="worker_schedule_slots_few">%1$d слота</string>
+    <string name="worker_schedule_slots_many">%1$d слотов</string>
+    <string name="worker_schedule_field_horizon_label">Горизонт</string>
+    <string name="worker_schedule_field_horizon">Горизонт (дней вперёд, поддерживаемых сгенерированными)</string>
+    <!-- The cap is enforced server-side, never on the client (`docs/design/26-155-*.md`'s own accepted
+         "console decision, kept") - this caption states it, it does not enforce it. -->
+    <string name="worker_schedule_horizon_cap_note">Ограничено %1$d днями.</string>
+    <string name="worker_schedule_field_materialize_from">Не генерировать раньше</string>
+    <string name="worker_schedule_materialize_from_cannot_move_note">Нельзя сдвинуть раньше, чем %1$s.</string>
+    <string name="worker_schedule_recut_note">Нужно исправить дни, уже нарезанные по старому шаблону?</string>
+    <string name="worker_schedule_recut_button">Пересчитать</string>
+    <string name="worker_schedule_action_create">Создать расписание</string>
+    <string name="worker_schedule_action_save">Сохранить расписание</string>
+    <string name="worker_schedule_recut_preview_title">Предпросмотр пересчёта</string>
+    <string name="worker_schedule_recut_preview_summary">Дней в диапазоне: %1$d. Записей, требующих решения: %2$d.</string>
+    <!-- States plainly that this is a preview-only hook, not the real thing - the full three-step
+         «Пересчёт» screen (decisions, confirm, result) is a follow-up slice. -->
+    <string name="worker_schedule_recut_preview_note">Полный экран пересчёта с подтверждением появится в следующем обновлении.</string>
+    <string name="worker_schedule_recut_load_failed_unexpected">Не удалось получить предпросмотр пересчёта. Попробуйте ещё раз.</string>
 
     <!--
         `26-142`: Записи's own «Настройка» screen (menu label «Настройка», primary section «Календари») -

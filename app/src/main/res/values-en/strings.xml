@@ -461,6 +461,46 @@
     <string name="masters_field_active">Active</string>
     <string name="masters_delete_title">Delete this master?</string>
     <string name="masters_delete_message">Only a master with no bookings can be deleted outright. If a master has bookings, deactivate them instead - the booking history is kept.</string>
+    <string name="masters_action_open_schedule">Schedule</string>
+    <string name="masters_action_open_slots">Slots</string>
+
+    <!-- `26-170` (`26-155` part 2): English half of the «График» drill-down - see `values/strings.xml`'s
+         own doc comment on this same key block for the full reasoning. -->
+    <string name="worker_schedule_tab">Schedule</string>
+    <string name="worker_schedule_page_title">Schedule — %1$s</string>
+    <string name="worker_schedule_load_failed_unexpected">Couldn\'t load the schedule. Try again.</string>
+    <string name="worker_schedule_empty_note">No schedule yet - this worker materialises nothing until one is saved.</string>
+    <string name="worker_schedule_field_template">Template</string>
+    <string name="worker_schedule_template_weekly">Weekly (ordinary week)</string>
+    <string name="worker_schedule_template_cycle">Cycle (N days on, M days off)</string>
+    <string name="worker_schedule_switching_to_weekly_note">Switching to Weekly clears the cycle settings on save. Already materialised days are untouched either way.</string>
+    <string name="worker_schedule_field_cycle_anchor">Anchor date (first working day)</string>
+    <string name="worker_schedule_field_cycle_working_days">Working days</string>
+    <string name="worker_schedule_field_cycle_rest_days">Rest days</string>
+    <string name="worker_schedule_cycle_shift_pattern_note">"2 on 2 off" is 2 working days, 2 rest days. "1 on 3 off" is 1 working day, 3 rest days, plus the hours below - not a 24-hour window.</string>
+    <string name="worker_schedule_weekly_hours_note">Weekly hours are set on the Hours screen, per day of the week.</string>
+    <string name="worker_schedule_field_slots">Slots</string>
+    <string name="worker_schedule_field_slot_minutes">Slot length (minutes)</string>
+    <string name="worker_schedule_slot_minutes_note">A service longer than this needs more than one slot, claimed together as one booking.</string>
+    <string name="worker_schedule_field_buffer_minutes">Buffer between slots (minutes)</string>
+    <string name="worker_schedule_field_buffers_count">Buffers inside a long booking count toward its service duration</string>
+    <string name="worker_schedule_arithmetic_caption">With these numbers: a %1$d-minute service takes %2$s, %3$s–%4$s.</string>
+    <string name="worker_schedule_slots_one">%1$d slot</string>
+    <string name="worker_schedule_slots_few">%1$d slots</string>
+    <string name="worker_schedule_slots_many">%1$d slots</string>
+    <string name="worker_schedule_field_horizon_label">Horizon</string>
+    <string name="worker_schedule_field_horizon">Horizon (days ahead kept generated)</string>
+    <string name="worker_schedule_horizon_cap_note">Capped at %1$d days.</string>
+    <string name="worker_schedule_field_materialize_from">Don\'t generate before</string>
+    <string name="worker_schedule_materialize_from_cannot_move_note">Cannot move earlier than %1$s.</string>
+    <string name="worker_schedule_recut_note">Need to fix days already cut under an old template?</string>
+    <string name="worker_schedule_recut_button">Re-cut</string>
+    <string name="worker_schedule_action_create">Create schedule</string>
+    <string name="worker_schedule_action_save">Save schedule</string>
+    <string name="worker_schedule_recut_preview_title">Re-cut preview</string>
+    <string name="worker_schedule_recut_preview_summary">Days in range: %1$d. Bookings needing a decision: %2$d.</string>
+    <string name="worker_schedule_recut_preview_note">The full re-cut screen with confirmation is coming in a later update.</string>
+    <string name="worker_schedule_recut_load_failed_unexpected">Couldn\'t load the re-cut preview. Try again.</string>
 
     <!-- `26-142`: English half of Записи's own «Настройка» screen - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->

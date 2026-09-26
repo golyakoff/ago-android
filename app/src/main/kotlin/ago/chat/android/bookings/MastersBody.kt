@@ -62,6 +62,10 @@ internal fun MastersBody(
     onCancelEdit: () -> Unit,
     onFormChanged: (WorkerForm) -> Unit,
     onSubmit: (WorkerForm) -> Unit,
+    // `26-170` (`26-155` part 2): the card's own «График» drill-down entry (Q1, console row-action
+    // parity). A callback, not a `NavHost` route - [BookingsScreen]'s own `MastersDrillDown` state is
+    // what this ends up flipping, one level up.
+    onOpenSchedule: (Worker) -> Unit,
 ) {
     // Which worker's delete is being confirmed, if any. Held here rather than in [MastersUiState] for the
     // reason every other transient dialog in this app is: it is a property of this composition, not a
@@ -106,6 +110,7 @@ internal fun MastersBody(
                             onEdit = onEdit,
                             onToggleActive = onToggleActive,
                             onDelete = { confirmingDelete = it },
+                            onOpenSchedule = onOpenSchedule,
                         )
                     }
                 }
@@ -147,6 +152,7 @@ private fun MastersList(
     onEdit: (Worker) -> Unit,
     onToggleActive: (Worker) -> Unit,
     onDelete: (Worker) -> Unit,
+    onOpenSchedule: (Worker) -> Unit,
 ) {
     val serviceNames = remember(services) { services.associate { it.serviceId to it.name } }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -180,6 +186,7 @@ private fun MastersList(
                         onEdit = { onEdit(worker) },
                         onToggleActive = { onToggleActive(worker) },
                         onDelete = { onDelete(worker) },
+                        onOpenSchedule = { onOpenSchedule(worker) },
                     )
                     HorizontalDivider()
                 }
@@ -197,6 +204,15 @@ private fun MastersList(
  * **`«Удалить»` is a real delete here, unlike Услуги's `«Снять с продажи»`** — a worker who was never
  * booked can be removed outright, and the confirmation dialog plus the server's own refusal for a booked
  * worker are what make that safe ([MastersViewModel.delete]'s own doc comment).
+ *
+ * **`26-170`: «График»/«Слоты» are a second row, below the roster actions above.** Two card buttons
+ * (Q1, console row-action parity), not a third `⋮` menu entry — the identical reasoning
+ * [ago.chat.android.bookings.MastersViewModel]'s own sibling `WorkersApi` gate needs no restating, since
+ * both open a drill-down over this same screen rather than a different permission surface. **«Слоты» is
+ * disabled this slice** — its own screen is `26-155`'s follow-up ticket
+ * (`docs/design/26-155-*.md`'s ticket split) — a disabled button states "not yet" without a dead tap
+ * target that silently does nothing, the same "the reason it cannot be tapped is stated" idiom
+ * [MastersList]'s own disabled Add button already follows for a missing calendar.
  */
 @Composable
 private fun WorkerCard(
@@ -206,6 +222,7 @@ private fun WorkerCard(
     onEdit: () -> Unit,
     onToggleActive: () -> Unit,
     onDelete: () -> Unit,
+    onOpenSchedule: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -254,6 +271,20 @@ private fun WorkerCard(
                     text = stringResource(R.string.masters_action_delete),
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+        // `26-170`: the drill-down entry row - a second row rather than crowding the roster actions
+        // above, since these two open a whole different screen rather than acting on this row in place.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TextButton(onClick = onOpenSchedule, enabled = !busy) {
+                Text(text = stringResource(R.string.masters_action_open_schedule))
+            }
+            // Disabled, not omitted - see this composable's own doc comment for why.
+            TextButton(onClick = {}, enabled = false) {
+                Text(text = stringResource(R.string.masters_action_open_slots))
             }
         }
     }
