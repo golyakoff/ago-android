@@ -502,6 +502,19 @@
     <string name="worker_schedule_recut_preview_note">The full re-cut screen with confirmation is coming in a later update.</string>
     <string name="worker_schedule_recut_load_failed_unexpected">Couldn\'t load the re-cut preview. Try again.</string>
 
+    <!-- `26-171` (`26-155` part 3): English half of the «Слоты» drill-down - see `values/strings.xml`'s
+         own doc comment on this same key block for the full reasoning. -->
+    <string name="worker_slots_tab">Slots</string>
+    <string name="worker_slots_page_title">Slots — %1$s</string>
+    <string name="worker_slots_load_failed_unexpected">Couldn\'t load the slots. Try again.</string>
+    <string name="worker_slots_empty">No slots in this range.</string>
+    <string name="worker_slots_status_available">Available</string>
+    <string name="worker_slots_status_pending_confirmation">Awaiting confirmation</string>
+    <string name="worker_slots_status_booked">Booked</string>
+    <string name="worker_slots_status_cancelled">Cancelled</string>
+    <string name="worker_slots_status_no_show">No-show</string>
+    <string name="worker_slots_status_blocked">Blocked</string>
+
     <!-- `26-142`: English half of Записи's own «Настройка» screen - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->
     <string name="calendar_setup_tab">Setup</string>

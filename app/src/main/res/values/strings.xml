@@ -864,6 +864,24 @@
     <string name="worker_schedule_recut_load_failed_unexpected">Не удалось получить предпросмотр пересчёта. Попробуйте ещё раз.</string>
 
     <!--
+        `26-171` (`26-155` part 3): the «Слоты» drill-down - a worker's own materialised slots for the
+        fixed Q5 default range (today..+14). Wording mirrors `ago-console`'s own
+        `CalendarWorkerSlotsPage.tsx`/`ru.ts` (`calendarSlots*`) verbatim where the two screens say the
+        same thing; the six status words are `calendarSlotStatus*` verbatim.
+    -->
+    <string name="worker_slots_tab">Слоты</string>
+    <string name="worker_slots_page_title">Слоты — %1$s</string>
+    <string name="worker_slots_load_failed_unexpected">Не удалось загрузить слоты. Попробуйте ещё раз.</string>
+    <string name="worker_slots_empty">В этом диапазоне нет слотов.</string>
+    <string name="worker_slots_status_available">Свободен</string>
+    <string name="worker_slots_status_pending_confirmation">Ожидает подтверждения</string>
+    <string name="worker_slots_status_booked">Забронирован</string>
+    <!-- Q6 (`docs/design/26-155-*.md`): shown, not filtered out - server/console parity. -->
+    <string name="worker_slots_status_cancelled">Отменён</string>
+    <string name="worker_slots_status_no_show">Неявка</string>
+    <string name="worker_slots_status_blocked">Заблокирован</string>
+
+    <!--
         `26-142`: Записи's own «Настройка» screen (menu label «Настройка», primary section «Календари») -
         the calendar roster a single Setup screen owns. Wording carried over from `ago-console`'s own
         `CalendarSetupPage`. The timezone picker is a curated, localized dropdown (`25-16`), never free
