@@ -331,6 +331,29 @@
     <string name="tags_action_failed">Не удалось изменить метки</string>
 
     <!--
+        `26-150`: the contact-detail panel's «Заметки команды» row + its own notes sub-screen
+        (`docs/design/26-111-thread-contact-detail-panel.md`, N1). `notes_row_title` names both the row and
+        the sub-screen's own header - one label for the same feature in both places. The count trio is the
+        row's own trailing text, pluralised the same way `contact_panel_conversation_count_*` is (design
+        Q8: the count is the notes list's own length, never a separate field). `notes_row_load_failed` is
+        the row's own inline failure text. `notes_empty` is the sub-screen's empty state.
+        `notes_composer_placeholder`/`notes_add_button`/`notes_adding_button` are the composer, drawn only
+        with `conversation:note_write` (hide-not-disable); `notes_add_failed` is the generic
+        transport-failure line under it - a genuine server refusal shows the server's own sentence verbatim
+        instead (design §4).
+    -->
+    <string name="notes_row_title">Заметки команды</string>
+    <string name="notes_row_count_one">%1$d заметка</string>
+    <string name="notes_row_count_few">%1$d заметки</string>
+    <string name="notes_row_count_many">%1$d заметок</string>
+    <string name="notes_row_load_failed">Не удалось загрузить заметки</string>
+    <string name="notes_empty">Заметок нет</string>
+    <string name="notes_composer_placeholder">Новая заметка…</string>
+    <string name="notes_add_button">Добавить</string>
+    <string name="notes_adding_button">Добавление…</string>
+    <string name="notes_add_failed">Не удалось добавить заметку</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

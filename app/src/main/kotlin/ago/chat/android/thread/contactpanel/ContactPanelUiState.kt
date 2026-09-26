@@ -2,6 +2,7 @@ package ago.chat.android.thread.contactpanel
 
 import ago.chat.android.core.domain.contactdetails.ContactDetail
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.notes.ConversationNote
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.Tag
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
@@ -29,6 +30,7 @@ public data class ContactPanelUiState(
     val summary: HeaderSummaryState = HeaderSummaryState.Loading,
     val contactDetails: ContactDetailsSectionState = ContactDetailsSectionState.Loading,
     val tags: TagsSectionState = TagsSectionState.Loading,
+    val notes: NotesSectionState = NotesSectionState.Loading,
 )
 
 /**
@@ -184,4 +186,74 @@ public sealed interface TagActionError {
     public data class Failed(
         val reason: NetworkFailure,
     ) : TagActionError
+}
+
+/**
+ * `26-150`: the «Заметки команды» row's own async state — the third section slice to grow
+ * [ContactPanelUiState] the additive way its own doc comment prescribes, reading and writing through
+ * [ago.chat.android.core.domain.notes.ConversationNotesApi] (`26-115`). Three arms, the same
+ * Loading/Loaded/Failed vocabulary [HeaderSummaryState], [ContactDetailsSectionState] and
+ * [TagsSectionState] establish — fetched once, at panel-open time, the same moment those two sections'
+ * own reads fire (design Q8: "fetch the notes list on open … no separate count field"), so the row's own
+ * count is never a second read, only [Loaded.notes]'s own size.
+ *
+ * **Why the composer's draft and in-flight state live on [Loaded] rather than on
+ * [ContactPanelUiState] itself.** The identical "the in-flight state travels with the loaded list it
+ * acts on" shape [ContactDetailsSectionState.Loaded] and [TagsSectionState.Loaded] already establish for
+ * their own single write. Unlike those two, the note composer's own typed text has nowhere else to live —
+ * this is the one section slice that needs a live draft rather than a picker selection — so [draft] rides
+ * here rather than in a `remember`-only Compose state that a process death (or simply closing and
+ * reopening the notes sub-screen) would silently drop.
+ */
+public sealed interface NotesSectionState {
+    public data object Loading : NotesSectionState
+
+    /**
+     * The notes the server returned, in the order it returned them (this app reorders nothing — the
+     * identical "the server's own order is the order" contract [ConversationNote]'s own doc comment
+     * states), plus the composer's own transient state.
+     *
+     * [draft] — the note composer's current text, empty until the operator types into it and cleared
+     * again once [AddNoteResult.Added] lands (`ContactPanelViewModel.addNote`'s own doc comment).
+     *
+     * [addingNote] — `true` while one add is in flight; the composer's submit control is disabled and its
+     * label swaps to a "sending" word while this is set, the identical single-write in-flight shape
+     * [ContactDetailsSectionState.Loaded.revealingIds] already establishes for a per-row reveal, here for
+     * the panel's one composer instead of a per-row set.
+     *
+     * [addNoteError] — the last add outcome when it was not a success: a genuine server refusal shown
+     * verbatim, or a transport failure shown as one generic line — the identical [RowRevealError] /
+     * [TagActionError] split. Unlike a refused tag write, [draft] is deliberately **not** cleared on a
+     * refusal or a failure — the operator's own typed words stay in the composer so a refused note is
+     * fixable (a blank body, say) rather than retyped from scratch.
+     */
+    public data class Loaded(
+        val notes: List<ConversationNote>,
+        val draft: String = "",
+        val addingNote: Boolean = false,
+        val addNoteError: AddNoteError? = null,
+    ) : NotesSectionState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : NotesSectionState
+}
+
+/**
+ * `26-150`: why adding one team note did not take — the two non-success arms of
+ * [ago.chat.android.core.domain.notes.AddNoteResult], carried into the UI the identical way
+ * [RowRevealError] and [TagActionError] already carry their own write's non-success arms.
+ */
+public sealed interface AddNoteError {
+    /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
+     * sentence" posture [RowRevealError.Refused] establishes. */
+    public data class Refused(
+        val detail: String,
+    ) : AddNoteError
+
+    /** A transport failure — no server sentence to show, so the sub-screen renders one generic
+     * «Не удалось добавить заметку» line, classified by [reason] only if a caller ever needs to. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : AddNoteError
 }

@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
+import ago.chat.android.thread.contactpanel.sections.NotesSection
 import ago.chat.android.thread.contactpanel.sections.TagsSection
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.russianPluralStringResource
@@ -94,6 +95,14 @@ internal fun ContactDetailPanel(
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     onRetryTags: () -> Unit,
+    // `26-150`: `conversation:note_write` gates only the notes sub-screen's own composer (hide-not-disable,
+    // design Q7); reading the notes row/count/list rides the panel's own `conversation:read` gate, the
+    // identical split [canTag] above draws for the tags section's own write half
+    // ([ago.chat.android.thread.contactpanel.sections.NotesSection]'s own doc comment).
+    canWriteNote: Boolean,
+    onNoteDraftChanged: (String) -> Unit,
+    onAddNote: () -> Unit,
+    onRetryNotes: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -149,6 +158,20 @@ internal fun ContactDetailPanel(
                 onAddTag = onAddTag,
                 onRemoveTag = onRemoveTag,
                 onRetry = onRetryTags,
+            )
+
+            Spacer(modifier = Modifier.height(SectionSpacing))
+
+            // `26-150` (S-H): «Заметки команды» - a row that opens its own notes sub-screen rather than
+            // an inline list (unlike the two sections above). Reads its own arm off the same state and
+            // takes its callbacks from the same VM, the additive convention documented above;
+            // `conversation:note_write` gates only the sub-screen's composer (hide-not-disable).
+            NotesSection(
+                state = state.notes,
+                canWriteNote = canWriteNote,
+                onNoteDraftChanged = onNoteDraftChanged,
+                onAddNote = onAddNote,
+                onRetry = onRetryNotes,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

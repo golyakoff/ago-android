@@ -113,6 +113,10 @@ class ContactDetailPanelTest {
                 onAddTag = {},
                 onRemoveTag = {},
                 onRetryTags = {},
+                canWriteNote = false,
+                onNoteDraftChanged = {},
+                onAddNote = {},
+                onRetryNotes = {},
                 onDismiss = { showPanel = false },
             )
         }
