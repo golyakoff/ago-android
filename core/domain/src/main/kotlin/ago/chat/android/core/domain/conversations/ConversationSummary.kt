@@ -60,6 +60,19 @@ package ago.chat.android.core.domain.conversations
  * (`26-90`'s own Scope: "`Сообщений: N` ... a total, never an unread count. No unread badge on this
  * tab"). `0` both for a conversation that genuinely has none and for the queue read, which does not
  * populate it — that DTO's own doc comment explains why the two are indistinguishable on purpose.
+ *
+ * `26-152`: [attachmentUploadGrantedAt]/[attachmentUploadGrantedByOperatorId] join the same additive
+ * way — `Ago.Chat.Contracts.ConversationSummaryDto.AttachmentUploadGrantedAt`/
+ * `.AttachmentUploadGrantedByOperatorId`, `null` both for a row that predates the pair and for one with
+ * no grant at all, the identical "additive, defaulted, absent is honest" rule every field above already
+ * follows. [hasAttachmentUploadGrant] alone was enough for the composer's own attach control (`26-15`),
+ * but the contact-detail panel's own «Приём файлов от посетителя» toggle also shows a "granted by … ·
+ * {time}" caption (`docs/design/26-111-thread-contact-detail-panel.md`, F1) — the same who/when
+ * `ago-console`'s own `AttachmentUploadGrantToggle` reads off its identical two fields. Carried through
+ * unparsed for the identical reason [createdAt]/[lastMessageAt] already are (a raw ISO-8601 string, no
+ * `now` to measure against here). `attachmentUploadGrantedByOperatorId` is an id, not a resolved
+ * display name — this app joins none, the same gap `ago-console`'s own component names rather than
+ * quietly works around: the caption says "an operator granted it", never a name.
  */
 public data class ConversationSummary(
     public val conversationId: String,
@@ -76,6 +89,8 @@ public data class ConversationSummary(
     public val lastMessageContentKind: String? = null,
     public val messageCount: Int = 0,
     public val operatorName: String? = null,
+    public val attachmentUploadGrantedAt: String? = null,
+    public val attachmentUploadGrantedByOperatorId: String? = null,
 )
 
 /**

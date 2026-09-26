@@ -34,6 +34,7 @@ public data class ContactPanelUiState(
     val tags: TagsSectionState = TagsSectionState.Loading,
     val notes: NotesSectionState = NotesSectionState.Loading,
     val pastDialogs: PastDialogsSectionState = PastDialogsSectionState.Loading,
+    val attachmentUpload: AttachmentUploadSectionState = AttachmentUploadSectionState.Loading,
 )
 
 /**
@@ -346,4 +347,81 @@ public sealed interface PastDialogHistoryState {
     public data class Failed(
         val reason: NetworkFailure,
     ) : PastDialogHistoryState
+}
+
+/**
+ * `26-152`: the «Приём файлов от посетителя» toggle's own async state — the fifth and final section
+ * slice to grow [ContactPanelUiState] the additive way that type's own doc comment prescribes. Unlike
+ * every section above, there is no dedicated read endpoint for one conversation's own grant status —
+ * [ago.chat.android.core.domain.conversationactions.ConversationActionsApi]'s own doc comment on
+ * [ago.chat.android.core.domain.conversationactions.ConversationActionsApi.grantAttachmentUpload]
+ * already names the mechanism this section actually uses: "the panel re-reads the conversation" through
+ * [ago.chat.android.core.domain.conversations.ConversationsApi.fetchQueue] (the same two lists
+ * [ago.chat.android.thread.ThreadRoute]'s own caller already draws this conversation's row from — a
+ * thread can only ever be open on a `Waiting` or `AssignedToMe` conversation, never a closed admin-list
+ * one, so the queue is always the right place to look). Three arms, the same Loading/Loaded/Failed
+ * vocabulary every sibling section establishes.
+ *
+ * **Whole section hidden without `conversation:attachment_upload_grant`, not merely its write half.**
+ * Unlike [TagsSectionState]/[NotesSectionState] (whose *read* half rides the panel's own
+ * `conversation:read` gate and only the write is separately gated), this feature has no read gate of its
+ * own to fall back to — `docs/design/26-111-contact-panel-slices.md`'s own S-J line and
+ * `ago-console`'s own `AttachmentUploadGrantToggle` ("hidden, not disabled ... without
+ * `ATTACHMENT_UPLOAD_GRANT_PERMISSION`") agree the entire row disappears, not just a control on it. The
+ * view model itself stays permission-agnostic regardless (it always fetches and always exposes
+ * [ago.chat.android.thread.contactpanel.ContactPanelViewModel.toggleAttachmentUpload]) — the gate lives
+ * in the UI layer, the identical split [TagsSectionState]'s own doc comment states for [canTag].
+ */
+public sealed interface AttachmentUploadSectionState {
+    public data object Loading : AttachmentUploadSectionState
+
+    /**
+     * [granted] — whether the visitor may currently upload attachments to this conversation
+     * ([ago.chat.android.core.domain.conversations.ConversationSummary.hasAttachmentUploadGrant]'s own
+     * meaning, re-read fresh rather than trusted from an earlier queue snapshot).
+     *
+     * [grantedAt]/[grantedByOperatorId] — the raw wire timestamp and granting operator's id, both `null`
+     * while [granted] is `false` and whenever the server itself has neither (a row that predates the
+     * pair). [grantedByOperatorId] is never resolved to a display name — the caption says "an operator
+     * granted it", the identical "who/when, not a resolved name" posture `ago-console`'s own
+     * `AttachmentUploadGrantToggle` states for the same two fields.
+     *
+     * [toggling] — `true` while one grant/revoke write (and the re-read that follows a successful one)
+     * is in flight; the toggle control is disabled while this is set, the identical single-write
+     * in-flight shape [NotesSectionState.Loaded.addingNote] already establishes for the notes composer.
+     *
+     * [actionError] — the last toggle outcome when it was not a success, shown non-destructively beneath
+     * the control and cleared the moment a new toggle begins. [granted] is left exactly as it was
+     * through either non-success arm — a refused or failed toggle never flips the control on screen.
+     */
+    public data class Loaded(
+        val granted: Boolean,
+        val grantedAt: String? = null,
+        val grantedByOperatorId: String? = null,
+        val toggling: Boolean = false,
+        val actionError: AttachmentUploadActionError? = null,
+    ) : AttachmentUploadSectionState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : AttachmentUploadSectionState
+}
+
+/**
+ * `26-152`: why a grant/revoke toggle did not take — the two non-success arms of
+ * [ago.chat.android.core.domain.conversationactions.ConversationActionResult], carried into the UI the
+ * identical way [TagActionError]/[AddNoteError] already carry their own write's non-success arms.
+ */
+public sealed interface AttachmentUploadActionError {
+    /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
+     * sentence" posture [TagActionError.Refused] establishes. */
+    public data class Refused(
+        val detail: String,
+    ) : AttachmentUploadActionError
+
+    /** A transport failure — no server sentence to show, so the section renders one generic
+     * «Не удалось изменить разрешение» line, classified by [reason] only if a caller ever needs to. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : AttachmentUploadActionError
 }

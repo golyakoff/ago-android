@@ -4,6 +4,15 @@ import ago.chat.android.core.domain.contactdetails.ContactDetail
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
+import ago.chat.android.core.domain.conversationactions.ConversationActionResult
+import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
+import ago.chat.android.core.domain.conversations.AllConversationsResult
+import ago.chat.android.core.domain.conversations.ClaimResult
+import ago.chat.android.core.domain.conversations.ConversationQueue
+import ago.chat.android.core.domain.conversations.ConversationSummary
+import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.ErasureResult
+import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNote
@@ -75,6 +84,8 @@ class ContactPanelViewModelTest {
         conversationNotesApi: ConversationNotesApi = FakeConversationNotesApi(),
         visitorHistoryApi: VisitorHistoryApi = FakeVisitorHistoryApi(),
         hubEvents: OperatorHubEvents = FakeOperatorHubEvents(),
+        conversationsApi: ConversationsApi = FakeConversationsApi(),
+        conversationActionsApi: ConversationActionsApi = FakeConversationActionsApi(),
     ) = ContactPanelViewModel(
         visitorSummaryApi = summaryApi,
         contactDetailsApi = contactDetailsApi,
@@ -82,6 +93,8 @@ class ContactPanelViewModelTest {
         conversationNotesApi = conversationNotesApi,
         visitorHistoryApi = visitorHistoryApi,
         hubEvents = hubEvents,
+        conversationsApi = conversationsApi,
+        conversationActionsApi = conversationActionsApi,
         ioDispatcher = dispatcher,
     )
 
@@ -846,6 +859,268 @@ class ContactPanelViewModelTest {
         ): AddNoteResult {
             addCalls++
             return addResult
+        }
+    }
+
+    // ─── 26-152: «Приём файлов от посетителя» toggle ──────────────────────────────────────────────────
+
+    @Test
+    fun `open loads the attachment-upload row into the Loaded arm`() =
+        runTest(dispatcher) {
+            val queue =
+                ConversationQueue(
+                    waiting = emptyList(),
+                    assignedToMe =
+                        listOf(
+                            conversationSummary(
+                                "c1",
+                                hasAttachmentUploadGrant = true,
+                                attachmentUploadGrantedAt = "2026-03-14T09:00:00Z",
+                                attachmentUploadGrantedByOperatorId = "op1",
+                            ),
+                        ),
+                )
+            val viewModel = viewModel(conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue)))
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(
+                AttachmentUploadSectionState.Loaded(
+                    granted = true,
+                    grantedAt = "2026-03-14T09:00:00Z",
+                    grantedByOperatorId = "op1",
+                ),
+                viewModel.state.value.attachmentUpload,
+            )
+        }
+
+    @Test
+    fun `a failed queue read becomes the Failed arm, and its retry asks again`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi(queueResult = QueueResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(conversationsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            assertEquals(
+                AttachmentUploadSectionState.Failed(NetworkFailure.NoConnection),
+                viewModel.state.value.attachmentUpload,
+            )
+
+            viewModel.retryAttachmentUpload()
+            advanceUntilIdle()
+
+            assertEquals(2, api.queueCalls)
+        }
+
+    @Test
+    fun `a row missing from the queue becomes Failed rather than a guessed not-granted`() =
+        runTest(dispatcher) {
+            val queue = ConversationQueue(waiting = emptyList(), assignedToMe = emptyList())
+            val viewModel = viewModel(conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue)))
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            assertEquals(
+                AttachmentUploadSectionState.Failed(NetworkFailure.Unexpected),
+                viewModel.state.value.attachmentUpload,
+            )
+        }
+
+    @Test
+    fun `toggling a granted-false row grants it, re-reading the queue for the fresh who-when`() =
+        runTest(dispatcher) {
+            val notGranted = ConversationQueue(waiting = emptyList(), assignedToMe = listOf(conversationSummary("c1")))
+            val granted =
+                ConversationQueue(
+                    waiting = emptyList(),
+                    assignedToMe =
+                        listOf(
+                            conversationSummary(
+                                "c1",
+                                hasAttachmentUploadGrant = true,
+                                attachmentUploadGrantedAt = "2026-03-14T09:00:00Z",
+                                attachmentUploadGrantedByOperatorId = "op1",
+                            ),
+                        ),
+                )
+            val conversationsApi =
+                FakeConversationsApi(
+                    queueResults = mutableListOf(QueueResult.Loaded(notGranted), QueueResult.Loaded(granted)),
+                )
+            val actionsApi = FakeConversationActionsApi(grantResult = ConversationActionResult.Succeeded)
+            val viewModel = viewModel(conversationsApi = conversationsApi, conversationActionsApi = actionsApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            assertEquals(false, (viewModel.state.value.attachmentUpload as AttachmentUploadSectionState.Loaded).granted)
+
+            viewModel.toggleAttachmentUpload()
+            advanceUntilIdle()
+
+            assertEquals(1, actionsApi.grantCalls)
+            assertEquals(0, actionsApi.revokeCalls)
+            assertEquals(
+                AttachmentUploadSectionState.Loaded(
+                    granted = true,
+                    grantedAt = "2026-03-14T09:00:00Z",
+                    grantedByOperatorId = "op1",
+                ),
+                viewModel.state.value.attachmentUpload,
+            )
+        }
+
+    @Test
+    fun `toggling a granted-true row revokes it`() =
+        runTest(dispatcher) {
+            val queue =
+                ConversationQueue(
+                    waiting = emptyList(),
+                    assignedToMe = listOf(conversationSummary("c1", hasAttachmentUploadGrant = true)),
+                )
+            val conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue))
+            val actionsApi = FakeConversationActionsApi(revokeResult = ConversationActionResult.Succeeded)
+            val viewModel = viewModel(conversationsApi = conversationsApi, conversationActionsApi = actionsApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.toggleAttachmentUpload()
+            advanceUntilIdle()
+
+            assertEquals(1, actionsApi.revokeCalls)
+            assertEquals(0, actionsApi.grantCalls)
+        }
+
+    @Test
+    fun `a refused toggle leaves granted untouched and surfaces the detail verbatim`() =
+        runTest(dispatcher) {
+            val queue = ConversationQueue(waiting = emptyList(), assignedToMe = listOf(conversationSummary("c1")))
+            val conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue))
+            val actionsApi =
+                FakeConversationActionsApi(grantResult = ConversationActionResult.Refused("Уже отключено."))
+            val viewModel = viewModel(conversationsApi = conversationsApi, conversationActionsApi = actionsApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.toggleAttachmentUpload()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.attachmentUpload as AttachmentUploadSectionState.Loaded
+            assertEquals(false, loaded.granted)
+            assertEquals(false, loaded.toggling)
+            assertEquals(AttachmentUploadActionError.Refused("Уже отключено."), loaded.actionError)
+            // A refused write asked the queue exactly once - the initial `open` read - never a second,
+            // unneeded re-read the way a Succeeded result triggers.
+            assertEquals(1, conversationsApi.queueCalls)
+        }
+
+    @Test
+    fun `a failed toggle leaves granted untouched and surfaces a generic reason`() =
+        runTest(dispatcher) {
+            val queue = ConversationQueue(waiting = emptyList(), assignedToMe = listOf(conversationSummary("c1")))
+            val conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue))
+            val actionsApi = FakeConversationActionsApi(grantResult = ConversationActionResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(conversationsApi = conversationsApi, conversationActionsApi = actionsApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.toggleAttachmentUpload()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.attachmentUpload as AttachmentUploadSectionState.Loaded
+            assertEquals(false, loaded.granted)
+            assertEquals(AttachmentUploadActionError.Failed(NetworkFailure.NoConnection), loaded.actionError)
+        }
+
+    @Test
+    fun `a toggle already in flight is a no-op`() =
+        runTest(dispatcher) {
+            val queue = ConversationQueue(waiting = emptyList(), assignedToMe = listOf(conversationSummary("c1")))
+            val conversationsApi = FakeConversationsApi(queueResult = QueueResult.Loaded(queue))
+            val actionsApi = FakeConversationActionsApi(grantHang = true)
+            val viewModel = viewModel(conversationsApi = conversationsApi, conversationActionsApi = actionsApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+
+            viewModel.toggleAttachmentUpload()
+            dispatcher.scheduler.runCurrent()
+            viewModel.toggleAttachmentUpload()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, actionsApi.grantCalls)
+        }
+
+    private fun conversationSummary(
+        conversationId: String,
+        hasAttachmentUploadGrant: Boolean = false,
+        attachmentUploadGrantedAt: String? = null,
+        attachmentUploadGrantedByOperatorId: String? = null,
+    ): ConversationSummary =
+        ConversationSummary(
+            conversationId = conversationId,
+            visitorId = "v1",
+            emojiCreature = null,
+            emojiFood = null,
+            visitorName = null,
+            createdAt = "2026-03-14T08:00:00Z",
+            operatorUnreadCount = 0,
+            hasAttachmentUploadGrant = hasAttachmentUploadGrant,
+            attachmentUploadGrantedAt = attachmentUploadGrantedAt,
+            attachmentUploadGrantedByOperatorId = attachmentUploadGrantedByOperatorId,
+        )
+
+    private class FakeConversationsApi(
+        queueResult: QueueResult = QueueResult.Loaded(ConversationQueue(emptyList(), emptyList())),
+        private val queueResults: MutableList<QueueResult> = mutableListOf(queueResult),
+    ) : ConversationsApi {
+        var queueCalls = 0
+
+        override suspend fun fetchQueue(): QueueResult {
+            queueCalls++
+            return if (queueResults.size > 1) queueResults.removeAt(0) else queueResults.first()
+        }
+
+        override suspend fun claim(conversationId: String): ClaimResult = error("not used by this view model")
+
+        override suspend fun markRead(
+            conversationId: String,
+            upToSequence: Int,
+        ): Boolean = error("not used by this view model")
+
+        override suspend fun fetchAllConversations(
+            beforeId: String?,
+            pageSize: Int,
+            states: List<String>,
+        ): AllConversationsResult = error("not used by this view model")
+
+        override suspend fun requestErasure(conversationId: String): ErasureResult = error("not used by this view model")
+    }
+
+    private class FakeConversationActionsApi(
+        private val grantResult: ConversationActionResult = ConversationActionResult.Failed(NetworkFailure.Unexpected),
+        private val revokeResult: ConversationActionResult = ConversationActionResult.Failed(NetworkFailure.Unexpected),
+        private val grantHang: Boolean = false,
+    ) : ConversationActionsApi {
+        var grantCalls = 0
+        var revokeCalls = 0
+
+        override suspend fun close(conversationId: String): ConversationActionResult = error("not used by this view model")
+
+        override suspend fun grantAttachmentUpload(conversationId: String): ConversationActionResult {
+            grantCalls++
+            if (grantHang) awaitCancellation()
+            return grantResult
+        }
+
+        override suspend fun revokeAttachmentUpload(conversationId: String): ConversationActionResult {
+            revokeCalls++
+            return revokeResult
         }
     }
 }

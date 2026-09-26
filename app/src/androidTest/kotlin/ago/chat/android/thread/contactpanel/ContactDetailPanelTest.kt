@@ -123,6 +123,9 @@ class ContactDetailPanelTest {
                 onClosePastDialogHistory = {},
                 onRetryPastDialogHistory = {},
                 onLoadOlderPastDialogHistory = {},
+                canGrantAttachmentUpload = false,
+                onToggleAttachmentUpload = {},
+                onRetryAttachmentUpload = {},
                 onDismiss = { showPanel = false },
             )
         }

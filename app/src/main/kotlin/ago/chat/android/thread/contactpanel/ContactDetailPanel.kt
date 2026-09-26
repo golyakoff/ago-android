@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.conversations.ConversationStateLabel
 import ago.chat.android.core.domain.conversations.conversationStateLabel
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
+import ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection
 import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
 import ago.chat.android.thread.contactpanel.sections.NotesSection
 import ago.chat.android.thread.contactpanel.sections.PastDialogsSection
@@ -114,6 +115,14 @@ internal fun ContactDetailPanel(
     onClosePastDialogHistory: () -> Unit,
     onRetryPastDialogHistory: () -> Unit,
     onLoadOlderPastDialogHistory: () -> Unit,
+    // `26-152`: `conversation:attachment_upload_grant` gates the «Приём файлов от посетителя» section's
+    // own *existence*, not only a control on it (unlike [canTag]/[canWriteNote] above) — wired the same
+    // way those two are: the VM stays permission-agnostic, the gate lives here in the UI layer where the
+    // permission set is known ([ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection]'s
+    // own doc comment).
+    canGrantAttachmentUpload: Boolean,
+    onToggleAttachmentUpload: () -> Unit,
+    onRetryAttachmentUpload: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -200,6 +209,21 @@ internal fun ContactDetailPanel(
                 onClosePastDialogHistory = onClosePastDialogHistory,
                 onRetryPastDialogHistory = onRetryPastDialogHistory,
                 onLoadOlderPastDialogHistory = onLoadOlderPastDialogHistory,
+            )
+
+            Spacer(modifier = Modifier.height(SectionSpacing))
+
+            // `26-152` (S-J): «Приём файлов от посетителя» - the reversible attachment-upload toggle.
+            // Reads its own arm off the same state and takes its callbacks from the same VM, the additive
+            // convention documented above; unlike every section above, `conversation:attachment_upload_grant`
+            // gates the section's whole existence (the section itself decides to draw nothing without it -
+            // [AttachmentUploadSection]'s own doc comment), so this call is unconditional here exactly like
+            // every other section's.
+            AttachmentUploadSection(
+                state = state.attachmentUpload,
+                canGrant = canGrantAttachmentUpload,
+                onToggle = onToggleAttachmentUpload,
+                onRetry = onRetryAttachmentUpload,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

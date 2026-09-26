@@ -266,6 +266,13 @@ private data class ConversationSummaryWireDto(
     // `26-90`: additive the identical way — `null` for a Waiting row (no operator by definition) and
     // for the queue read, which does not join `operators` in at all.
     val operatorName: String? = null,
+    // `26-152`: additive the identical way — `null` for a row with no grant at all and for one that
+    // predates the pair. `Ago.Chat.Contracts.ConversationSummaryDto.AttachmentUploadGrantedAt`/
+    // `.AttachmentUploadGrantedByOperatorId`'s own raw wire values, unparsed here — [ConversationSummary]'s
+    // own doc comment carries the reasoning (the contact-detail panel's «Приём файлов от посетителя»
+    // caption, `26-152`).
+    val attachmentUploadGrantedAt: String? = null,
+    val attachmentUploadGrantedByOperatorId: String? = null,
 )
 
 /** `Ago.Chat.Contracts.OperatorQueueResponse`. */
@@ -299,6 +306,8 @@ private fun ConversationSummaryWireDto.toDomain() =
         lastMessageContentKind = lastMessageContentKind,
         messageCount = messageCount,
         operatorName = operatorName,
+        attachmentUploadGrantedAt = attachmentUploadGrantedAt,
+        attachmentUploadGrantedByOperatorId = attachmentUploadGrantedByOperatorId,
     )
 
 private fun OperatorQueueResponseWireDto.toDomain() =

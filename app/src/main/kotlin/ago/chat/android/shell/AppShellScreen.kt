@@ -205,6 +205,12 @@ internal fun AppShellScreen(
             // reading a conversation's notes and being allowed to add one are two capabilities the server
             // checks separately too.
             canWriteNote = permissions.holds(Permission.CONVERSATION_NOTE_WRITE),
+            // `26-152`: `conversation:attachment_upload_grant` gates the contact-panel attachment-upload
+            // section's whole existence (hide-not-disable, design Q7) - computed here, once, from the same
+            // permission set, the identical shape `canWriteNote` above uses. A separate check from
+            // `conversation:read`: there is no read-only fallback for this one section
+            // ([ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection]'s own doc comment).
+            canGrantAttachmentUpload = permissions.holds(Permission.CONVERSATION_ATTACHMENT_UPLOAD_GRANT),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for
