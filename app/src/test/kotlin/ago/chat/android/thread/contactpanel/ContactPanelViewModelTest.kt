@@ -220,8 +220,8 @@ class ContactPanelViewModelTest {
 
             val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
             assertEquals(listOf(unmasked), loaded.details)
-            assertTrue(loaded.revealingIds.isEmpty())
-            assertTrue(loaded.revealErrors.isEmpty())
+            assertTrue(loaded.pendingIds.isEmpty())
+            assertTrue(loaded.rowErrors.isEmpty())
         }
 
     @Test
@@ -242,7 +242,242 @@ class ContactPanelViewModelTest {
 
             val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
             assertEquals(listOf(masked), loaded.details)
-            assertEquals(RowRevealError.Refused("Not entitled"), loaded.revealErrors["p1"])
+            assertEquals(RowActionError.Refused("Not entitled"), loaded.rowErrors["p1"])
+        }
+
+    // ─── 26-169: КОНТАКТНЫЕ ДАННЫЕ edit + assessment ───────────────────────────────────────────────
+
+    @Test
+    fun `startEditContactDetail opens the editor prefilled with the row's current value`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val viewModel = viewModel(contactDetailsApi = FakeContactDetailsApi(listResult = ContactDetailsResult.Loaded(listOf(row))))
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals("p1", loaded.editingId)
+            assertEquals("+7 900 111 22 33", loaded.editDraft)
+        }
+
+    @Test
+    fun `opening a second row's editor discards the first row's draft`() =
+        runTest(dispatcher) {
+            val rows =
+                listOf(
+                    ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false),
+                    ContactDetail(id = "e1", kind = "Email", value = "a@example.com", masked = false),
+                )
+            val viewModel = viewModel(contactDetailsApi = FakeContactDetailsApi(listResult = ContactDetailsResult.Loaded(rows)))
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+            viewModel.onEditContactDetailDraftChanged("+7 999 000 00 00")
+            viewModel.startEditContactDetail("e1")
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals("e1", loaded.editingId)
+            assertEquals("a@example.com", loaded.editDraft)
+        }
+
+    @Test
+    fun `cancelEditContactDetail closes the editor without sending anything`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val api = FakeContactDetailsApi(listResult = ContactDetailsResult.Loaded(listOf(row)))
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+            viewModel.onEditContactDetailDraftChanged("+7 999 000 00 00")
+            viewModel.cancelEditContactDetail()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals(null, loaded.editingId)
+            assertEquals("", loaded.editDraft)
+            assertEquals(0, api.editCalls)
+        }
+
+    @Test
+    fun `saveEditContactDetail replaces the row in place and closes the editor on success`() =
+        runTest(dispatcher) {
+            val original =
+                ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false, assessment = "Confirmed")
+            val edited = ContactDetail(id = "p1", kind = "Phone", value = "+7 999 000 00 00", masked = false)
+            val api =
+                FakeContactDetailsApi(
+                    listResult = ContactDetailsResult.Loaded(listOf(original)),
+                    editResult = ContactDetailWriteResult.Updated(edited),
+                )
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+            viewModel.onEditContactDetailDraftChanged("+7 999 000 00 00")
+            viewModel.saveEditContactDetail()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            // The server's own answer replaces the row - assessment reset to `Unset` included, since
+            // this method never fabricates the row itself.
+            assertEquals(listOf(edited), loaded.details)
+            assertEquals(null, loaded.editingId)
+            assertEquals("", loaded.editDraft)
+            assertTrue(loaded.pendingIds.isEmpty())
+            assertEquals(1, api.editCalls)
+        }
+
+    @Test
+    fun `a refused edit keeps the editor open with the draft, and surfaces the server detail`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val api =
+                FakeContactDetailsApi(
+                    listResult = ContactDetailsResult.Loaded(listOf(row)),
+                    editResult = ContactDetailWriteResult.Refused("Слишком длинный номер."),
+                )
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+            viewModel.onEditContactDetailDraftChanged("+7 999 000 00 00 00 00")
+            viewModel.saveEditContactDetail()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals(listOf(row), loaded.details)
+            assertEquals("p1", loaded.editingId)
+            assertEquals("+7 999 000 00 00 00 00", loaded.editDraft)
+            assertEquals(RowActionError.Refused("Слишком длинный номер."), loaded.rowErrors["p1"])
+        }
+
+    @Test
+    fun `saveEditContactDetail is a no-op for a blank draft`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val api = FakeContactDetailsApi(listResult = ContactDetailsResult.Loaded(listOf(row)))
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.startEditContactDetail("p1")
+            viewModel.onEditContactDetailDraftChanged("   ")
+            viewModel.saveEditContactDetail()
+            advanceUntilIdle()
+
+            assertEquals(0, api.editCalls)
+        }
+
+    @Test
+    fun `setContactDetailAssessment replaces the row in place with the server's new assessment`() =
+        runTest(dispatcher) {
+            val unset = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val confirmed = unset.copy(assessment = "Confirmed")
+            val api =
+                FakeContactDetailsApi(
+                    listResult = ContactDetailsResult.Loaded(listOf(unset)),
+                    assessmentResult = ContactDetailWriteResult.Updated(confirmed),
+                )
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.setContactDetailAssessment("p1", "Confirmed")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals(listOf(confirmed), loaded.details)
+            assertTrue(loaded.pendingIds.isEmpty())
+            assertEquals(1, api.assessmentCalls)
+        }
+
+    @Test
+    fun `a refused assessment leaves the row untouched and surfaces the server detail`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "n1", kind = "Name", value = "Аня", masked = false)
+            val api =
+                FakeContactDetailsApi(
+                    listResult = ContactDetailsResult.Loaded(listOf(row)),
+                    assessmentResult = ContactDetailWriteResult.Refused("Имя нельзя оценивать."),
+                )
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.setContactDetailAssessment("n1", "Confirmed")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals(listOf(row), loaded.details)
+            assertEquals(RowActionError.Refused("Имя нельзя оценивать."), loaded.rowErrors["n1"])
+        }
+
+    @Test
+    fun `a failed assessment write surfaces the assessment-specific generic reason`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val api =
+                FakeContactDetailsApi(
+                    listResult = ContactDetailsResult.Loaded(listOf(row)),
+                    assessmentResult = ContactDetailWriteResult.Failed(NetworkFailure.NoConnection),
+                )
+            val viewModel = viewModel(contactDetailsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.setContactDetailAssessment("p1", "Invalid")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.contactDetails as ContactDetailsSectionState.Loaded
+            assertEquals(RowActionError.Failed.Assessment(NetworkFailure.NoConnection), loaded.rowErrors["p1"])
+        }
+
+    @Test
+    fun `an assessment write already in flight for that row is a no-op`() =
+        runTest(dispatcher) {
+            val row = ContactDetail(id = "p1", kind = "Phone", value = "+7 900 111 22 33", masked = false)
+            val hangingApi =
+                object : ContactDetailsApi {
+                    var calls = 0
+
+                    override suspend fun fetchContactDetails(conversationId: String) = ContactDetailsResult.Loaded(listOf(row))
+
+                    override suspend fun revealContactDetail(
+                        conversationId: String,
+                        contactDetailId: String,
+                    ): RevealContactDetailResult = error("not used by this test")
+
+                    override suspend fun editContactDetail(
+                        conversationId: String,
+                        contactDetailId: String,
+                        value: String,
+                    ): ContactDetailWriteResult = error("not used by this test")
+
+                    override suspend fun setContactDetailAssessment(
+                        conversationId: String,
+                        contactDetailId: String,
+                        assessment: String,
+                    ): ContactDetailWriteResult {
+                        calls++
+                        awaitCancellation()
+                    }
+                }
+            val viewModel = viewModel(contactDetailsApi = hangingApi)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.setContactDetailAssessment("p1", "Confirmed")
+            dispatcher.scheduler.runCurrent()
+            viewModel.setContactDetailAssessment("p1", "Confirmed")
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, hangingApi.calls)
         }
 
     // ─── 26-149: tags section ──────────────────────────────────────────────────────────────────────────
@@ -798,9 +1033,9 @@ class ContactPanelViewModelTest {
         var listCalls = 0
         var revealCalls = 0
 
-        // `26-167`: the write half of this port has no caller yet - the edit/assessment screen is a
-        // separate follow-up slice (`docs/design/26-156-*.md` §6, ticket `26-172`/`26-173`) - so these
-        // two exist only so this fake keeps implementing the whole interface; no test here exercises them.
+        // `26-169`: the write half of this port now has a real caller - `ContactPanelViewModel
+        // .saveEditContactDetail`/`.setContactDetailAssessment` - exercised by this file's own `26-169`
+        // section below.
         var editCalls = 0
         var assessmentCalls = 0
 

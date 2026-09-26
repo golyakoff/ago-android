@@ -315,6 +315,26 @@
     <string name="contact_details_reveal_failed">Не удалось показать</string>
 
     <!--
+        `26-169`: the row `⋮` this section grows (`docs/design/26-156-*.md`) - «Изменить» opens the row's
+        own editor (`contact_details_action_save`/`_saving`, «Отмена» reuses `action_cancel`), «Подтвердить»/
+        «Отметить недействительным» set a Phone/Email row's own assessment, rendered back as
+        `contact_details_assessment_confirmed`/`_invalid` beside the value. `_row_actions` is the `⋮`
+        button's own accessible name; `_edit_failed`/`_assessment_failed` are this section's two further
+        generic transport-failure lines (`contact_details_reveal_failed`'s own siblings) - a genuine server
+        refusal shows the server's own sentence verbatim instead, exactly as it already does for a reveal.
+    -->
+    <string name="contact_details_action_edit">Изменить</string>
+    <string name="contact_details_action_save">Сохранить</string>
+    <string name="contact_details_action_saving">Сохранение…</string>
+    <string name="contact_details_action_confirm">Подтвердить</string>
+    <string name="contact_details_action_mark_invalid">Отметить недействительным</string>
+    <string name="contact_details_assessment_confirmed">Подтверждено</string>
+    <string name="contact_details_assessment_invalid">Недействительно</string>
+    <string name="contact_details_edit_failed">Не удалось сохранить изменение.</string>
+    <string name="contact_details_assessment_failed">Не удалось обновить статус.</string>
+    <string name="contact_details_row_actions">Действия</string>
+
+    <!--
         `26-149`: the contact-detail panel's tags section - «МЕТКИ» (chips + «+ метка» picker,
         `docs/design/26-111-thread-contact-detail-panel.md`). `tags_section_title` is rendered uppercase by
         the section (like `contact_details_section_title`), so the source stays sentence case for TalkBack.

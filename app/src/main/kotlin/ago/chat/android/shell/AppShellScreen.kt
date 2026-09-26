@@ -193,6 +193,13 @@ internal fun AppShellScreen(
             // already holds, the identical shape the two Booleans above use. Safe while [permissions] is
             // still [OperatorPermissions.Unknown] for the reason stated above.
             canReadContactDetail = permissions.holds(Permission.CONVERSATION_READ),
+            // `26-169`: `conversation:send` gates the contact-panel's КОНТАКТНЫЕ ДАННЫЕ section's row `⋮`
+            // (edit + set-assessment) - computed here, once, from the same permission set, the identical
+            // shape `canReadContactDetail` above uses. A separate check from `conversation:read`: reading a
+            // conversation's contact details and being allowed to edit or assess one are two capabilities
+            // the server checks separately too (`EditVisitorContactDetailHandler`/
+            // `SetVisitorContactDetailAssessmentHandler`, `docs/design/26-156-*.md` §2).
+            canSendConversation = permissions.holds(Permission.CONVERSATION_SEND),
             // `26-149`: `conversation:tag` gates the contact-panel tags section's write affordances
             // (hide-not-disable, design Q7) - computed here, once, from the same permission set, the
             // identical shape `canReadContactDetail` above uses. A separate check from `conversation:read`:

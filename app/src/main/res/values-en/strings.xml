@@ -184,6 +184,16 @@
     <string name="contact_details_empty">No contact details</string>
     <string name="contact_details_load_failed">Couldn\'t load contact details</string>
     <string name="contact_details_reveal_failed">Couldn\'t show</string>
+    <string name="contact_details_action_edit">Edit</string>
+    <string name="contact_details_action_save">Save</string>
+    <string name="contact_details_action_saving">Saving…</string>
+    <string name="contact_details_action_confirm">Confirm</string>
+    <string name="contact_details_action_mark_invalid">Mark as invalid</string>
+    <string name="contact_details_assessment_confirmed">Confirmed</string>
+    <string name="contact_details_assessment_invalid">Invalid</string>
+    <string name="contact_details_edit_failed">Couldn\'t save the change.</string>
+    <string name="contact_details_assessment_failed">Couldn\'t update the status.</string>
+    <string name="contact_details_row_actions">Actions</string>
 
     <!-- `26-149`: contact-detail panel tags section (chips + «+ метка» picker). -->
     <string name="tags_section_title">Tags</string>
