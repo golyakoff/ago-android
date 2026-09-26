@@ -47,10 +47,12 @@ import javax.inject.Inject
  * from [unreadTotal] — [ConversationsUnreadTotal]'s own doc comment states why that port, not a second
  * fetch of anything `ConversationListViewModel` already holds, is what backs it.
  *
- * `26-179`: the identical "outlives every bottom-tab switch" scope is what lets this class also own
- * Записи's own poll-driven [pendingBookingsTotal] - a second footer badge, a different kind of source
- * ([PendingBookingsCount] an active poll rather than [ConversationsUnreadTotal]'s passive Room read), and
- * the same scope long enough to keep it alive whichever tab is actually showing.
+ * `26-179`/`26-180`: the identical "outlives every bottom-tab switch" scope is what lets this class also
+ * own Записи's own poll-driven [pendingBookingsTotal] and Команда's own session-only [teamUnreadTotal] —
+ * three footer badges, three different kinds of source ([ConversationsUnreadTotal] a passive Room read,
+ * [PendingBookingsCount] an active poll, [TeamUnreadCount] a live hub-push tally with no backing store at
+ * all — see that class's own doc comment) — and one scope long enough to keep every one of them alive
+ * whichever tab is actually showing.
  *
  * ## The three states this class ever publishes, and what each one renders
  *
@@ -76,6 +78,7 @@ public class AppShellViewModel
         private val presenceController: OperatorPresenceController,
         private val unreadTotal: ConversationsUnreadTotal,
         private val pendingBookingsCount: PendingBookingsCount,
+        private val teamUnreadCount: TeamUnreadCount,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutablePermissions = MutableStateFlow<OperatorPermissions>(OperatorPermissions.Unknown)
@@ -98,6 +101,11 @@ public class AppShellViewModel
          * shell tearing down) is what stops it. */
         public val pendingBookingsTotal: StateFlow<Int?> =
             pendingBookingsCount.observeCount().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+        /** `26-180`: Команда's own badge count - never `null` (see [TeamUnreadCount]'s own doc comment
+         * for why this one has no "not loaded yet" state at all), relayed verbatim from [teamUnreadCount]
+         * rather than re-derived here. */
+        public val teamUnreadTotal: StateFlow<Int> = teamUnreadCount.count
 
         private val mutableLoadError = MutableStateFlow<NetworkFailure?>(null)
 
@@ -122,12 +130,23 @@ public class AppShellViewModel
         init {
             load()
             viewModelScope.launch { mutableIdentity.value = identityProvider.currentIdentity() }
+            // `26-180`: starts `teamUnreadCount`'s own `OperatorHubEvents.teamMessages` collection on
+            // this class's own `viewModelScope` - alive for the shell's whole lifetime, the identical
+            // "counts while Команда is not the active tab" shape [pendingBookingsTotal] above already
+            // needs `viewModelScope` for.
+            teamUnreadCount.start(viewModelScope)
         }
 
         /** The retry screen's only control — re-asks the identical question, nothing else changes. */
         public fun retry() {
             mutableLoadError.value = null
             load()
+        }
+
+        /** `26-180`: [AppShellContent]'s own signal for "Команда just became (or stopped being) the
+         * active tab" - see [TeamUnreadCount.setActive]'s own doc comment for the two effects this has. */
+        public fun onTeamTabActiveChanged(active: Boolean) {
+            teamUnreadCount.setActive(active)
         }
 
         private fun load() {

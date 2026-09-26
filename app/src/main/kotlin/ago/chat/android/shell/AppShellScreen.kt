@@ -110,6 +110,7 @@ public fun AppShellRoute(
     val identity by viewModel.identity.collectAsStateWithLifecycle()
     val unreadConversationsTotal by viewModel.unreadConversationsTotal.collectAsStateWithLifecycle()
     val pendingBookingsTotal by viewModel.pendingBookingsTotal.collectAsStateWithLifecycle()
+    val teamUnreadTotal by viewModel.teamUnreadTotal.collectAsStateWithLifecycle()
 
     // `26-17`: the Settings screen's own site switcher writes a new site *through* `ActiveSiteSelection`
     // (`di/AppModule`'s single source of truth) rather than through this value, so this local override
@@ -127,9 +128,11 @@ public fun AppShellRoute(
         operatorEmail = identity?.email,
         unreadConversationsTotal = unreadConversationsTotal,
         pendingBookingsTotal = pendingBookingsTotal,
+        teamUnreadTotal = teamUnreadTotal,
         onRetry = viewModel::retry,
         onSignOut = onSignOut,
         onSiteSwitched = { newSiteId -> currentActiveSiteId = newSiteId },
+        onTeamTabActiveChanged = viewModel::onTeamTabActiveChanged,
     )
 }
 
@@ -175,7 +178,14 @@ internal fun AppShellScreen(
     // already is, restated for Записи's own footer badge. Read by `AppShellContent` below, alone; no tab
     // slot needs it.
     pendingBookingsTotal: Int? = null,
+    // `26-180`: never `null` - [TeamUnreadCount]'s own doc comment states why Команда's own badge has no
+    // "not loaded yet" state to represent. Read by `AppShellContent` below, alone; no tab slot needs it.
+    teamUnreadTotal: Int = 0,
     onSiteSwitched: (String) -> Unit = {},
+    // `26-180`: [AppShellContent]'s own signal for "Команда just became (or stopped being) the active
+    // tab" - a back-contract test's own substitute call site never passes this, so it defaults to a no-op
+    // exactly the way [onSiteSwitched] above already does.
+    onTeamTabActiveChanged: (Boolean) -> Unit = {},
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit = { onOpenSettings ->
         ConversationsTabHost(
             activeSiteId = activeSiteId,
@@ -347,12 +357,14 @@ internal fun AppShellScreen(
                 operatorEmail = operatorEmail,
                 unreadConversationsTotal = unreadConversationsTotal,
                 pendingBookingsTotal = pendingBookingsTotal,
+                teamUnreadTotal = teamUnreadTotal,
                 onSignOut = onSignOut,
                 conversationsTab = conversationsTab,
                 bookingsTab = bookingsTab,
                 settingsScreen = settingsScreen,
                 teamTab = teamTab,
                 onSiteSwitched = onSiteSwitched,
+                onTeamTabActiveChanged = onTeamTabActiveChanged,
             )
     }
 }
@@ -394,6 +406,7 @@ private fun AppShellContent(
     operatorEmail: String?,
     unreadConversationsTotal: Int?,
     pendingBookingsTotal: Int?,
+    teamUnreadTotal: Int,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     // `26-96`/`26-97`/`26-140`/`26-142`/`26-164`: the third through seventh `Boolean` are
@@ -405,11 +418,21 @@ private fun AppShellContent(
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     onSiteSwitched: (String) -> Unit,
+    onTeamTabActiveChanged: (Boolean) -> Unit,
 ) {
     val navController = rememberNavController()
     val destinations = remember(permissions) { visibleBottomDestinations(permissions) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // `26-180`: Команда's own footer badge resets - and stops counting - the instant this becomes the
+    // active tab, and resumes counting the instant it stops being one. `LaunchedEffect(isTeamActive)`
+    // rather than `LaunchedEffect(currentRoute)`: this only needs to know the *transition* in or out of
+    // Команда specifically, not every bottom-tab change, and keying on the derived `Boolean` is what
+    // makes a switch between two *other* tabs (Диалоги to Записи, say) a no-op here rather than a spurious
+    // re-announcement of whatever `isTeamActive` already was.
+    val isTeamActive = currentRoute == BottomDestination.Team.route()
+    LaunchedEffect(isTeamActive) { onTeamTabActiveChanged(isTeamActive) }
 
     // `26-157`: whether one of Записи's four `⋮` configuration screens is open as a modal page. Reported up
     // by `bookingsTab`'s own `onConfigScreenChanged`, it hides the bottom navigation bar for exactly as
@@ -507,10 +530,12 @@ private fun AppShellContent(
                             }
                         },
                         icon = {
-                            // `26-46`/`26-179`: the mockup's `.nb` — drawn only on Диалоги or Записи, only
-                            // once each destination's own source has actually answered ([badgeCount]
-                            // below is `null` until then, `PendingBookingsCount.observeCount`'s and
-                            // `ConversationsUnreadTotal.observeTotal`'s own doc comments), and never for a
+                            // `26-46`/`26-179`/`26-180`: the mockup's `.nb` — drawn on Диалоги, Записи or
+                            // Команда, only once each destination's own source has actually answered
+                            // ([badgeCount] below is `null` until then for the first two -
+                            // `PendingBookingsCount.observeCount`'s and `ConversationsUnreadTotal
+                            // .observeTotal`'s own doc comments explain why; `teamUnreadTotal` has no such
+                            // state, `TeamUnreadCount`'s own doc comment explains why not), and never for a
                             // genuine `0` (`docs/backlog/26-39-*.md`'s own "no count is invented, and none
                             // is drawn for a real zero either" rule, restated for a badge instead of a
                             // label).
@@ -518,6 +543,7 @@ private fun AppShellContent(
                                 when (destination) {
                                     BottomDestination.Conversations -> unreadConversationsTotal
                                     BottomDestination.Bookings -> pendingBookingsTotal
+                                    BottomDestination.Team -> teamUnreadTotal
                                     else -> null
                                 }?.takeIf { it > 0 }
                             if (badgeCount != null) {
@@ -540,14 +566,16 @@ private fun AppShellContent(
                                                 many = R.string.nav_bookings_pending_many,
                                             )
 
+                                        // Диалоги and Команда both share this wording - `else`, not two
+                                        // separate arms, because both counts genuinely are "N unread
+                                        // messages", the identical fact `conversation_row_unread_*` already
+                                        // names for a conversation row's own badge (`26-180`: Команда's own
+                                        // messages are unread the same way, so this reuses that string
+                                        // rather than adding a near-duplicate one - the wording, not the
+                                        // wire shape, is what decides whether a string is shared).
                                         else ->
                                             russianPluralStringResource(
                                                 count = badgeCount.toLong(),
-                                                // Reused, not duplicated: the identical clause
-                                                // `ConversationListScreen`'s own
-                                                // `conversationRowContentDescription` already speaks for
-                                                // one row's own unread count - the same number, worded the
-                                                // same way, whether it is heard here or there.
                                                 one = R.string.conversation_row_unread_one,
                                                 few = R.string.conversation_row_unread_few,
                                                 many = R.string.conversation_row_unread_many,
