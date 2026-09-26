@@ -109,6 +109,7 @@ public fun AppShellRoute(
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val identity by viewModel.identity.collectAsStateWithLifecycle()
     val unreadConversationsTotal by viewModel.unreadConversationsTotal.collectAsStateWithLifecycle()
+    val pendingBookingsTotal by viewModel.pendingBookingsTotal.collectAsStateWithLifecycle()
 
     // `26-17`: the Settings screen's own site switcher writes a new site *through* `ActiveSiteSelection`
     // (`di/AppModule`'s single source of truth) rather than through this value, so this local override
@@ -125,6 +126,7 @@ public fun AppShellRoute(
         operatorDisplayName = identity?.displayName,
         operatorEmail = identity?.email,
         unreadConversationsTotal = unreadConversationsTotal,
+        pendingBookingsTotal = pendingBookingsTotal,
         onRetry = viewModel::retry,
         onSignOut = onSignOut,
         onSiteSwitched = { newSiteId -> currentActiveSiteId = newSiteId },
@@ -169,6 +171,10 @@ internal fun AppShellScreen(
     // loaded yet" - no badge - the identical distinction `AppShellViewModel.unreadConversationsTotal`'s
     // own doc comment draws. Read by `AppShellContent` below, alone; no tab slot needs it.
     unreadConversationsTotal: Int? = null,
+    // `26-179`: the identical `null`-means-"not loaded yet" shape [unreadConversationsTotal] above
+    // already is, restated for Записи's own footer badge. Read by `AppShellContent` below, alone; no tab
+    // slot needs it.
+    pendingBookingsTotal: Int? = null,
     onSiteSwitched: (String) -> Unit = {},
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit = { onOpenSettings ->
         ConversationsTabHost(
@@ -340,6 +346,7 @@ internal fun AppShellScreen(
                 operatorDisplayName = operatorDisplayName,
                 operatorEmail = operatorEmail,
                 unreadConversationsTotal = unreadConversationsTotal,
+                pendingBookingsTotal = pendingBookingsTotal,
                 onSignOut = onSignOut,
                 conversationsTab = conversationsTab,
                 bookingsTab = bookingsTab,
@@ -386,6 +393,7 @@ private fun AppShellContent(
     operatorDisplayName: String?,
     operatorEmail: String?,
     unreadConversationsTotal: Int?,
+    pendingBookingsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
     // `26-96`/`26-97`/`26-140`/`26-142`/`26-164`: the third through seventh `Boolean` are
@@ -499,33 +507,52 @@ private fun AppShellContent(
                             }
                         },
                         icon = {
-                            // `26-46`: the mockup's `.nb` — drawn only on Диалоги, only once a real
-                            // total has arrived ([unreadConversationsTotal] `null` means "not loaded
-                            // yet", `AppShellViewModel.unreadConversationsTotal`'s own doc comment), and
-                            // never for a genuine `0` (`docs/backlog/26-39-*.md`'s own "no count is
-                            // invented, and none is drawn for a real zero either" rule, restated for a
-                            // badge instead of a label).
-                            val unreadCount =
-                                unreadConversationsTotal
-                                    ?.takeIf { it > 0 && destination == BottomDestination.Conversations }
-                            if (unreadCount != null) {
-                                // `unreadCount` (a fresh local `val`) is smart-cast non-null for the
-                                // rest of this branch - `unreadConversationsTotal` itself, a captured
-                                // parameter, would not be, which is why this is read through it rather
-                                // than through that parameter directly from here on.
+                            // `26-46`/`26-179`: the mockup's `.nb` — drawn only on Диалоги or Записи, only
+                            // once each destination's own source has actually answered ([badgeCount]
+                            // below is `null` until then, `PendingBookingsCount.observeCount`'s and
+                            // `ConversationsUnreadTotal.observeTotal`'s own doc comments), and never for a
+                            // genuine `0` (`docs/backlog/26-39-*.md`'s own "no count is invented, and none
+                            // is drawn for a real zero either" rule, restated for a badge instead of a
+                            // label).
+                            val badgeCount: Int? =
+                                when (destination) {
+                                    BottomDestination.Conversations -> unreadConversationsTotal
+                                    BottomDestination.Bookings -> pendingBookingsTotal
+                                    else -> null
+                                }?.takeIf { it > 0 }
+                            if (badgeCount != null) {
+                                // `badgeCount` (a fresh local `val`) is smart-cast non-null for the
+                                // rest of this branch - `unreadConversationsTotal`/`pendingBookingsTotal`
+                                // themselves, captured parameters, would not be, which is why this is read
+                                // through it rather than through either parameter directly from here on.
                                 val label = stringResource(destination.labelRes())
                                 val unreadClause =
-                                    russianPluralStringResource(
-                                        count = unreadCount.toLong(),
-                                        // Reused, not duplicated: the identical clause
-                                        // `ConversationListScreen`'s own `conversationRowContentDescription`
-                                        // already speaks for one row's own unread count - the same
-                                        // number, worded the same way, whether it is heard here or
-                                        // there.
-                                        one = R.string.conversation_row_unread_one,
-                                        few = R.string.conversation_row_unread_few,
-                                        many = R.string.conversation_row_unread_many,
-                                    )
+                                    when (destination) {
+                                        BottomDestination.Bookings ->
+                                            // `26-179`: its own wording - "N bookings waiting", not
+                                            // "N unread messages" - `conversation_row_unread_*` has
+                                            // nothing to do with a booking queue and reusing it here would
+                                            // announce the wrong noun to a screen reader.
+                                            russianPluralStringResource(
+                                                count = badgeCount.toLong(),
+                                                one = R.string.nav_bookings_pending_one,
+                                                few = R.string.nav_bookings_pending_few,
+                                                many = R.string.nav_bookings_pending_many,
+                                            )
+
+                                        else ->
+                                            russianPluralStringResource(
+                                                count = badgeCount.toLong(),
+                                                // Reused, not duplicated: the identical clause
+                                                // `ConversationListScreen`'s own
+                                                // `conversationRowContentDescription` already speaks for
+                                                // one row's own unread count - the same number, worded the
+                                                // same way, whether it is heard here or there.
+                                                one = R.string.conversation_row_unread_one,
+                                                few = R.string.conversation_row_unread_few,
+                                                many = R.string.conversation_row_unread_many,
+                                            )
+                                    }
                                 BadgedBox(
                                     badge = {
                                         // No explicit colours: `Badge`'s own default container/content
@@ -545,7 +572,7 @@ private fun AppShellContent(
                                             // `Icon` below instead.
                                             modifier = Modifier.clearAndSetSemantics {},
                                         ) {
-                                            Text(text = unreadCount.toString())
+                                            Text(text = badgeCount.toString())
                                         }
                                     },
                                 ) {

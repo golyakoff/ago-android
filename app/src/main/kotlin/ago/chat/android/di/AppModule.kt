@@ -68,6 +68,8 @@ import ago.chat.android.core.network.workers.KtorWorkersApi
 import ago.chat.android.core.network.workerschedule.KtorWorkerScheduleApi
 import ago.chat.android.core.network.workerslots.KtorWorkerSlotsApi
 import ago.chat.android.data.AgoChatDatabase
+import ago.chat.android.data.bookings.PendingBookingsCount
+import ago.chat.android.data.bookings.PendingBookingsPoller
 import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.data.conversations.RoomConversationListCache
@@ -699,6 +701,15 @@ public object AppModule {
     // is itself `internal`, regardless of [ConversationsUnreadTotal] (the return type) being `public`.
     @Provides
     internal fun provideConversationsUnreadTotal(cache: RoomConversationListCache): ConversationsUnreadTotal = cache
+
+    // `26-179`: `internal`, for the identical reason [provideConversationListCache] above already is -
+    // [PendingBookingsPoller] (the parameter type) is itself `internal`, regardless of
+    // [PendingBookingsCount] (the return type) being `public`. No `@Singleton`: this instance is owned by
+    // whichever [ago.chat.android.shell.AppShellViewModel] injects it, the identical unscoped-binding
+    // shape that class's own constructor already gets for every other collaborator Hilt does not need to
+    // share across screens.
+    @Provides
+    internal fun providePendingBookingsCount(poller: PendingBookingsPoller): PendingBookingsCount = poller
 
     @Provides
     internal fun provideComposerDraftDao(database: AgoChatDatabase): ComposerDraftDao = database.composerDraftDao()
