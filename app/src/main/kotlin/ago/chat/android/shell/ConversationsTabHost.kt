@@ -60,6 +60,11 @@ public fun ConversationsTabHost(
     // (hide-not-disable). Defaulted to `false` so every back-contract test constructing this composable
     // directly compiles and behaves unchanged.
     canReadContactDetail: Boolean = false,
+    // `26-169`: `conversation:send`, computed by [AppShellScreen]'s own `conversationsTab` default and
+    // threaded straight through to [ThreadRoute] alongside `canReadContactDetail`, which gates the contact
+    // details section's row `⋮` (edit + set-assessment) on it (hide-not-disable). Defaulted to `false` so
+    // every back-contract test constructing this composable directly compiles and behaves unchanged.
+    canSendConversation: Boolean = false,
     // `26-149`: `conversation:tag`, computed by [AppShellScreen]'s own `conversationsTab` default and
     // threaded straight through to [ThreadRoute] alongside `canReadContactDetail`, which gates the tags
     // section's write affordances on it (hide-not-disable). Defaulted to `false` so every back-contract
@@ -174,6 +179,7 @@ public fun ConversationsTabHost(
                 hasAttachmentUploadGrant = row?.hasAttachmentUploadGrant,
                 identityUnavailable = identityUnavailable,
                 canReadContactDetail = canReadContactDetail,
+                canSendConversation = canSendConversation,
                 canTagConversation = canTagConversation,
                 canWriteNote = canWriteNote,
                 canGrantAttachmentUpload = canGrantAttachmentUpload,

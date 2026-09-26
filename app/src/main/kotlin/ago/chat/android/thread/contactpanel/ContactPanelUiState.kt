@@ -73,29 +73,51 @@ public sealed interface HeaderSummaryState {
  * skeleton while it loads, the rows once they land, and its own inline retry (never a whole-sheet
  * failure — `docs/design/26-111-thread-contact-detail-panel.md` §4) if it does not.
  *
- * The two reveal-transient fields live on the [Loaded] arm rather than on [ContactPanelUiState] itself,
- * the identical "the in-flight set travels with the loaded list it acts on" shape
+ * The per-row transient fields live on the [Loaded] arm rather than on [ContactPanelUiState] itself, the
+ * identical "the in-flight set travels with the loaded list it acts on" shape
  * [ago.chat.android.bookings.ContactsUiState.Loaded] already establishes for the calendar reveal.
+ *
+ * `26-169` (`docs/design/26-156-*.md`): [pendingIds]/[rowErrors] are `26-148`'s own `revealingIds`/
+ * `revealErrors`, generalised from "a reveal in flight" to "any one of this row's three writes in flight" —
+ * reveal, [ContactPanelViewModel.saveEditContactDetail] and [ContactPanelViewModel.setContactDetailAssessment]
+ * all share the same shape (one row, one write, one outcome), and only one of the three can ever be in
+ * flight for a given row at a time (the row's own `⋮` menu is the only entry point to edit or assess, and
+ * it is unavailable while a reveal is already running, [ContactDetailsSection]'s own doc comment). A second,
+ * per-row `editingId`/`editDraft` pair is new here rather than reused from [NotesSectionState.Loaded.draft]'s
+ * shape verbatim: unlike the panel's one note composer, this section can have many rows, so the "which one"
+ * needs its own id alongside the text.
  */
 public sealed interface ContactDetailsSectionState {
     public data object Loading : ContactDetailsSectionState
 
     /**
-     * The rows the server returned, plus the per-row reveal transient state.
+     * The rows the server returned, plus the per-row transient state every write on this section shares.
      *
-     * [revealingIds] — the contact-detail ids with a reveal in flight right now; the section disables that
-     * row's «Показать» and swaps its label to «Показ…» while its id is in this set (keyed by row id, since
-     * a reveal is a single-row action, unlike the calendar's per-customer key).
+     * [pendingIds] — the contact-detail ids with a reveal, edit-save or assessment write in flight right
+     * now; the section disables that row's «Показать»/`⋮` while its id is in this set (keyed by row id,
+     * since every write here is a single-row action, unlike the calendar's per-customer key).
      *
-     * [revealErrors] — the last reveal outcome per row when it was not a success: a [RowRevealError.Refused]
-     * carries the server's own RFC 7807 sentence to show verbatim, a [RowRevealError.Failed] a transport
-     * cause the section renders as one generic line. The masked value stays on screen through either — this
-     * app never unmasks a value from a failure (`ContactDetailsApi.revealContactDetail`'s own contract).
+     * [rowErrors] — the last non-success outcome per row: a [RowActionError.Refused] carries the server's
+     * own RFC 7807 sentence to show verbatim regardless of which of the three writes produced it; a
+     * [RowActionError.Failed] arm is specific to the write that produced it (the section renders a different
+     * generic line for "couldn't show" vs "couldn't save the edit" vs "couldn't update the status" — three
+     * real, different sentences, not one reused across all three). The row's own value/assessment stays
+     * exactly as it was through either arm — this app never mutates a row from a failure, the identical
+     * posture `26-148`'s own reveal already established.
+     *
+     * [editingId]/[editDraft] — which row (if any) the operator currently has open in the row `⋮`'s own
+     * «Изменить» editor, and that editor's current draft text. `null`/`""` while no row is being edited;
+     * opening a *different* row's editor replaces both in one step, discarding whatever was typed into the
+     * first (`ContactPanelViewModel.startEditContactDetail`'s own doc comment) — "only one row edits at a
+     * time" is a UI rule this state enforces by construction (one field, not a per-row map) rather than a
+     * guard some caller could forget.
      */
     public data class Loaded(
         val details: List<ContactDetail>,
-        val revealingIds: Set<String> = emptySet(),
-        val revealErrors: Map<String, RowRevealError> = emptyMap(),
+        val pendingIds: Set<String> = emptySet(),
+        val rowErrors: Map<String, RowActionError> = emptyMap(),
+        val editingId: String? = null,
+        val editDraft: String = "",
     ) : ContactDetailsSectionState
 
     public data class Failed(
@@ -104,23 +126,47 @@ public sealed interface ContactDetailsSectionState {
 }
 
 /**
- * `26-148`: why one row's reveal did not replace its masked value — the two non-success arms of
- * [ago.chat.android.core.domain.contactdetails.RevealContactDetailResult], carried into the UI so the
- * section can show a genuine server refusal verbatim but a transport failure as its own generic,
- * localized line. The successful arm needs no representation here: it replaces the row in place.
+ * `26-148`/`26-169`: why one row's write did not land — generalised from `26-148`'s own `RowRevealError`
+ * to the three writes [ContactDetailsSectionState.Loaded.rowErrors] now covers (reveal, edit, set
+ * assessment). [Refused] is shared across all three: a genuine server refusal is the identical RFC 7807
+ * `detail` shape regardless of which PATCH/POST produced it, so there is nothing write-specific to carry.
+ * [Failed] is **not** shared — a transport failure carries no server sentence, so the section falls back to
+ * one generic, localized line, and that line's own wording differs per write («Не удалось показать» /
+ * «Не удалось сохранить изменение.» / «Не удалось обновить статус.»); nesting [Failed] by write keeps that
+ * choice exhaustive (a fourth write added later fails to compile here until it too states its own line)
+ * rather than a shared `Failed(reason)` plus a second field the section would have to keep in sync by hand.
+ * The successful arm needs no representation here in either case: it replaces the row in place.
  */
-public sealed interface RowRevealError {
+public sealed interface RowActionError {
     /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
-     * sentence" posture the reveal-refusal arm establishes. */
+     * sentence" posture the reveal-refusal arm originally established. */
     public data class Refused(
         val detail: String,
-    ) : RowRevealError
+    ) : RowActionError
 
-    /** A transport failure — no server sentence to show, so the section renders one generic
-     * «Не удалось показать» line, classified by [reason] only if a caller ever needs to. */
-    public data class Failed(
-        val reason: NetworkFailure,
-    ) : RowRevealError
+    /** A transport failure, classified by which of the section's three writes produced it — see this
+     * sealed interface's own doc comment for why this arm is not a single shared shape. Each carries its
+     * own [NetworkFailure], the identical "classified by reason only if a caller ever needs to" posture
+     * every other `Failed` arm in this file keeps. */
+    public sealed interface Failed : RowActionError {
+        /** No server sentence to show for a failed reveal — the section's own generic «Не удалось
+         * показать» line. */
+        public data class Reveal(
+            val reason: NetworkFailure,
+        ) : Failed
+
+        /** No server sentence to show for a failed edit save — the section's own generic «Не удалось
+         * сохранить изменение.» line. The draft stays on screen; this arm never clears it. */
+        public data class Edit(
+            val reason: NetworkFailure,
+        ) : Failed
+
+        /** No server sentence to show for a failed assessment write — the section's own generic «Не
+         * удалось обновить статус.» line. */
+        public data class Assessment(
+            val reason: NetworkFailure,
+        ) : Failed
+    }
 }
 
 /**
@@ -184,12 +230,12 @@ public sealed interface TagsSectionState {
  * `26-149`: why an apply or remove did not take — the two non-success arms of
  * [ago.chat.android.core.domain.tags.TagActionResult], carried into the UI so the section can show a
  * genuine server refusal verbatim but a transport failure as its own generic, localized line — the
- * identical split [RowRevealError] draws for the reveal. The successful arm needs no representation: it
- * updates the applied list in place.
+ * identical split [RowActionError] draws for the reveal/edit/assessment writes. The successful arm needs
+ * no representation: it updates the applied list in place.
  */
 public sealed interface TagActionError {
     /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
-     * sentence" posture [RowRevealError.Refused] establishes. */
+     * sentence" posture [RowActionError.Refused] establishes. */
     public data class Refused(
         val detail: String,
     ) : TagActionError
@@ -231,11 +277,11 @@ public sealed interface NotesSectionState {
      *
      * [addingNote] — `true` while one add is in flight; the composer's submit control is disabled and its
      * label swaps to a "sending" word while this is set, the identical single-write in-flight shape
-     * [ContactDetailsSectionState.Loaded.revealingIds] already establishes for a per-row reveal, here for
+     * [ContactDetailsSectionState.Loaded.pendingIds] already establishes for a per-row write, here for
      * the panel's one composer instead of a per-row set.
      *
      * [addNoteError] — the last add outcome when it was not a success: a genuine server refusal shown
-     * verbatim, or a transport failure shown as one generic line — the identical [RowRevealError] /
+     * verbatim, or a transport failure shown as one generic line — the identical [RowActionError] /
      * [TagActionError] split. Unlike a refused tag write, [draft] is deliberately **not** cleared on a
      * refusal or a failure — the operator's own typed words stay in the composer so a refused note is
      * fixable (a blank body, say) rather than retyped from scratch.
@@ -255,11 +301,11 @@ public sealed interface NotesSectionState {
 /**
  * `26-150`: why adding one team note did not take — the two non-success arms of
  * [ago.chat.android.core.domain.notes.AddNoteResult], carried into the UI the identical way
- * [RowRevealError] and [TagActionError] already carry their own write's non-success arms.
+ * [RowActionError] and [TagActionError] already carry their own write's non-success arms.
  */
 public sealed interface AddNoteError {
     /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
-     * sentence" posture [RowRevealError.Refused] establishes. */
+     * sentence" posture [RowActionError.Refused] establishes. */
     public data class Refused(
         val detail: String,
     ) : AddNoteError
@@ -304,7 +350,7 @@ public sealed interface PastDialogsSectionState {
      *
      * [loadingMore] — `true` while one further page is in flight, the section's own single load-more
      * in-flight flag (there is only ever one such fetch at a time, so a `Boolean` suffices — unlike
-     * [ContactDetailsSectionState.Loaded.revealingIds]'s per-row `Set`, which needs one flag per
+     * [ContactDetailsSectionState.Loaded.pendingIds]'s per-row `Set`, which needs one flag per
      * independently-triggerable row).
      *
      * [selectedConversationId]/[history] — which of [conversations] the operator opened for a read-only

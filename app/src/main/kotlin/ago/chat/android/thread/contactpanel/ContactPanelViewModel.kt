@@ -1,5 +1,6 @@
 package ago.chat.android.thread.contactpanel
 
+import ago.chat.android.core.domain.contactdetails.ContactDetailWriteResult
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
@@ -57,6 +58,14 @@ import javax.inject.Inject
  * already depends on for the *live* conversation) — because the design itself splits the two that way
  * (`VisitorHistoryApi`'s own doc comment: "a thin REST list, a hub read to open one"). The remaining
  * sections (`26-152`…`26-153`) grow it the same additive way again.
+ *
+ * `26-169` (`docs/design/26-156-*.md`, over the write client `26-167` landed on [contactDetailsApi]): no
+ * new collaborator — [startEditContactDetail]/[onEditContactDetailDraftChanged]/[cancelEditContactDetail]/
+ * [saveEditContactDetail]/[setContactDetailAssessment] are the КОНТАКТНЫЕ ДАННЫЕ section's own second and
+ * third writes, added the identical way [revealContactDetail] already established its first. This class
+ * stays permission-agnostic here too (`conversation:send` gates the row `⋮`'s own affordances in the UI
+ * layer, [ago.chat.android.thread.contactpanel.sections.ContactDetailsSection]'s own doc comment) — it
+ * always exposes the writes, whether or not the operator actually holds the permission to trigger them.
  *
  * **Opened, not injected-with-an-id.** [open] hands the conversation id in, the identical shape
  * [ago.chat.android.thread.ThreadViewModel.open] already establishes — this class is scoped to the open
@@ -757,7 +766,7 @@ public class ContactPanelViewModel
          * `26-148`: reveals one masked contact-detail row's real value. Reuses `26-115`'s reveal-result
          * idiom exactly:
          *
-         * - A row already in [ContactDetailsSectionState.Loaded.revealingIds] is a no-op — one deliberate
+         * - A row already in [ContactDetailsSectionState.Loaded.pendingIds] is a no-op — one deliberate
          *   tap, one server call per row.
          * - On [RevealContactDetailResult.Revealed] the row is replaced in place with the server's own
          *   unmasked value; nothing here unmasks a value client-side.
@@ -772,19 +781,8 @@ public class ContactPanelViewModel
         public fun revealContactDetail(contactDetailId: String) {
             val conversationId = loadedConversationId ?: return
             val loaded = mutableState.value.contactDetails as? ContactDetailsSectionState.Loaded ?: return
-            if (contactDetailId in loaded.revealingIds) return
-            mutableState.update {
-                it.copy(
-                    contactDetails =
-                        loaded.copy(
-                            revealingIds = loaded.revealingIds + contactDetailId,
-                            // A stale error about a previous attempt on this row has no business staying
-                            // once a new attempt starts - the same "clear the row's error the moment a new
-                            // reveal begins" moment the calendar's own reveal establishes.
-                            revealErrors = loaded.revealErrors - contactDetailId,
-                        ),
-                )
-            }
+            if (contactDetailId in loaded.pendingIds) return
+            markContactDetailPending(contactDetailId)
 
             viewModelScope.launch {
                 val result =
@@ -795,35 +793,252 @@ public class ContactPanelViewModel
                 mutableState.update { current ->
                     val currentLoaded =
                         current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
-                    val nextRevealing = currentLoaded.revealingIds - contactDetailId
                     val nextContactDetails =
                         when (result) {
                             is RevealContactDetailResult.Revealed ->
-                                currentLoaded.copy(
-                                    details =
-                                        currentLoaded.details.map {
-                                            if (it.id == contactDetailId) result.contactDetail else it
-                                        },
-                                    revealingIds = nextRevealing,
-                                    revealErrors = currentLoaded.revealErrors - contactDetailId,
-                                )
+                                finishContactDetailPending(currentLoaded, contactDetailId) {
+                                    it.copy(
+                                        details =
+                                            it.details.map { detail ->
+                                                if (detail.id == contactDetailId) result.contactDetail else detail
+                                            },
+                                    )
+                                }
 
                             is RevealContactDetailResult.Refused ->
-                                currentLoaded.copy(
-                                    revealingIds = nextRevealing,
-                                    revealErrors =
-                                        currentLoaded.revealErrors + (contactDetailId to RowRevealError.Refused(result.detail)),
-                                )
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Refused(result.detail),
+                                ) { it }
 
                             is RevealContactDetailResult.Failed ->
-                                currentLoaded.copy(
-                                    revealingIds = nextRevealing,
-                                    revealErrors =
-                                        currentLoaded.revealErrors + (contactDetailId to RowRevealError.Failed(result.reason)),
-                                )
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Failed.Reveal(result.reason),
+                                ) { it }
                         }
                     current.copy(contactDetails = nextContactDetails)
                 }
+            }
+        }
+
+        /**
+         * `26-169` (`docs/design/26-156-*.md`): opens the row `⋮`'s own «Изменить» editor on one row,
+         * prefilled with its current value — the identical "captures the starting draft" moment
+         * [ContactDetailsPanel.tsx]'s own `handleStartEdit` performs server-side of this same feature. Opening
+         * a *different* row's editor while one is already open replaces both [ContactDetailsSectionState
+         * .Loaded.editingId] and [ContactDetailsSectionState.Loaded.editDraft] in the one update below,
+         * discarding whatever was typed into the first — nothing was ever sent for it, so there is nothing to
+         * reconcile. A no-op unless the section is [ContactDetailsSectionState.Loaded]; the row `⋮` itself
+         * never offers «Изменить» for a masked row or without `conversation:send`
+         * ([ago.chat.android.thread.contactpanel.sections.ContactDetailsSection]'s own doc comment), so this
+         * method does not re-check either — the UI layer is where the permission set and the masked flag are
+         * both already known.
+         */
+        public fun startEditContactDetail(contactDetailId: String) {
+            mutableState.update { current ->
+                val loaded = current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                val detail = loaded.details.firstOrNull { it.id == contactDetailId } ?: return@update current
+                current.copy(
+                    contactDetails =
+                        loaded.copy(
+                            editingId = contactDetailId,
+                            editDraft = detail.value,
+                            rowErrors = loaded.rowErrors - contactDetailId,
+                        ),
+                )
+            }
+        }
+
+        /** `26-169`: every keystroke in the row editor opened by [startEditContactDetail]. A no-op unless a
+         * row is currently being edited. */
+        public fun onEditContactDetailDraftChanged(text: String) {
+            mutableState.update { current ->
+                val loaded = current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                if (loaded.editingId == null) return@update current
+                current.copy(contactDetails = loaded.copy(editDraft = text))
+            }
+        }
+
+        /** `26-169`: closes the row editor without sending anything — «Отмена». A no-op unless a row is
+         * currently being edited. */
+        public fun cancelEditContactDetail() {
+            mutableState.update { current ->
+                val loaded = current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                if (loaded.editingId == null) return@update current
+                current.copy(contactDetails = loaded.copy(editingId = null, editDraft = ""))
+            }
+        }
+
+        /**
+         * `26-169`: submits the row editor's current draft as a correction to [ContactDetailsSectionState
+         * .Loaded.editingId]'s own value — «Сохранить». A no-op unless a row is being edited, that row's
+         * own write is not already [ContactDetailsSectionState.Loaded.pendingIds] (one tap, one server call),
+         * and the draft is non-blank ([ContactDetailsApi.editContactDetail]'s own doc comment: an empty
+         * value is refused server-side anyway, but there is no reason to round-trip for one this class can
+         * already tell is empty).
+         *
+         * On [ContactDetailWriteResult.Updated] the row is replaced in place with the server's own answer —
+         * **assessment included**: the server resets a row's assessment to `Unset` on every successful edit
+         * ([ContactDetailsApi.editContactDetail]'s own doc comment), and this method does not need to
+         * special-case that because it never fabricates the row from [detail]/the draft, only from the
+         * server's own response — and the editor closes. On [ContactDetailWriteResult.Refused] the editor
+         * stays open with the draft exactly as typed and the server's `detail` shown beneath the row
+         * (design §3: "draft kept"); on [ContactDetailWriteResult.Failed] the same, with a generic line.
+         */
+        public fun saveEditContactDetail() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.contactDetails as? ContactDetailsSectionState.Loaded ?: return
+            val contactDetailId = loaded.editingId ?: return
+            if (contactDetailId in loaded.pendingIds) return
+            val value = loaded.editDraft.trim()
+            if (value.isEmpty()) return
+
+            markContactDetailPending(contactDetailId)
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) { contactDetailsApi.editContactDetail(conversationId, contactDetailId, value) }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded =
+                        current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                    val nextContactDetails =
+                        when (result) {
+                            is ContactDetailWriteResult.Updated ->
+                                finishContactDetailPending(currentLoaded, contactDetailId) {
+                                    it.copy(
+                                        details =
+                                            it.details.map { detail ->
+                                                if (detail.id == contactDetailId) result.contactDetail else detail
+                                            },
+                                        editingId = null,
+                                        editDraft = "",
+                                    )
+                                }
+
+                            is ContactDetailWriteResult.Refused ->
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Refused(result.detail),
+                                ) { it }
+
+                            is ContactDetailWriteResult.Failed ->
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Failed.Edit(result.reason),
+                                ) { it }
+                        }
+                    current.copy(contactDetails = nextContactDetails)
+                }
+            }
+        }
+
+        /**
+         * `26-169`: sets one Phone/Email row's assessment — «Подтвердить»/«Отметить недействительным» in the
+         * row `⋮`. [assessment] is the server's own raw wire spelling (`"Confirmed"` or `"Invalid"`, never
+         * `"Unset"` — [ContactDetailsApi.setContactDetailAssessment]'s own doc comment), unparsed the
+         * identical way [ContactDetail.kind] already travels through this class: the classification (which
+         * menu entry is offered for which current [ContactDetail.assessment]) is the UI's job, this method
+         * only ever forwards whatever it is given. A no-op while that row's own write is already
+         * [ContactDetailsSectionState.Loaded.pendingIds] (one tap, one server call). A `Name` row's menu never
+         * offers either action in the first place ([ago.chat.android.thread.contactpanel.sections
+         * .ContactDetailsSection]'s own doc comment), so this method does not re-check `kind` either — the
+         * server would refuse it anyway ([ContactDetailsApi.setContactDetailAssessment]'s own doc comment on
+         * `VisitorContactDetail.AssessmentNotApplicable`), and that refusal would surface exactly like any
+         * other [ContactDetailWriteResult.Refused] below.
+         *
+         * On [ContactDetailWriteResult.Updated] the row is replaced in place with the server's own answer
+         * (its new [ContactDetail.assessment]); on [ContactDetailWriteResult.Refused]/[ContactDetailWriteResult.Failed]
+         * the row is left exactly as it was and the error surfaced beneath it — the identical refused-verbatim
+         * / failed-generic split every other write on this class already draws.
+         */
+        public fun setContactDetailAssessment(
+            contactDetailId: String,
+            assessment: String,
+        ) {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.contactDetails as? ContactDetailsSectionState.Loaded ?: return
+            if (contactDetailId in loaded.pendingIds) return
+
+            markContactDetailPending(contactDetailId)
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        contactDetailsApi.setContactDetailAssessment(conversationId, contactDetailId, assessment)
+                    }
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { current ->
+                    val currentLoaded =
+                        current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                    val nextContactDetails =
+                        when (result) {
+                            is ContactDetailWriteResult.Updated ->
+                                finishContactDetailPending(currentLoaded, contactDetailId) {
+                                    it.copy(
+                                        details =
+                                            it.details.map { detail ->
+                                                if (detail.id == contactDetailId) result.contactDetail else detail
+                                            },
+                                    )
+                                }
+
+                            is ContactDetailWriteResult.Refused ->
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Refused(result.detail),
+                                ) { it }
+
+                            is ContactDetailWriteResult.Failed ->
+                                finishContactDetailPending(
+                                    currentLoaded,
+                                    contactDetailId,
+                                    error = RowActionError.Failed.Assessment(result.reason),
+                                ) { it }
+                        }
+                    current.copy(contactDetails = nextContactDetails)
+                }
+            }
+        }
+
+        /** Marks [contactDetailId]'s write in flight and clears any stale error about a previous attempt on
+         * it — the same "clear the row's error the moment a new write begins" moment `26-148`'s own reveal
+         * established, now shared by all three writes on this section. A no-op unless the section is
+         * [ContactDetailsSectionState.Loaded]. */
+        private fun markContactDetailPending(contactDetailId: String) {
+            mutableState.update { current ->
+                val loaded = current.contactDetails as? ContactDetailsSectionState.Loaded ?: return@update current
+                current.copy(
+                    contactDetails =
+                        loaded.copy(
+                            pendingIds = loaded.pendingIds + contactDetailId,
+                            rowErrors = loaded.rowErrors - contactDetailId,
+                        ),
+                )
+            }
+        }
+
+        /** Folds one row write's result back into the section: clears [contactDetailId]'s in-flight flag,
+         * then on success applies [onSucceeded] (the caller's own replace-in-place) and on a non-success
+         * (`error` non-null) leaves [onSucceeded] unapplied and records the error instead — the shared tail
+         * every one of [revealContactDetail]/[saveEditContactDetail]/[setContactDetailAssessment] folds its
+         * own three-way result through, the identical "clear the flag, then branch" shape [finishTagAction]
+         * already establishes for the tags section's own two writes. */
+        private fun finishContactDetailPending(
+            loaded: ContactDetailsSectionState.Loaded,
+            contactDetailId: String,
+            error: RowActionError? = null,
+            onSucceeded: (ContactDetailsSectionState.Loaded) -> ContactDetailsSectionState.Loaded,
+        ): ContactDetailsSectionState.Loaded {
+            val cleared = loaded.copy(pendingIds = loaded.pendingIds - contactDetailId)
+            return if (error == null) {
+                onSucceeded(cleared)
+            } else {
+                cleared.copy(rowErrors = cleared.rowErrors + (contactDetailId to error))
             }
         }
 

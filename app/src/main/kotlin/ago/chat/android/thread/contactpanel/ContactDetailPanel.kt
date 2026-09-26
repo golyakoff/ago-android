@@ -90,6 +90,17 @@ internal fun ContactDetailPanel(
     onRetrySummary: () -> Unit,
     onRevealContactDetail: (String) -> Unit,
     onRetryContactDetails: () -> Unit,
+    // `26-169`: `conversation:send` gates the КОНТАКТНЫЕ ДАННЫЕ section's row `⋮` (edit + assessment)
+    // hide-not-disable (design Q7, `docs/design/26-156-*.md`) - reading and revealing stay ungated here,
+    // riding the panel's own `conversation:read` gate exactly as `26-148` already established. Wired the
+    // same way every later section's own permission Boolean below already is: the VM stays
+    // permission-agnostic, the gate lives here in the UI layer where the permission set is known.
+    canSendConversation: Boolean,
+    onStartEditContactDetail: (String) -> Unit,
+    onEditContactDetailDraftChanged: (String) -> Unit,
+    onSaveEditContactDetail: () -> Unit,
+    onCancelEditContactDetail: () -> Unit,
+    onSetContactDetailAssessment: (String, String) -> Unit,
     // `26-149`: `conversation:tag` gates the tags section's write affordances (each chip's «×» and the
     // «+ метка» add) hide-not-disable (design Q7); the chips themselves ride the panel's own
     // `conversation:read` gate. Reading the tags needs no second gate, so this Boolean only ever hides
@@ -175,8 +186,14 @@ internal fun ContactDetailPanel(
             // and takes its callbacks from the same VM, the additive convention documented above.
             ContactDetailsSection(
                 state = state.contactDetails,
+                canSendConversation = canSendConversation,
                 onReveal = onRevealContactDetail,
                 onRetry = onRetryContactDetails,
+                onStartEdit = onStartEditContactDetail,
+                onEditDraftChanged = onEditContactDetailDraftChanged,
+                onSaveEdit = onSaveEditContactDetail,
+                onCancelEdit = onCancelEditContactDetail,
+                onSetAssessment = onSetContactDetailAssessment,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

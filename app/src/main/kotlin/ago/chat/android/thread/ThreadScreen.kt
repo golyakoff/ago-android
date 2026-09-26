@@ -145,6 +145,13 @@ public fun ThreadRoute(
     // hide-not-disable (design Q7): `false` (the default every direct-construction test still gets) means
     // the affordance is never drawn, and the panel VM below is never opened.
     canReadContactDetail: Boolean = false,
+    // `26-169`: `conversation:send`, computed once from the operator's permission set by `AppShellScreen`'s
+    // own `conversationsTab` default and threaded down through `ConversationsTabHost` alongside
+    // `canReadContactDetail`. Gates the КОНТАКТНЫЕ ДАННЫЕ section's row `⋮` (edit + set-assessment)
+    // hide-not-disable (design Q7, `docs/design/26-156-*.md`); it never gates the section's existence or
+    // its «Показать» reveal (both ride `conversation:read`, the panel's own gate). `false` (the default
+    // every direct-construction test still gets) hides every row's `⋮`.
+    canSendConversation: Boolean = false,
     // `26-149`: `conversation:tag`, computed once from the operator's permission set by `AppShellScreen`'s
     // own `conversationsTab` default and threaded down through `ConversationsTabHost` alongside
     // `canReadContactDetail`. Gates the tags section's write affordances hide-not-disable (design Q7); it
@@ -293,6 +300,15 @@ public fun ThreadRoute(
             onRetrySummary = contactPanelViewModel::retry,
             onRevealContactDetail = contactPanelViewModel::revealContactDetail,
             onRetryContactDetails = contactPanelViewModel::retryContactDetails,
+            // `26-169`: the КОНТАКТНЫЕ ДАННЫЕ section's edit + set-assessment callbacks + its
+            // `conversation:send` gate, wired the same way the tags/notes callbacks below are - the VM stays
+            // permission-agnostic, the gate lives here in the UI layer where the permission set is known.
+            canSendConversation = canSendConversation,
+            onStartEditContactDetail = contactPanelViewModel::startEditContactDetail,
+            onEditContactDetailDraftChanged = contactPanelViewModel::onEditContactDetailDraftChanged,
+            onSaveEditContactDetail = contactPanelViewModel::saveEditContactDetail,
+            onCancelEditContactDetail = contactPanelViewModel::cancelEditContactDetail,
+            onSetContactDetailAssessment = contactPanelViewModel::setContactDetailAssessment,
             // `26-149`: the tags section's write callbacks + its `conversation:tag` gate, wired the same way
             // the contact-details callbacks above are - the VM stays permission-agnostic (it always exposes
             // apply/remove), the gate lives here in the UI layer where the permission set is known.
