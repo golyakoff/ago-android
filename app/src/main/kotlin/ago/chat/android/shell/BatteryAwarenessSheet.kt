@@ -11,13 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -66,6 +65,16 @@ internal fun BatteryAwarenessRoute(viewModel: BatteryAwarenessViewModel = hiltVi
  * through [androidx.compose.material3.ModalBottomSheet]'s own `onDismissRequest`, so there is no code path
  * left in this file that could gate anything on an operator's choice here; the two buttons open a system
  * screen and leave the sheet exactly as visible as it was; only closing it acts.
+ *
+ * **`26-185`: both action buttons below are `FilledTonalButton`, not one `Button`/one `OutlinedButton`.**
+ * The two settings screens they open — battery optimisation and autostart — are equally recommended, not
+ * a primary action and a secondary fallback; the previous unequal styling (one filled, one outlined) told
+ * an operator to treat the battery one as more important, a priority the author never intended. Material
+ * 3's own guidance is at most one filled `Button` per container (its highest-emphasis slot, reserved for
+ * a single primary action) and equal actions get equal emphasis — `FilledTonalButton` is the "important
+ * but not the one filled action" role, which is what both of these are. Scope: this is the *sheet's* own
+ * pair only; `SettingsScreen`'s expanded-card `OutlinedButton`s are each a single contextual action with
+ * nothing competing beside them, so `26-185` leaves those as they are.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +111,11 @@ internal fun BatteryAwarenessSheet(
                     modifier = Modifier.padding(start = 10.dp),
                 )
             }
-            Button(onClick = onOpenBatterySettings, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+            // `26-185`: `FilledTonalButton`, not `Button` — the two settings actions below are equally
+            // recommended (there is no single primary one to earn Material 3's one-filled-button-per-
+            // container slot), so both get the same medium-emphasis treatment instead of one outranking
+            // the other. See [BatteryAwarenessSheet]'s own doc comment for the full reasoning.
+            FilledTonalButton(onClick = onOpenBatterySettings, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 Text(text = stringResource(R.string.battery_awareness_battery_action))
             }
 
@@ -111,7 +124,7 @@ internal fun BatteryAwarenessSheet(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )
-            OutlinedButton(onClick = onOpenAutostartSettings, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            FilledTonalButton(onClick = onOpenAutostartSettings, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Text(text = stringResource(R.string.battery_awareness_autostart_action))
             }
 
