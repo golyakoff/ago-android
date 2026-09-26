@@ -3,6 +3,10 @@ package ago.chat.android.thread.contactpanel
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
+import ago.chat.android.core.domain.conversationactions.ConversationActionResult
+import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
+import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.conversations.QueueResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNotesApi
@@ -71,6 +75,14 @@ public class ContactPanelViewModel
         private val conversationNotesApi: ConversationNotesApi,
         private val visitorHistoryApi: VisitorHistoryApi,
         private val hubEvents: OperatorHubEvents,
+        // `26-152`: [conversationsApi] is the same shipped `26-14` port `ConversationListViewModel` reads
+        // the queue through — reused rather than a new per-conversation read, because there is no
+        // per-conversation grant-status endpoint gated the way this panel needs
+        // ([ago.chat.android.core.domain.conversationactions.ConversationActionsApi]'s own doc comment
+        // names the queue re-read as the mechanism). [conversationActionsApi] is `26-146`'s own shipped
+        // port for the grant/revoke writes themselves — reused as-is, never rebuilt.
+        private val conversationsApi: ConversationsApi,
+        private val conversationActionsApi: ConversationActionsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(ContactPanelUiState())
@@ -113,6 +125,9 @@ public class ContactPanelViewModel
             if (!sameConversation || mutableState.value.pastDialogs is PastDialogsSectionState.Failed) {
                 loadPastDialogs(conversationId)
             }
+            if (!sameConversation || mutableState.value.attachmentUpload is AttachmentUploadSectionState.Failed) {
+                loadAttachmentUpload(conversationId)
+            }
         }
 
         /** The header's own inline retry (§4: per-section retry, never a whole-sheet failure) — re-reads
@@ -152,6 +167,91 @@ public class ContactPanelViewModel
         public fun retryPastDialogs() {
             val conversationId = loadedConversationId ?: return
             loadPastDialogs(conversationId)
+        }
+
+        /** `26-152`: the «Приём файлов от посетителя» toggle's own inline retry — the sibling of [retry]/
+         * [retryContactDetails]/[retryTags]/[retryNotes]/[retryPastDialogs], re-reading only this
+         * section's own grant status and leaving the rest of the sheet untouched (§4). A no-op before the
+         * first [open]. */
+        public fun retryAttachmentUpload() {
+            val conversationId = loadedConversationId ?: return
+            loadAttachmentUpload(conversationId)
+        }
+
+        /**
+         * `26-152`: flips the visitor's attachment-upload permission the other way — grants it when it is
+         * currently off, revokes it when it is currently on, through [conversationActionsApi] (`26-146`,
+         * reused as-is). A no-op while a toggle is already [AttachmentUploadSectionState.Loaded.toggling]
+         * (one tap, one server call) or before the section has landed [AttachmentUploadSectionState.Loaded]
+         * — there is nothing to flip before that.
+         *
+         * **Update-after-`2xx`, via a re-read, not a locally fabricated result.** On
+         * [ConversationActionResult.Succeeded] this method does not flip [AttachmentUploadSectionState.Loaded.granted]
+         * itself from client-side knowledge — unlike [applyTag]'s own vocabulary-entry shortcut, this write's
+         * own `200` body carries a grant status this adapter deliberately does not parse
+         * ([ConversationActionsApi.grantAttachmentUpload]'s own doc comment), so the only honest source for
+         * the resulting granted/who/when is a fresh [fetchAttachmentUploadState] — the same "re-reads the
+         * conversation for the caption's own who/when" mechanism that doc comment names for this exact
+         * item. [AttachmentUploadSectionState.Loaded.toggling] stays `true` through that re-read, so the
+         * control stays disabled (not a flash back to the section's own skeleton) until the fresh answer
+         * lands. On [ConversationActionResult.Refused]/[ConversationActionResult.Failed] the granted flag is
+         * left exactly as it was and the error is surfaced beneath the control — the identical
+         * refused-verbatim / failed-generic split [finishTagAction] already draws for its own write.
+         */
+        public fun toggleAttachmentUpload() {
+            val conversationId = loadedConversationId ?: return
+            val loaded = mutableState.value.attachmentUpload as? AttachmentUploadSectionState.Loaded ?: return
+            if (loaded.toggling) return
+            val granting = !loaded.granted
+
+            mutableState.update { current ->
+                val currentLoaded = current.attachmentUpload as? AttachmentUploadSectionState.Loaded ?: return@update current
+                current.copy(attachmentUpload = currentLoaded.copy(toggling = true, actionError = null))
+            }
+            viewModelScope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        if (granting) {
+                            conversationActionsApi.grantAttachmentUpload(conversationId)
+                        } else {
+                            conversationActionsApi.revokeAttachmentUpload(conversationId)
+                        }
+                    }
+                if (loadedConversationId != conversationId) return@launch
+                when (result) {
+                    ConversationActionResult.Succeeded -> {
+                        val next = fetchAttachmentUploadState(conversationId)
+                        if (loadedConversationId != conversationId) return@launch
+                        mutableState.update { current -> current.copy(attachmentUpload = next) }
+                    }
+
+                    is ConversationActionResult.Refused ->
+                        mutableState.update { current ->
+                            val currentLoaded =
+                                current.attachmentUpload as? AttachmentUploadSectionState.Loaded ?: return@update current
+                            current.copy(
+                                attachmentUpload =
+                                    currentLoaded.copy(
+                                        toggling = false,
+                                        actionError = AttachmentUploadActionError.Refused(result.detail),
+                                    ),
+                            )
+                        }
+
+                    is ConversationActionResult.Failed ->
+                        mutableState.update { current ->
+                            val currentLoaded =
+                                current.attachmentUpload as? AttachmentUploadSectionState.Loaded ?: return@update current
+                            current.copy(
+                                attachmentUpload =
+                                    currentLoaded.copy(
+                                        toggling = false,
+                                        actionError = AttachmentUploadActionError.Failed(result.reason),
+                                    ),
+                            )
+                        }
+                }
+            }
         }
 
         /**
@@ -697,6 +797,56 @@ public class ContactPanelViewModel
                             },
                     )
                 }
+            }
+        }
+
+        /** `26-152`: reads the toggle's own initial state on [open] — sets [AttachmentUploadSectionState.Loading]
+         * first, then [fetchAttachmentUploadState]'s answer, dropped if the panel has since moved to a
+         * different conversation (the same guard every other `load*` method on this class applies). */
+        private fun loadAttachmentUpload(conversationId: String) {
+            mutableState.update { it.copy(attachmentUpload = AttachmentUploadSectionState.Loading) }
+            viewModelScope.launch {
+                val next = fetchAttachmentUploadState(conversationId)
+                if (loadedConversationId != conversationId) return@launch
+                mutableState.update { it.copy(attachmentUpload = next) }
+            }
+        }
+
+        /**
+         * The one place this section actually reads its own data: [ConversationsApi.fetchQueue] (`26-14`,
+         * reused as-is), searched for [conversationId]'s own row — the identical two lists
+         * ([ago.chat.android.core.domain.conversations.ConversationQueue.waiting]/[ago.chat.android.core.domain.conversations.ConversationQueue.assignedToMe])
+         * [ago.chat.android.shell.ConversationsTabHost]'s own row lookup already draws this conversation
+         * from before a thread can even be opened, which is why the queue is always the right place to
+         * look here and never a genuine gap: this method is only ever called for a conversation the panel
+         * is already open on.
+         *
+         * A row that is not found (the rare case where the conversation left both lists — closed or
+         * reassigned — between the panel opening and this read) becomes [AttachmentUploadSectionState.Failed]
+         * with [NetworkFailure.Unexpected] — a `2xx` whose answer did not contain what this read expected,
+         * the identical classification [NetworkFailure.Unexpected]'s own doc comment describes, restated
+         * for a missing row rather than a malformed body. Never a fabricated "not granted" — that would be
+         * exactly the kind of guessed answer [ago.chat.android.core.domain.conversations.ConversationSummary]'s
+         * own `hasAttachmentUploadGrant` doc comment already rejected once, for the identical field.
+         */
+        private suspend fun fetchAttachmentUploadState(conversationId: String): AttachmentUploadSectionState {
+            val result = withContext(ioDispatcher) { conversationsApi.fetchQueue() }
+            return when (result) {
+                is QueueResult.Loaded -> {
+                    val row =
+                        (result.queue.waiting + result.queue.assignedToMe).firstOrNull { it.conversationId == conversationId }
+                    if (row != null) {
+                        AttachmentUploadSectionState.Loaded(
+                            granted = row.hasAttachmentUploadGrant,
+                            grantedAt = row.attachmentUploadGrantedAt,
+                            grantedByOperatorId = row.attachmentUploadGrantedByOperatorId,
+                        )
+                    } else {
+                        AttachmentUploadSectionState.Failed(NetworkFailure.Unexpected)
+                    }
+                }
+
+                is QueueResult.Failed -> AttachmentUploadSectionState.Failed(result.reason)
             }
         }
 

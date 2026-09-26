@@ -376,6 +376,29 @@
     <string name="past_dialogs_history_empty">Сообщений нет</string>
 
     <!--
+        `26-152`: the contact-detail panel's fifth and final section - «Приём файлов от посетителя», a
+        single reversible toggle (`docs/design/26-111-contact-panel-slices.md`, S-J). Wording mirrors
+        `ago-console`'s own `AttachmentUploadGrantToggle` verbatim (`attachmentUploadGrantButton`/
+        `attachmentUploadRevokeButton`/`attachmentUploadGrantedByOperatorNote`/
+        `attachmentUploadGrantedByDefaultNote`) - the same feature, described the same way on both
+        surfaces. `attachment_upload_grant_button`/`attachment_upload_revoke_button` name the toggle's
+        *next* state, not its current one - a tap on "Разрешить загрузку файлов" is what grants it.
+        `attachment_upload_granted_by_operator`/`attachment_upload_granted_by_default` are the caption
+        shown only while granted, chosen by whether the server reported a granting operator id - never a
+        resolved operator name (the console's own remarks on that same gap). `attachment_upload_load_failed`
+        is the section's own inline read-failure text; `attachment_upload_toggle_failed` is the generic
+        transport-failure line under the control - a genuine server refusal shows the server's own
+        sentence verbatim instead (design §4).
+    -->
+    <string name="attachment_upload_section_title">Приём файлов от посетителя</string>
+    <string name="attachment_upload_grant_button">Разрешить загрузку файлов</string>
+    <string name="attachment_upload_revoke_button">Запретить загрузку файлов</string>
+    <string name="attachment_upload_granted_by_operator">Разрешено оператором</string>
+    <string name="attachment_upload_granted_by_default">Разрешено по умолчанию для этого сайта</string>
+    <string name="attachment_upload_load_failed">Не удалось загрузить</string>
+    <string name="attachment_upload_toggle_failed">Не удалось изменить разрешение на загрузку файлов</string>
+
+    <!--
         `26-16`: the bottom navigation - `navigation.md`'s own five destinations, in its own order.
         Names match the console's rail exactly (`ago-console/src/i18n/ru.ts`) since they name the same
         thing on a different surface, not a second vocabulary for it.

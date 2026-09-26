@@ -70,6 +70,12 @@ public fun ConversationsTabHost(
     // which gates the notes sub-screen's own composer on it (hide-not-disable). Defaulted to `false` so
     // every back-contract test constructing this composable directly compiles and behaves unchanged.
     canWriteNote: Boolean = false,
+    // `26-152`: `conversation:attachment_upload_grant`, computed by [AppShellScreen]'s own `conversationsTab`
+    // default and threaded straight through to [ThreadRoute] alongside `canReadContactDetail`/
+    // `canTagConversation`/`canWriteNote`, which gates the attachment-upload section's whole existence on
+    // it (hide-not-disable). Defaulted to `false` so every back-contract test constructing this composable
+    // directly compiles and behaves unchanged.
+    canGrantAttachmentUpload: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -159,6 +165,7 @@ public fun ConversationsTabHost(
                 canReadContactDetail = canReadContactDetail,
                 canTagConversation = canTagConversation,
                 canWriteNote = canWriteNote,
+                canGrantAttachmentUpload = canGrantAttachmentUpload,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null

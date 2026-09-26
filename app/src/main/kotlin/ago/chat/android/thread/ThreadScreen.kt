@@ -159,6 +159,14 @@ public fun ThreadRoute(
     // `canTagConversation` above draws for the tags section). `false` (the default every direct-construction
     // test still gets) hides the composer.
     canWriteNote: Boolean = false,
+    // `26-152`: `conversation:attachment_upload_grant`, computed once from the operator's permission set
+    // by `AppShellScreen`'s own `conversationsTab` default and threaded down through `ConversationsTabHost`
+    // alongside `canReadContactDetail`/`canTagConversation`/`canWriteNote`. Gates the contact-panel
+    // attachment-upload section's whole existence (hide-not-disable, design Q7) - unlike the three
+    // Booleans above, there is no separate read gate for this one to fall back to
+    // ([ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection]'s own doc comment). `false`
+    // (the default every direct-construction test still gets) hides the section entirely.
+    canGrantAttachmentUpload: Boolean = false,
     viewModel: ThreadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -281,6 +289,12 @@ public fun ThreadRoute(
             onClosePastDialogHistory = contactPanelViewModel::closePastDialogHistory,
             onRetryPastDialogHistory = contactPanelViewModel::retryPastDialogHistory,
             onLoadOlderPastDialogHistory = contactPanelViewModel::loadOlderPastDialogHistory,
+            // `26-152`: the attachment-upload section's own callbacks + its `conversation:attachment_upload_grant`
+            // gate, wired the same way the sections above are - the VM stays permission-agnostic, the gate
+            // lives here in the UI layer where the permission set is known.
+            canGrantAttachmentUpload = canGrantAttachmentUpload,
+            onToggleAttachmentUpload = contactPanelViewModel::toggleAttachmentUpload,
+            onRetryAttachmentUpload = contactPanelViewModel::retryAttachmentUpload,
             onDismiss = { showContactPanel = false },
         )
     }
