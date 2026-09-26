@@ -205,6 +205,17 @@
     <string name="notes_adding_button">Adding…</string>
     <string name="notes_add_failed">Couldn\'t add the note</string>
 
+    <!-- `26-151`: contact-detail panel «Прошлые диалоги» row + its own read-only history sub-screen. -->
+    <string name="past_dialogs_row_title">Past dialogs</string>
+    <string name="past_dialogs_row_count_one">%1$d dialog</string>
+    <string name="past_dialogs_row_count_few">%1$d dialogs</string>
+    <string name="past_dialogs_row_count_many">%1$d dialogs</string>
+    <string name="past_dialogs_row_load_failed">Couldn\'t load past dialogs</string>
+    <string name="past_dialogs_empty">No past dialogs yet</string>
+    <string name="past_dialogs_load_more">Show more</string>
+    <string name="past_dialogs_history_load_failed">Couldn\'t load the conversation</string>
+    <string name="past_dialogs_history_empty">No messages</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>

@@ -272,6 +272,15 @@ public fun ThreadRoute(
             onNoteDraftChanged = contactPanelViewModel::onNoteDraftChanged,
             onAddNote = contactPanelViewModel::addNote,
             onRetryNotes = contactPanelViewModel::retryNotes,
+            // `26-151`: the «Прошлые диалоги» section's own callbacks, wired the same way the sections
+            // above are - the VM stays permission-agnostic (there is nothing to gate: Q6 made this section
+            // strictly read-only), so no extra Boolean is threaded down for it, unlike `canTag`/`canWriteNote`.
+            onRetryPastDialogs = contactPanelViewModel::retryPastDialogs,
+            onLoadMorePastDialogs = contactPanelViewModel::loadMorePastDialogs,
+            onOpenPastDialog = contactPanelViewModel::openPastDialog,
+            onClosePastDialogHistory = contactPanelViewModel::closePastDialogHistory,
+            onRetryPastDialogHistory = contactPanelViewModel::retryPastDialogHistory,
+            onLoadOlderPastDialogHistory = contactPanelViewModel::loadOlderPastDialogHistory,
             onDismiss = { showContactPanel = false },
         )
     }
@@ -590,9 +599,20 @@ private fun DismissibleBanner(
  * at all. [ThreadViewModel.markReadUpTo]'s own doc comment covers why the console's simpler
  * "just use the newest loaded message" cannot be ported as-is - it depends on `Thread` always
  * re-scrolling to a new arrival, which this list does not do.
+ *
+ * `26-151`: `internal` rather than `private` — the contact-detail panel's «Прошлые диалоги» read-only
+ * history view ([ago.chat.android.thread.contactpanel.sections.PastDialogsSection]) reuses this exact
+ * composable to render one past conversation's messages, per design Q6 and the S-I scope ("reuse the
+ * message renderer, no composer/actions"). This function already has no composer and no swipe/tag/close
+ * actions of its own — those live in [ThreadScreen]'s `Scaffold` (the `Composer` in `bottomBar`) and
+ * elsewhere entirely — so it was already the read-only list the past-dialogs view needs; only its
+ * visibility needed to widen, not its shape. [onNewestVisibleSequenceChanged] is a no-op for a past
+ * conversation (marking read applies only to the live, currently-assigned one -
+ * [ago.chat.android.thread.ThreadViewModel.markReadUpTo]'s own contract), and [canLoadOlder]/[onLoadOlder]
+ * page a past conversation's own history exactly the way they page the live one's.
  */
 @Composable
-private fun MessageList(
+internal fun MessageList(
     messages: List<MessageDto>,
     canLoadOlder: Boolean,
     loadingOlder: Boolean,

@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
 import ago.chat.android.thread.contactpanel.sections.NotesSection
+import ago.chat.android.thread.contactpanel.sections.PastDialogsSection
 import ago.chat.android.thread.contactpanel.sections.TagsSection
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.russianPluralStringResource
@@ -103,6 +104,16 @@ internal fun ContactDetailPanel(
     onNoteDraftChanged: (String) -> Unit,
     onAddNote: () -> Unit,
     onRetryNotes: () -> Unit,
+    // `26-151`: the «Прошлые диалоги» section's own callbacks. No permission Boolean beside them - Q6
+    // decided past dialogs are strictly read-only, and reading them rides the panel's own
+    // `conversation:read` gate exactly as reading notes does ([NotesSection]'s own doc comment on why it
+    // takes no read-permission parameter either); there is no write half here to gate at all.
+    onRetryPastDialogs: () -> Unit,
+    onLoadMorePastDialogs: () -> Unit,
+    onOpenPastDialog: (String) -> Unit,
+    onClosePastDialogHistory: () -> Unit,
+    onRetryPastDialogHistory: () -> Unit,
+    onLoadOlderPastDialogHistory: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -172,6 +183,23 @@ internal fun ContactDetailPanel(
                 onNoteDraftChanged = onNoteDraftChanged,
                 onAddNote = onAddNote,
                 onRetry = onRetryNotes,
+            )
+
+            Spacer(modifier = Modifier.height(SectionSpacing))
+
+            // `26-151` (S-I): «Прошлые диалоги» - the row that opens a read-only list of the visitor's
+            // other conversations on this site, and a read-only transcript of whichever one is opened.
+            // Reads its own arm off the same state and takes its callbacks from the same VM, the additive
+            // convention documented above; strictly read-only (Q6), so there is no permission Boolean to
+            // pass in beyond the panel's own `conversation:read` gate.
+            PastDialogsSection(
+                state = state.pastDialogs,
+                onRetry = onRetryPastDialogs,
+                onLoadMore = onLoadMorePastDialogs,
+                onOpenPastDialog = onOpenPastDialog,
+                onClosePastDialogHistory = onClosePastDialogHistory,
+                onRetryPastDialogHistory = onRetryPastDialogHistory,
+                onLoadOlderPastDialogHistory = onLoadOlderPastDialogHistory,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

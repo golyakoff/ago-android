@@ -5,7 +5,9 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.ConversationNote
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.Tag
+import ago.chat.android.core.domain.visitorhistory.VisitorHistoryConversation
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
+import ago.chat.android.core.network.realtime.MessageDto
 
 /**
  * `26-147`: the contact-detail panel's own state — the join point every later section
@@ -31,6 +33,7 @@ public data class ContactPanelUiState(
     val contactDetails: ContactDetailsSectionState = ContactDetailsSectionState.Loading,
     val tags: TagsSectionState = TagsSectionState.Loading,
     val notes: NotesSectionState = NotesSectionState.Loading,
+    val pastDialogs: PastDialogsSectionState = PastDialogsSectionState.Loading,
 )
 
 /**
@@ -256,4 +259,91 @@ public sealed interface AddNoteError {
     public data class Failed(
         val reason: NetworkFailure,
     ) : AddNoteError
+}
+
+/**
+ * `26-151`: the «Прошлые диалоги» row's own async state — the fourth and final section slice to grow
+ * [ContactPanelUiState] the additive way its own doc comment prescribes, reading through
+ * [ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi] (`26-144`). Three arms, the same
+ * Loading/Loaded/Failed vocabulary [HeaderSummaryState]/[ContactDetailsSectionState]/[TagsSectionState]/
+ * [NotesSectionState] establish — fetched once at panel-open time, the identical moment those sections'
+ * own reads fire.
+ *
+ * **Why this section nests a second read (`history`) rather than growing [ContactPanelUiState] with a
+ * sibling field.** Design Q6 decided past dialogs are read-only and opened *from* the list (§4: "tapping
+ * the row opens a list of the visitor's prior conversations; tapping one opens it read-only"), so the
+ * transcript is inherently a child of *this* list, never a sibling section an operator could reach any
+ * other way — the identical "the in-flight state travels with the loaded list it acts on" shape
+ * [ContactDetailsSectionState.Loaded]/[TagsSectionState.Loaded] already establish for their own writes,
+ * here for a nested *read* instead. [selectedConversationId]/[history] are `null`/`null` while the
+ * operator is looking at the list itself, and both are set together the moment [ContactPanelViewModel.openPastDialog]
+ * is called.
+ */
+public sealed interface PastDialogsSectionState {
+    public data object Loading : PastDialogsSectionState
+
+    /**
+     * The visitor's other conversations on this site, oldest-appended as [ContactPanelViewModel.loadMorePastDialogs]
+     * pages further back — a keyset list only ever grows forward, never replaces what already rendered
+     * ([ago.chat.android.core.domain.visitorhistory.VisitorHistoryPage.nextBeforeId]'s own contract, the
+     * identical convention [ago.chat.android.core.domain.conversations.AllConversationsPage.nextBeforeId]
+     * already states).
+     *
+     * [nextBeforeId] — the keyset cursor for the next page of [conversations], `null` once the last page
+     * has been fetched; drives whether the sub-screen offers a "load more" control at all.
+     *
+     * [loadingMore] — `true` while one further page is in flight, the section's own single load-more
+     * in-flight flag (there is only ever one such fetch at a time, so a `Boolean` suffices — unlike
+     * [ContactDetailsSectionState.Loaded.revealingIds]'s per-row `Set`, which needs one flag per
+     * independently-triggerable row).
+     *
+     * [selectedConversationId]/[history] — which of [conversations] the operator opened for a read-only
+     * transcript, and that transcript's own async state; both `null` while the operator is looking at the
+     * list rather than a transcript.
+     */
+    public data class Loaded(
+        val conversations: List<VisitorHistoryConversation>,
+        val nextBeforeId: String? = null,
+        val loadingMore: Boolean = false,
+        val selectedConversationId: String? = null,
+        val history: PastDialogHistoryState? = null,
+    ) : PastDialogsSectionState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : PastDialogsSectionState
+}
+
+/**
+ * `26-151`: one past conversation's own read-only transcript, opened through the hub's
+ * `GetVisitorHistoryConversationAsync` ([ago.chat.android.core.network.realtime.OperatorHubEvents.getVisitorHistoryConversation]).
+ * Q6 decided past dialogs are read-only — this type carries no draft, no `sending`, no send-refusal arm,
+ * unlike [ago.chat.android.thread.ThreadUiState], which is the shape a *live*, writable conversation
+ * needs and this deliberately is not.
+ */
+public sealed interface PastDialogHistoryState {
+    public data object Loading : PastDialogHistoryState
+
+    /**
+     * [messages] — this past conversation's own messages, ascending by sequence, the identical ordering
+     * contract [ago.chat.android.thread.ThreadUiState.messages] states, fed straight into the same
+     * message renderer.
+     *
+     * [nextBeforeSequence] — the keyset cursor for "load older messages" within *this* transcript, `null`
+     * once exhausted; [loadingOlder] is that manual load's own in-flight flag, and [historyError] is a
+     * failed "load older" call's inline error — the identical three-field shape
+     * [ago.chat.android.thread.ThreadUiState] draws for [ago.chat.android.thread.ThreadUiState.loadingOlder]/
+     * [ago.chat.android.thread.ThreadUiState.historyError], minus everything about sending because this
+     * transcript never sends.
+     */
+    public data class Loaded(
+        val messages: List<MessageDto>,
+        val nextBeforeSequence: Long? = null,
+        val loadingOlder: Boolean = false,
+        val historyError: NetworkFailure? = null,
+    ) : PastDialogHistoryState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : PastDialogHistoryState
 }

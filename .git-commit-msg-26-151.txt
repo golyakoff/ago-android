@@ -1,0 +1,7 @@
+feat(26-151): contact-detail panel past-dialogs row + read-only history (S-I)
+
+Adds the «Прошлые диалоги» row: a list of the visitor's other conversations on this
+site (reusing 26-144's client + hub method), and a read-only transcript of whichever
+one is opened, reusing the live thread's own MessageList with no composer and no
+actions (design Q6). Rides the panel's own conversation:read gate, same as the notes
+section - there is no write half here to gate.
