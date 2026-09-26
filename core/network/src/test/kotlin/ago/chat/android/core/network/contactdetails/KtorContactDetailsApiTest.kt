@@ -1,6 +1,7 @@
 package ago.chat.android.core.network.contactdetails
 
 import ago.chat.android.core.domain.contactdetails.ContactDetail
+import ago.chat.android.core.domain.contactdetails.ContactDetailWriteResult
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
 import ago.chat.android.core.domain.net.NetworkFailure
@@ -15,6 +16,7 @@ import io.ktor.client.engine.mock.respondError
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -31,7 +33,7 @@ class KtorContactDetailsApiTest {
     // --------------------------------------- GET /api/v1/conversations/{id}/contact-details
 
     @Test
-    fun `every row round-trips, Name included and never masked`() =
+    fun `every row round-trips, Name included and never masked, assessment parsed and defaulted`() =
         runTest {
             var requestedUrl: String? = null
             val api =
@@ -42,8 +44,8 @@ class KtorContactDetailsApiTest {
                         {
                           "contactDetails": [
                             {"id":"cd-1","kind":"Name","value":"Аня","masked":false},
-                            {"id":"cd-2","kind":"Phone","value":"+7•••••1234","masked":true},
-                            {"id":"cd-3","kind":"Email","value":"anya@example.com","masked":false}
+                            {"id":"cd-2","kind":"Phone","value":"+7•••••1234","masked":true,"assessment":"Confirmed"},
+                            {"id":"cd-3","kind":"Email","value":"anya@example.com","masked":false,"assessment":"Invalid"}
                           ]
                         }
                         """.trimIndent(),
@@ -57,9 +59,11 @@ class KtorContactDetailsApiTest {
             assertEquals(
                 ContactDetailsResult.Loaded(
                     listOf(
-                        ContactDetail(id = "cd-1", kind = "Name", value = "Аня", masked = false),
-                        ContactDetail(id = "cd-2", kind = "Phone", value = "+7•••••1234", masked = true),
-                        ContactDetail(id = "cd-3", kind = "Email", value = "anya@example.com", masked = false),
+                        // No `assessment` on the wire at all - the pre-`26-167` shape - still parses,
+                        // defaulted to "Unset" rather than failing decode.
+                        ContactDetail(id = "cd-1", kind = "Name", value = "Аня", masked = false, assessment = "Unset"),
+                        ContactDetail(id = "cd-2", kind = "Phone", value = "+7•••••1234", masked = true, assessment = "Confirmed"),
+                        ContactDetail(id = "cd-3", kind = "Email", value = "anya@example.com", masked = false, assessment = "Invalid"),
                     ),
                 ),
                 result,
@@ -169,6 +173,183 @@ class KtorContactDetailsApiTest {
             val api = apiFor { respond("""{"somethingElseEntirely":true}""", HttpStatusCode.OK, jsonHeaders()) }
 
             assertEquals(RevealContactDetailResult.Failed(NetworkFailure.Unexpected), api.revealContactDetail("c1", "cd-2"))
+        }
+
+    // ---------------------------- PATCH /api/v1/conversations/{id}/contact-details/{id}
+
+    @Test
+    fun `a 2xx edit sends the new value and the updated row comes back, assessment reset included`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            var sentBody: String? = null
+            val api =
+                apiFor { request ->
+                    requested = request.method to request.url.toString()
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond(
+                        """{"id":"cd-2","kind":"Phone","value":"+79997654321","masked":false,"assessment":"Unset"}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.editContactDetail("c1", "cd-2", "+79997654321")
+
+            assertEquals(
+                ContactDetailWriteResult.Updated(
+                    ContactDetail(id = "cd-2", kind = "Phone", value = "+79997654321", masked = false, assessment = "Unset"),
+                ),
+                result,
+            )
+            assertEquals(HttpMethod.Patch to "$baseUrl/api/v1/conversations/c1/contact-details/cd-2", requested)
+            assertEquals("""{"value":"+79997654321"}""", sentBody)
+        }
+
+    @Test
+    fun `a 400 with a problem-details body on edit is rendered as that exact refusal, draft implied to stay`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"VisitorContactDetail.Invalid","detail":"A contact detail value cannot be blank."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.editContactDetail("c1", "cd-2", "")
+
+            assertEquals(ContactDetailWriteResult.Refused("A contact detail value cannot be blank."), result)
+        }
+
+    @Test
+    fun `a 404 with no problem-details body on edit classifies as a server error, never a fabricated string`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.NotFound) }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.ServerError(404)),
+                api.editContactDetail("c1", "cd-2", "+79997654321"),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on edit is a transport failure, not a silently retried write`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.NoConnection),
+                api.editContactDetail("c1", "cd-2", "+79997654321"),
+            )
+        }
+
+    @Test
+    fun `a 2xx edit that dropped the shape is Failed, never a fabricated row`() =
+        runTest {
+            val api = apiFor { respond("""{"somethingElseEntirely":true}""", HttpStatusCode.OK, jsonHeaders()) }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.Unexpected),
+                api.editContactDetail("c1", "cd-2", "+79997654321"),
+            )
+        }
+
+    // ------------------ PATCH /api/v1/conversations/{id}/contact-details/{id}/assessment
+
+    @Test
+    fun `a 2xx assessment write sends the target assessment and the updated row comes back`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            var sentBody: String? = null
+            val api =
+                apiFor { request ->
+                    requested = request.method to request.url.toString()
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond(
+                        """{"id":"cd-2","kind":"Phone","value":"+79991234567","masked":false,"assessment":"Confirmed"}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.setContactDetailAssessment("c1", "cd-2", "Confirmed")
+
+            assertEquals(
+                ContactDetailWriteResult.Updated(
+                    ContactDetail(id = "cd-2", kind = "Phone", value = "+79991234567", masked = false, assessment = "Confirmed"),
+                ),
+                result,
+            )
+            assertEquals(HttpMethod.Patch to "$baseUrl/api/v1/conversations/c1/contact-details/cd-2/assessment", requested)
+            assertEquals("""{"assessment":"Confirmed"}""", sentBody)
+        }
+
+    @Test
+    fun `a 400 InvalidAssessment problem-details body is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"VisitorContactDetail.InvalidAssessment","detail":"\"Unset\" is not a settable assessment."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.setContactDetailAssessment("c1", "cd-2", "Unset")
+
+            assertEquals(ContactDetailWriteResult.Refused("\"Unset\" is not a settable assessment."), result)
+        }
+
+    @Test
+    fun `a 400 AssessmentNotApplicable problem-details body on a Name row is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"VisitorContactDetail.AssessmentNotApplicable","detail":"Name rows cannot be assessed."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.setContactDetailAssessment("c1", "cd-1", "Confirmed")
+
+            assertEquals(ContactDetailWriteResult.Refused("Name rows cannot be assessed."), result)
+        }
+
+    @Test
+    fun `a 404 with no problem-details body on the assessment write classifies as a server error`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.NotFound) }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.ServerError(404)),
+                api.setContactDetailAssessment("c1", "cd-2", "Confirmed"),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on the assessment write is a transport failure, not a silently retried write`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.NoConnection),
+                api.setContactDetailAssessment("c1", "cd-2", "Confirmed"),
+            )
+        }
+
+    @Test
+    fun `a 2xx assessment write that dropped the shape is Failed, never a fabricated row`() =
+        runTest {
+            val api = apiFor { respond("""{"somethingElseEntirely":true}""", HttpStatusCode.OK, jsonHeaders()) }
+
+            assertEquals(
+                ContactDetailWriteResult.Failed(NetworkFailure.Unexpected),
+                api.setContactDetailAssessment("c1", "cd-2", "Confirmed"),
+            )
         }
 
     private fun jsonHeaders() = headersOf("Content-Type", ContentType.Application.Json.toString())

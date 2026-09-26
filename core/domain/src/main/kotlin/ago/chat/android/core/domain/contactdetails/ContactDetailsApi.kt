@@ -16,6 +16,13 @@ import ago.chat.android.core.domain.net.NetworkFailure
  * matching `26-115`'s own scope: edit and the confirm/mark-invalid assessment exist on the server but
  * are out of scope here (the 26-111 "Author decisions" §1 drops name-assessment outright, and no ticket
  * has asked for edit yet).
+ *
+ * `26-167` (`docs/design/26-156-*.md` §6, ticket `26-171`): adds the two writes — [editContactDetail]
+ * and [setContactDetailAssessment] — confirmed against the same `ago-chat` code at `8530e22`
+ * (`EditVisitorContactDetailHandler`, `SetVisitorContactDetailAssessmentHandler`), both gated
+ * `Permission.ConversationSend` server-side. Against **chat's own `VisitorContactDetail`s only** — never
+ * the calendar `PersonRecord.Phone` (no edit API exists for that number, and must not: `PhoneVerifiedAt`
+ * is bound to it) and never the dropped `customers` table (design doc §1).
  */
 public interface ContactDetailsApi {
     /**
@@ -51,22 +58,65 @@ public interface ContactDetailsApi {
         conversationId: String,
         contactDetailId: String,
     ): RevealContactDetailResult
+
+    /**
+     * `PATCH /api/v1/conversations/{conversationId}/contact-details/{contactDetailId}` `{value}` —
+     * operator-only, gated `conversation:send` (`EditVisitorContactDetailHandler`). An operator's own
+     * correction to an existing row's own value, never a second, competing one — mirrors console's
+     * «Изменить». **The server resets the row's `Assessment` back to `Unset` on a successful edit**
+     * (`EditVisitorContactDetailHandler`'s own remarks) — the [ContactDetail] this returns already
+     * reflects that, so a caller never needs to clear the assessment itself.
+     *
+     * Wrong-visitor and unknown-id both read as [ContactDetailWriteResult.Refused] with the server's
+     * `VisitorContactDetail.NotFound` sentence — the identical info-hiding shape [revealContactDetail]
+     * already documents. An empty or oversized [value] is refused the same way
+     * (`VisitorContactDetail.Invalid`), never a client-side validation the port would have to keep in
+     * sync with the domain's own rule.
+     */
+    public suspend fun editContactDetail(
+        conversationId: String,
+        contactDetailId: String,
+        value: String,
+    ): ContactDetailWriteResult
+
+    /**
+     * `PATCH /api/v1/conversations/{conversationId}/contact-details/{contactDetailId}/assessment`
+     * `{assessment}` — operator-only, gated `conversation:send`
+     * (`SetVisitorContactDetailAssessmentHandler`). [assessment] is
+     * `Ago.Chat.Domain.VisitorContactDetailAssessment`'s own wire spelling, unparsed — `"Confirmed"` or
+     * `"Invalid"` — the identical "the classification lives in `:core:domain`, the raw string travels"
+     * discipline [ContactDetail.kind] already follows. **Never `"Unset"`**: the server refuses that as
+     * not a settable target (there is no path back to unasserted through this endpoint — the same rule
+     * the console follows), and a `Name` row is refused regardless of value
+     * (`VisitorContactDetail.AssessmentNotApplicable`) — both surface as
+     * [ContactDetailWriteResult.Refused], never a client-side pre-check duplicating the server's rule.
+     */
+    public suspend fun setContactDetailAssessment(
+        conversationId: String,
+        contactDetailId: String,
+        assessment: String,
+    ): ContactDetailWriteResult
 }
 
 /**
  * `Ago.Chat.Application.UseCases.ListVisitorContactDetails.VisitorContactDetailDto`, reduced to the
- * fields this panel renders — `recordedByOperatorId`/`source`/`verified`/`recordedAt`/`assessment` are
- * all on the wire and simply omitted here, the same `ignoreUnknownKeys`-backed reduction
+ * fields this panel renders — `recordedByOperatorId`/`source`/`verified`/`recordedAt` are on the wire and
+ * simply omitted here, the same `ignoreUnknownKeys`-backed reduction
  * [ago.chat.android.core.domain.bookings.Contact]'s own doc comment explains for the calendar's contact
- * read: none of those fields has a screen yet, and `assessment` in particular is dropped on purpose —
- * 26-111 decision #1 drops name-assessment display entirely, and this app confirms/marks nothing (no
- * `PATCH .../assessment` client exists on this port).
+ * read: neither field has a screen yet.
  *
  * [kind] is `Ago.Chat.Domain.VisitorContactDetailKind`'s own wire spelling, unparsed —
  * `"Name"`/`"Phone"`/`"Email"` verbatim, the identical "the classification lives in `:core:domain`, the
  * raw string travels" discipline [ConversationSummary.state][ago.chat.android.core.domain.conversations.ConversationSummary]
  * already follows. **`Name` is never masked and never carries an invalid/unverified state** — trusted
  * and shown as written, per 26-111's own author decision.
+ *
+ * `26-167`: [assessment] joins the shape — `Ago.Chat.Domain.VisitorContactDetailAssessment`'s own wire
+ * spelling, unparsed the identical way [kind] already is: `"Unset"`/`"Confirmed"`/`"Invalid"` verbatim,
+ * default `"Unset"` for a row recorded before this field existed on this client (never `null` — the
+ * server always sends it; the default only protects a stale cached shape). 26-111 decision #1 drops
+ * *displaying* an assessment for a `Name` row; this port still carries whatever the server sent rather
+ * than special-casing `kind` here, since the row's own kind already tells a caller whether to render it.
  */
 public data class ContactDetail(
     val id: String,
@@ -75,6 +125,7 @@ public data class ContactDetail(
     /** `true` means [value] is a masked string and the caller may offer [ContactDetailsApi.revealContactDetail];
      * `false` means [value] already is the real one. Always `false` for a `kind == "Name"` row. */
     val masked: Boolean,
+    val assessment: String = "Unset",
 )
 
 /** What reading one conversation's contact details came back with — the identical two-arm shape
@@ -113,4 +164,35 @@ public sealed interface RevealContactDetailResult {
     public data class Failed(
         val reason: NetworkFailure,
     ) : RevealContactDetailResult
+}
+
+/**
+ * `26-167`: what either write ([ContactDetailsApi.editContactDetail],
+ * [ContactDetailsApi.setContactDetailAssessment]) came back with — the identical three-arm shape
+ * [RevealContactDetailResult] already establishes above, generalised to "a write that can be genuinely
+ * refused" rather than "a reveal" specifically: both PATCHes answer the same
+ * `2xx`-row / non-2xx-`detail` / transport-failure split, so one result type serves both rather than two
+ * parallel ones differing only in name.
+ */
+public sealed interface ContactDetailWriteResult {
+    /** A `2xx` carrying the server's own updated row — the edit's post-edit value (assessment reset to
+     * `Unset`, per [ContactDetailsApi.editContactDetail]'s own doc comment) or the assessment write's own
+     * new [ContactDetail.assessment]. Named [contactDetail], not `detail` — the identical reason
+     * [RevealContactDetailResult.Revealed] already gives for itself. */
+    public data class Updated(
+        val contactDetail: ContactDetail,
+    ) : ContactDetailWriteResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — a permission refusal, an unknown or
+     * wrong-visitor id, an invalid value, or an inapplicable assessment all land here, shown to the
+     * operator verbatim; nothing was written, and the draft on screen is kept. */
+    public data class Refused(
+        val detail: String,
+    ) : ContactDetailWriteResult
+
+    /** Everything that is not a genuine server refusal — a dropped connection, or a non-2xx whose body
+     * carried no `detail` to show. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : ContactDetailWriteResult
 }
