@@ -1157,6 +1157,33 @@
     <string name="channels_install_load_failed_transport">Не удалось связаться с AGO. Проверьте подключение и попробуйте ещё раз.</string>
     <string name="channels_install_load_failed_unexpected">Не удалось загрузить установку виджета. Попробуйте ещё раз.</string>
 
+    <!-- `26-188`: the shared Каналы connect/status/disconnect scaffold ([ago.chat.android.channels.ChannelConnectScreen])
+         - one set of words for the badge/action/dialog shapes every one of the three token channels
+         (Telegram now, MAX/VK in `C2`/`C3`) draws identically. -->
+    <string name="channel_connect_action">Подключить</string>
+    <string name="channel_connect_connecting">Подключение…</string>
+    <string name="channel_disconnect_action">Отключить</string>
+    <string name="channel_disconnecting_action">Отключение…</string>
+    <string name="channel_disconnect_dialog_title">Отключить канал?</string>
+    <!-- %1$s is the device-zone date/time this screen already formats - never a raw ISO string. -->
+    <string name="channel_connected_since">Подключено с %1$s</string>
+    <string name="channel_checked_at">Проверено %1$s</string>
+    <string name="channel_status_verified">Подключено</string>
+    <string name="channel_status_unreachable">Не удалось проверить</string>
+    <string name="channel_status_unreachable_body">Не удалось связаться с провайдером сейчас. Подождите немного и обновите статус.</string>
+    <string name="channel_status_refused">Не подтверждено</string>
+
+    <!-- `26-188`: Каналы → Telegram - connect a bot token, watch its live status, disconnect. One
+         resource for both the Ещё row label and the screen's own app-bar title, the identical
+         "one word, one string" shape `channels_install_title` already takes. -->
+    <string name="channels_telegram_title">Telegram</string>
+    <string name="channels_telegram_not_connected_body">Подключите Telegram-бота, чтобы получать сообщения от клиентов в этом канале.</string>
+    <string name="channels_telegram_token_label">Токен бота</string>
+    <string name="channels_telegram_token_hint">Получите токен у @BotFather в Telegram</string>
+    <!-- The token never round-trips (`adr/0069`): reconnecting after a bad or expired token means
+         disconnecting and connecting again with a fresh one, never an edit. -->
+    <string name="channels_telegram_disconnect_dialog_body">Отключить Telegram-бота? Чтобы подключить его снова, потребуется новый токен — прежний ввести повторно нельзя.</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity

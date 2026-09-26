@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
+import ago.chat.android.core.domain.channels.ChannelConnectionApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
@@ -43,6 +44,7 @@ import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
+import ago.chat.android.core.network.channels.KtorChannelConnectionApi
 import ago.chat.android.core.network.contactdetails.KtorContactDetailsApi
 import ago.chat.android.core.network.conversationactions.KtorConversationActionsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
@@ -479,6 +481,22 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): InstallationApi = KtorInstallationApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-188`: the Каналы → Telegram/MAX/VK screens' own port — the same `config.apiBaseUrl`
+     * [provideInstallationApi] above reads, since `GET/POST/DELETE …/channels/{kind}` is one more family
+     * of endpoints on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection], the identical shape
+     * [provideInstallationApi] above already threads it through for — every one of the three routes
+     * carries the site id in the URL itself. One binding for all three channels
+     * ([ChannelConnectionApi]'s own doc comment: one parameterised port, not three copies), so `C2`/`C3`
+     * need no `@Provides` of their own.
+     */
+    @Provides
+    public fun provideChannelConnectionApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): ChannelConnectionApi = KtorChannelConnectionApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same
