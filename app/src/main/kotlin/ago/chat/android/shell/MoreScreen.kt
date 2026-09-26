@@ -2,6 +2,7 @@ package ago.chat.android.shell
 
 import ago.chat.android.R
 import ago.chat.android.channels.InstallWidgetRoute
+import ago.chat.android.channels.TelegramChannelRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
@@ -87,6 +88,10 @@ internal fun MoreScreen(
             // mirroring `ago-console`'s own `InstallSnippetPage`. Back returns to the Ещё list (clause 2)
             // via the same `openRowId = null` this screen's own `BackHandler` above already uses.
             CHANNELS_INSTALL_ROW_ID -> InstallWidgetRoute(onBack = { openRowId = null })
+            // `26-188`: Каналы → Telegram - a token connect/status/disconnect screen, the first of the
+            // three token channels this scaffold serves (MAX/VK follow identically in `C2`/`C3`). Back
+            // returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            CHANNELS_TELEGRAM_ROW_ID -> TelegramChannelRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -191,6 +196,7 @@ internal data class MoreRow(
 )
 
 internal const val CHANNELS_INSTALL_ROW_ID: String = "channels-install"
+internal const val CHANNELS_TELEGRAM_ROW_ID: String = "channels-telegram"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
@@ -202,7 +208,11 @@ internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billi
  * `26-159`: Каналы gains its first real row — «Установка виджета» — but only when [canConfigureSite],
  * matching how `ago-console`'s own rail gates its `/channels/install` entry on `site:configure`. A
  * section with no rows is still not drawn at all ([buildMoreSections]), so an operator without the
- * permission sees no Каналы header either, exactly as before this item. */
+ * permission sees no Каналы header either, exactly as before this item.
+ *
+ * `26-188`: Каналы gains its second real row — Telegram — under the identical gate. Row order follows
+ * `docs/design/tenant-channels-android.md` §5.2 (Установка виджета · [MAX] · Telegram · VK · Почта);
+ * MAX's own row is not added until `C2`, so Telegram sits directly after Установка виджета for now. */
 internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
@@ -210,6 +220,13 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = CHANNELS_INSTALL_ROW_ID,
                     labelRes = R.string.channels_install_title,
+                    section = MoreSectionId.Channels,
+                ),
+            )
+            add(
+                MoreRow(
+                    id = CHANNELS_TELEGRAM_ROW_ID,
+                    labelRes = R.string.channels_telegram_title,
                     section = MoreSectionId.Channels,
                 ),
             )
