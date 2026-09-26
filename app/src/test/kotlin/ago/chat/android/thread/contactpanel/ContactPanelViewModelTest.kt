@@ -1,6 +1,7 @@
 package ago.chat.android.thread.contactpanel
 
 import ago.chat.android.core.domain.contactdetails.ContactDetail
+import ago.chat.android.core.domain.contactdetails.ContactDetailWriteResult
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsResult
 import ago.chat.android.core.domain.contactdetails.RevealContactDetailResult
@@ -791,9 +792,17 @@ class ContactPanelViewModelTest {
     private class FakeContactDetailsApi(
         private val listResult: ContactDetailsResult = ContactDetailsResult.Loaded(emptyList()),
         private val revealResult: RevealContactDetailResult = RevealContactDetailResult.Failed(NetworkFailure.Unexpected),
+        private val editResult: ContactDetailWriteResult = ContactDetailWriteResult.Failed(NetworkFailure.Unexpected),
+        private val assessmentResult: ContactDetailWriteResult = ContactDetailWriteResult.Failed(NetworkFailure.Unexpected),
     ) : ContactDetailsApi {
         var listCalls = 0
         var revealCalls = 0
+
+        // `26-167`: the write half of this port has no caller yet - the edit/assessment screen is a
+        // separate follow-up slice (`docs/design/26-156-*.md` §6, ticket `26-172`/`26-173`) - so these
+        // two exist only so this fake keeps implementing the whole interface; no test here exercises them.
+        var editCalls = 0
+        var assessmentCalls = 0
 
         override suspend fun fetchContactDetails(conversationId: String): ContactDetailsResult {
             listCalls++
@@ -806,6 +815,24 @@ class ContactPanelViewModelTest {
         ): RevealContactDetailResult {
             revealCalls++
             return revealResult
+        }
+
+        override suspend fun editContactDetail(
+            conversationId: String,
+            contactDetailId: String,
+            value: String,
+        ): ContactDetailWriteResult {
+            editCalls++
+            return editResult
+        }
+
+        override suspend fun setContactDetailAssessment(
+            conversationId: String,
+            contactDetailId: String,
+            assessment: String,
+        ): ContactDetailWriteResult {
+            assessmentCalls++
+            return assessmentResult
         }
     }
 

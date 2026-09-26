@@ -359,7 +359,8 @@ public object AppModule {
     /**
      * `26-115`: the contact-detail panel's own list-and-reveal port — `config.apiBaseUrl`, the same
      * `Ago.Chat.Api` origin [provideConversationsApi] above already reads, since the contact-details
-     * endpoints live on that same host, not the calendar's.
+     * endpoints live on that same host, not the calendar's. `26-167` adds the edit and
+     * set-assessment writes to the same port/adapter pair — one binding still covers all four calls.
      */
     @Provides
     public fun provideContactDetailsApi(
