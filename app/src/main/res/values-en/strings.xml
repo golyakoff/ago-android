@@ -746,6 +746,29 @@
     <string name="channels_vk_share">Share</string>
     <string name="channels_vk_secrets_shown_once_hint">The callback URL and webhook secret are shown only once, right after connecting. To see them again, disconnect and reconnect the community with a fresh token.</string>
 
+    <!-- `26-193`: Channels → «Widget on site». See the ru strings for the full note. -->
+    <string name="widget_config_hub_title">Widget on site</string>
+    <string name="widget_config_hub_intro">Changes will reach a visitor the next time their page loads.</string>
+    <string name="widget_config_hub_section">Sections</string>
+    <string name="widget_config_group_appearance">Appearance</string>
+    <string name="widget_config_field_color_label">Accent colour</string>
+    <string name="widget_config_field_color_invalid">Enter a colour as #RRGGBB</string>
+    <string name="widget_config_field_position_label">Launcher position</string>
+    <string name="widget_config_position_bottom_right">Bottom right</string>
+    <string name="widget_config_position_bottom_left">Bottom left</string>
+    <string name="widget_config_field_locale_label">Widget language</string>
+    <string name="widget_config_field_panel_title_label">Panel title</string>
+    <string name="widget_config_field_panel_title_supporting">%1$d/%2$d · If left blank, the widget\'s own default greeting is shown.</string>
+    <string name="widget_config_field_channel_switcher_placement_label">Channel switcher</string>
+    <string name="widget_config_channel_switcher_above">Above the composer</string>
+    <string name="widget_config_channel_switcher_below">Below the launcher</string>
+    <string name="widget_config_field_icon_size_label">Icon size</string>
+    <string name="widget_config_icon_size_large">Large</string>
+    <string name="widget_config_icon_size_medium">Medium</string>
+    <string name="widget_config_icon_size_small">Small</string>
+    <string name="widget_config_action_save">Save</string>
+    <string name="widget_config_saved">Saved</string>
+
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
     <string name="account_menu_fallback_initial">?</string>
