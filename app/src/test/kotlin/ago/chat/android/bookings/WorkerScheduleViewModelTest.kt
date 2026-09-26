@@ -1,11 +1,6 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
-import ago.chat.android.core.domain.recut.RecutApi
-import ago.chat.android.core.domain.recut.RecutBookingDecision
-import ago.chat.android.core.domain.recut.RecutConfirmResult
-import ago.chat.android.core.domain.recut.RecutPreview
-import ago.chat.android.core.domain.recut.RecutPreviewResult
 import ago.chat.android.core.domain.workerschedule.SaveWorkerScheduleResult
 import ago.chat.android.core.domain.workerschedule.ScheduleKind
 import ago.chat.android.core.domain.workerschedule.WorkerSchedule
@@ -29,8 +24,9 @@ import org.junit.Test
 
 /**
  * `26-170` (`26-155` part 2): the «График» drill-down's own view model - a schedule that may not exist
- * yet ([WorkerScheduleResult.None]'s own "create" state), a save that refuses locally when a number does
- * not parse, and the minimal Q2 re-cut hook (preview only, never a decision or a confirm).
+ * yet ([WorkerScheduleResult.None]'s own "create" state) and a save that refuses locally when a number
+ * does not parse. `26-172` (`26-155` part 4) removed this class's own read-only re-cut preview hook -
+ * its own tests moved with it to `WorkerRecutViewModelTest`, over the full three-step flow.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkerScheduleViewModelTest {
@@ -49,7 +45,7 @@ class WorkerScheduleViewModelTest {
     @Test
     fun `starts Loading before open is called`() =
         runTest(dispatcher) {
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(hangFetch = true), FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(hangFetch = true), dispatcher)
 
             viewModel.open("w1")
             dispatcher.scheduler.runCurrent()
@@ -60,7 +56,7 @@ class WorkerScheduleViewModelTest {
     @Test
     fun `configuration no_schedule renders as an empty form, not a failure`() =
         runTest(dispatcher) {
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = null), FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = null), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -73,7 +69,7 @@ class WorkerScheduleViewModelTest {
     @Test
     fun `an existing schedule prefills the form from it`() =
         runTest(dispatcher) {
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = SCHEDULE), FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = SCHEDULE), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -87,7 +83,7 @@ class WorkerScheduleViewModelTest {
     @Test
     fun `a deployment with no calendar backend is NotConfigured, not a failure`() =
         runTest(dispatcher) {
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(notConfigured = true), FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(notConfigured = true), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -99,7 +95,7 @@ class WorkerScheduleViewModelTest {
     fun `re-opening the same worker id does not re-fetch`() =
         runTest(dispatcher) {
             val api = FakeWorkerScheduleApi(schedule = SCHEDULE)
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -113,7 +109,7 @@ class WorkerScheduleViewModelTest {
     fun `opening a different worker id re-fetches for it`() =
         runTest(dispatcher) {
             val api = FakeWorkerScheduleApi(schedule = SCHEDULE)
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -128,7 +124,7 @@ class WorkerScheduleViewModelTest {
     fun `a form whose numbers do not parse refuses locally - no request is sent`() =
         runTest(dispatcher) {
             val api = FakeWorkerScheduleApi(schedule = null)
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -144,7 +140,7 @@ class WorkerScheduleViewModelTest {
     fun `saving sends every field and re-reads rather than trusting the write's own echo`() =
         runTest(dispatcher) {
             val api = FakeWorkerScheduleApi(schedule = null)
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -167,7 +163,7 @@ class WorkerScheduleViewModelTest {
                     schedule = null,
                     saveResult = SaveWorkerScheduleResult.Refused("materializeFrom cannot move earlier."),
                 )
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -192,7 +188,7 @@ class WorkerScheduleViewModelTest {
                     schedule = null,
                     saveResult = SaveWorkerScheduleResult.Failed(BookingsQueueFailure.Transport),
                 )
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -209,7 +205,7 @@ class WorkerScheduleViewModelTest {
     fun `a second submit while one is in flight is a no-op`() =
         runTest(dispatcher) {
             val api = FakeWorkerScheduleApi(schedule = null, hangSave = true)
-            val viewModel = WorkerScheduleViewModel(api, FakeRecutApi(), dispatcher)
+            val viewModel = WorkerScheduleViewModel(api, dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -220,59 +216,6 @@ class WorkerScheduleViewModelTest {
 
             assertEquals(1, api.saveCount)
             assertTrue((viewModel.state.value as WorkerScheduleUiState.Loaded).formBusy)
-        }
-
-    @Test
-    fun `the minimal re-cut hook previews from the schedule's own cursor, read-only`() =
-        runTest(dispatcher) {
-            val preview = RecutPreview(days = emptyList(), fingerprint = "fp1")
-            val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(preview))
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = SCHEDULE), recutApi, dispatcher)
-            viewModel.open("w1")
-            advanceUntilIdle()
-
-            viewModel.previewRecut()
-            advanceUntilIdle()
-
-            assertEquals(SCHEDULE.materializeFrom, recutApi.lastFrom)
-            assertEquals(RecutHookUiState.Loaded(preview), (viewModel.state.value as WorkerScheduleUiState.Loaded).recut)
-            // The hook never decides or confirms anything on its own behalf.
-            assertEquals(0, recutApi.confirmCount)
-        }
-
-    @Test
-    fun `previewing with no saved schedule is a no-op - there is no cursor to preview from`() =
-        runTest(dispatcher) {
-            val recutApi = FakeRecutApi()
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = null), recutApi, dispatcher)
-            viewModel.open("w1")
-            advanceUntilIdle()
-
-            viewModel.previewRecut()
-            advanceUntilIdle()
-
-            assertEquals(0, recutApi.previewCount)
-        }
-
-    @Test
-    fun `a recut refusal is shown verbatim and dismissing clears it back to Idle`() =
-        runTest(dispatcher) {
-            val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Refused("Range starts before today.", "recut.from_before_today"))
-            val viewModel = WorkerScheduleViewModel(FakeWorkerScheduleApi(schedule = SCHEDULE), recutApi, dispatcher)
-            viewModel.open("w1")
-            advanceUntilIdle()
-
-            viewModel.previewRecut()
-            advanceUntilIdle()
-
-            assertEquals(
-                RecutHookUiState.Refused("Range starts before today."),
-                (viewModel.state.value as WorkerScheduleUiState.Loaded).recut,
-            )
-
-            viewModel.dismissRecutPreview()
-
-            assertEquals(RecutHookUiState.Idle, (viewModel.state.value as WorkerScheduleUiState.Loaded).recut)
         }
 
     private companion object {
@@ -350,30 +293,3 @@ private val SCHEDULE_FOR_SAVE =
         updatedAt = "2026-08-01T00:00:00Z",
         buffersCountTowardServiceDuration = true,
     )
-
-private class FakeRecutApi(
-    private val previewResult: RecutPreviewResult = RecutPreviewResult.Loaded(RecutPreview(emptyList(), "fp")),
-) : RecutApi {
-    var previewCount: Int = 0
-    var confirmCount: Int = 0
-    var lastFrom: String? = null
-
-    override suspend fun preview(
-        workerId: String,
-        from: String,
-    ): RecutPreviewResult {
-        previewCount++
-        lastFrom = from
-        return previewResult
-    }
-
-    override suspend fun confirm(
-        workerId: String,
-        from: String,
-        fingerprint: String,
-        decisions: List<RecutBookingDecision>,
-    ): RecutConfirmResult {
-        confirmCount++
-        return RecutConfirmResult.NotConfigured
-    }
-}

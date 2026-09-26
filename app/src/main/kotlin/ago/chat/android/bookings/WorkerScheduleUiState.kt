@@ -1,7 +1,6 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
-import ago.chat.android.core.domain.recut.RecutPreview
 import ago.chat.android.core.domain.workerschedule.ScheduleKind
 import ago.chat.android.core.domain.workerschedule.WorkerSchedule
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleDraft
@@ -12,8 +11,14 @@ import java.time.LocalDate
  * identical four-arm shape [MastersUiState]/[ago.chat.android.schedule.WorkingHoursUiState] already
  * establish, restated rather than shared because [Loaded] carries a schedule that may not exist yet
  * ([WorkerScheduleResult.None]'s own "create" state, `docs/design/26-155-*.md`'s own quote of the
- * server's `configuration.no_schedule`) plus the minimal re-cut hook (Q2) this slice ships instead of
- * the full «Пересчёт» screen.
+ * server's `configuration.no_schedule`).
+ *
+ * **The re-cut hook is gone.** `26-170` shipped a minimal, read-only re-cut preview inline on this
+ * screen (Q2's stopgap); `26-172` (`26-155` part 4, this item) replaces it with the full three-step
+ * «Пересчёт» screen — its own drill-down page, over its own [WorkerRecutUiState] — so this state has
+ * nothing left to carry for it beyond the note+button [WorkerScheduleBody] still draws when [existing]
+ * is non-null, which now just navigates ([WorkerScheduleFormFields]'s own `onOpenRecut`) rather than
+ * triggering a preview in place.
  */
 internal sealed interface WorkerScheduleUiState {
     data object Loading : WorkerScheduleUiState
@@ -26,17 +31,12 @@ internal sealed interface WorkerScheduleUiState {
      * @param form a *copy* the form edits freely, not a reference into [existing] — the identical
      *   "the confirmed value stays what the server last said while the operator types" discipline
      *   [MastersUiState.Loaded.editing]'s own doc comment records.
-     * @param recut the minimal re-cut hook's own state (Q2) — a read-only preview reached from this
-     *   screen's own note+button when [existing] is non-null; the full three-step «Пересчёт» screen
-     *   (decisions, `AlertDialog` confirm, result) is a follow-up slice this hook deliberately does not
-     *   build (`docs/design/26-155-*.md`'s own ticket split).
      */
     data class Loaded(
         val existing: WorkerSchedule?,
         val form: WorkerScheduleForm,
         val formBusy: Boolean = false,
         val actionError: BookingActionErrorUi? = null,
-        val recut: RecutHookUiState = RecutHookUiState.Idle,
     ) : WorkerScheduleUiState
 
     data object NotConfigured : WorkerScheduleUiState
@@ -44,31 +44,6 @@ internal sealed interface WorkerScheduleUiState {
     data class Failed(
         val reason: BookingsQueueFailure,
     ) : WorkerScheduleUiState
-}
-
-/**
- * `26-170`: the minimal re-cut hook Q2 asks for — a read-only [RecutPreview], with no decisions and no
- * confirm/execute step. [Loaded]/[Refused]/[Failed] mirror [ago.chat.android.core.domain.recut.RecutPreviewResult]'s
- * own three-way split one-for-one; [Idle] is this hook's own resting state (the dialog is closed).
- */
-internal sealed interface RecutHookUiState {
-    data object Idle : RecutHookUiState
-
-    data object Loading : RecutHookUiState
-
-    data class Loaded(
-        val preview: RecutPreview,
-    ) : RecutHookUiState
-
-    /** A genuine server refusal (a bounds code named on [ago.chat.android.core.domain.recut.RecutApi.preview]'s
-     * own doc comment) — shown verbatim, the identical rule every other refusal in this app follows. */
-    data class Refused(
-        val detail: String,
-    ) : RecutHookUiState
-
-    data class Failed(
-        val reason: BookingsQueueFailure,
-    ) : RecutHookUiState
 }
 
 /**

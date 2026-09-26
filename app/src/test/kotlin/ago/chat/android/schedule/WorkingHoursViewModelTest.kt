@@ -107,7 +107,42 @@ class WorkingHoursViewModelTest {
             viewModel.save("r1", dayOfWeek = 1, startsAt = "09:00", endsAt = "19:00")
             advanceUntilIdle()
 
-            assertEquals(reconciliation, (viewModel.state.value as WorkingHoursUiState.Loaded).notice)
+            val loaded = viewModel.state.value as WorkingHoursUiState.Loaded
+            assertEquals(reconciliation, loaded.notice)
+            // `26-172` (`26-155` part 4): the tappable `RecutNotice` needs to know *whose* schedule to
+            // open «Пересчёт» for - captured from the rule the write touched, since
+            // [WorkingHoursReconciliation] itself carries no worker id on the wire.
+            assertEquals(RULE.workerId, loaded.noticeWorkerId)
+        }
+
+    @Test
+    fun `no notice at all means no notice worker id either`() =
+        runTest(dispatcher) {
+            val api = FakeWorkingHoursApi(rules = listOf(RULE))
+            val viewModel = WorkingHoursViewModel(api, dispatcher)
+            advanceUntilIdle()
+
+            viewModel.save("r1", dayOfWeek = 1, startsAt = "09:00", endsAt = "19:00")
+            advanceUntilIdle()
+
+            assertNull((viewModel.state.value as WorkingHoursUiState.Loaded).noticeWorkerId)
+        }
+
+    @Test
+    fun `deleting a rule that produces a notice still attributes it to that rule's own worker`() =
+        runTest(dispatcher) {
+            val reconciliation = WorkingHoursReconciliation("2026-09-28", listOf("2026-09-28"), 1)
+            val api = FakeWorkingHoursApi(rules = listOf(RULE), change = WorkingHoursChangeResult.Changed(reconciliation))
+            val viewModel = WorkingHoursViewModel(api, dispatcher)
+            advanceUntilIdle()
+
+            viewModel.delete("r1")
+            advanceUntilIdle()
+
+            // A real delete removes the rule from the next GET's own answer - `workerId` has to be
+            // captured from the list as it stood *before* the write, never read back off a fresh read
+            // that may no longer carry the rule at all ([WorkingHoursViewModel.write]'s own doc comment).
+            assertEquals(RULE.workerId, (viewModel.state.value as WorkingHoursUiState.Loaded).noticeWorkerId)
         }
 
     @Test
@@ -220,7 +255,9 @@ class WorkingHoursViewModelTest {
             viewModel.refresh()
             advanceUntilIdle()
 
-            assertNull((viewModel.state.value as WorkingHoursUiState.Loaded).notice)
+            val loaded = viewModel.state.value as WorkingHoursUiState.Loaded
+            assertNull(loaded.notice)
+            assertNull(loaded.noticeWorkerId)
         }
 
     private companion object {

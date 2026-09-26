@@ -1,8 +1,5 @@
 package ago.chat.android.bookings
 
-import ago.chat.android.core.domain.bookings.BookingsQueueFailure
-import ago.chat.android.core.domain.recut.RecutApi
-import ago.chat.android.core.domain.recut.RecutPreviewResult
 import ago.chat.android.core.domain.workerschedule.SaveWorkerScheduleResult
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleApi
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleResult
@@ -21,8 +18,12 @@ import javax.inject.Inject
 
 /**
  * `26-170` (`26-155` part 2): the «График» drill-down's own view model, over [WorkerScheduleApi] (read
- * and write) and [RecutApi] (the minimal Q2 hook, preview only). Obtained by [BookingsRoute] via
- * `hiltViewModel()` **only inside its own drill-down branch** — the identical Hilt-avoidance-when-ungated
+ * and write). `26-172` (`26-155` part 4) removed the read-only re-cut preview hook this class used to
+ * also carry (Q2's stopgap, over `RecutApi`) — the note+button [WorkerScheduleBody] draws when a
+ * schedule exists now navigates to its own «Пересчёт» drill-down page
+ * ([WorkerRecutViewModel]/[WorkerRecutUiState]) instead, so this class has nothing left to do with
+ * `RecutApi` at all. Obtained by [BookingsRoute] via `hiltViewModel()` **only inside its own drill-down
+ * branch** — the identical Hilt-avoidance-when-ungated
  * shape [MastersViewModel]'s own doc comment states, restated here for one more reason: this class is
  * scoped to the whole Записи route (not one open worker), so constructing it at all would run its
  * `init` even for an operator who has not opened a drill-down yet, the exact waste that shape exists to
@@ -49,7 +50,6 @@ internal class WorkerScheduleViewModel
     @Inject
     constructor(
         private val api: WorkerScheduleApi,
-        private val recutApi: RecutApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<WorkerScheduleUiState>(WorkerScheduleUiState.Loading)
@@ -118,50 +118,6 @@ internal class WorkerScheduleViewModel
                     is SaveWorkerScheduleResult.Refused -> failForm(BookingActionErrorUi.ServerRefusal(result.detail))
                     is SaveWorkerScheduleResult.Failed -> failForm(BookingActionErrorUi.Unavailable(result.reason))
                 }
-            }
-        }
-
-        /**
-         * `26-155` Q2's minimal re-cut hook: a read-only [RecutApi.preview], anchored at the schedule's
-         * own [ago.chat.android.core.domain.workerschedule.WorkerSchedule.materializeFrom] (its cursor -
-         * the earliest date a re-cut could ever move, the same bound the full three-step screen's own
-         * first step would default to when reached from here rather than from the Часы notice). No
-         * decisions, no confirm/execute - [WorkerScheduleUiState.Loaded.recut]'s own doc comment states
-         * why the rest is a follow-up slice.
-         */
-        fun previewRecut() {
-            val workerId = openWorkerId ?: return
-            val loaded = mutableState.value as? WorkerScheduleUiState.Loaded ?: return
-            val from = loaded.existing?.materializeFrom ?: return
-            if (loaded.recut is RecutHookUiState.Loading) return
-
-            mutableState.update { loaded.copy(recut = RecutHookUiState.Loading) }
-            viewModelScope.launch {
-                val result = withContext(ioDispatcher) { recutApi.preview(workerId, from) }
-                mutableState.update { current ->
-                    val currentLoaded = current as? WorkerScheduleUiState.Loaded ?: return@update current
-                    currentLoaded.copy(
-                        recut =
-                            when (result) {
-                                is RecutPreviewResult.Loaded -> RecutHookUiState.Loaded(result.preview)
-                                is RecutPreviewResult.Refused -> RecutHookUiState.Refused(result.detail)
-                                is RecutPreviewResult.Failed -> RecutHookUiState.Failed(result.reason)
-                                // Unreachable in practice - reading the schedule already proved AGO
-                                // Calendar is configured for this tenant - kept as a real, typed arm
-                                // rather than a `!!`/exception, the same defensive completeness every
-                                // sibling `when` over a sealed result in this app already has.
-                                RecutPreviewResult.NotConfigured ->
-                                    RecutHookUiState.Failed(BookingsQueueFailure.Unexpected)
-                            },
-                    )
-                }
-            }
-        }
-
-        /** Closes the minimal re-cut preview dialog — nothing was sent, so there is nothing to undo. */
-        fun dismissRecutPreview() {
-            mutableState.update { current ->
-                (current as? WorkerScheduleUiState.Loaded)?.copy(recut = RecutHookUiState.Idle) ?: current
             }
         }
 

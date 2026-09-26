@@ -819,12 +819,12 @@
 
     <!--
         `26-170` (`26-155` part 2): the «График» drill-down over one master - read/edit/save that
-        worker's schedule template through the `26-168` `WorkerScheduleApi`, plus a minimal read-only
-        re-cut hook (Q2) over `RecutApi`. Wording carried over from `ago-console`'s own
-        `WorkerScheduleSection.tsx`/`i18n/ru.ts` (`calendarSchedule*`/`calendarCycle*`/`calendarRecut*`
-        keys) - the same facts, worded the same way on both surfaces. The full three-step «Пересчёт»
-        screen (decisions, confirm, result) is a follow-up slice; this hook is deliberately a read-only
-        preview with a note that says so.
+        worker's schedule template through the `26-168` `WorkerScheduleApi`. Wording carried over from
+        `ago-console`'s own `WorkerScheduleSection.tsx`/`i18n/ru.ts`
+        (`calendarSchedule*`/`calendarCycle*`) - the same facts, worded the same way on both surfaces.
+        The note+button below (`worker_schedule_recut_note`/`_button`) now navigates to the full
+        three-step «Пересчёт» screen (`worker_recut_*`, `26-172`) rather than a preview shown in place -
+        `26-170`'s own read-only hook (a dialog with a "coming in a later update" note) is gone.
     -->
     <string name="worker_schedule_tab">График</string>
     <string name="worker_schedule_page_title">График — %1$s</string>
@@ -863,12 +863,6 @@
     <string name="worker_schedule_recut_button">Пересчитать</string>
     <string name="worker_schedule_action_create">Создать расписание</string>
     <string name="worker_schedule_action_save">Сохранить расписание</string>
-    <string name="worker_schedule_recut_preview_title">Предпросмотр пересчёта</string>
-    <string name="worker_schedule_recut_preview_summary">Дней в диапазоне: %1$d. Записей, требующих решения: %2$d.</string>
-    <!-- States plainly that this is a preview-only hook, not the real thing - the full three-step
-         «Пересчёт» screen (decisions, confirm, result) is a follow-up slice. -->
-    <string name="worker_schedule_recut_preview_note">Полный экран пересчёта с подтверждением появится в следующем обновлении.</string>
-    <string name="worker_schedule_recut_load_failed_unexpected">Не удалось получить предпросмотр пересчёта. Попробуйте ещё раз.</string>
 
     <!--
         `26-171` (`26-155` part 3): the «Слоты» drill-down - a worker's own materialised slots for the
@@ -887,6 +881,40 @@
     <string name="worker_slots_status_cancelled">Отменён</string>
     <string name="worker_slots_status_no_show">Неявка</string>
     <string name="worker_slots_status_blocked">Заблокирован</string>
+
+    <!--
+        `26-172` (`26-155` part 4, the epic's own final part): the «Пересчёт» drill-down - the full
+        three-step flow (preview, per-booking decisions, `AlertDialog` confirm, result) replacing
+        `26-170`'s own read-only preview hook. Reached from «График»'s own note+button
+        (`worker_schedule_recut_note`/`_button`, unchanged) and from the Часы `RecutNotice`
+        (`working_hours_recut_notice*`, now tappable). Wording mirrors `ago-console`'s own
+        `CalendarWorkerRecutPage.tsx`/`ru.ts` (`calendarRecut*`) verbatim where the two screens say the
+        same thing; the three booking status words reuse `worker_slots_status_pending_confirmation`/
+        `_booked`/`_no_show` rather than a second copy of the identical Russian words.
+    -->
+    <string name="worker_recut_tab">Пересчёт</string>
+    <string name="worker_recut_page_title">Пересчёт — %1$s</string>
+    <string name="worker_recut_from_label">Пересчитать с</string>
+    <string name="worker_recut_preview_button">Предпросмотр</string>
+    <string name="worker_recut_nothing_generated_note">В этом диапазоне ещё ничего не сгенерировано - пересчёт просто нарежет его заново.</string>
+    <string name="worker_recut_day_slots_note">%1$d свободных слотов будет удалено, если этот день пересчитать.</string>
+    <string name="worker_recut_no_bookings_note">В этот день записей нет.</string>
+    <!-- A day with any Оставить/неявка booking - shown appended to the day's own date. -->
+    <string name="worker_recut_day_kept_note">(останется без изменений)</string>
+    <string name="worker_recut_decision_cancel">Отменить</string>
+    <string name="worker_recut_decision_keep">Оставить</string>
+    <string name="worker_recut_already_no_show_note">Уже произошло как неявка — этот день сохраняется.</string>
+    <string name="worker_recut_review_and_confirm_button">Просмотреть и подтвердить</string>
+    <string name="worker_recut_choose_decision_note">Выберите «отменить» или «оставить» для каждой записи выше, прежде чем продолжить.</string>
+    <string name="worker_recut_confirm_title">Подтвердить пересчёт</string>
+    <!-- The four numbers, in the console's own order: days re-cut, slots deleted, bookings cancelled,
+         days left untouched. -->
+    <string name="worker_recut_confirm_message">Это очистит и заново создаст %1$d дн., удалив %2$d своб. слотов и отменив %3$d записей. %4$d дн. останутся точно такими же, потому что в них запись, которую вы решили оставить, или неявка, по которой нельзя принять решение.</string>
+    <string name="worker_recut_cannot_be_undone">Это нельзя отменить.</string>
+    <string name="worker_recut_confirm_button">Подтвердить пересчёт</string>
+    <string name="worker_recut_done_title">Готово</string>
+    <string name="worker_recut_result_summary">%1$d дн. пересчитано, %2$d дн. оставлено без изменений, так как в них сохранённая запись. %3$d свободных слотов удалено, %4$d добавлено, %5$d записей отменено.</string>
+    <string name="worker_recut_result_left_in_old_grid">Оставлено в старой сетке: %1$s.</string>
 
     <!--
         `26-142`: Записи's own «Настройка» screen (menu label «Настройка», primary section «Календари») -

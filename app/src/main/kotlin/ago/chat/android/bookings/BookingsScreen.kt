@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
 import ago.chat.android.core.domain.readiness.BookingPrecondition
+import ago.chat.android.core.domain.recut.RecutDecision
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.schedule.WorkingHoursBody
@@ -67,10 +68,16 @@ import java.time.OffsetDateTime
  * screen" question now needs an answer of its own rather than being implied. A plain UI-layer enum, the
  * identical reason [BookingsTab] itself is one (that enum's own doc comment) — nothing outside this
  * file's own composables and view-model wiring needs to know these names exist.
+ *
+ * `26-172` (`26-155` part 4, the epic's own final part) adds [Recut] — the third and final drill-down,
+ * reached from «График»'s own note+button (`WorkerScheduleFormFields`'s own `onOpenRecut`) and from the
+ * Часы `RecutNotice` (`WorkingHoursScreen.kt`'s own `onOpenRecut`), never from a card action of its own
+ * (Q2, `docs/design/26-155-*.md`: destructive, and only meaningful once a schedule exists).
  */
 internal enum class MastersDrillDownKind {
     Schedule,
     Slots,
+    Recut,
 }
 
 /**
@@ -126,6 +133,13 @@ public fun BookingsRoute(
     // closes (`onCloseConfig`/`onConfigSelected` below still clear [mastersDrillDownWorkerId] itself,
     // which is what actually hides both pages).
     var mastersDrillDownKind by rememberSaveable { mutableStateOf(MastersDrillDownKind.Schedule) }
+
+    // `26-172` (`26-155` part 4): the «Пересчёт» drill-down's own «Пересчитать с» prefill - `null` when
+    // reached from «График»'s own note+button (defaults to today, [WorkerRecutViewModel.open]'s own doc
+    // comment), the server's own `recutFrom` when reached from the Часы `RecutNotice`. Read only while
+    // [mastersDrillDownKind] is [MastersDrillDownKind.Recut]; cleared alongside [mastersDrillDownWorkerId]
+    // everywhere that id is, so a later График-triggered open never inherits a stale Часы prefill.
+    var mastersDrillDownRecutFrom by rememberSaveable { mutableStateOf<String?>(null) }
 
     // `26-164`: the identical Hilt-avoidance-when-ungated shape the branches below establish, applied to
     // [ReadinessViewModel] - an operator lacking `calendar:configure` never constructs it and never
@@ -303,20 +317,22 @@ public fun BookingsRoute(
     // Hilt-avoidance-when-ungated shape [mastersState] above establishes, gated on `showMastersSegment`
     // (an operator lacking `calendar:configure` never even opens Мастера), `mastersDrillDownWorkerId`
     // (a Мастера operator who has not opened a drill-down yet never triggers this class's own
-    // `init`-free but still network-holding [WorkerScheduleApi]/[RecutApi] pair) and, since `26-171`,
-    // `mastersDrillDownKind` (an operator who opened «Слоты» rather than «График» never constructs this
-    // class either - [WorkerSlotsViewModel] is its own sibling branch below). This is also what the
-    // `26-162` androidTest landmine requires: `hiltViewModel()` for [WorkerScheduleViewModel] happens
-    // only in this branch of [BookingsRoute], never inside [BookingsScreen] itself, which every
-    // shell/back-contract test drives under a plain `ComponentActivity` with `bookingsTab` substituted
-    // for a marker `Text` - a route this branch is never part of, since substituting `bookingsTab` skips
-    // [BookingsRoute] entirely.
+    // `init`-free but still network-holding [WorkerScheduleApi]) and, since `26-171`,
+    // `mastersDrillDownKind` (an operator who opened «Слоты»/«Пересчёт» rather than «График» never
+    // constructs this class either - [WorkerSlotsViewModel]/[WorkerRecutViewModel] are its own sibling
+    // branches below). This is also what the `26-162` androidTest landmine requires: `hiltViewModel()`
+    // for [WorkerScheduleViewModel] happens only in this branch of [BookingsRoute], never inside
+    // [BookingsScreen] itself, which every shell/back-contract test drives under a plain
+    // `ComponentActivity` with `bookingsTab` substituted for a marker `Text` - a route this branch is
+    // never part of, since substituting `bookingsTab` skips [BookingsRoute] entirely.
+    //
+    // `26-172` removed [WorkerScheduleViewModel]'s own read-only re-cut preview hook (`previewRecut`/
+    // `dismissRecutPreview`) - the note+button now navigates to [MastersDrillDownKind.Recut]'s own
+    // sibling branch below instead of triggering a preview in place.
     val workerScheduleState: WorkerScheduleUiState?
     val onRetryWorkerSchedule: () -> Unit
     val onWorkerScheduleFormChanged: (WorkerScheduleForm) -> Unit
     val onSubmitWorkerSchedule: () -> Unit
-    val onPreviewWorkerScheduleRecut: () -> Unit
-    val onDismissWorkerScheduleRecutPreview: () -> Unit
     if (showMastersSegment && mastersDrillDownWorkerId != null && mastersDrillDownKind == MastersDrillDownKind.Schedule) {
         val workerScheduleViewModel: WorkerScheduleViewModel = hiltViewModel()
         val collectedWorkerScheduleState by workerScheduleViewModel.state.collectAsStateWithLifecycle()
@@ -324,8 +340,6 @@ public fun BookingsRoute(
         onRetryWorkerSchedule = workerScheduleViewModel::refresh
         onWorkerScheduleFormChanged = workerScheduleViewModel::onFormChanged
         onSubmitWorkerSchedule = workerScheduleViewModel::submit
-        onPreviewWorkerScheduleRecut = workerScheduleViewModel::previewRecut
-        onDismissWorkerScheduleRecutPreview = workerScheduleViewModel::dismissRecutPreview
         // `26-170`: the `hiltViewModel()`-scoped instance survives across which worker is open
         // ([WorkerScheduleViewModel]'s own doc comment) - this is what actually switches it, the
         // identical `LaunchedEffect(conversationId)` shape [ago.chat.android.thread.ThreadViewModel]'s
@@ -339,8 +353,6 @@ public fun BookingsRoute(
         onRetryWorkerSchedule = {}
         onWorkerScheduleFormChanged = {}
         onSubmitWorkerSchedule = {}
-        onPreviewWorkerScheduleRecut = {}
-        onDismissWorkerScheduleRecutPreview = {}
     }
 
     // `26-171` (`26-155` part 3): the «Слоты» drill-down's own view model - the identical
@@ -368,7 +380,50 @@ public fun BookingsRoute(
         onRevealWorkerSlot = {}
     }
 
-    // The drill-down page's own app-bar title (`«График»`/«Слоты» — {displayName}`) - resolved from the
+    // `26-172` (`26-155` part 4, the epic's own final part): the «Пересчёт» drill-down's own view model -
+    // the identical Hilt-avoidance-when-ungated shape [workerSlotsState] above establishes, gated the
+    // identical way except on [MastersDrillDownKind.Recut] instead - an operator who opened «График» or
+    // «Слоты» never constructs this class either, and the identical `26-162` androidTest landmine
+    // applies for the identical reason.
+    val workerRecutState: WorkerRecutUiState?
+    val onWorkerRecutFromChanged: (String) -> Unit
+    val onPreviewWorkerRecut: () -> Unit
+    val onDecideWorkerRecut: (String, RecutDecision) -> Unit
+    val onRequestConfirmWorkerRecut: () -> Unit
+    val onDismissConfirmWorkerRecut: () -> Unit
+    val onConfirmWorkerRecut: () -> Unit
+    val onRevealWorkerRecut: (String) -> Unit
+    if (showMastersSegment && mastersDrillDownWorkerId != null && mastersDrillDownKind == MastersDrillDownKind.Recut) {
+        val workerRecutViewModel: WorkerRecutViewModel = hiltViewModel()
+        val collectedWorkerRecutState by workerRecutViewModel.state.collectAsStateWithLifecycle()
+        workerRecutState = collectedWorkerRecutState
+        onWorkerRecutFromChanged = workerRecutViewModel::onFromChanged
+        onPreviewWorkerRecut = workerRecutViewModel::preview
+        onDecideWorkerRecut = workerRecutViewModel::decide
+        onRequestConfirmWorkerRecut = workerRecutViewModel::requestConfirm
+        onDismissConfirmWorkerRecut = workerRecutViewModel::dismissConfirm
+        onConfirmWorkerRecut = workerRecutViewModel::confirm
+        onRevealWorkerRecut = workerRecutViewModel::reveal
+        // `26-170`'s own `drillDownWorkerId` switch, restated for this sibling view model -
+        // [WorkerRecutViewModel.open] always starts a fresh attempt (that class's own doc comment), so
+        // this effect re-running whenever this branch is freshly (re-)entered - not only when the worker
+        // id itself changes - is exactly the behaviour wanted, not a bug to guard against.
+        val drillDownWorkerId = mastersDrillDownWorkerId
+        LaunchedEffect(drillDownWorkerId) {
+            if (drillDownWorkerId != null) workerRecutViewModel.open(drillDownWorkerId, mastersDrillDownRecutFrom)
+        }
+    } else {
+        workerRecutState = null
+        onWorkerRecutFromChanged = {}
+        onPreviewWorkerRecut = {}
+        onDecideWorkerRecut = { _, _ -> }
+        onRequestConfirmWorkerRecut = {}
+        onDismissConfirmWorkerRecut = {}
+        onConfirmWorkerRecut = {}
+        onRevealWorkerRecut = {}
+    }
+
+    // The drill-down page's own app-bar title (`«График»`/«Слоты»`/«Пересчёт» — {displayName}`) - resolved from the
     // roster [MastersViewModel] already holds rather than a second read, and `null` (a bare fallback
     // title) whenever the roster has not answered yet or no longer lists this worker.
     val mastersDrillDownWorkerName =
@@ -414,10 +469,12 @@ public fun BookingsRoute(
         onConfigSelected = { tab ->
             activeConfigTab = tab
             mastersDrillDownWorkerId = null
+            mastersDrillDownRecutFrom = null
         },
         onCloseConfig = {
             activeConfigTab = null
             mastersDrillDownWorkerId = null
+            mastersDrillDownRecutFrom = null
         },
         onRetry = viewModel::refresh,
         onReject = viewModel::reject,
@@ -463,27 +520,55 @@ public fun BookingsRoute(
             mastersDrillDownWorkerId = worker.workerId
             mastersDrillDownKind = MastersDrillDownKind.Slots
         },
-        onCloseMastersDrillDown = { mastersDrillDownWorkerId = null },
+        onCloseMastersDrillDown = {
+            mastersDrillDownWorkerId = null
+            mastersDrillDownRecutFrom = null
+        },
         // `26-170`: the weekly-hours note's own in-hub swap (Q2's own sibling note, worded like
         // [BookingsScreen]'s own `onFixReadiness`) - leaves Мастера's roster underneath untouched and
         // opens Часы as a sibling `⋮` screen, never a third navigation level.
         onSwitchMastersDrillDownToHours = {
             mastersDrillDownWorkerId = null
+            mastersDrillDownRecutFrom = null
             activeConfigTab = BookingsTab.Hours
+        },
+        // `26-172` (`26-155` part 4): the note+button inside «График» - stays on the same worker, only
+        // the drill-down kind switches. `mastersDrillDownRecutFrom` stays `null` (defaults to today,
+        // `WorkerRecutViewModel.open`'s own doc comment) - this is the "reached from schedule" entry, not
+        // the Часы notice's own prefilled one below.
+        onOpenRecutFromSchedule = {
+            mastersDrillDownRecutFrom = null
+            mastersDrillDownKind = MastersDrillDownKind.Recut
         },
         workerScheduleState = workerScheduleState,
         onRetryWorkerSchedule = onRetryWorkerSchedule,
         onWorkerScheduleFormChanged = onWorkerScheduleFormChanged,
         onSubmitWorkerSchedule = onSubmitWorkerSchedule,
-        onPreviewWorkerScheduleRecut = onPreviewWorkerScheduleRecut,
-        onDismissWorkerScheduleRecutPreview = onDismissWorkerScheduleRecutPreview,
         workerSlotsState = workerSlotsState,
         onRetryWorkerSlots = onRetryWorkerSlots,
         onRevealWorkerSlot = onRevealWorkerSlot,
+        workerRecutState = workerRecutState,
+        onWorkerRecutFromChanged = onWorkerRecutFromChanged,
+        onPreviewWorkerRecut = onPreviewWorkerRecut,
+        onDecideWorkerRecut = onDecideWorkerRecut,
+        onRequestConfirmWorkerRecut = onRequestConfirmWorkerRecut,
+        onDismissConfirmWorkerRecut = onDismissConfirmWorkerRecut,
+        onConfirmWorkerRecut = onConfirmWorkerRecut,
+        onRevealWorkerRecut = onRevealWorkerRecut,
         workingHoursState = workingHoursState,
         onRetryWorkingHours = onRetryWorkingHours,
         onSaveWorkingHours = onSaveWorkingHours,
         onDeleteWorkingHours = onDeleteWorkingHours,
+        // `26-172`: the Часы `RecutNotice`'s own entry point - opens the Masters «Пересчёт» drill-down
+        // for the rule's own worker, prefilled with the server's own `recutFrom`
+        // (`WorkingHoursUiState.Loaded.noticeWorkerId`'s own doc comment states why the notice now
+        // carries a `workerId` at all).
+        onOpenMastersRecutFromHours = { workerId, from ->
+            activeConfigTab = BookingsTab.Masters
+            mastersDrillDownWorkerId = workerId
+            mastersDrillDownRecutFrom = from
+            mastersDrillDownKind = MastersDrillDownKind.Recut
+        },
         readinessState = readinessState,
         onRetryReadiness = onRefreshReadiness,
         hubConnectionState = hubConnectionState,
@@ -577,19 +662,31 @@ internal fun BookingsScreen(
     onOpenMastersSlots: (Worker) -> Unit,
     onCloseMastersDrillDown: () -> Unit,
     onSwitchMastersDrillDownToHours: () -> Unit,
+    // `26-172` (`26-155` part 4): «График»'s own note+button - opens [MastersDrillDownKind.Recut] for
+    // the worker already open, never a fourth navigation level.
+    onOpenRecutFromSchedule: () -> Unit,
     workerScheduleState: WorkerScheduleUiState?,
     onRetryWorkerSchedule: () -> Unit,
     onWorkerScheduleFormChanged: (WorkerScheduleForm) -> Unit,
     onSubmitWorkerSchedule: () -> Unit,
-    onPreviewWorkerScheduleRecut: () -> Unit,
-    onDismissWorkerScheduleRecutPreview: () -> Unit,
     workerSlotsState: WorkerSlotsUiState?,
     onRetryWorkerSlots: () -> Unit,
     onRevealWorkerSlot: (String) -> Unit,
+    workerRecutState: WorkerRecutUiState?,
+    onWorkerRecutFromChanged: (String) -> Unit,
+    onPreviewWorkerRecut: () -> Unit,
+    onDecideWorkerRecut: (String, RecutDecision) -> Unit,
+    onRequestConfirmWorkerRecut: () -> Unit,
+    onDismissConfirmWorkerRecut: () -> Unit,
+    onConfirmWorkerRecut: () -> Unit,
+    onRevealWorkerRecut: (String) -> Unit,
     workingHoursState: WorkingHoursUiState?,
     onRetryWorkingHours: () -> Unit,
     onSaveWorkingHours: (String, Int, String, String) -> Unit,
     onDeleteWorkingHours: (String) -> Unit,
+    // `26-172`: the Часы `RecutNotice`'s own entry point - opens the Masters «Пересчёт» drill-down for
+    // the notice's own worker, prefilled with the server's own `recutFrom`.
+    onOpenMastersRecutFromHours: (workerId: String, from: String) -> Unit,
     readinessState: ReadinessUiState?,
     onRetryReadiness: () -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
@@ -624,8 +721,7 @@ internal fun BookingsScreen(
                         onFormChanged = onWorkerScheduleFormChanged,
                         onSubmit = onSubmitWorkerSchedule,
                         onSwitchToHours = onSwitchMastersDrillDownToHours,
-                        onPreviewRecut = onPreviewWorkerScheduleRecut,
-                        onDismissRecutPreview = onDismissWorkerScheduleRecutPreview,
+                        onOpenRecut = onOpenRecutFromSchedule,
                     )
 
                 MastersDrillDownKind.Slots ->
@@ -635,6 +731,26 @@ internal fun BookingsScreen(
                         onBack = onCloseMastersDrillDown,
                         onRetry = onRetryWorkerSlots,
                         onReveal = onRevealWorkerSlot,
+                    )
+
+                // `26-172` (`26-155` part 4, the epic's own final part): «Пересчёт» - the full three-step
+                // flow, replacing `26-170`'s own read-only preview hook.
+                MastersDrillDownKind.Recut ->
+                    WorkerRecutDrillDownPage(
+                        workerDisplayName = mastersDrillDownWorkerName,
+                        // Unreachable in practice: [workerRecutState] is non-null exactly when this
+                        // branch itself renders (`BookingsRoute`'s own identical gating condition) - kept
+                        // as a real fallback rather than `!!`, the identical defensive completeness the
+                        // Schedule/Slots arms above already show with their own `?: ...Loading`.
+                        state = workerRecutState ?: WorkerRecutUiState.Loaded(from = ""),
+                        onBack = onCloseMastersDrillDown,
+                        onFromChanged = onWorkerRecutFromChanged,
+                        onPreview = onPreviewWorkerRecut,
+                        onDecide = onDecideWorkerRecut,
+                        onRequestConfirm = onRequestConfirmWorkerRecut,
+                        onDismissConfirm = onDismissConfirmWorkerRecut,
+                        onConfirm = onConfirmWorkerRecut,
+                        onReveal = onRevealWorkerRecut,
                     )
             }
             return
@@ -679,6 +795,7 @@ internal fun BookingsScreen(
             onRetryWorkingHours = onRetryWorkingHours,
             onSaveWorkingHours = onSaveWorkingHours,
             onDeleteWorkingHours = onDeleteWorkingHours,
+            onOpenRecutFromHours = onOpenMastersRecutFromHours,
         )
         return
     }
@@ -879,6 +996,8 @@ private fun BookingsConfigModalPage(
     onRetryWorkingHours: () -> Unit,
     onSaveWorkingHours: (String, Int, String, String) -> Unit,
     onDeleteWorkingHours: (String) -> Unit,
+    // `26-172` (`26-155` part 4): Часы's own `RecutNotice` entry point.
+    onOpenRecutFromHours: (workerId: String, from: String) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
@@ -971,6 +1090,7 @@ private fun BookingsConfigModalPage(
                                 onRetry = onRetryWorkingHours,
                                 onSave = onSaveWorkingHours,
                                 onDelete = onDeleteWorkingHours,
+                                onOpenRecut = onOpenRecutFromHours,
                             )
                         }
 

@@ -13,7 +13,7 @@ import ago.chat.android.core.domain.workerslots.WorkerSlot
  * generic wording. In practice this is unreachable — [WorkerSlotsViewModel] always asks for the fixed
  * Q5 default range (today..+14), which never fails that check — but it is kept as a real, typed arm
  * rather than a `!!`/exception, the identical defensive completeness every sibling `when` over a sealed
- * result in this app already has ([WorkerScheduleViewModel.previewRecut]'s own unreachable
+ * result in this app already has ([WorkerRecutViewModel.preview]'s own unreachable
  * `RecutPreviewResult.NotConfigured` arm is the most recent precedent for this exact call).
  */
 internal sealed interface WorkerSlotsUiState {

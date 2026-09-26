@@ -45,4 +45,13 @@ public object BookingRevealSurface {
      * audit trail's whole reason to carry `surface` is telling them apart.
      */
     public const val ANDROID_WORKER_SLOTS: String = "AndroidWorkerSlots"
+
+    /**
+     * `26-172` (`26-155` part 4): the «Пересчёт» drill-down's own reveal — Q7's accepted vocabulary
+     * (`docs/design/26-155-*.md`), a distinct string from [ANDROID_WORKER_SLOTS] for the identical
+     * reason every sibling constant above is its own: a re-cut preview is a fifth, genuinely different
+     * caller of the shared reveal endpoint, and the audit trail's whole reason to carry `surface` is
+     * telling them apart.
+     */
+    public const val ANDROID_RECUT: String = "AndroidRecut"
 }

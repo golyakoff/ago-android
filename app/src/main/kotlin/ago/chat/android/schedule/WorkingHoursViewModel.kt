@@ -63,7 +63,12 @@ internal class WorkingHoursViewModel
             mutableState.update { WorkingHoursUiState.Loading }
             busyRuleIds = emptySet()
             viewModelScope.launch {
-                applyResult(withContext(ioDispatcher) { api.fetchWorkingHours() }, notice = null, actionError = null)
+                applyResult(
+                    withContext(ioDispatcher) { api.fetchWorkingHours() },
+                    notice = null,
+                    noticeWorkerId = null,
+                    actionError = null,
+                )
             }
         }
 
@@ -100,6 +105,10 @@ internal class WorkingHoursViewModel
         ) {
             if (ruleId in busyRuleIds) return
             val loaded = mutableState.value as? WorkingHoursUiState.Loaded ?: return
+            // Captured from the list as it stood *before* this write - a delete removes the rule from the
+            // next GET's own answer, so this is the one place its `workerId` is still known
+            // ([WorkingHoursUiState.Loaded.noticeWorkerId]'s own doc comment).
+            val writtenWorkerId = loaded.rules.firstOrNull { it.ruleId == ruleId }?.workerId
             busyRuleIds = busyRuleIds + ruleId
             mutableState.update { loaded.copy(busyRuleIds = busyRuleIds, actionError = null) }
 
@@ -108,12 +117,15 @@ internal class WorkingHoursViewModel
                 busyRuleIds = busyRuleIds - ruleId
 
                 when (result) {
-                    is WorkingHoursChangeResult.Changed ->
+                    is WorkingHoursChangeResult.Changed -> {
+                        val notice = result.reconciliation.takeIf { it.recutFrom != null }
                         applyResult(
                             withContext(ioDispatcher) { api.fetchWorkingHours() },
-                            notice = result.reconciliation.takeIf { it.recutFrom != null },
+                            notice = notice,
+                            noticeWorkerId = notice?.let { writtenWorkerId },
                             actionError = null,
                         )
+                    }
 
                     is WorkingHoursChangeResult.Refused ->
                         mutableState.update { current ->
@@ -136,6 +148,7 @@ internal class WorkingHoursViewModel
         private fun applyResult(
             result: WorkingHoursResult,
             notice: WorkingHoursReconciliation?,
+            noticeWorkerId: String?,
             actionError: BookingActionErrorUi?,
         ) {
             mutableState.update {
@@ -145,6 +158,7 @@ internal class WorkingHoursViewModel
                             rules = result.rules,
                             busyRuleIds = busyRuleIds,
                             notice = notice,
+                            noticeWorkerId = noticeWorkerId,
                             actionError = actionError,
                         )
 
