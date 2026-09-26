@@ -1,5 +1,6 @@
 package ago.chat.android.devices
 
+import ago.chat.android.core.domain.devices.DeviceIdProvider
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
 import ago.chat.android.core.domain.devices.PushProvider
@@ -21,9 +22,14 @@ import javax.inject.Singleton
  *
  * **Why one class rather than three call sites each doing their own thing.** Sign-in,
  * [AgoPushMessagingService.onNewToken] and [DeviceRegistrationWorker] all need the identical sequence -
- * read the installation id, ask the SDK for the current token, PUT it - and a duplicated version of
- * that sequence at each of the three sites is exactly the kind of drift `26-59`'s own history in this
- * codebase warns about (one call site quietly diverging from the other two).
+ * read the installation id and the device id, ask the SDK for the current token, PUT it - and a
+ * duplicated version of that sequence at each of the three sites is exactly the kind of drift `26-59`'s
+ * own history in this codebase warns about (one call site quietly diverging from the other two).
+ *
+ * `26-122` added [deviceIdProvider] alongside [installationIdProvider]: the installation id is
+ * regenerated on every reinstall and so can never dedup across one, while the device id
+ * ([DeviceIdProvider]'s own doc comment) survives one - both are read on every registration so the
+ * server can upsert on the stable value while still tracking which install currently holds the row.
  *
  * **Deliberately holds no `Context` and no `WorkManager`.** [DeviceRegistrationScheduler] (a real
  * `WorkManager` call) and this class are split for exactly that reason - see that interface's own doc
@@ -36,6 +42,7 @@ public class DeviceRegistrationCoordinator
     constructor(
         private val pushGateway: PushRegistrationGateway,
         private val installationIdProvider: InstallationIdProvider,
+        private val deviceIdProvider: DeviceIdProvider,
         private val deviceRegistrationApi: DeviceRegistrationApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : DeviceRevocation,
@@ -76,7 +83,12 @@ public class DeviceRegistrationCoordinator
 
                 when (val token = pushGateway.currentToken()) {
                     is PushTokenResult.Token ->
-                        deviceRegistrationApi.register(installationIdProvider.installationId(), token.value, pushGateway.provider)
+                        deviceRegistrationApi.register(
+                            installationIdProvider.installationId(),
+                            deviceIdProvider.deviceId(),
+                            token.value,
+                            pushGateway.provider,
+                        )
                     is PushTokenResult.Unavailable -> {
                         reportTokenFailure(token.reason, token.critical)
                         true
@@ -122,7 +134,12 @@ public class DeviceRegistrationCoordinator
             token: String,
         ): Boolean =
             withContext(ioDispatcher) {
-                deviceRegistrationApi.register(installationIdProvider.installationId(), token, provider)
+                deviceRegistrationApi.register(
+                    installationIdProvider.installationId(),
+                    deviceIdProvider.deviceId(),
+                    token,
+                    provider,
+                )
             }
 
         /**

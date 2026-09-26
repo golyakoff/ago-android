@@ -3,9 +3,15 @@ package ago.chat.android.core.domain.devices
 /**
  * `26-06`: a stable, per-install identifier - generated once and read forever after, never rotated by
  * anything this app does. **Not the push token.** `docs/architecture/push-notifications.md`'s own
- * "Device registration" section states the one decision this exists for: the server row's identity is
- * `(operator_id, installation_id)`, not `(operator_id, token)`, which is what lets a rotated token
- * update an existing row instead of accumulating a dead one on every refresh.
+ * "Device registration" section states the original decision this exists for: a rotated token updates
+ * an existing row instead of accumulating a dead one on every refresh.
+ *
+ * **`26-122`: this value is no longer the server row's identity.** A reinstall regenerates it (this
+ * type's own doc comment already said so: "per-install", not "per-device"), which is exactly why
+ * `26-83` found rows accumulating across reinstalls. The row's real identity moved to
+ * [DeviceIdProvider]'s own value; this one still travels on every registration (kept current on the row
+ * so a later sign-out `DELETE` from whichever install currently holds it still finds it) and still
+ * addresses the row on the wire, but it no longer decides which row a registration lands on.
  *
  * Declared here rather than in `:app`, the identical [ago.chat.android.core.domain.identity.ActiveSiteSelection]
  * placement: the interface itself names no Android type, and every real caller

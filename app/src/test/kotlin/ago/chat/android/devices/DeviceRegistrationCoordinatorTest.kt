@@ -1,5 +1,6 @@
 package ago.chat.android.devices
 
+import ago.chat.android.core.domain.devices.DeviceIdProvider
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
 import ago.chat.android.core.domain.devices.PushProvider
@@ -11,9 +12,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * `26-06`: [DeviceRegistrationCoordinator] on a plain JVM, through fakes for its three ports - no
- * `Context`, no `WorkManager`, no RuStore SDK on the classpath at all, which is exactly the property
- * splitting [DeviceRegistrationScheduler] off this class buys (that interface's own doc comment).
+ * `26-06`: [DeviceRegistrationCoordinator] on a plain JVM, through fakes for its ports (a fourth,
+ * [DeviceIdProvider], joined in `26-122`) - no `Context`, no `WorkManager`, no RuStore SDK on the
+ * classpath at all, which is exactly the property splitting [DeviceRegistrationScheduler] off this
+ * class buys (that interface's own doc comment).
  *
  * The property `docs/backlog/26-06-*.md` explicitly asks to be proven by call order, not by the absence
  * of a symptom, is here too: `revokeThisDevice revokes the server row before it deletes the local
@@ -21,18 +23,19 @@ import org.junit.Test
  */
 class DeviceRegistrationCoordinatorTest {
     @Test
-    fun `registerThisDevice reads the installation id and the current token, then registers both`() =
+    fun `registerThisDevice reads the installation id, the device id and the current token, then registers all three`() =
         runTest {
             val api = FakeDeviceRegistrationApi()
             val coordinator =
                 coordinatorFor(
                     installationId = "install-1",
+                    deviceId = "device-1",
                     token = PushTokenResult.Token("token-abc"),
                     api = api,
                 )
 
             assertTrue(coordinator.registerThisDevice())
-            assertEquals(listOf("install-1" to "token-abc"), api.registerCalls)
+            assertEquals(listOf(RegisterCall("install-1", "device-1", "token-abc")), api.registerCalls)
         }
 
     @Test
@@ -152,24 +155,56 @@ class DeviceRegistrationCoordinatorTest {
         runTest {
             val gateway = FakeGateway(token = PushTokenResult.Token("should-not-be-used"))
             val api = FakeDeviceRegistrationApi()
-            val coordinator = coordinatorFor(installationId = "install-1", gateway = gateway, api = api)
+            val coordinator = coordinatorFor(installationId = "install-1", deviceId = "device-1", gateway = gateway, api = api)
 
             assertTrue(coordinator.onNewToken(PushProvider.RuStore, "rotated-token"))
 
-            assertEquals(listOf("install-1" to "rotated-token"), api.registerCalls)
+            assertEquals(listOf(RegisterCall("install-1", "device-1", "rotated-token")), api.registerCalls)
             assertEquals(0, gateway.currentTokenCalls)
         }
 
     @Test
-    fun `onNewToken re-registers with the same installationId every time - token rotation, not a new install`() =
+    fun `onNewToken re-registers with the same installationId and deviceId every time - token rotation, not a new install`() =
         runTest {
             val api = FakeDeviceRegistrationApi()
-            val coordinator = coordinatorFor(installationId = "install-1", api = api)
+            val coordinator = coordinatorFor(installationId = "install-1", deviceId = "device-1", api = api)
 
             coordinator.onNewToken(PushProvider.RuStore, "token-1")
             coordinator.onNewToken(PushProvider.RuStore, "token-2")
 
-            assertEquals(listOf("install-1" to "token-1", "install-1" to "token-2"), api.registerCalls)
+            assertEquals(
+                listOf(
+                    RegisterCall("install-1", "device-1", "token-1"),
+                    RegisterCall("install-1", "device-1", "token-2"),
+                ),
+                api.registerCalls,
+            )
+        }
+
+    /**
+     * `26-122`'s own promise, at the coordinator level: a reinstall keeps the deviceId but hands back a
+     * new installationId (`DataStoreInstallationId`'s own doc comment) - both must still travel on every
+     * registration so the server can dedup on the stable one.
+     */
+    @Test
+    fun `26-122 - registerThisDevice sends both ids every time, even when only the installationId changed`() =
+        runTest {
+            val api = FakeDeviceRegistrationApi()
+            val beforeReinstall =
+                coordinatorFor(installationId = "install-before", deviceId = "device-stable", api = api)
+            beforeReinstall.registerThisDevice()
+
+            val afterReinstall =
+                coordinatorFor(installationId = "install-after", deviceId = "device-stable", api = api)
+            afterReinstall.registerThisDevice()
+
+            assertEquals(
+                listOf(
+                    RegisterCall("install-before", "device-stable", "token"),
+                    RegisterCall("install-after", "device-stable", "token"),
+                ),
+                api.registerCalls,
+            )
         }
 
     @Test
@@ -215,6 +250,7 @@ class DeviceRegistrationCoordinatorTest {
                 object : DeviceRegistrationApi {
                     override suspend fun register(
                         installationId: String,
+                        deviceId: String,
                         token: String,
                         provider: PushProvider,
                     ): Boolean = true
@@ -259,6 +295,7 @@ class DeviceRegistrationCoordinatorTest {
 
     private fun coordinatorFor(
         installationId: String = "install-1",
+        deviceId: String = "device-1",
         token: PushTokenResult = PushTokenResult.Token("token"),
         gateway: PushRegistrationGateway = FakeGateway(token = token),
         api: DeviceRegistrationApi = FakeDeviceRegistrationApi(),
@@ -266,6 +303,7 @@ class DeviceRegistrationCoordinatorTest {
         DeviceRegistrationCoordinator(
             pushGateway = gateway,
             installationIdProvider = FakeInstallationIdProvider(installationId),
+            deviceIdProvider = FakeDeviceIdProvider(deviceId),
             deviceRegistrationApi = api,
             ioDispatcher = Dispatchers.Unconfined,
         )
@@ -274,6 +312,12 @@ class DeviceRegistrationCoordinatorTest {
         private val id: String,
     ) : InstallationIdProvider {
         override suspend fun installationId(): String = id
+    }
+
+    private class FakeDeviceIdProvider(
+        private val id: String,
+    ) : DeviceIdProvider {
+        override suspend fun deviceId(): String = id
     }
 
     private class FakeGateway(
@@ -295,20 +339,29 @@ class DeviceRegistrationCoordinatorTest {
         override suspend fun checkAvailability(): PushAvailability = availability
     }
 
+    /** `26-122`: `installationId`/`deviceId`/`token` as one recorded value rather than a bare `Pair`,
+     * now that a call carries three identity-relevant fields instead of two. */
+    private data class RegisterCall(
+        val installationId: String,
+        val deviceId: String,
+        val token: String,
+    )
+
     private class FakeDeviceRegistrationApi(
         private val registerResult: Boolean = true,
         private val revokeResult: Boolean = true,
     ) : DeviceRegistrationApi {
-        val registerCalls = mutableListOf<Pair<String, String>>()
+        val registerCalls = mutableListOf<RegisterCall>()
         val registerProviders = mutableListOf<PushProvider>()
         val revokeCalls = mutableListOf<String>()
 
         override suspend fun register(
             installationId: String,
+            deviceId: String,
             token: String,
             provider: PushProvider,
         ): Boolean {
-            registerCalls += installationId to token
+            registerCalls += RegisterCall(installationId, deviceId, token)
             registerProviders += provider
             return registerResult
         }

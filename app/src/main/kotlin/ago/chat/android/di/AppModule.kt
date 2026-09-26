@@ -13,6 +13,7 @@ import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
 import ago.chat.android.core.domain.conversations.ConversationListCache
 import ago.chat.android.core.domain.conversations.ConversationsApi
+import ago.chat.android.core.domain.devices.DeviceIdProvider
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
 import ago.chat.android.core.domain.devices.PushProvider
@@ -66,6 +67,7 @@ import ago.chat.android.data.thread.ComposerDraftDao
 import ago.chat.android.data.thread.RoomComposerDraftStore
 import ago.chat.android.devices.AndroidBatteryOptimizationChecker
 import ago.chat.android.devices.AndroidBootTimeSource
+import ago.chat.android.devices.AndroidIdDeviceIdProvider
 import ago.chat.android.devices.AndroidNotificationChannelStateReader
 import ago.chat.android.devices.AndroidNotificationPermissionChecker
 import ago.chat.android.devices.AppForegroundTracker
@@ -703,6 +705,12 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideInstallationIdProvider(installationId: DataStoreInstallationId): InstallationIdProvider = installationId
+
+    /** `26-122`: [DeviceIdProvider]'s own binding - see that interface's own doc comment for the
+     * `ANDROID_ID`-vs-stored-UUID trade-off this choice makes. */
+    @Provides
+    @Singleton
+    public fun provideDeviceIdProvider(deviceId: AndroidIdDeviceIdProvider): DeviceIdProvider = deviceId
 
     /**
      * `26-06`/`26-100`: the device-registration half over the shared authenticated `HttpClient` every

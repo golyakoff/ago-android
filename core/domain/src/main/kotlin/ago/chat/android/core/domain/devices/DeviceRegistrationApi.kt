@@ -22,16 +22,26 @@ package ago.chat.android.core.domain.devices
  * caller ([DeviceRegistrationCoordinator][ago.chat.android.devices.DeviceRegistrationCoordinator], via
  * whichever [ago.chat.android.devices.PushRegistrationGateway] was selected for this device) now states
  * which one every registration is for.
+ *
+ * `26-122`: [register] gained [deviceId] - a value stable across a reinstall
+ * ([DeviceIdProvider]'s own doc comment), unlike [installationId] which a reinstall regenerates. The
+ * server upserts by `(operator, deviceId)` now, so a reinstall's fresh [installationId] replaces the
+ * prior row instead of adding a second one - `docs/backlog/26-122-*.md`'s own promise.
  */
 public interface DeviceRegistrationApi {
     /**
-     * `PUT /api/v1/me/devices/{installationId}` - upserts this installation's row with the push
-     * [token] it holds right now for the given [provider]. Safe to call repeatedly with the same token
-     * (the row's own `last_seen_at` still advances, which is what turns a periodic call into a liveness
-     * signal) and safe to call again with a new one after rotation.
+     * `PUT /api/v1/me/devices/{installationId}` - upserts this device's row with the push [token] it
+     * holds right now for the given [provider]. Safe to call repeatedly with the same token (the row's
+     * own `last_seen_at` still advances, which is what turns a periodic call into a liveness signal) and
+     * safe to call again with a new one after rotation.
+     *
+     * `26-122`: [deviceId] is the identity the server actually dedups on now; [installationId] still
+     * addresses the row on the wire (the path segment `DELETE` also uses) and is kept current on the
+     * server row so a later sign-out from this same install still finds it.
      */
     public suspend fun register(
         installationId: String,
+        deviceId: String,
         token: String,
         provider: PushProvider,
     ): Boolean

@@ -36,6 +36,7 @@ public class KtorDeviceRegistrationApi(
 ) : DeviceRegistrationApi {
     override suspend fun register(
         installationId: String,
+        deviceId: String,
         token: String,
         provider: PushProvider,
     ): Boolean {
@@ -47,7 +48,14 @@ public class KtorDeviceRegistrationApi(
                     // request's own declared `Content-Type` - omitting this is what produced "Kotlin
                     // reflection is not available" the first time this app ever sent a POST body.
                     contentType(ContentType.Application.Json)
-                    setBody(RegisterDeviceRequestWireDto(provider = provider.wireValue, platform = PLATFORM, token = token))
+                    setBody(
+                        RegisterDeviceRequestWireDto(
+                            provider = provider.wireValue,
+                            platform = PLATFORM,
+                            token = token,
+                            deviceId = deviceId,
+                        ),
+                    )
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -76,11 +84,14 @@ public class KtorDeviceRegistrationApi(
     }
 }
 
-/** `Ago.Chat.Api.Me.MeDeviceEndpoints.RegisterDeviceRequest` - the three fields that route's own body
- * carries, in the same camelCase the server's default JSON naming policy renders every other DTO in. */
+/** `Ago.Chat.Api.Me.MeDeviceEndpoints.RegisterDeviceRequest` - the fields that route's own body
+ * carries, in the same camelCase the server's default JSON naming policy renders every other DTO in.
+ * `26-122` added [deviceId] - nullable on the server, but this client always sends the real value
+ * [ago.chat.android.devices.AndroidIdDeviceIdProvider] resolves. */
 @Serializable
 private data class RegisterDeviceRequestWireDto(
     val provider: String,
     val platform: String,
     val token: String,
+    val deviceId: String,
 )
