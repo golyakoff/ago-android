@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -180,7 +181,7 @@ private fun LoadMoreFooter(
             Text(
                 text = loadMoreFailureMessage(reason),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = agoStatusColors().dangerText,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }

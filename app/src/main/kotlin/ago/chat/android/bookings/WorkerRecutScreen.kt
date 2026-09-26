@@ -11,6 +11,7 @@ import ago.chat.android.core.domain.recut.RecutPreview
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -425,7 +426,7 @@ private fun RecutConfirmDialog(
                 Text(
                     text = stringResource(R.string.worker_recut_cannot_be_undone),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                 )
             }
         },

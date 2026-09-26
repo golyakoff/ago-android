@@ -5,6 +5,7 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -347,7 +348,7 @@ private fun DismissibleTeamBanner(
         Text(
             text = message,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onAction) { Text(text = actionLabel) }

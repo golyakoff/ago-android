@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.thread.contactpanel.CloseActionError
 import ago.chat.android.thread.contactpanel.RestrictionActionError
 import ago.chat.android.thread.contactpanel.RestrictionSectionState
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -142,7 +143,7 @@ private fun CloseConversationControl(
                     is CloseActionError.Failed -> stringResource(R.string.conversation_actions_close_failed)
                 },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.padding(top = RowSpacing),
         )
     }
@@ -254,7 +255,7 @@ private fun LoadedRestriction(
                     is RestrictionActionError.Failed -> stringResource(R.string.conversation_actions_restriction_action_failed)
                 },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.padding(top = RowSpacing),
         )
     }
@@ -302,7 +303,7 @@ private fun LoadedRestriction(
                                     R.string.conversation_actions_restrict_confirm_action
                                 },
                             ),
-                        color = if (!state.restricted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        color = if (!state.restricted) agoStatusColors().dangerText else MaterialTheme.colorScheme.primary,
                     )
                 }
             },

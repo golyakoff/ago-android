@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.readiness.BookingPrecondition
 import ago.chat.android.core.domain.readiness.CalendarReadiness
 import ago.chat.android.core.domain.readiness.PreconditionState
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -90,7 +91,7 @@ private fun ReadinessCalendarCard(
                     if (calendar.isBookable) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
-                        MaterialTheme.colorScheme.error
+                        agoStatusColors().dangerText
                     },
             )
         }
@@ -120,7 +121,7 @@ private fun ReadinessRow(
             // Decorative: the icon's own shape (never colour alone) plus the label beside it already
             // state met/unmet - the identical `StatusGlyph` precedent.
             contentDescription = null,
-            tint = if (row.isMet) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            tint = if (row.isMet) MaterialTheme.colorScheme.onSurfaceVariant else agoStatusColors().dangerText,
             modifier = Modifier.padding(end = 8.dp),
         )
         Text(

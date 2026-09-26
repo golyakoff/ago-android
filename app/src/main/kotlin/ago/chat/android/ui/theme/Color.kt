@@ -82,6 +82,10 @@ internal val AgoLive = Color(0xFF33D17A)
 
 internal val AgoMintLight = Color(0xFFEAFFFB)
 internal val AgoSuccessLight = Color(0xFF12684A)
+
+// Light needs no fill/text split (`26-183`): `#9F1D17` reads on white as a solid fill (with white on
+// top) and as text on the light surface both, so it is the light value for `error` and for
+// `AgoStatusColors.dangerText` alike.
 internal val AgoDangerLight = Color(0xFF9F1D17)
 internal val AgoDangerTintLight = Color(0xFFFDECEA)
 
@@ -93,7 +97,19 @@ internal val AgoWarningTintLight = Color(0xFFFFF4E0)
 
 internal val AgoMintDark = Color(0xFF0F2B22)
 internal val AgoSuccessDark = Color(0xFF7FE0AF)
-internal val AgoDangerDark = Color(0xFFFF8A80)
+
+// `26-183`: the danger role splits in dark, because one hex cannot do both jobs on a near-black page.
+//   - FILL (behind text) — the Material 3 error tone `#B3261E`, wired to `error` in `Theme.kt`, always
+//     with pure-white `onError`. tokens.css's old coral `#FF8A80` was too light to sit behind text as a
+//     solid fill, and its on-text drifted between dark and light across screens; the author's decision
+//     for `26-183` is one fill red with white on top, everywhere.
+//   - TEXT/ICON on the app's own surface — `AgoDangerTextDark` below. `#B3261E` is unreadable as text on
+//     `--ago-surface`/`--ago-paper` (both near-black), so on-surface danger text keeps the legible light
+//     tone the coral already gave it. This is the light theme's `AgoDangerLight` counterpart for dark,
+//     carried by `AgoStatusColors` rather than a `ColorScheme` role — Material 3 has no "error text that
+//     is not also the error fill" slot once `error` is spoken for by the fill.
+internal val AgoDangerDark = Color(0xFFB3261E)
+internal val AgoDangerTextDark = Color(0xFFFF8A80)
 internal val AgoDangerTintDark = Color(0xFF3A1613)
 internal val AgoWarningDark = Color(0xFFFFB74D)
 internal val AgoWarningTintDark = Color(0xFF3A2A10)

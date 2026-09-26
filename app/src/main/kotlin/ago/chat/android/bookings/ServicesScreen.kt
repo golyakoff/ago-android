@@ -2,6 +2,7 @@ package ago.chat.android.bookings
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.ConfiguredService
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -144,7 +145,7 @@ private fun ServiceCard(
                 Text(
                     text = stringResource(R.string.services_status_withdrawn),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                 )
             }
         }

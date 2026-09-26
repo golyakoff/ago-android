@@ -3,6 +3,7 @@ package ago.chat.android.thread.contactpanel.sections
 import ago.chat.android.R
 import ago.chat.android.thread.contactpanel.AttachmentUploadActionError
 import ago.chat.android.thread.contactpanel.AttachmentUploadSectionState
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -142,7 +143,7 @@ private fun LoadedAttachmentUpload(
                     is AttachmentUploadActionError.Failed -> stringResource(R.string.attachment_upload_toggle_failed)
                 },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.padding(top = RowSpacing),
         )
     }

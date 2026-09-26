@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.shell.AppShellRoute
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -182,7 +183,7 @@ private fun SignInFailedScreen(
         Text(
             text = stringResource(R.string.sign_in_failed_title),
             style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             textAlign = TextAlign.Center,
         )
         Text(

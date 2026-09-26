@@ -16,7 +16,7 @@ import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
-import ago.chat.android.ui.theme.agoWarningColors
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
@@ -370,7 +370,7 @@ internal fun ConversationListScreen(
                     state.allLoadError?.let { reason ->
                         Text(
                             text = networkFailureText(reason),
-                            color = MaterialTheme.colorScheme.error,
+                            color = agoStatusColors().dangerText,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
@@ -617,7 +617,7 @@ private fun QueueLoadErrorBanner(
     ) {
         Text(
             text = networkFailureText(reason),
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.weight(1f),
         )
@@ -1182,7 +1182,7 @@ private fun WaitingRow(
                             is ClaimErrorUi.Unavailable -> networkFailureText(error.reason)
                         },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onDismissError) {
@@ -1527,7 +1527,7 @@ private fun EraseConfirmDialog(
             TextButton(onClick = onConfirm) {
                 Text(
                     text = stringResource(R.string.conversation_list_erase_confirm_action),
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                 )
             }
         },
@@ -1592,12 +1592,12 @@ private fun RowScope.conversationStatusPill(row: ConversationRowUi) {
     val modifier = Modifier.weight(1f, fill = false)
     when (conversationStateLabel(row.state)) {
         // `.pill.warn{background:var(--warning-tint); color:var(--warning)}` - the one pair Material 3
-        // has no role for, which is why `AgoWarningColors` exists (that file's own doc comment).
+        // has no role for, which is why `AgoStatusColors` exists (that file's own doc comment).
         ConversationStateLabel.Waiting ->
             StatusPill(
                 text = text,
-                containerColor = agoWarningColors().warningTint,
-                contentColor = agoWarningColors().warning,
+                containerColor = agoStatusColors().warningTint,
+                contentColor = agoStatusColors().warning,
                 modifier = modifier,
             )
 

@@ -12,6 +12,7 @@ import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.components.shortElapsedText
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -695,7 +696,7 @@ private fun DismissibleBanner(
         Text(
             text = message,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onAction) { Text(text = actionLabel) }

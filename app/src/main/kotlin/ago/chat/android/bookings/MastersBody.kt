@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workers.WorkerCalendar
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -242,7 +243,7 @@ private fun WorkerCard(
                 Text(
                     text = stringResource(R.string.masters_status_inactive),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                 )
             }
         }
@@ -276,7 +277,7 @@ private fun WorkerCard(
             TextButton(onClick = onDelete, enabled = !busy) {
                 Text(
                     text = stringResource(R.string.masters_action_delete),
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                 )
             }
         }
