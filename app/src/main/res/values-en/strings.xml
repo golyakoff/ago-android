@@ -408,6 +408,26 @@
     <string name="services_withdrawn_note">A withdrawn service can no longer be chosen in the booking widget. Bookings already taken and worker cards keep it - the service is not deleted, and it can be put back on offer.</string>
     <string name="services_duration_invalid">Enter a duration in whole minutes.</string>
 
+    <!-- `26-164`: English half of Записи's own «Готовность» hub entry - see `values/strings.xml`'s own doc
+         comment on this same key block for the full reasoning. The six precondition labels and the
+         status/no-calendar words are mirrored verbatim from `ago-console`'s own `i18n/en.ts:1486-1499`; the
+         two action labels are this screen's own shortened wording ("Fix it"/"Slots"), same as the Russian
+         side. -->
+    <string name="readiness_tab">Readiness</string>
+    <string name="readiness_page_title">Can a visitor book right now?</string>
+    <string name="readiness_load_failed_unexpected">Couldn\'t load booking readiness. Try again.</string>
+    <string name="readiness_no_calendar">No calendar yet</string>
+    <string name="readiness_bookable">Bookable</string>
+    <string name="readiness_not_bookable">Not bookable</string>
+    <string name="readiness_action_fix">Fix it</string>
+    <string name="readiness_action_slots">Slots</string>
+    <string name="readiness_precondition_worker_on_calendar">An active worker is on this calendar</string>
+    <string name="readiness_precondition_service_offered">That worker performs a service</string>
+    <string name="readiness_precondition_working_hours_configured">That worker has working hours, or a cycle schedule</string>
+    <string name="readiness_precondition_schedule_saved">That worker has a saved schedule</string>
+    <string name="readiness_precondition_slots_materialized">Slots have been generated inside the horizon</string>
+    <string name="readiness_precondition_calendar_published">The calendar is published</string>
+
     <!-- `26-140`: English half of Записи's own «Мастера» segment - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->
     <string name="masters_tab">Masters</string>

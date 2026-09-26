@@ -252,9 +252,15 @@ internal fun AppShellScreen(
     // `onOpenSettings` so the latter stays the trailing lambda at the call site. A back-contract test's own
     // substitute lambda that ignores the new parameter still type-checks unchanged against the widened
     // function type.
+    //
+    // `26-164` adds a seventh `Boolean`, `showReadinessEntry` (`calendar:configure` alone) — the
+    // booking-readiness hub, threaded *ahead* of `showSetupSegment` because Готовность is now the first
+    // entry the `⋮` hub offers (`docs/design/26-154-*.md`'s own accepted Q1/Q2), overtaking Настройка
+    // (Календари).
     bookingsTab: BookingsTabSlot = {
         showConfirmedSegment,
         showClientsSegment,
+        showReadinessEntry,
         showSetupSegment,
         showMastersSegment,
         showServicesSegment,
@@ -265,6 +271,7 @@ internal fun AppShellScreen(
         BookingsRoute(
             showConfirmedSegment = showConfirmedSegment,
             showClientsSegment = showClientsSegment,
+            showReadinessEntry = showReadinessEntry,
             showSetupSegment = showSetupSegment,
             showMastersSegment = showMastersSegment,
             showServicesSegment = showServicesSegment,
@@ -374,10 +381,11 @@ private fun AppShellContent(
     unreadConversationsTotal: Int?,
     onSignOut: () -> Unit,
     conversationsTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
-    // `26-96`/`26-97`/`26-140`/`26-142`: the third through sixth `Boolean` are `calendar:configure` alone,
-    // each its own gate rather than a reuse of the Клиенты one - see [AppShellScreen]'s own `bookingsTab`
-    // parameter. `26-157`: the `(Boolean) -> Unit` before `onOpenSettings` is `onConfigScreenChanged` -
-    // whether a `⋮` configuration screen is open, so this function can hide the bottom bar while it is.
+    // `26-96`/`26-97`/`26-140`/`26-142`/`26-164`: the third through seventh `Boolean` are
+    // `calendar:configure` alone, each its own gate rather than a reuse of the Клиенты one - see
+    // [AppShellScreen]'s own `bookingsTab` parameter. `26-157`: the `(Boolean) -> Unit` before
+    // `onOpenSettings` is `onConfigScreenChanged` - whether a `⋮` configuration screen is open, so this
+    // function can hide the bottom bar while it is.
     bookingsTab: BookingsTabSlot,
     settingsScreen: @Composable (onBack: () -> Unit, onSiteSwitched: (String) -> Unit) -> Unit,
     teamTab: @Composable (onOpenSettings: () -> Unit) -> Unit,
@@ -585,9 +593,13 @@ private fun AppShellContent(
                 bookingsTab(
                     permissions.holds(Permission.CUSTOMER_READ),
                     permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                    // `26-164`: `calendar:configure` alone - the gate `GetBookingReadinessHandler` itself
+                    // checks server-side. Its own parameter, threaded first among the config-menu gates
+                    // because Готовность is now the very first entry in the `⋮` hub, ahead of Настройка.
+                    permissions.holds(Permission.CALENDAR_CONFIGURE),
                     // `26-142`: `calendar:configure` alone - the gate the tenant-configuration writes
                     // (allowed origins, the calendar roster) check server-side. Its own parameter, threaded
-                    // first because Настройка (Календари) is the first entry in the `⋮` hub.
+                    // second now, since Готовность overtook Настройка (Календари) as the hub's first entry.
                     permissions.holds(Permission.CALENDAR_CONFIGURE),
                     // `26-140`: `calendar:configure` alone - the gate the worker-dictionary writes check
                     // server-side, its own parameter for the same reason each config-menu gate below is
@@ -679,6 +691,7 @@ internal typealias BookingsTabSlot =
     @Composable (
         showConfirmedSegment: Boolean,
         showClientsSegment: Boolean,
+        showReadinessEntry: Boolean,
         showSetupSegment: Boolean,
         showMastersSegment: Boolean,
         showServicesSegment: Boolean,

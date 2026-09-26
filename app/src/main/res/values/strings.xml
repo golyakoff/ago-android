@@ -727,6 +727,31 @@
     <string name="services_duration_invalid">Укажите длительность в целых минутах.</string>
 
     <!--
+        `26-164`: Записи's own «Готовность» hub entry - short menu label «Готовность», page title the full
+        question «Может ли клиент записаться прямо сейчас?» (accepted product decision, `docs/design/26-154-*.md`,
+        2026-09-26). A `⋮` config entry gated on `calendar:configure`, now offered FIRST - ahead of Настройка
+        (Календари) - since it is the "where am I" screen a tenant opens before the four fill screens, not one
+        more fill screen itself. Copy mirrored verbatim from `ago-console`'s own `i18n/ru.ts:1486-1499`, except
+        the two action labels this screen shortens for a phone-width row (`docs/design/26-154-*.md` §2):
+        «Слоты» here, not the console's «Посмотреть слоты».
+    -->
+    <string name="readiness_tab">Готовность</string>
+    <string name="readiness_page_title">Может ли клиент записаться прямо сейчас?</string>
+    <string name="readiness_load_failed_unexpected">Не удалось загрузить готовность к записи. Попробуйте ещё раз.</string>
+    <string name="readiness_no_calendar">Календаря пока нет</string>
+    <!-- The word, never a colour alone - the identical `masters_status_inactive` rule. -->
+    <string name="readiness_bookable">Можно записаться</string>
+    <string name="readiness_not_bookable">Нельзя записаться</string>
+    <string name="readiness_action_fix">Исправить</string>
+    <string name="readiness_action_slots">Слоты</string>
+    <string name="readiness_precondition_worker_on_calendar">На календаре есть активный мастер</string>
+    <string name="readiness_precondition_service_offered">Этот мастер оказывает услугу</string>
+    <string name="readiness_precondition_working_hours_configured">У этого мастера заданы рабочие часы или циклический график</string>
+    <string name="readiness_precondition_schedule_saved">У этого мастера сохранён график</string>
+    <string name="readiness_precondition_slots_materialized">Слоты сгенерированы в пределах горизонта</string>
+    <string name="readiness_precondition_calendar_published">Календарь опубликован</string>
+
+    <!--
         `26-140`: Записи's own «Мастера» segment - the worker dictionary, with the full create/edit/delete
         this product had no screen for at all until this item. A `⋮` config entry gated on
         `calendar:configure`, offered before Услуги (menu order Календари · Мастера · Услуги · Часы).

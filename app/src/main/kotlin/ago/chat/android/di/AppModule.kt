@@ -24,6 +24,7 @@ import ago.chat.android.core.domain.installation.InstallationApi
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.readiness.BookingReadinessApi
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
@@ -49,6 +50,7 @@ import ago.chat.android.core.network.installation.KtorInstallationApi
 import ago.chat.android.core.network.notes.KtorConversationNotesApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.persons.KtorPersonsApi
+import ago.chat.android.core.network.readiness.KtorBookingReadinessApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
@@ -576,6 +578,20 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): CalendarSetupApi = KtorCalendarSetupApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-164`: [ago.chat.android.bookings.ReadinessViewModel]'s own port — a fifth `@Provides` against
+     * the same calendar origin as [provideBookingsApi]/[provideWorkingHoursApi]/[provideWorkersApi]/
+     * [provideCalendarSetupApi], for the reason [BookingReadinessApi]'s own doc comment gives: a computed
+     * fact about the tenant's whole configuration, behind the same `calendar:configure` gate, not a sixth
+     * method on [BookingsApi]. Always constructs, including when [OidcConfig.calendarApiBaseUrl] is
+     * `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideBookingReadinessApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): BookingReadinessApi = KtorBookingReadinessApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-55`: [ago.chat.android.team.PeopleViewModel]'s own port — plain REST on the chat API this app
