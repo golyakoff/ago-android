@@ -25,6 +25,7 @@ import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.readiness.BookingReadinessApi
+import ago.chat.android.core.domain.recut.RecutApi
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
@@ -32,6 +33,8 @@ import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
 import ago.chat.android.core.domain.workers.WorkersApi
+import ago.chat.android.core.domain.workerschedule.WorkerScheduleApi
+import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
@@ -54,6 +57,7 @@ import ago.chat.android.core.network.readiness.KtorBookingReadinessApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.recut.KtorRecutApi
 import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
@@ -61,6 +65,8 @@ import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi
 import ago.chat.android.core.network.visitorsummary.KtorVisitorSummaryApi
 import ago.chat.android.core.network.workers.KtorWorkersApi
+import ago.chat.android.core.network.workerschedule.KtorWorkerScheduleApi
+import ago.chat.android.core.network.workerslots.KtorWorkerSlotsApi
 import ago.chat.android.data.AgoChatDatabase
 import ago.chat.android.data.conversations.ConversationRowDao
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
@@ -565,6 +571,44 @@ public object AppModule {
         client: HttpClient,
         config: OidcConfig,
     ): WorkersApi = KtorWorkersApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-168` (part 1 of `26-155`): the График drill-down's own port (a follow-up slice) — a sixth
+     * `@Provides` against the same calendar origin as [provideBookingsApi]/[provideWorkingHoursApi]/
+     * [provideWorkersApi], for the reason [WorkerScheduleApi]'s own doc comment gives: a worker's
+     * schedule template is a different noun behind the same `calendar:configure` gate, not a fourth
+     * method on [WorkersApi]. Always constructs, including when [OidcConfig.calendarApiBaseUrl] is
+     * `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideWorkerScheduleApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): WorkerScheduleApi = KtorWorkerScheduleApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-168` (part 1 of `26-155`): the Слоты drill-down's own port (a follow-up slice) — the identical
+     * reason [provideWorkerScheduleApi] above states, for the materialised-slot read instead of the
+     * schedule template. Always constructs, including when [OidcConfig.calendarApiBaseUrl] is `null`,
+     * the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideWorkerSlotsApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): WorkerSlotsApi = KtorWorkerSlotsApi(client, config.calendarApiBaseUrl)
+
+    /**
+     * `26-168` (part 1 of `26-155`): the Пересчёт drill-down's own port (a follow-up slice) — the
+     * identical reason [provideWorkerScheduleApi] above states, for the re-cut preview/confirm pair
+     * instead of the schedule template. Always constructs, including when [OidcConfig.calendarApiBaseUrl]
+     * is `null`, the identical reason [provideBookingsApi] states.
+     */
+    @Provides
+    public fun provideRecutApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): RecutApi = KtorRecutApi(client, config.calendarApiBaseUrl)
 
     /**
      * `26-142`: [ago.chat.android.bookings.CalendarSetupViewModel]'s own port — a fourth `@Provides`
