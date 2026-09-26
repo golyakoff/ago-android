@@ -113,3 +113,14 @@ internal val AgoDangerTextDark = Color(0xFFFF8A80)
 internal val AgoDangerTintDark = Color(0xFF3A1613)
 internal val AgoWarningDark = Color(0xFFFFB74D)
 internal val AgoWarningTintDark = Color(0xFF3A2A10)
+
+// `26-184`: the flat status glyph's own "needs attention" ICON colour (`AgoIcons.ErrorCircle`,
+// `AgoStatusColors.dangerIcon`) — deliberately its own pair, not a reuse of `dangerText`/`AgoDangerLight`
+// above (light) or `AgoDangerTextDark` (dark). Those two exist for on-surface danger *text*, tuned for
+// legibility as body copy; the author's explicit choice for this glyph is a more saturated red than
+// either — an icon can carry more saturation than text before it reads as shouting, so the two roles are
+// allowed to diverge even though both are "danger, on this app's own surface, not a solid fill". Not
+// sourced from `tokens.css` (no console counterpart exists for this role yet); recorded here as its own
+// named token rather than an inline literal, the same reason every other colour in this file is not one.
+internal val AgoDangerIconLight = Color(0xFFB3261E)
+internal val AgoDangerIconDark = Color(0xFFFF5449)

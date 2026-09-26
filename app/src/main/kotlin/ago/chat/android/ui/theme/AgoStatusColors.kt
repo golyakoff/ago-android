@@ -21,6 +21,11 @@ import androidx.compose.ui.graphics.Color
  *    "cannot be undone" caption) with no role of its own — `#B3261E` is unreadable as text on this app's
  *    near-black surface. `dangerText` is that legible tone: the old coral in dark, the deep red in light
  *    (see `AgoDangerTextDark`/`AgoDangerLight`).
+ *  - **`dangerIcon`** (`26-184`) — the flat status glyph's own "needs attention" state
+ *    (`AgoIcons.ErrorCircle`, `SettingsScreen`'s `StatusGlyph` and `BatteryAwarenessSheet`'s header) is
+ *    deliberately tinted its own colour, not `dangerText`: the author's explicit choice is a more
+ *    saturated red for an *icon* than the tone tuned for on-surface *text* — see `AgoDangerIconLight`/
+ *    `AgoDangerIconDark`'s own comment in `Color.kt` for why the two are allowed to diverge.
  *
  * **Why a `CompositionLocal` rather than reading the constants at the call site.** Each value is
  * light/dark-dependent, and *which* one applies is a question only [AgoChatTheme] can answer: this app
@@ -37,6 +42,7 @@ internal data class AgoStatusColors(
     val warning: Color,
     val warningTint: Color,
     val dangerText: Color,
+    val dangerIcon: Color,
 )
 
 internal val LocalAgoStatusColors: ProvidableCompositionLocal<AgoStatusColors> =
@@ -48,6 +54,7 @@ internal val LocalAgoStatusColors: ProvidableCompositionLocal<AgoStatusColors> =
             warning = AgoWarningLight,
             warningTint = AgoWarningTintLight,
             dangerText = AgoDangerLight,
+            dangerIcon = AgoDangerIconLight,
         )
     }
 

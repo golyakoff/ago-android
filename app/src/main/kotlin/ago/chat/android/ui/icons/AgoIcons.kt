@@ -315,17 +315,20 @@ public object AgoIcons {
         )
 
     /**
-     * `26-128`: the battery-mode/autostart status glyph's own OK state — drawn *inside* this app's own
-     * coloured circle badge (`SettingsScreen.kt`'s own `StatusGlyph`), not Material Symbols' filled
-     * `check` glyph, for the identical "redraw in this family's stroke treatment, never import a filled
-     * shape" reasoning this file's own header gives for [TrashForever] below. Transcribed from Feather's
-     * own `check` glyph (`<polyline points="20 6 9 17 4 12"/>`) — already this file's precedent for
-     * borrowing a Feather primitive verbatim, the same reasoning [Call] above states for Feather's `phone`.
+     * `26-128`: originally the battery-mode/autostart status glyph's own OK state, drawn *inside* this
+     * app's own coloured circle badge (`SettingsScreen.kt`'s own `StatusGlyph`) — `26-184` moves that call
+     * site to [CheckCircle] instead (a flat glyph with its own enclosing ring, no separate badge). [Check]
+     * remains in use elsewhere at this same heavier weight — `ReadinessBody`'s met/unmet row,
+     * `ContactDetailsSection`'s «Подтверждено» mark — never Material Symbols' filled `check` glyph, for
+     * the identical "redraw in this family's stroke treatment, never import a filled shape" reasoning this
+     * file's own header gives for [TrashForever] below. Transcribed from Feather's own `check` glyph
+     * (`<polyline points="20 6 9 17 4 12"/>`) — already this file's precedent for borrowing a Feather
+     * primitive verbatim, the same reasoning [Call] above states for Feather's `phone`.
      *
-     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8 — this glyph is only ever
-     * rendered shrunk inside `SettingsScreen`'s own status circle, where the 1.8 stroke read hair-thin on a
-     * real device; the geometry is still Feather's verbatim, only the weight is heavier. See that constant's
-     * own doc comment for why these two glyphs, and only these two, deviate from the uniform family stroke.
+     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8, because at the small
+     * sizes its call sites render it the 1.8 stroke read hair-thin on a real device; the geometry is still
+     * Feather's verbatim, only the weight is heavier. See that constant's own doc comment for why these
+     * two glyphs, and only these two, deviate from the uniform family stroke.
      */
     public val Check: ImageVector =
         strokeIcon(
@@ -340,21 +343,23 @@ public object AgoIcons {
         )
 
     /**
-     * `26-128`: the status glyph's own "needs attention" state — a plain exclamation mark (stem + dot),
-     * matching Material Symbols' `priority_high` **in shape** (a bare mark, no enclosing circle — this
-     * app's own coloured circle badge already supplies that framing, so importing a glyph that drew its
-     * own circle too would double it) and, like [Check] above, transcribed rather than imported: Feather's
-     * `alert-circle` draws the identical stem-plus-dot interior
+     * `26-128`: originally the status glyph's own "needs attention" state — a plain exclamation mark
+     * (stem + dot), matching Material Symbols' `priority_high` **in shape** (a bare mark, no enclosing
+     * circle — this app's own coloured circle badge supplied that framing, so importing a glyph that drew
+     * its own circle too would have doubled it). `26-184` moves that call site to [ErrorCircle] instead (a
+     * flat glyph whose own ring encloses this same stem-plus-dot interior). [Exclamation] remains in use
+     * elsewhere at this same heavier weight — `ReadinessBody`'s met/unmet row — and, like [Check] above,
+     * transcribed rather than imported: Feather's `alert-circle` draws the identical stem-plus-dot interior
      * (`<line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`) around its own
      * circle stroke, which this glyph keeps and that glyph's own circle drops. The dot is a real, working
      * Feather convention, not a guess: a stroked line one hundredth of a unit long still draws, because
      * [STROKE_WIDTH]'s round cap gives it a radius — the line's own zero-ish length only decides how much
      * that round cap is allowed to stretch into an oval, not whether it draws at all.
      *
-     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8 — like [Check] above, this
-     * glyph is only ever rendered shrunk inside `SettingsScreen`'s own status circle, where the 1.8 stroke
-     * was barely visible on a real device. The heavier weight also fattens the round-cap dot (its radius is
-     * half the stroke width), so the mark reads as an exclamation at badge size rather than a faint tick.
+     * `26-137`: drawn at [STATUS_GLYPH_STROKE_WIDTH] (3.0), not the family's 1.8, because at the small
+     * sizes its call sites render it the 1.8 stroke was barely visible on a real device. The heavier weight
+     * also fattens the round-cap dot (its radius is half the stroke width), so the mark reads as an
+     * exclamation at that size rather than a faint tick.
      */
     public val Exclamation: ImageVector =
         strokeIcon(
@@ -373,15 +378,14 @@ public object AgoIcons {
         )
 
     /**
-     * `26-128`: the first-launch battery/autostart sheet's own header glyph — the one place this item
-     * keeps a warning **triangle** at all (round 3 of the approved mockup singled this glyph out to keep
-     * it, while replacing every *circular* status badge's own triangle with [Exclamation] instead:
-     * "triangle-in-a-circle looks wrong"). Transcribed from Feather's `alert-triangle`, the identical
-     * "borrow the Feather primitive verbatim" precedent [Call]/[Check]/[Exclamation] already establish —
-     * its own outline (a rounded-corner triangle drawn as two arcs and three straight edges) already
-     * matches this family's 1.8-stroke/round-cap/round-join treatment with nothing to redraw, and its
-     * interior stem-plus-dot is the identical exclamation mark [Exclamation] above already transcribes,
-     * restated here as part of one continuous icon rather than shared geometry between two `ImageVector`s.
+     * `26-128`: originally the first-launch battery/autostart sheet's own header glyph — the one place
+     * that item kept a warning **triangle** at all, while every *circular* status badge elsewhere used
+     * [Exclamation] instead ("triangle-in-a-circle looks wrong"). `26-184` retires that last call site
+     * too: the sheet's header now draws [ErrorCircle], the same flat glyph the settings rows use, so no
+     * triangle remains anywhere in the app. Kept here, unused, as a faithful Feather `alert-triangle`
+     * transcription rather than deleted outright — a rounded-corner triangle (two arcs, three straight
+     * edges) around the identical stem-plus-dot mark [Exclamation] transcribes, restated here as part of
+     * one continuous icon rather than shared geometry between two `ImageVector`s.
      */
     public val Warning: ImageVector =
         strokeIcon(
@@ -555,6 +559,58 @@ public object AgoIcons {
         )
 
     /**
+     * `26-184`: the battery/autostart status glyph's own OK state (`SettingsScreen`'s `StatusGlyph`),
+     * replacing the coloured-circle-badge treatment [Check] above was drawn for. Modelled on Material
+     * Symbols Outlined `check_circle` — a circle stroke enclosing a checkmark, both drawn by *this* icon
+     * rather than composed from an external badge — so the glyph reads as flat and tinted at a plain
+     * 24dp, with no filled backing behind it. The checkmark is not [Check]'s own path (that geometry
+     * spans almost the full 24×24 viewport and would crowd a 9-radius ring); it is [Readiness]'s own
+     * smaller two-segment mark, which already exists for exactly this "checkmark centred inside a
+     * `circle(12, 12, 9)`" proportion — reused rather than redrawn a third time.
+     */
+    public val CheckCircle: ImageVector =
+        strokeIcon(
+            "AgoCheckCircle",
+            // <circle cx="12" cy="12" r="9"/>
+            { circle(centreX = 12f, centreY = 12f, radius = 9f) },
+            // M8 12.5l2.5 2.5 5-5.5
+            {
+                moveTo(8f, 12.5f)
+                lineToRelative(2.5f, 2.5f)
+                lineToRelative(5f, -5.5f)
+            },
+        )
+
+    /**
+     * `26-184`: the battery/autostart status glyph's own "needs attention" state (`SettingsScreen`'s
+     * `StatusGlyph`) and [ago.chat.android.shell.BatteryAwarenessSheet]'s own header glyph, both
+     * replacing an earlier treatment this item retires — the coloured-circle-badge-plus-[Exclamation] on
+     * the settings rows, and the bare warning triangle ([Warning]) on the sheet header. Modelled on
+     * Material Symbols Outlined `error` — a circle stroke enclosing a stem-and-dot exclamation mark, at
+     * the same `circle(12, 12, 9)` proportion [CheckCircle] above uses, so the two read as one flat
+     * family at 24dp. The stem-and-dot interior is [Exclamation]'s own convention (a real stroke plus a
+     * zero-ish-length, round-capped line standing in for a dot — see [Exclamation]'s own comment),
+     * repositioned to sit inside this ring rather than filling the full viewport the way [Exclamation]
+     * does when drawn bare.
+     */
+    public val ErrorCircle: ImageVector =
+        strokeIcon(
+            "AgoErrorCircle",
+            // <circle cx="12" cy="12" r="9"/>
+            { circle(centreX = 12f, centreY = 12f, radius = 9f) },
+            // M12 7v6
+            {
+                moveTo(12f, 7f)
+                verticalLineToRelative(6f)
+            },
+            // M12 16h.01
+            {
+                moveTo(12f, 16f)
+                lineToRelative(0.01f, 0f)
+            },
+        )
+
+    /**
      * `26-176`: the Записи `⋮` hub's own «Часы» row, its leading icon. Modelled on Material Symbols
      * outlined `schedule` — a clock face with two hands meeting at the centre, drawn as one continuous
      * stroke (12-o'clock tip down to centre, then out toward 4 o'clock) rather than two separate subpaths,
@@ -581,12 +637,17 @@ private const val STROKE_WIDTH = 1.8f
 
 /**
  * `26-137`: the deliberately heavier weight [AgoIcons.Check] and [AgoIcons.Exclamation] alone are drawn at.
- * Those two are the only glyphs in the set rendered *shrunk* — inside `SettingsScreen`'s own ~13dp status
- * circle rather than at the family's usual 24dp — and at that size the family's 1.8 stroke came out hair-thin
- * and barely legible on a real device (the `26-128` follow-up this item fixes). 3.0 is the heaviest this
+ * Originally because those two were the only glyphs in the set rendered *shrunk* — inside `SettingsScreen`'s
+ * own ~13dp status circle rather than at the family's usual 24dp — and at that size the family's 1.8 stroke
+ * came out hair-thin and barely legible on a real device (the `26-128` follow-up this item fixed). `26-184`
+ * retires that particular call site ([ago.chat.android.ui.icons.AgoIcons.CheckCircle]/[AgoIcons.ErrorCircle]
+ * replace it, drawn flat at the family's usual 1.8), but [Check]/[Exclamation] keep the heavier weight
+ * because their remaining call sites (`ReadinessBody`'s met/unmet row, `ContactDetailsSection`'s
+ * «Подтверждено» mark) render them at similarly small sizes with the identical legibility need — changing
+ * it now would be an unrelated visual change to screens this item does not touch. 3.0 is the heaviest this
  * viewport carries before a check's two arms or the exclamation's stem-and-dot start to merge: pushed to
- * the maximum the style allows so the status cue reads clearly at badge size, while every full-size glyph
- * keeps the uniform 1.8 the icon family's identity depends on.
+ * the maximum the style allows so the glyph reads clearly at small size, while every full-size glyph keeps
+ * the uniform 1.8 the icon family's identity depends on.
  */
 private const val STATUS_GLYPH_STROKE_WIDTH = 3.0f
 private val IconSize = 24.dp
