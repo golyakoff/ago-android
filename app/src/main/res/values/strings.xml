@@ -1263,7 +1263,6 @@
          observation contradicts it - see `AutostartUiState`'s own doc comment for that precedence. -->
     <string name="settings_autostart_manual_confirm_checkbox">Автозапуск включён — не напоминать</string>
     <string name="settings_autostart_manual_confirmed_note">Вы отметили, что автозапуск включён.</string>
-    <string name="settings_autostart_manual_confirm_undo">Напоминать снова</string>
 
     <!-- `26-18`: `PushUnavailableReason`'s own four values - `RuStorePushClient.checkPushAvailability()`'s
          real, named causes (`docs/architecture/push-notifications.md`'s own "What the operator's phone

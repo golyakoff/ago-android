@@ -515,45 +515,39 @@ internal fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            // `26-187`: the manual-confirm control - shown only in [AutostartUiState
-                            // .Recommended] (a correctly-configured operator's own way to clear the neutral
-                            // guess without waiting for a reboot), or its own undo once that claim is what is
-                            // currently holding the row green ([autostartManuallyConfirmed], not a boot
-                            // observation - see that flag's own doc comment on [SettingsViewModel]). The
-                            // checkbox-plus-label row mirrors [BatteryAwarenessSheet]'s own
-                            // "don't show again" shape rather than inventing a new one.
-                            if (autostartUiState == AutostartUiState.Recommended) {
+                            // `26-187` (clarity fix): ONE checkbox in both the Recommended and the
+                            // manually-confirmed states, with a single stable label whose CHECKED state means
+                            // "I've enabled autostart, don't remind me". The first shape rendered a *checked*
+                            // box labelled «Напоминать снова» in the confirmed state, which read as a flat
+                            // contradiction (checked = remind again?). Now the checked-ness simply tracks the
+                            // persisted claim ([autostartManuallyConfirmed]): unchecked in Recommended (tick to
+                            // confirm), checked once confirmed (untick to be reminded again). The confirmed
+                            // note sits above it. Mirrors [BatteryAwarenessSheet]'s own "don't show again" shape.
+                            if (autostartUiState == AutostartUiState.Recommended || autostartManuallyConfirmed) {
+                                if (autostartManuallyConfirmed) {
+                                    Text(
+                                        text = stringResource(R.string.settings_autostart_manual_confirmed_note),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(top = 14.dp),
+                                    )
+                                }
+                                val onToggle: () -> Unit = {
+                                    if (autostartManuallyConfirmed) {
+                                        onClearAutostartManualConfirmation()
+                                    } else {
+                                        onConfirmAutostartManually()
+                                    }
+                                }
                                 Row(
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
-                                            .padding(top = 14.dp)
-                                            .clickable(onClick = onConfirmAutostartManually),
+                                            .padding(top = if (autostartManuallyConfirmed) 8.dp else 14.dp)
+                                            .clickable(onClick = onToggle),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Checkbox(checked = false, onCheckedChange = { if (it) onConfirmAutostartManually() })
+                                    Checkbox(checked = autostartManuallyConfirmed, onCheckedChange = { onToggle() })
                                     Text(text = stringResource(R.string.settings_autostart_manual_confirm_checkbox))
-                                }
-                            } else if (autostartManuallyConfirmed) {
-                                Column(modifier = Modifier.padding(top = 14.dp)) {
-                                    Text(
-                                        text = stringResource(R.string.settings_autostart_manual_confirmed_note),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Row(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 8.dp)
-                                                .clickable(onClick = onClearAutostartManualConfirmation),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Checkbox(
-                                            checked = true,
-                                            onCheckedChange = { if (!it) onClearAutostartManualConfirmation() },
-                                        )
-                                        Text(text = stringResource(R.string.settings_autostart_manual_confirm_undo))
-                                    }
                                 }
                             }
                             Text(
