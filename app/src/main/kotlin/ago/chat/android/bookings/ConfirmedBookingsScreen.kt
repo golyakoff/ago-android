@@ -1,8 +1,8 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.R
+import ago.chat.android.core.domain.bookings.BookingIdentity
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
-import ago.chat.android.core.domain.bookings.ConfirmedBookingIdentity
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsStripDay
 import ago.chat.android.core.domain.bookings.DayGroup
 import ago.chat.android.core.domain.bookings.WorkerGroup
@@ -59,9 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import java.time.Duration
 import java.time.LocalDate
-import java.time.OffsetDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -439,7 +437,7 @@ private fun WorkerGroupHeader(worker: WorkerGroup) {
  *    shape (a conversation's *last activity* trails the row; an appointment's *start time* leads it).
  * 2. **The client line is the name**, via [confirmedBookingIdentity] — never
  *    [ago.chat.android.ui.components.IdentifierText] again; that composable's own hex output must not
- *    appear on this screen as an identity (`ConfirmedBookingIdentity`'s own doc comment, `:core:domain`).
+ *    appear on this screen as an identity (`BookingIdentity`'s own doc comment, `:core:domain`).
  * 5. **Two Material icons, always both, chat then phone** — [AgoIcons.Chat] (the mockup's own
  *    `chat_bubble` glyph shape) and [AgoIcons.Call] (`call`), an [IconButton] pair at the row's trailing
  *    edge. The phone icon's own tap opens the identical detail sheet the row itself opens (that sheet is
@@ -472,7 +470,7 @@ private fun ConfirmedBookingRow(
         )
         Column(modifier = Modifier.weight(1f).padding(horizontal = RowLineGap)) {
             Text(
-                text = confirmedBookingIdentityText(confirmedBookingIdentity(row)),
+                text = bookingIdentityText(confirmedBookingIdentity(row)),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
@@ -499,7 +497,7 @@ private fun ConfirmedBookingRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                confirmedDurationMinutesOrNull(row.startsAt, row.endsAt)?.let { minutes ->
+                durationMinutesOrNull(row.startsAt, row.endsAt)?.let { minutes ->
                     Text(
                         text = " · ",
                         style = MaterialTheme.typography.bodySmall,
@@ -527,15 +525,18 @@ private fun ConfirmedBookingRow(
     }
 }
 
-/** [ConfirmedBookingIdentity]'s own three arms, rendered — shared verbatim between the row
+/** [BookingIdentity]'s own three arms, rendered — shared verbatim between the row
  * ([ConfirmedBookingRow]) and the detail sheet's own header ([ConfirmedBookingDetailBody]) so the two
- * surfaces can never word the identical fallback differently. */
+ * surfaces can never word the identical fallback differently. `internal`, not `private`: `26-163`'s own
+ * pending row and sheet ([PendingBookingsScreen.kt][PendingBookingRow]) render the identical three arms,
+ * and a fourth surface wording the fallback on its own is exactly the drift this function exists to
+ * rule out. */
 @Composable
-private fun confirmedBookingIdentityText(identity: ConfirmedBookingIdentity): String =
+internal fun bookingIdentityText(identity: BookingIdentity): String =
     when (identity) {
-        is ConfirmedBookingIdentity.Name -> identity.displayName
-        is ConfirmedBookingIdentity.MaskedPhone -> identity.phone
-        ConfirmedBookingIdentity.NoName -> stringResource(R.string.bookings_confirmed_identity_no_name)
+        is BookingIdentity.Name -> identity.displayName
+        is BookingIdentity.MaskedPhone -> identity.phone
+        BookingIdentity.NoName -> stringResource(R.string.bookings_confirmed_identity_no_name)
     }
 
 /**
@@ -581,25 +582,17 @@ private fun ConfirmedBookingDetailBody(
         // Hard requirement 7: the header is the name (the identical fallback the list row uses - this
         // sheet must not show the hex id either).
         Text(
-            text = confirmedBookingIdentityText(confirmedBookingIdentity(booking)),
+            text = bookingIdentityText(confirmedBookingIdentity(booking)),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
         )
         // Hard requirement 7: date LEFT, time RIGHT, no dot/separator between the two containers - two
         // `Text`s at the opposite ends of one `Row`, not one interpolated sentence.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = confirmedBookingDetailDateText(booking),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = confirmedBookingDetailTimeRangeText(booking),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            )
-        }
+        BookingDetailDateTimeLine(
+            localDate = booking.localDate,
+            weekday = booking.weekday,
+            startsAt = booking.startsAt,
+            endsAt = booking.endsAt,
+        )
 
         // Hard requirement 8: Услуга / Мастер / Телефон / Подтверждён по SMS / Источник, each its own
         // row. `26-135`: the labels ride `bodyMedium` (matching the date line above, not the smaller
@@ -708,40 +701,68 @@ private fun ConfirmedBookingDetailBody(
     }
 }
 
-/** Hard requirement 7's own "the date carries the year" - weekday (full name) + day + genitive month +
- * year, e.g. «Вторник, 29 сентября 2026». Falls back to the weekday alone if [ConfirmedBooking.localDate]
- * fails to parse - the identical "never invented, rendered honestly" posture
- * [ago.chat.android.thread.ThreadScreen]'s own `clockTimeOrNull` already takes for a malformed
- * timestamp, restated here for a malformed date. */
+/**
+ * Hard requirement 7: the detail sheet's own date/time line - date LEFT, time RIGHT, no dot/separator
+ * between the two containers; two `Text`s at the opposite ends of one `Row`, not one interpolated
+ * sentence. `internal`, not `private`: `26-163`'s own pending sheet ([PendingBookingDetailBody]) draws the
+ * identical line over [ago.chat.android.core.domain.bookings.PendingBooking]'s own fields, which is why
+ * this takes the four bare values rather than a [ConfirmedBooking]. [weekday] is `null` when the caller
+ * could not derive one (the pending response carries none, and
+ * [ago.chat.android.core.domain.bookings.businessLocalWeekdayOrNull] returns `null` for a malformed date) -
+ * the date then renders without its weekday rather than with a wrong one.
+ */
 @Composable
-private fun confirmedBookingDetailDateText(booking: ConfirmedBooking): String {
+internal fun BookingDetailDateTimeLine(
+    localDate: String,
+    weekday: Int?,
+    startsAt: String,
+    endsAt: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = bookingDetailDateText(localDate, weekday),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = bookingDetailTimeRangeText(startsAt, endsAt),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+/** Hard requirement 7's own "the date carries the year" - weekday (full name) + day + genitive month +
+ * year, e.g. «Вторник, 29 сентября 2026». Falls back to the weekday alone if [localDate] fails to parse -
+ * the identical "never invented, rendered honestly" posture [ago.chat.android.thread.ThreadScreen]'s own
+ * `clockTimeOrNull` already takes for a malformed timestamp, restated here for a malformed date. A `null`
+ * [weekday] drops the weekday and its comma, never substitutes a guessed one. */
+@Composable
+private fun bookingDetailDateText(
+    localDate: String,
+    weekday: Int?,
+): String {
     val weekdayLabels = stringArrayResource(R.array.bookings_weekday_full)
     val monthGenitiveLabels = stringArrayResource(R.array.bookings_month_genitive)
-    val weekday = weekdayLabels.getOrElse(booking.weekday) { "" }
-    val date = runCatching { LocalDate.parse(booking.localDate) }.getOrNull() ?: return weekday
+    val weekdayLabel = weekday?.let { weekdayLabels.getOrElse(it) { "" } }.orEmpty()
+    val date = runCatching { LocalDate.parse(localDate) }.getOrNull() ?: return weekdayLabel
     val month = monthGenitiveLabels.getOrElse(date.monthValue - 1) { "" }
-    return "$weekday, ${date.dayOfMonth} $month ${date.year}"
+    val dateText = "${date.dayOfMonth} $month ${date.year}"
+    return if (weekdayLabel.isEmpty()) dateText else "$weekdayLabel, $dateText"
 }
 
 /** Hard requirement 7's own time container - business-local start–end, the identical
  * [businessLocalTimeOrNull] the row itself already uses for [ConfirmedBooking.startsAt], applied to both
  * bounds. An em dash on either side that fails to parse, never a blank container. */
-private fun confirmedBookingDetailTimeRangeText(booking: ConfirmedBooking): String {
-    val start = businessLocalTimeOrNull(booking.startsAt) ?: "—"
-    val end = businessLocalTimeOrNull(booking.endsAt) ?: "—"
-    return "$start–$end"
-}
-
-/** The identical duration computation [ago.chat.android.bookings.BookingsScreen.kt]'s own private
- * `durationMinutesOrNull` makes for the pending card, restated here rather than shared across files for
- * two composables that are each `private` to their own file. */
-private fun confirmedDurationMinutesOrNull(
+private fun bookingDetailTimeRangeText(
     startsAt: String,
     endsAt: String,
-): Long? {
-    val start = runCatching { OffsetDateTime.parse(startsAt) }.getOrNull() ?: return null
-    val end = runCatching { OffsetDateTime.parse(endsAt) }.getOrNull() ?: return null
-    return Duration.between(start, end).toMinutes().takeIf { it >= 0 }
+): String {
+    val start = businessLocalTimeOrNull(startsAt) ?: "—"
+    val end = businessLocalTimeOrNull(endsAt) ?: "—"
+    return "$start–$end"
 }
 
 // `26-51`: the mockup's own date-strip chip metrics, named once here.
@@ -756,12 +777,14 @@ private val DateStripDotSize = 6.dp
 private val DateStripEdgePadding = 16.dp
 
 // `.rtop{gap:8px}` - the identical gap `ConversationListScreen`'s own `RtopGap` names for the same CSS
-// rule, restated here rather than imported since that value is `private` to its own file.
-private val RowLineGap = 8.dp
+// rule, restated here rather than imported since that value is `private` to its own file. `internal`:
+// `26-163`'s own pending row (`PendingBookingsScreen.kt`) shares both metrics so the two lists' rows line
+// up to the pixel when an operator flips between the segments.
+internal val RowLineGap = 8.dp
 
 // `26-117`: the row's own leading time column - wide enough for "10:00" in `bodySmall`, bold, with no
 // truncation on any locale this app renders (Russian-only today, `docs/architecture.md`).
-private val RowTimeColumnWidth = 40.dp
+internal val RowTimeColumnWidth = 40.dp
 
 // `26-125` bug 2: pinned rather than the device's own configured locale - this screen is Russian-only
 // (`docs/architecture.md`), the identical reason `PhoneRevealsReportScreen`'s own `OCCURRED_AT_FORMAT`

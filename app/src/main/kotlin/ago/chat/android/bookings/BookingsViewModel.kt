@@ -2,8 +2,11 @@ package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.oldestDeadlineFirst
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.di.IoDispatcher
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,17 +28,35 @@ import javax.inject.Inject
  * (`26-51`/a later item is where "keep this screen live" would actually get proven against a Done-when
  * of its own).
  *
- * `26-49`: no longer read-only — [reject]/[cancel]/[markNoShow] are the queue's veto verbs. [busyBookingIds]
- * is plain instance state, not part of [BookingsUiState] itself until [applyPendingResult] folds it in —
- * the identical "no lock needed" reasoning [ConversationListViewModel]'s own class doc comment gives:
- * every mutation here runs on `viewModelScope`'s own dispatcher, and the `withContext(ioDispatcher)`
- * blocks only ever wrap the suspending network call, never a read or write of this field.
+ * `26-49`: no longer read-only — [reject]/[cancel] are the queue's veto verbs. [busyBookingIds] is plain
+ * instance state, not part of [BookingsUiState] itself until [applyPendingResult] folds it in — the
+ * identical "no lock needed" reasoning [ConversationListViewModel]'s own class doc comment gives: every
+ * mutation here runs on `viewModelScope`'s own dispatcher, and the `withContext(ioDispatcher)` blocks only
+ * ever wrap the suspending network call, never a read or write of this field.
+ *
+ * `26-163`: **`markNoShow` is gone from this class, on purpose.** `Event.MarkNoShow` (`Ago.Calendar.Domain`)
+ * accepts only a `Booked` row - a no-show is a statement about a *confirmed* visit that did not happen, and
+ * every row on this screen is still `PendingConfirmation`, so the server refused the call on every row it
+ * could ever have been aimed at. The port method ([BookingsApi.markNoShow]) stays: it is the backend's real
+ * surface, and Утверждены's own detail sheet is where a caller for it belongs. What *is* valid for a pending
+ * row is exactly [reject] (`Event.Reject`: `PendingConfirmation -> Cancelled`) and [cancel] (`Event.Cancel`:
+ * `PendingConfirmation | Booked -> Cancelled`, a second permission for the same transition - see
+ * `CancelBookingHandler`'s own remarks on why the queue offers both). There is no operator *confirm*: the
+ * calendar exposes no such endpoint (`ConsoleEndpoints.cs` maps reject/cancel/no-show and nothing else;
+ * `Event.Confirm` is the sweep's alone), so the screen's own caption - everything confirms automatically -
+ * is the whole accept path, stated rather than drawn as a button the server would not answer.
+ *
+ * `26-163`/`adr/0184`: [personsApi] is the identical display-merge
+ * [ago.chat.android.bookings.ConfirmedBookingsViewModel]'s own doc comment describes for Утверждены,
+ * restated here because `PendingBookingResponse` carries the identical bare `personId`-no-name shape.
+ * [mergeDisplayNames] is the one place this class closes that gap.
  */
 @HiltViewModel
 public class BookingsViewModel
     @Inject
     constructor(
         private val api: BookingsApi,
+        private val personsApi: PersonsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<BookingsUiState>(BookingsUiState.Loading)
@@ -62,31 +83,23 @@ public class BookingsViewModel
             mutableState.update { BookingsUiState.Loading }
             busyBookingIds = emptySet()
             viewModelScope.launch {
-                applyPendingResult(withContext(ioDispatcher) { api.fetchPendingQueue() }, actionError = null)
+                applyPendingResult(fetchQueue(), actionError = null)
             }
         }
 
-        /** `26-49`: rejects a pending booking — [act] documents the one shape all three veto actions
-         * share. */
+        /** `26-49`: rejects a pending booking — [act] documents the one shape both veto actions share. */
         public fun reject(bookingId: String) {
             act(bookingId, api::rejectBooking)
         }
 
-        /** `26-49`: cancels a pending booking — [act]'s own doc comment covers this and [markNoShow]
-         * too. */
+        /** `26-49`: cancels a pending booking — [act]'s own doc comment covers this and [reject] too. */
         public fun cancel(bookingId: String) {
             act(bookingId, api::cancelBooking)
         }
 
-        /** `26-49`: marks a pending booking a no-show — [act]'s own doc comment covers this and
-         * [cancel] too. */
-        public fun markNoShow(bookingId: String) {
-            act(bookingId, api::markNoShow)
-        }
-
         /**
-         * `26-49`: the one place all three veto actions' shared shape lives — `docs/backlog/26-49-*.md`'s
-         * own Scope items 2-3, ported from `CalendarQueuePage.tsx`'s own `act` verbatim rather than
+         * `26-49`: the one place both veto actions' shared shape lives — `docs/backlog/26-49-*.md`'s own
+         * Scope items 2-3, ported from `CalendarQueuePage.tsx`'s own `act` verbatim rather than
          * re-derived:
          *
          * 1. **One deliberate tap, one server call.** A row already in [busyBookingIds] is a no-op —
@@ -118,7 +131,42 @@ public class BookingsViewModel
                         is BookingActionResult.Refused -> BookingActionErrorUi.ServerRefusal(result.detail)
                         is BookingActionResult.Failed -> BookingActionErrorUi.Unavailable(result.reason)
                     }
-                applyPendingResult(withContext(ioDispatcher) { api.fetchPendingQueue() }, actionError)
+                applyPendingResult(fetchQueue(), actionError)
+            }
+        }
+
+        /** The one read both [refresh] and [act] make — the queue, then the display-merge over it, so the
+         * two callers cannot drift into one of them showing merged names and the other bare fallbacks. */
+        private suspend fun fetchQueue(): PendingBookingsResult {
+            val result = withContext(ioDispatcher) { api.fetchPendingQueue() }
+            return if (result is PendingBookingsResult.Loaded) result.copy(bookings = mergeDisplayNames(result.bookings)) else result
+        }
+
+        /**
+         * `26-163`/`adr/0184`: the identical chat-registry display-merge
+         * [ago.chat.android.bookings.ContactsViewModel.mergeDisplayNames]'s own doc comment describes in
+         * full, restated here for [PendingBooking] — a lookup miss or an unreachable [personsApi] leaves
+         * [PendingBooking.customerDisplayName] at `null`, which
+         * [ago.chat.android.core.domain.bookings.pendingBookingIdentity] already falls back from to the
+         * masked phone (when the caller holds `customer:read`), then to a stated "no name" - never to the
+         * hex person id. A failed merge is never surfaced as an error: the queue itself loaded, and a
+         * nameless row is an honest, readable state, not a broken screen.
+         */
+        private suspend fun mergeDisplayNames(bookings: List<PendingBooking>): List<PendingBooking> {
+            val personIds = bookings.map { it.customerId }.distinct()
+            if (personIds.isEmpty()) return bookings
+
+            val persons =
+                when (val result = withContext(ioDispatcher) { personsApi.fetchPersons(personIds) }) {
+                    is PersonsResult.Loaded -> result.persons
+                    is PersonsResult.Failed -> return bookings
+                }
+
+            val namesByPersonId = persons.mapNotNull { person -> person.displayName?.let { name -> person.personId to name } }.toMap()
+            if (namesByPersonId.isEmpty()) return bookings
+
+            return bookings.map { booking ->
+                namesByPersonId[booking.customerId]?.let { name -> booking.copy(customerDisplayName = name) } ?: booking
             }
         }
 

@@ -3,9 +3,6 @@ package ago.chat.android.bookings
 import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfiguredService
-import ago.chat.android.core.domain.bookings.ConfirmationCountdown
-import ago.chat.android.core.domain.bookings.PendingBooking
-import ago.chat.android.core.domain.bookings.confirmationCountdown
 import ago.chat.android.core.domain.calendarsetup.ConfiguredCalendar
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
@@ -14,27 +11,22 @@ import ago.chat.android.schedule.WorkingHoursUiState
 import ago.chat.android.schedule.WorkingHoursViewModel
 import ago.chat.android.shell.rememberPendingConversationOpener
 import ago.chat.android.ui.components.AccountAvatarAction
-import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +36,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,8 +58,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Duration
 import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * `26-48`: Записи, for real — replaces `ago.chat.android.shell.BookingsPlaceholderScreen` at
@@ -292,7 +281,6 @@ public fun BookingsRoute(
         onRetry = viewModel::refresh,
         onReject = viewModel::reject,
         onCancel = viewModel::cancel,
-        onMarkNoShow = viewModel::markNoShow,
         confirmedState = confirmedState,
         onSelectDay = onSelectDay,
         onRetryConfirmed = onRetryConfirmed,
@@ -372,9 +360,10 @@ internal fun BookingsScreen(
     onConfigSelected: (BookingsTab) -> Unit,
     onCloseConfig: () -> Unit,
     onRetry: () -> Unit,
+    // `26-163`: the veto pair is the whole action surface for a pending row - «Не пришёл» left with that
+    // item, since `Event.MarkNoShow` accepts only a `Booked` row (`BookingsViewModel`'s own doc comment).
     onReject: (String) -> Unit,
     onCancel: (String) -> Unit,
-    onMarkNoShow: (String) -> Unit,
     confirmedState: ConfirmedBookingsUiState?,
     onSelectDay: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
@@ -551,7 +540,6 @@ internal fun BookingsScreen(
                                                 busyBookingIds = state.busyBookingIds,
                                                 onReject = onReject,
                                                 onCancel = onCancel,
-                                                onMarkNoShow = onMarkNoShow,
                                             )
                                         }
 
@@ -904,109 +892,14 @@ internal fun ActionErrorBanner(
     )
 }
 
-@Composable
-private fun PendingBookingsList(
-    bookings: List<PendingBooking>,
-    now: OffsetDateTime,
-    busyBookingIds: Set<String>,
-    onReject: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onMarkNoShow: (String) -> Unit,
-) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-        items(bookings, key = { it.bookingId }) { booking ->
-            PendingBookingCard(
-                booking = booking,
-                now = now,
-                busy = booking.bookingId in busyBookingIds,
-                onReject = { onReject(booking.bookingId) },
-                onCancel = { onCancel(booking.bookingId) },
-                onMarkNoShow = { onMarkNoShow(booking.bookingId) },
-            )
-            HorizontalDivider()
-        }
-    }
-}
-
-/**
- * The mockup's own card — service and duration, when and with whom, the deadline, and the calendar's
- * short id (`docs/backlog/26-48-*.md`'s own Scope item 4). Every one of `serviceId`/`workerId`/
- * `calendarId` is an id, rendered through [IdentifierText] — never a name, because
- * `PendingBookingResponse` does not carry one yet (`PendingBooking`'s own doc comment).
- *
- * `26-49`: the three veto actions - `docs/backlog/26-49-*.md`'s own Scope item 4 draws no
- * «Подтвердить» beside them, on purpose (this file's own [BookingsScreen]-level caption says why).
- * [busy] disables all three at once for *this* card only - never the whole list
- * (`CalendarQueuePage.tsx:258-266`'s own `disabled={busyId === row.bookingId}`, read per-row).
- */
-@Composable
-private fun PendingBookingCard(
-    booking: PendingBooking,
-    now: OffsetDateTime,
-    busy: Boolean,
-    onReject: () -> Unit,
-    onCancel: () -> Unit,
-    onMarkNoShow: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        // "Service and duration" (`docs/backlog/26-48-*.md`'s own Scope item 4) - one row.
-        BookingDetailRow(label = stringResource(R.string.bookings_card_service_label)) {
-            IdentifierText(id = booking.serviceId, style = MaterialTheme.typography.bodyMedium)
-            durationMinutesOrNull(booking.startsAt, booking.endsAt)?.let { minutes ->
-                Text(
-                    text = stringResource(R.string.bookings_duration_minutes, minutes.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
-        // "When and with whom" - two rows rather than one shared line, so each has its own label; the
-        // mockup groups them visually, but nothing in this item's Scope requires one Compose `Row`
-        // over two, and two labelled rows read at least as clearly on a phone-width card.
-        clockTimeOrNull(booking.startsAt)?.let { time ->
-            BookingDetailRow(label = stringResource(R.string.bookings_card_when_label), modifier = Modifier.padding(top = 4.dp)) {
-                Text(text = time, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        BookingDetailRow(label = stringResource(R.string.bookings_card_worker_label), modifier = Modifier.padding(top = 4.dp)) {
-            IdentifierText(id = booking.workerId, style = MaterialTheme.typography.bodyMedium)
-        }
-        // The deadline - a full sentence on its own, so it carries no separate label.
-        Text(
-            text = confirmationCountdownText(booking.confirmationDeadline, now),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        BookingDetailRow(
-            label = stringResource(R.string.bookings_card_calendar_label),
-            modifier = Modifier.padding(top = 4.dp),
-        ) {
-            IdentifierText(id = booking.calendarId, style = MaterialTheme.typography.bodySmall)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            TextButton(onClick = onReject, enabled = !busy) {
-                Text(text = stringResource(R.string.bookings_action_reject))
-            }
-            TextButton(onClick = onCancel, enabled = !busy) {
-                Text(text = stringResource(R.string.bookings_action_cancel))
-            }
-            TextButton(onClick = onMarkNoShow, enabled = !busy) {
-                Text(text = stringResource(R.string.bookings_action_no_show))
-            }
-        }
-    }
-}
-
 /** `SettingsScreen`'s own `AboutLine` shape, restated: a label, then whatever the row actually needs to
- * show beside it - here a slot rather than a single value, since some rows carry two pieces (a time and
- * a worker id; a service id and its duration). `internal`, not `private`: `26-117`'s own booking-detail
- * sheet (`ConfirmedBookingsScreen.kt`'s own `ConfirmedBookingDetailBody`) reuses this for its own
- * Услуга/Мастер/Телефон/Подтверждён по SMS/Источник rows rather than a second, near-identical
- * label-then-content row shape. */
+ * show beside it - a slot rather than a single value, since a row may carry two pieces (a masked phone
+ * and its reveal control). `internal`, not `private`: `26-117`'s own booking-detail sheet
+ * (`ConfirmedBookingsScreen.kt`'s own `ConfirmedBookingDetailBody`) and `26-163`'s pending sheet
+ * (`PendingBookingsScreen.kt`) both draw their Услуга/Мастер/Телефон/... rows through this rather than a
+ * second, near-identical label-then-content row shape. The `26-48` pending card that first drew it is
+ * gone (`26-163` replaced it with the row-and-sheet the confirmed segment already had), which is why this
+ * file's only remaining callers are elsewhere. */
 @Composable
 internal fun BookingDetailRow(
     label: String,
@@ -1016,9 +909,9 @@ internal fun BookingDetailRow(
 ) {
     // Label leads the row, the value trails it at the row's own end - the weighted spacer between the two
     // is what pins the content to the right edge (`26-135`'s own "values right-aligned to the sheet edge",
-    // the identical mockup layout). `labelStyle` is parametrised, default unchanged, so the confirmed-
-    // booking detail sheet can lift its own labels to `bodyMedium` without this pending-card call site's
-    // own `labelMedium` moving with it (`26-135`: "parametrise the label style, default unchanged").
+    // the identical mockup layout). `labelStyle` is parametrised, default unchanged, so a detail sheet
+    // can lift its labels to `bodyMedium` without moving any other call site's `labelMedium` with it
+    // (`26-135`: "parametrise the label style, default unchanged").
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
@@ -1031,27 +924,12 @@ internal fun BookingDetailRow(
     }
 }
 
-@Composable
-private fun confirmationCountdownText(
-    confirmationDeadline: String,
-    now: OffsetDateTime,
-): String =
-    when (val countdown = confirmationCountdown(confirmationDeadline, now)) {
-        is ConfirmationCountdown.HoursRemaining ->
-            stringResource(R.string.bookings_confirms_in_hours, countdown.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
-
-        ConfirmationCountdown.Unknown -> stringResource(R.string.bookings_deadline_unknown)
-    }
-
-/** `null` for anything that fails to parse - the same "never invented, rendered honestly" posture
- * `ThreadScreen`'s own `clockTimeOrNull` already takes for a malformed timestamp. Rendered in the
- * device's own zone - the operator reading this screen, not the calendar's own business time zone. */
-private fun clockTimeOrNull(startsAt: String): String? =
-    runCatching {
-        OffsetDateTime.parse(startsAt).atZoneSameInstant(ZoneId.systemDefault()).format(CLOCK_FORMAT)
-    }.getOrNull()
-
-private fun durationMinutesOrNull(
+/** The booking's own length in whole minutes, or `null` when either bound fails to parse - the identical
+ * "never invented, rendered honestly" posture every formatter on these screens takes. `internal`, not
+ * `private`: `26-163` made this the one copy for the confirmed row (`ConfirmedBookingsScreen.kt`), the
+ * pending row and the pending sheet alike, replacing the per-file restatement two `private` callers
+ * used to justify - three callers is where a shared function stops being premature. */
+internal fun durationMinutesOrNull(
     startsAt: String,
     endsAt: String,
 ): Long? {
@@ -1059,5 +937,3 @@ private fun durationMinutesOrNull(
     val end = runCatching { OffsetDateTime.parse(endsAt) }.getOrNull() ?: return null
     return Duration.between(start, end).toMinutes().takeIf { it >= 0 }
 }
-
-private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")

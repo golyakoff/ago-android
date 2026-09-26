@@ -271,17 +271,15 @@
     <string name="bookings_load_failed_transport">Couldn\'t reach AGO Calendar. Check your connection and try again.</string>
     <string name="bookings_load_failed_unexpected">Couldn\'t load the booking queue. Try again.</string>
     <string name="bookings_confirms_in_hours">Confirms in %d h</string>
+    <string name="bookings_pending_confirms_in_hours_short">in %d h</string>
     <string name="bookings_deadline_unknown">deadline unknown</string>
     <string name="bookings_duration_minutes">%d min</string>
     <string name="bookings_card_service_label">Service</string>
-    <string name="bookings_card_when_label">When</string>
     <!-- `26-91`: "Master", not "Worker" — see the file-level note above. -->
     <string name="bookings_card_worker_label">Master</string>
-    <string name="bookings_card_calendar_label">Calendar</string>
     <string name="bookings_auto_confirms_caption">Everything confirms automatically.</string>
     <string name="bookings_action_reject">Reject</string>
     <string name="bookings_action_cancel">Cancel</string>
-    <string name="bookings_action_no_show">No-show</string>
 
     <string name="bookings_tab_confirmed">Confirmed</string>
     <string name="bookings_confirmed_day_empty">Nothing\'s booked on this day.</string>

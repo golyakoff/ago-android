@@ -478,19 +478,38 @@ private data class ProblemDetailsWireDto(
 private fun classify(failure: Exception): BookingsQueueFailure =
     if (failure is IOException) BookingsQueueFailure.Transport else BookingsQueueFailure.Unexpected
 
-/** `Ago.Calendar.Contracts.PendingBookingResponse`, reduced to the fields [PendingBooking] carries —
- * see that class's own doc comment for which fields this wave has no screen for yet, and why
- * `ignoreUnknownKeys` (`AgoHttpClient.kt`'s own `agoJson`) is what lets this DTO simply omit them
- * rather than declare and immediately discard `customerId`/`localDate`/`isOverdue`/`phone`/`masked`. */
+/**
+ * `Ago.Calendar.Contracts.PendingBookingResponse`, reduced to the fields [PendingBooking] carries — see
+ * that class's own doc comment for the one field (`isOverdue`) with no screen here, and why
+ * `ignoreUnknownKeys` (`AgoHttpClient.kt`'s own `agoJson`) is what lets this DTO simply omit it rather
+ * than declare and immediately discard it.
+ *
+ * `26-163`: reads the names `26-50` put on the wire (`workerDisplayName`/`serviceName`) and `adr/0184`'s
+ * `personId`, `localDate`, `phone` and `masked` — every one of which used to be dropped here while the
+ * screen rendered hex ids in their place. `workerDisplayName`/`personId`/`localDate` are required, the
+ * identical stance [ConfirmedBookingWireDto] takes for its own copies of the same three: the real server
+ * always sends them, and a `2xx` without them is a shape the adapter never promised. `serviceName` is
+ * nullable on the wire itself (the read model's own defensive `left join`); `phone` is JSON `null` for a
+ * caller without `customer:read` ([PendingBooking.phone]'s own doc comment) and defaulted so an older
+ * response omitting the key keeps decoding; `masked` defaults `false` the way [ConfirmedBookingWireDto]'s
+ * does. No `customerDisplayName` — nothing on the wire fills it, and [ago.chat.android.bookings.BookingsViewModel]
+ * display-merges it in afterwards.
+ */
 @Serializable
 private data class PendingBookingWireDto(
     val bookingId: String,
     val calendarId: String,
     val workerId: String,
+    val workerDisplayName: String,
     val serviceId: String,
+    val serviceName: String? = null,
+    val personId: String,
     val startsAt: String,
     val endsAt: String,
+    val localDate: String,
     val confirmationDeadline: String,
+    val phone: String? = null,
+    val masked: Boolean = false,
 )
 
 private fun PendingBookingWireDto.toDomain() =
@@ -498,10 +517,17 @@ private fun PendingBookingWireDto.toDomain() =
         bookingId = bookingId,
         calendarId = calendarId,
         workerId = workerId,
+        workerDisplayName = workerDisplayName,
         serviceId = serviceId,
+        serviceName = serviceName,
+        customerId = personId,
         startsAt = startsAt,
         endsAt = endsAt,
+        localDate = localDate,
         confirmationDeadline = confirmationDeadline,
+        customerDisplayName = null,
+        phone = phone,
+        masked = masked,
     )
 
 /**
@@ -510,7 +536,7 @@ private fun PendingBookingWireDto.toDomain() =
  * `26-117`: [phone]/[masked] are no longer omitted — [ConfirmedBooking]'s own doc comment says why the
  * reduction that used to drop them no longer applies. Both are defaulted rather than required: the real
  * server always sends them (`ConsoleContracts.cs`'s own remarks on `Phone`: "Always populated"), but a
- * default lets a `2xx` that happened to omit them degrade to [ConfirmedBookingIdentity.NoName] through
+ * default lets a `2xx` that happened to omit them degrade to [BookingIdentity.NoName] through
  * [confirmedBookingIdentity]'s own blank-is-absent rule rather than failing the whole page's decode — the
  * identical `ignoreUnknownKeys`-adjacent resilience [PendingBookingWireDto]'s own doc comment already
  * relies on for fields this adapter has no use for, applied here to fields it does read.

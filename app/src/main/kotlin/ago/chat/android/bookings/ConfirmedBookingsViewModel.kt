@@ -104,7 +104,7 @@ internal class ConfirmedBookingsViewModel
          * full, restated here for [ConfirmedBooking] instead of [ago.chat.android.core.domain.bookings.Contact] —
          * a lookup miss or an unreachable [personsApi] leaves [ConfirmedBooking.customerDisplayName] at
          * `null`, which [confirmedBookingIdentity] already falls back from to the masked phone, then to
-         * [ago.chat.android.core.domain.bookings.ConfirmedBookingIdentity.NoName].
+         * [ago.chat.android.core.domain.bookings.BookingIdentity.NoName].
          */
         private suspend fun mergeDisplayNames(bookings: List<ConfirmedBooking>): List<ConfirmedBooking> {
             val personIds = bookings.map { it.customerId }.distinct()
