@@ -19,6 +19,25 @@ class ConfirmedBookingsRangeTest {
     }
 
     @Test
+    fun `26-212 confirmedBookingsRange builds the identical movable window around any anchor, not just today`() {
+        val range = confirmedBookingsRange(LocalDate.of(2026, 10, 15))
+
+        assertEquals("2026-10-15", range.from)
+        assertEquals("2026-10-21", range.to)
+        assertEquals(
+            listOf("2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19", "2026-10-20", "2026-10-21"),
+            range.dates,
+        )
+    }
+
+    @Test
+    fun `26-212 defaultConfirmedBookingsRange is exactly confirmedBookingsRange with today as the anchor`() {
+        val today = LocalDate.of(2026, 9, 23)
+
+        assertEquals(confirmedBookingsRange(today), defaultConfirmedBookingsRange(today))
+    }
+
+    @Test
     fun `every strip day carries the 0-is-Sunday weekday convention`() {
         // 2026-09-27 is a Sunday.
         val range = defaultConfirmedBookingsRange(LocalDate.of(2026, 9, 27))

@@ -102,6 +102,56 @@ class ConfirmedBookingsViewModelTest {
         }
 
     @Test
+    fun `26-212 picking a date re-fetches an entirely new range anchored there, not today`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            assertEquals(1, api.confirmedFetchCalls)
+
+            viewModel.onDatePicked("2026-10-15")
+            advanceUntilIdle()
+
+            assertEquals(2, api.confirmedFetchCalls)
+            assertEquals("2026-10-15" to "2026-10-21", api.lastFetchedRange)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            // The picked day is what the strip now opens on, the identical "selectedDate == range.from"
+            // rule the initial today-anchored load already follows.
+            assertEquals("2026-10-15", state.selectedDate)
+            assertEquals("2026-10-15", state.strip.first().date)
+        }
+
+    @Test
+    fun `26-212 a retry after a jump re-reads the picked window, not today`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            viewModel.onDatePicked("2026-10-15")
+            advanceUntilIdle()
+
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            assertEquals(3, api.confirmedFetchCalls)
+            assertEquals("2026-10-15" to "2026-10-21", api.lastFetchedRange)
+        }
+
+    @Test
+    fun `26-212 a malformed picked date is ignored, no crash, no re-fetch`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            assertEquals(1, api.confirmedFetchCalls)
+
+            viewModel.onDatePicked("not-a-date")
+            advanceUntilIdle()
+
+            assertEquals(1, api.confirmedFetchCalls)
+        }
+
+    @Test
     fun `NotConfigured passes straight through`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ConfirmedBookingsResult.NotConfigured)
@@ -305,6 +355,12 @@ class ConfirmedBookingsViewModelTest {
     ) : BookingsApi {
         var confirmedFetchCalls: Int = 0
             private set
+
+        // `26-212`: the `from`/`to` of the most recent fetch - what proves a date-picker jump
+        // (`onDatePicked`) actually asked the server for the *picked* window, not just re-asked for
+        // today's.
+        var lastFetchedRange: Pair<String, String>? = null
+            private set
         val revealCalls: MutableList<Pair<String, String>> = mutableListOf()
 
         // `26-51`'s own [ConfirmedBookingsViewModel] never calls this - the sibling pending-queue read.
@@ -315,6 +371,7 @@ class ConfirmedBookingsViewModelTest {
             to: String,
         ): ConfirmedBookingsResult {
             confirmedFetchCalls++
+            lastFetchedRange = from to to
             if (hangFetch) awaitCancellation()
             return result
         }

@@ -174,6 +174,7 @@ public fun BookingsRoute(
     // toggling this branch never recreates the view model underneath it.
     val confirmedState: ConfirmedBookingsUiState?
     val onSelectDay: (String) -> Unit
+    val onJumpToDate: (String) -> Unit
     val onRetryConfirmed: () -> Unit
     val onRevealConfirmed: (String) -> Unit
     if (showConfirmedSegment) {
@@ -181,11 +182,13 @@ public fun BookingsRoute(
         val collectedConfirmedState by confirmedViewModel.state.collectAsStateWithLifecycle()
         confirmedState = collectedConfirmedState
         onSelectDay = confirmedViewModel::onDaySelected
+        onJumpToDate = confirmedViewModel::onDatePicked
         onRetryConfirmed = confirmedViewModel::refresh
         onRevealConfirmed = confirmedViewModel::reveal
     } else {
         confirmedState = null
         onSelectDay = {}
+        onJumpToDate = {}
         onRetryConfirmed = {}
         onRevealConfirmed = {}
     }
@@ -483,6 +486,7 @@ public fun BookingsRoute(
         onCancel = viewModel::cancel,
         confirmedState = confirmedState,
         onSelectDay = onSelectDay,
+        onJumpToDate = onJumpToDate,
         onRetryConfirmed = onRetryConfirmed,
         onRevealConfirmed = onRevealConfirmed,
         onOpenDialog = onOpenDialog,
@@ -625,6 +629,7 @@ internal fun BookingsScreen(
     onCancel: (String) -> Unit,
     confirmedState: ConfirmedBookingsUiState?,
     onSelectDay: (String) -> Unit,
+    onJumpToDate: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
     onRevealConfirmed: (String) -> Unit,
     onOpenDialog: (String) -> Unit,
@@ -920,6 +925,7 @@ internal fun BookingsScreen(
                             ConfirmedBookingsBody(
                                 state = it,
                                 onSelectDay = onSelectDay,
+                                onJumpToDate = onJumpToDate,
                                 onRetry = onRetryConfirmed,
                                 onReveal = onRevealConfirmed,
                                 onOpenDialog = onOpenDialog,

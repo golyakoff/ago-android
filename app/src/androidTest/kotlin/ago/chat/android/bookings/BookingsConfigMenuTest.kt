@@ -51,6 +51,7 @@ class BookingsConfigMenuTest {
                 onCancel = {},
                 confirmedState = null,
                 onSelectDay = {},
+                onJumpToDate = {},
                 onRetryConfirmed = {},
                 onRevealConfirmed = {},
                 onOpenDialog = {},

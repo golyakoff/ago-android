@@ -6,8 +6,8 @@ import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.DayGroup
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.bookings.confirmedBookingsRange
 import ago.chat.android.core.domain.bookings.confirmedBookingsStrip
-import ago.chat.android.core.domain.bookings.defaultConfirmedBookingsRange
 import ago.chat.android.core.domain.bookings.groupByDayThenWorker
 import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.persons.PersonsResult
@@ -62,6 +62,13 @@ internal class ConfirmedBookingsViewModel
          * `ViewModel` here). */
         private var revealingCustomerIds: Set<String> = emptySet()
 
+        /** `26-212`: the movable window's own anchor — [confirmedBookingsRange] is built around this on
+         * every [refresh], and [onDatePicked] is the only thing that ever moves it. Defaults to today, in
+         * the identical *UTC* calendar date [confirmedBookingsRange]'s own doc comment (via
+         * `defaultConfirmedBookingsRange`) explains porting `ago-console`'s own `defaultRange` for, so the
+         * screen opens on the identical seven-day window it always has until an operator picks a date. */
+        private var anchorDate: LocalDate = LocalDate.now(ZoneOffset.UTC)
+
         init {
             refresh()
         }
@@ -69,17 +76,15 @@ internal class ConfirmedBookingsViewModel
         /** The initial load, and the retry action a [ConfirmedBookingsUiState.Failed] screen offers —
          * the identical "asking again is the whole of retry" shape [BookingsViewModel.refresh]'s own doc
          * comment states. Clears [revealingCustomerIds] the identical reason
-         * [ContactsViewModel.refresh]'s own doc comment gives for clearing its own field of that name. */
+         * [ContactsViewModel.refresh]'s own doc comment gives for clearing its own field of that name.
+         * `26-212`: reads [anchorDate] rather than always re-deriving today, so a date-picker jump
+         * ([onDatePicked]) and a plain retry both go through this one fetch — retrying after a jump
+         * re-reads the *picked* window, never silently snaps back to today. */
         fun refresh() {
             mutableState.update { ConfirmedBookingsUiState.Loading }
             revealingCustomerIds = emptySet()
             viewModelScope.launch {
-                // `ago-console`'s own `defaultRange` reads a bare `new Date()`, i.e. the *UTC* calendar
-                // date - `defaultConfirmedBookingsRange`'s own doc comment on why this ports that
-                // faithfully rather than substituting a device-local date this class has no more reason
-                // to trust than the console's own browser-local one.
-                val today = LocalDate.now(ZoneOffset.UTC)
-                val range = defaultConfirmedBookingsRange(today)
+                val range = confirmedBookingsRange(anchorDate)
                 val newState =
                     when (val result = withContext(ioDispatcher) { api.fetchConfirmedBookings(range.from, range.to) }) {
                         is ConfirmedBookingsResult.Loaded -> {
@@ -132,6 +137,21 @@ internal class ConfirmedBookingsViewModel
             mutableState.update { current ->
                 if (current is ConfirmedBookingsUiState.Loaded) current.copy(selectedDate = date) else current
             }
+        }
+
+        /**
+         * `26-212`: the month/year header's own date-picker jump — moves [anchorDate] to [date] and
+         * re-fetches an entirely new range around it, unlike [onDaySelected] above which only ever
+         * re-slices a range already in hand. A malformed [date] (there should be no way for the Material3
+         * picker this is wired to ever produce one) leaves [anchorDate] untouched rather than crashing the
+         * screen — the identical "never invented, never fails the screen" posture
+         * [ConfirmedBookingsViewModel.mergeDisplayNames]'s own doc comment states for an unreachable
+         * [personsApi].
+         */
+        fun onDatePicked(date: String) {
+            val picked = runCatching { LocalDate.parse(date) }.getOrNull() ?: return
+            anchorDate = picked
+            refresh()
         }
 
         /**

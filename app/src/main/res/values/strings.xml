@@ -693,6 +693,12 @@
     <string name="bookings_confirmed_reschedule_sheet_title">Перенести оператором</string>
     <string name="bookings_confirmed_reschedule_empty">У этого мастера нет свободных слотов в ближайшие две недели.</string>
     <string name="bookings_confirmed_reschedule_load_failed_unexpected">Не удалось загрузить свободные слоты.</string>
+    <!-- `26-212`: the date strip's own sticky month/year header - now a tap target that opens a full
+         calendar picker and jumps the whole strip to any chosen day, not just the fixed seven-day window
+         `defaultConfirmedBookingsRange` used to hard-cap it at. The accessibility click label for that tap
+         (`Modifier.clickable(onClickLabel = ...)`), read by TalkBack alongside the header's own visible
+         month/year text. -->
+    <string name="bookings_confirmed_jump_to_date_action">Перейти к дате</string>
 
     <!--
         `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only

@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +44,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -60,7 +63,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -90,6 +95,7 @@ import kotlin.math.roundToInt
 internal fun ConfirmedBookingsBody(
     state: ConfirmedBookingsUiState,
     onSelectDay: (String) -> Unit,
+    onJumpToDate: (String) -> Unit,
     onRetry: () -> Unit,
     onReveal: (String) -> Unit,
     onOpenDialog: (String) -> Unit,
@@ -122,7 +128,12 @@ internal fun ConfirmedBookingsBody(
 
             Column(modifier = Modifier.fillMaxSize()) {
                 state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth()) }
-                ConfirmedDateStrip(strip = state.strip, selectedDate = state.selectedDate, onSelectDay = onSelectDay)
+                ConfirmedDateStrip(
+                    strip = state.strip,
+                    selectedDate = state.selectedDate,
+                    onSelectDay = onSelectDay,
+                    onJumpToDate = onJumpToDate,
+                )
                 val selectedDay = state.selectedDay
                 Box(modifier = Modifier.weight(1f)) {
                     // `docs/backlog/26-51-*.md`'s own Done-when: "a day with nothing booked renders a
@@ -216,13 +227,23 @@ internal fun ConfirmedBookingsBody(
  * behaviour, not a new colour or weight. A [Box] with `clipToBounds` hides the labels that have scrolled
  * past either edge; its height is set by whichever label is at full width (there is always one — a label
  * only shrinks while its successor is present and full), so the lane never collapses during a handoff.
+ *
+ * `26-212`: that same sticky header [Box] is now the tap target for a full [DatePickerDialog] jump — the
+ * fixed seven-day window `defaultConfirmedBookingsRange` used to hard-cap this strip at is now a *movable*
+ * one, [onJumpToDate] being what moves it (wired to [ConfirmedBookingsViewModel.onDatePicked]). The
+ * `LazyRow` day chips below stay exactly as `26-51`/`26-117`/`26-127` left them — a picked date lands here
+ * as an ordinary [ConfirmedBookingsUiState.Loaded] carrying a new [strip] anchored on that day, the
+ * identical shape a plain retry already produces, so this composable itself needs no branch for "did the
+ * strip move because of a pick or a retry".
  */
 @Composable
 private fun ConfirmedDateStrip(
     strip: List<ConfirmedBookingsStripDay>,
     selectedDate: String,
     onSelectDay: (String) -> Unit,
+    onJumpToDate: (String) -> Unit,
 ) {
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
     val weekdayLabels = stringArrayResource(R.array.bookings_weekday_short)
     val monthLabels = stringArrayResource(R.array.bookings_month_full)
     val labels = remember(strip) { confirmedBookingsMonthLabels(strip) }
@@ -252,7 +273,19 @@ private fun ConfirmedDateStrip(
     val geometry = stickyMonthHeaderGeometry(monthDayCounts, chipStridePx, scrollXPx)
 
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Box(modifier = Modifier.fillMaxWidth().clipToBounds()) {
+        // `26-212`: the whole sticky-header lane is the tap target, not just the current label's own text
+        // — the label that owns the slot changes under a moving finger as the strip scrolls (that is the
+        // whole point of `StickyMonthHeaderGeometry`), so pinning the click to one specific label's own
+        // composable would move the tap target out from under an operator mid-scroll. The header always
+        // shows *some* month/year, so "tap the header" reads the same regardless of which one.
+        val jumpToDateLabel = stringResource(R.string.bookings_confirmed_jump_to_date_action)
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .clickable(onClickLabel = jumpToDateLabel) { showDatePicker = true },
+        ) {
             labels.forEachIndexed { index, label ->
                 val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
                 when {
@@ -304,7 +337,85 @@ private fun ConfirmedDateStrip(
             }
         }
     }
+
+    if (showDatePicker) {
+        ConfirmedDateStripPickerDialog(
+            initialDate = selectedDate,
+            onDismiss = { showDatePicker = false },
+            onPicked = { date ->
+                showDatePicker = false
+                onJumpToDate(date)
+            },
+        )
+    }
 }
+
+/**
+ * `26-212`: the month/year header's own tap target — a native Material3 [DatePickerDialog], the closest
+ * Compose-native fit to "tap a month/year label, get a calendar" (a third-party picker library is ruled
+ * out by this ticket's own scope; `DatePicker`/`rememberDatePickerState` already ship with the
+ * `material3` dependency every other screen here uses). [initialDate] opens the calendar on the day the
+ * strip is already showing, so the picker starts where the operator's eyes already are rather than on
+ * today.
+ *
+ * Restates the identical UTC-midnight epoch-millis round trip
+ * [ago.chat.android.bookings.SingleDatePickerField]'s own doc comment (`WorkerScheduleScreen.kt`) already
+ * restates from [ago.chat.android.analytics.AnalyticsDateRangeControl] — a *third* copy of the same
+ * four-line conversion, which that doc comment's own reasoning calls overdue for a shared function once a
+ * third caller shows up. Left as a restatement here rather than fixed, since extracting it would touch two
+ * files outside this ticket's own scope (`docs/backlog/26-212-*.md` is this screen and its view model) for
+ * no behaviour change — flagged, not fixed, the same "report don't fix" call this ticket's own brief asks
+ * for any out-of-lane finding.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfirmedDateStripPickerDialog(
+    initialDate: String,
+    onDismiss: () -> Unit,
+    onPicked: (String) -> Unit,
+) {
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = epochMillisAtUtcMidnight(initialDate))
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    pickerState.selectedDateMillis?.let { onPicked(localDateAtUtcMidnight(it)) }
+                    onDismiss()
+                },
+            ) {
+                Text(text = stringResource(R.string.analytics_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.analytics_dialog_cancel))
+            }
+        },
+    ) {
+        DatePicker(state = pickerState)
+    }
+}
+
+/** [DatePicker] speaks in UTC-midnight epoch millis regardless of the device's own zone — its own
+ * documented contract, the identical pair [ago.chat.android.bookings.SingleDatePickerField]'s own doc
+ * comment already restates a copy of (see [ConfirmedDateStripPickerDialog]'s own doc comment on why this
+ * is a third restatement, not a shared import). */
+private fun epochMillisAtUtcMidnight(isoLocalDate: String): Long? =
+    runCatching {
+        LocalDate
+            .parse(isoLocalDate)
+            .atStartOfDay(ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+    }.getOrNull()
+
+private fun localDateAtUtcMidnight(epochMillis: Long): String =
+    Instant
+        .ofEpochMilli(epochMillis)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+        .toString()
 
 /** The muted month+year sub-label — same font, colour and weight as the service/duration sub-label
  * ([ConfirmedBookingRow]'s own `row.serviceName` `Text`), shared by the sticky slot and the incoming

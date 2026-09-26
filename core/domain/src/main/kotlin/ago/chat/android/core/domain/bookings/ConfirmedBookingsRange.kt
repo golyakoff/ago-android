@@ -20,6 +20,24 @@ public data class ConfirmedBookingsRange(
 private const val RANGE_HORIZON_DAYS = 6L
 
 /**
+ * `26-212`: the same seven-day window, now built around any [anchor] rather than only today — the strip
+ * became a *movable* window (tap the month/year header, jump to any day) rather than the hard seven-day
+ * cap [defaultConfirmedBookingsRange] used to be the only way to build one. Pure in [anchor] for the
+ * identical reason [defaultConfirmedBookingsRange]'s own doc comment already gives for [today] there: the
+ * one clock read (or, since `26-212`, the one date-picker read) happens at the call site,
+ * [ago.chat.android.bookings.ConfirmedBookingsViewModel], never here.
+ */
+public fun confirmedBookingsRange(anchor: LocalDate): ConfirmedBookingsRange {
+    val horizon = anchor.plusDays(RANGE_HORIZON_DAYS)
+    val dates =
+        generateSequence(anchor) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(horizon) }
+            .map { it.toString() }
+            .toList()
+    return ConfirmedBookingsRange(from = anchor.toString(), to = horizon.toString(), dates = dates)
+}
+
+/**
  * `26-51`: [today] is handed in rather than read here — the identical "logic is pure, the one clock
  * read happens at the call site" split [oldestDeadlineFirst] already draws for this package, and the
  * one this function's own caller,
@@ -29,16 +47,13 @@ private const val RANGE_HORIZON_DAYS = 6L
  * *UTC* calendar date a bare `Date` renders as, not the browser's own local date — so [today] is meant
  * to be `LocalDate.now(ZoneOffset.UTC)` here too, ported faithfully rather than "corrected" to a local
  * date this function has no way to know is more right.
+ *
+ * `26-212`: kept as the identical one-line "today is the default anchor" call [confirmedBookingsRange]
+ * itself is now defined in terms of — the view model's own `init`-time read still names this function
+ * rather than calling [confirmedBookingsRange] with today spelled out at the call site, since "the
+ * default range" is a concept worth its own name even though it is no longer its own implementation.
  */
-public fun defaultConfirmedBookingsRange(today: LocalDate): ConfirmedBookingsRange {
-    val horizon = today.plusDays(RANGE_HORIZON_DAYS)
-    val dates =
-        generateSequence(today) { it.plusDays(1) }
-            .takeWhile { !it.isAfter(horizon) }
-            .map { it.toString() }
-            .toList()
-    return ConfirmedBookingsRange(from = today.toString(), to = horizon.toString(), dates = dates)
-}
+public fun defaultConfirmedBookingsRange(today: LocalDate): ConfirmedBookingsRange = confirmedBookingsRange(today)
 
 /** One date strip chip's worth of information — [hasBookings] is the dot, computed against
  * [DayGroup.localDate] rather than re-fetched, since [range]'s own [ConfirmedBookingsRange.dates] and
