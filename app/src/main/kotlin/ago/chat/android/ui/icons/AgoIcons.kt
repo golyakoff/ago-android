@@ -378,42 +378,6 @@ public object AgoIcons {
         )
 
     /**
-     * `26-128`: originally the first-launch battery/autostart sheet's own header glyph — the one place
-     * that item kept a warning **triangle** at all, while every *circular* status badge elsewhere used
-     * [Exclamation] instead ("triangle-in-a-circle looks wrong"). `26-184` retires that last call site
-     * too: the sheet's header now draws [ErrorCircle], the same flat glyph the settings rows use, so no
-     * triangle remains anywhere in the app. Kept here, unused, as a faithful Feather `alert-triangle`
-     * transcription rather than deleted outright — a rounded-corner triangle (two arcs, three straight
-     * edges) around the identical stem-plus-dot mark [Exclamation] transcribes, restated here as part of
-     * one continuous icon rather than shared geometry between two `ImageVector`s.
-     */
-    public val Warning: ImageVector =
-        strokeIcon(
-            "AgoWarning",
-            // M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z
-            {
-                moveTo(10.29f, 3.86f)
-                lineTo(1.82f, 18f)
-                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, 1.71f, 3f)
-                horizontalLineToRelative(16.94f)
-                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, 1.71f, -3f)
-                lineTo(13.71f, 3.86f)
-                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = false, -3.42f, 0f)
-                close()
-            },
-            // M12 9v4
-            {
-                moveTo(12f, 9f)
-                verticalLineToRelative(4f)
-            },
-            // M12 17h.01
-            {
-                moveTo(12f, 17f)
-                lineToRelative(0.01f, 0f)
-            },
-        )
-
-    /**
      * `i-trash-forever` — the «Все» tab's own swipe-revealed destructive action (`26-90`). Material
      * Symbols' `delete_forever` **in shape** — a bin carrying a large X rather than the three vertical
      * rules of the ordinary `delete` — and **redrawn**, not imported: Material ships that glyph as a
@@ -585,7 +549,7 @@ public object AgoIcons {
      * `26-184`: the battery/autostart status glyph's own "needs attention" state (`SettingsScreen`'s
      * `StatusGlyph`) and [ago.chat.android.shell.BatteryAwarenessSheet]'s own header glyph, both
      * replacing an earlier treatment this item retires — the coloured-circle-badge-plus-[Exclamation] on
-     * the settings rows, and the bare warning triangle ([Warning]) on the sheet header. Modelled on
+     * the settings rows, and the bare warning triangle the sheet header used to draw. Modelled on
      * Material Symbols Outlined `error` — a circle stroke enclosing a stem-and-dot exclamation mark, at
      * the same `circle(12, 12, 9)` proportion [CheckCircle] above uses, so the two read as one flat
      * family at 24dp. The stem-and-dot interior is [Exclamation]'s own convention (a real stroke plus a
