@@ -2,14 +2,19 @@ package ago.chat.android.channels
 
 import ago.chat.android.R
 import ago.chat.android.bookings.LoadingBody
+import ago.chat.android.core.domain.channels.VkReveal
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,16 +36,22 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -52,10 +63,10 @@ import java.time.format.DateTimeFormatter
  * "one resource, two call sites" shape [ago.chat.android.channels.InstallWidgetScreen]'s own
  * `channels_install_title` already uses.
  *
- * [showVkReveal] is read here but the reveal panel itself is not built until `C3` — that slice edits
- * this file to add the region gated on it (`docs/design/tenant-channels-android.md` §5.1: "slice 3
- * edits `ChannelConnectScreen.kt`… so slice 3 depends on slice 1's file"). Telegram sets it `false` now;
- * MAX will too in `C2`.
+ * `26-190`/`C3`: [showVkReveal] now gates the reveal panel [ConnectedBody] draws
+ * (`docs/design/tenant-channels-android.md` §5.1 had named this file as the one `C3` would come back to
+ * edit, exactly as it did). Telegram and MAX both set it `false`; only [VkChannelViewModel]'s own config
+ * sets it `true`.
  */
 internal data class ChannelConnectConfig(
     @StringRes val titleRes: Int,
@@ -195,8 +206,8 @@ private fun DisconnectedBody(
 }
 
 /** `connected == true` — the badge/since/checked block every one of the three connected sub-states
- * (verified/unreachable/refused) shares, then a ghost disconnect action behind a confirm dialog. The VK
- * reveal panel is not built here; see [ChannelConnectConfig]'s own doc comment for why. */
+ * (verified/unreachable/refused) shares, then — for VK alone — the shown-once reveal region, then a ghost
+ * disconnect action behind a confirm dialog. */
 @Composable
 private fun ConnectedBody(
     state: ChannelConnectUiState.Connected,
@@ -233,6 +244,19 @@ private fun ConnectedBody(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // `26-190`/`C3`: VK's own shown-once reveal - drawn only for VK ([ChannelConnectConfig.showVkReveal])
+        // and only below the badge/since/checked block every connected sub-state already shares
+        // (`docs/design/tenant-channels-android.md` §2.3). A reload or a second device genuinely has
+        // nothing to show ([ChannelConnectUiState.Connected.reveal]'s own doc comment), so that case gets
+        // its own honest hint rather than a silently-omitted panel.
+        if (config.showVkReveal) {
+            if (state.reveal != null) {
+                VkRevealPanel(reveal = state.reveal)
+            } else {
+                InlineAlert(text = stringResource(R.string.channels_vk_secrets_shown_once_hint))
+            }
+        }
 
         OutlinedButton(onClick = { confirmingDisconnect = true }, enabled = !state.disconnecting) {
             Text(
@@ -277,6 +301,101 @@ private fun ConnectedBody(
                 }
             },
         )
+    }
+}
+
+/**
+ * `26-190`/`C3`: VK's own shown-once `callbackUrl`/`webhookSecret` - a secret **AGO generated for the
+ * shop**, needed by a human pasting it into VK's own community Callback API settings
+ * ([VkReveal]'s own doc comment). A neutral surface (not the danger-tinted [InlineAlert]) since this
+ * panel is informational, never a refusal or a wait-and-retry notice.
+ */
+@Composable
+private fun VkRevealPanel(reveal: VkReveal) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = stringResource(R.string.channels_vk_setup_title), style = MaterialTheme.typography.titleSmall)
+            Text(text = stringResource(R.string.channels_vk_setup_body), style = MaterialTheme.typography.bodySmall)
+            VkRevealField(
+                value = reveal.callbackUrl,
+                copyLabelRes = R.string.channels_vk_copy_callback_url,
+                copiedLabelRes = R.string.channels_vk_callback_url_copied,
+            )
+            VkRevealField(
+                value = reveal.webhookSecret,
+                copyLabelRes = R.string.channels_vk_copy_webhook_secret,
+                copiedLabelRes = R.string.channels_vk_webhook_secret_copied,
+            )
+        }
+    }
+}
+
+/**
+ * One reveal value: a read-only monospace field, a primary **Копировать** action and a secondary
+ * **Поделиться** one — the identical [LocalClipboard]/[ClipEntry] and [Intent.ACTION_SEND]/
+ * `createChooser` shapes [ago.chat.android.team.InviteColleagueSheet]'s own `InviteResultBody` already
+ * establishes for its invite link, restated here rather than shared since that composable is private to
+ * its own file. The clip label is an OS-level implementation detail (visible, if at all, only in system
+ * clipboard history), never user-facing copy, so it needs no string resource - the same reasoning that
+ * composable's own doc comment gives for `"invite-link"`.
+ */
+@Composable
+private fun VkRevealField(
+    value: String,
+    @StringRes copyLabelRes: Int,
+    @StringRes copiedLabelRes: Int,
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copied by rememberSaveable(value) { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                scope.launch {
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("ago-channel-secret", value)))
+                    copied = true
+                }
+            }) {
+                Text(text = stringResource(copyLabelRes))
+            }
+            OutlinedButton(onClick = {
+                val shareIntent =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, value)
+                    }
+                try {
+                    context.startActivity(Intent.createChooser(shareIntent, null))
+                } catch (missing: ActivityNotFoundException) {
+                    // A device with no share target at all, the only way this throws - the value is still
+                    // on screen, copyable, either way (`InviteColleagueSheet`'s own identical posture).
+                }
+            }) {
+                Text(text = stringResource(R.string.channels_vk_share))
+            }
+        }
+        if (copied) {
+            Text(
+                text = stringResource(copiedLabelRes),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

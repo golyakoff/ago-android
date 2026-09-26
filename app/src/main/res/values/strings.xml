@@ -1195,6 +1195,28 @@
          disconnecting and connecting again with a fresh one, never an edit. -->
     <string name="channels_telegram_disconnect_dialog_body">Отключить Telegram-бота? Чтобы подключить его снова, потребуется новый токен — прежний ввести повторно нельзя.</string>
 
+    <!-- `26-190`/`C3`: Каналы → VK - the third and last token channel, plus its own shown-once
+         callbackUrl/webhookSecret reveal (`adr/0069`'s one named exception: a secret AGO generated for
+         the shop, not the shop's own token, so it is shown once and never round-trips again). -->
+    <string name="channels_vk_title">VK</string>
+    <string name="channels_vk_not_connected_body">Подключите токен сообщества VK, чтобы получать сообщения от клиентов в этом канале.</string>
+    <string name="channels_vk_token_label">Токен сообщества</string>
+    <string name="channels_vk_token_hint">Ключ доступа сообщества с правами Callback API</string>
+    <!-- The token never round-trips (`adr/0069`); disconnecting also invalidates the callback URL and
+         webhook secret this channel minted for the shop, so reconnecting gets a fresh pair too. -->
+    <string name="channels_vk_disconnect_dialog_body">Отключить сообщество VK? Чтобы подключить его снова, потребуется новый токен — прежний ввести повторно нельзя. Callback URL и секрет вебхука тоже будут сброшены.</string>
+    <string name="channels_vk_setup_title">Настройка VK Callback API</string>
+    <string name="channels_vk_setup_body">Скопируйте Callback URL и секрет вебхука и вставьте их в настройки Callback API вашего сообщества VK.</string>
+    <string name="channels_vk_copy_callback_url">Скопировать Callback URL</string>
+    <string name="channels_vk_copy_webhook_secret">Скопировать секрет вебхука</string>
+    <string name="channels_vk_callback_url_copied">Callback URL скопирован</string>
+    <string name="channels_vk_webhook_secret_copied">Секрет вебхука скопирован</string>
+    <string name="channels_vk_share">Поделиться</string>
+    <!-- Shown instead of the reveal panel whenever the connect response that carried it is not this
+         session's own - a reload, or a second operator/device opening an already-connected screen
+         (`docs/design/tenant-channels-android.md` §2.3's own edge case: never a silently omitted panel). -->
+    <string name="channels_vk_secrets_shown_once_hint">Callback URL и секрет вебхука показываются только один раз, сразу после подключения. Чтобы получить их снова, отключите канал и подключите сообщество заново с новым токеном.</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity
