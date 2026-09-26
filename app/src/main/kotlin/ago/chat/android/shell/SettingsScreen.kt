@@ -5,6 +5,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.identity.Tenancy
 import ago.chat.android.core.domain.identity.TenancyListing
 import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.AutostartUiState
 import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.NotificationSettingsRoute
 import ago.chat.android.devices.PushAvailability
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -106,8 +108,8 @@ public fun SettingsRoute(
     val pushAvailability by viewModel.pushAvailability.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
-    val autostartStatus by viewModel.autostartStatus.collectAsStateWithLifecycle()
-    val autostartBlockedAfterReboot by viewModel.autostartBlockedAfterReboot.collectAsStateWithLifecycle()
+    val autostartUiState by viewModel.autostartUiState.collectAsStateWithLifecycle()
+    val autostartManuallyConfirmed by viewModel.autostartManuallyConfirmed.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -171,10 +173,12 @@ public fun SettingsRoute(
         batteryUnrestricted = batteryUnrestricted,
         onOpenBatterySettings = { openBatteryOptimizationSettings(context) },
         onOpenAppInfoSettings = { openAppInfoSettings(context) },
-        autostartStatus = autostartStatus,
-        autostartBlockedAfterReboot = autostartBlockedAfterReboot,
+        autostartUiState = autostartUiState,
+        autostartManuallyConfirmed = autostartManuallyConfirmed,
         autostartSettingsTarget = viewModel.autostartSettingsTarget,
         onOpenAutostartSettings = { openAutostartSettings(context, viewModel.autostartSettingsTarget) },
+        onConfirmAutostartManually = viewModel::confirmAutostartManually,
+        onClearAutostartManualConfirmation = viewModel::clearManualAutostartConfirmation,
         onBack = onBack,
     )
 }
@@ -221,12 +225,18 @@ internal fun SettingsScreen(
     batteryUnrestricted: Boolean = true,
     onOpenBatterySettings: () -> Unit = {},
     onOpenAppInfoSettings: () -> Unit = {},
-    autostartStatus: DeviceModeStatus = DeviceModeStatus.Ok,
-    // `26-129`: whether the after-the-fact inference found this boot was reached without autostart. Defaulted
-    // to `false` like every trailing parameter above - "nothing observed", the safe non-warning default.
-    autostartBlockedAfterReboot: Boolean = false,
+    // `26-187`: defaults to the safe, non-warning green - the identical "nothing to flag" convention this
+    // signature's own comment above already states, restated for the three-state type that replaced the
+    // old binary [DeviceModeStatus] here.
+    autostartUiState: AutostartUiState = AutostartUiState.Confirmed,
+    // `26-187`: whether the green above is *this operator's own claim* rather than a real boot observation -
+    // see [SettingsViewModel.autostartManuallyConfirmed]'s own doc comment for why the expanded card needs
+    // this distinction the collapsed row's glyph deliberately does not draw.
+    autostartManuallyConfirmed: Boolean = false,
     autostartSettingsTarget: AutostartSettingsTarget = AutostartSettingsTarget.None,
     onOpenAutostartSettings: () -> Unit = {},
+    onConfirmAutostartManually: () -> Unit = {},
+    onClearAutostartManualConfirmation: () -> Unit = {},
 ) {
     val switchableSites = (tenancies as? TenancyListing.Known)?.tenancies.orEmpty()
     // `26-128`: each row's own inline expand/collapse - the identical `rememberSaveable` boolean shape
@@ -426,11 +436,13 @@ internal fun SettingsScreen(
                 }
                 item { HorizontalDivider() }
 
-                // `26-128`: «Автозапуск» - see [AutostartAdvisor]'s own doc comment for why [autostartStatus]
-                // is a recommendation this row must never present as a confirmed reading, unlike the
-                // «Режим работы» row above it. `settings_autostart_limitation_note` in the expanded card
-                // below is what keeps that distinction visible to the operator, not merely to a future
-                // reader of this file's own comments.
+                // `26-128`/`26-187`: «Автозапуск» - see [AutostartAdvisor]'s own doc comment for why this
+                // row can never present a *verified* reading the way «Режим работы» above does.
+                // `settings_autostart_limitation_note` in the expanded card below is what keeps that
+                // distinction visible to the operator, not merely to a future reader of this file's own
+                // comments. `26-187` replaces the old binary title (a false «Выключено» a restrictive-OEM
+                // guess asserted even for an operator who had already turned autostart on) with
+                // [AutostartUiState]'s own three-state truth - see that type's own doc comment for the bug.
                 item {
                     Row(
                         modifier =
@@ -440,12 +452,12 @@ internal fun SettingsScreen(
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        StatusGlyph(status = autostartStatus)
+                        AutostartStatusGlyph(state = autostartUiState)
                         val titleRes =
-                            if (autostartStatus == DeviceModeStatus.Ok) {
-                                R.string.settings_autostart_title_ok
-                            } else {
-                                R.string.settings_autostart_title_needs_attention
+                            when (autostartUiState) {
+                                AutostartUiState.Confirmed -> R.string.settings_autostart_title_ok
+                                AutostartUiState.Recommended -> R.string.settings_autostart_title_recommended
+                                AutostartUiState.Blocked -> R.string.settings_autostart_title_blocked
                             }
                         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(
@@ -453,10 +465,10 @@ internal fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             // `26-129`: the specific after-the-fact reason, shown inline on the row (not only
-                            // in the expanded card) so an operator sees *why* it is orange without tapping.
-                            // Only when the inference actually observed a blocked reboot - the manufacturer
-                            // guess never sets this, so it never contradicts `settings_autostart_limitation_note`.
-                            if (autostartBlockedAfterReboot) {
+                            // in the expanded card) so an operator sees *why* it is red without tapping. Only
+                            // for the one real, unfavourable observation this row can make - a guess never
+                            // reaches [AutostartUiState.Blocked] on its own (see [resolveAutostartUiState]).
+                            if (autostartUiState == AutostartUiState.Blocked) {
                                 Text(
                                     text = stringResource(R.string.settings_autostart_blocked_after_reboot),
                                     style = MaterialTheme.typography.bodyMedium,
@@ -502,6 +514,47 @@ internal fun SettingsScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                            // `26-187`: the manual-confirm control - shown only in [AutostartUiState
+                            // .Recommended] (a correctly-configured operator's own way to clear the neutral
+                            // guess without waiting for a reboot), or its own undo once that claim is what is
+                            // currently holding the row green ([autostartManuallyConfirmed], not a boot
+                            // observation - see that flag's own doc comment on [SettingsViewModel]). The
+                            // checkbox-plus-label row mirrors [BatteryAwarenessSheet]'s own
+                            // "don't show again" shape rather than inventing a new one.
+                            if (autostartUiState == AutostartUiState.Recommended) {
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 14.dp)
+                                            .clickable(onClick = onConfirmAutostartManually),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(checked = false, onCheckedChange = { if (it) onConfirmAutostartManually() })
+                                    Text(text = stringResource(R.string.settings_autostart_manual_confirm_checkbox))
+                                }
+                            } else if (autostartManuallyConfirmed) {
+                                Column(modifier = Modifier.padding(top = 14.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.settings_autostart_manual_confirmed_note),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 8.dp)
+                                                .clickable(onClick = onClearAutostartManualConfirmation),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Checkbox(
+                                            checked = true,
+                                            onCheckedChange = { if (!it) onClearAutostartManualConfirmation() },
+                                        )
+                                        Text(text = stringResource(R.string.settings_autostart_manual_confirm_undo))
+                                    }
+                                }
                             }
                             Text(
                                 text = stringResource(R.string.settings_autostart_limitation_note),
@@ -604,6 +657,34 @@ private fun StatusGlyph(status: DeviceModeStatus) {
         }
     // Decorative: the row's own visible text already states the full sentence
     // ("Режим работы: ..."/"Автозапуск: ...") this glyph is only a colour cue for.
+    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+}
+
+/**
+ * `26-187`: «Автозапуск»'s own status glyph, drawn separately from [StatusGlyph] rather than widening that
+ * function to accept a third state - «Режим работы» reads a real system value and must never be able to
+ * reach a state it has no business occupying (this item's own brief states that constraint explicitly), so
+ * [DeviceModeStatus]'s two-state shape stays exactly as narrow as that row's own real answer. [AutostartUiState
+ * .Recommended] tints [MaterialTheme.colorScheme.onSurfaceVariant] - the same muted, non-alarming grey this
+ * screen's own captions already use - not `agoStatusColors().warning`/`.dangerIcon`: a manufacturer guess
+ * with no observation either way is not a fact worth drawing in an attention colour.
+ */
+@Composable
+private fun AutostartStatusGlyph(state: AutostartUiState) {
+    val icon: ImageVector =
+        when (state) {
+            AutostartUiState.Confirmed -> AgoIcons.CheckCircle
+            AutostartUiState.Recommended -> AgoIcons.InfoCircle
+            AutostartUiState.Blocked -> AgoIcons.ErrorCircle
+        }
+    val tint =
+        when (state) {
+            AutostartUiState.Confirmed -> MaterialTheme.colorScheme.tertiary
+            AutostartUiState.Recommended -> MaterialTheme.colorScheme.onSurfaceVariant
+            AutostartUiState.Blocked -> agoStatusColors().dangerIcon
+        }
+    // Decorative: the row's own visible text already states the full sentence ("Автозапуск: ...") this
+    // glyph is only a colour cue for - the identical reasoning [StatusGlyph] states for its own icon.
     Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
 }
 

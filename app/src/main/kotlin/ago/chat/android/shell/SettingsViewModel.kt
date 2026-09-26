@@ -7,12 +7,14 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.devices.AutostartAdvisor
 import ago.chat.android.devices.AutostartBootSignal
 import ago.chat.android.devices.AutostartInferenceReader
+import ago.chat.android.devices.AutostartManualConfirmStore
 import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.AutostartUiState
 import ago.chat.android.devices.BatteryOptimizationChecker
-import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
+import ago.chat.android.devices.resolveAutostartUiState
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.AppLanguagePreferences
@@ -72,6 +74,7 @@ public class SettingsViewModel
         private val batteryOptimizationChecker: BatteryOptimizationChecker,
         private val autostartAdvisor: AutostartAdvisor,
         private val autostartInferenceReader: AutostartInferenceReader,
+        private val autostartManualConfirmStore: AutostartManualConfirmStore,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         public val themeMode: StateFlow<ThemeMode> =
@@ -123,25 +126,34 @@ public class SettingsViewModel
          * screen is backgrounded. */
         public val batteryUnrestricted: StateFlow<Boolean> = mutableBatteryUnrestricted.asStateFlow()
 
-        private val mutableAutostartStatus = MutableStateFlow(autostartAdvisor.recommendation())
+        private val mutableAutostartUiState =
+            MutableStateFlow(
+                resolveAutostartUiState(
+                    recommendation = autostartAdvisor.recommendation(),
+                    bootSignal = AutostartBootSignal.NoSignal,
+                    manuallyConfirmed = false,
+                ),
+            )
 
-        /** `26-128`/`26-129`: Settings → «Автозапуск»'s own status. Its initial value is `26-128`'s pure
-         * manufacturer guess ([AutostartAdvisor.recommendation], constant for the life of the process); once
-         * [refreshAutostartInference] resolves `26-129`'s after-the-fact signal it is refined to
-         * [DeviceModeStatus.NeedsAttention] when a reboot was blocked, or to [DeviceModeStatus.Ok] when a
-         * reboot demonstrably autostarted (overriding a restrictive OEM's guess so a phone on which the
-         * operator already enabled autostart is not falsely warned). A `StateFlow`, unlike `26-128`'s plain
-         * `val`, precisely because it now has a second, disk-backed input that resolves asynchronously. */
-        public val autostartStatus: StateFlow<DeviceModeStatus> = mutableAutostartStatus.asStateFlow()
+        /** `26-128`/`26-129`/`26-187`: Settings → «Автозапуск»'s own status, [resolveAutostartUiState]'s own
+         * precedence over three inputs - `26-128`'s manufacturer guess ([AutostartAdvisor.recommendation],
+         * constant for the life of the process), `26-129`'s after-the-fact boot signal, and `26-187`'s own
+         * persisted manual confirmation. The initial value assumes [AutostartBootSignal.NoSignal] and no
+         * manual confirmation - the same "nothing observed yet" starting point `26-129`'s own initial value
+         * already was - until [reloadAutostartUiState] (`init`, then every `ON_RESUME`) resolves both disk
+         * reads and replaces it. A `StateFlow`, not a plain `val`, for the identical reason `26-129` already
+         * gives: two of its three inputs resolve asynchronously. */
+        public val autostartUiState: StateFlow<AutostartUiState> = mutableAutostartUiState.asStateFlow()
 
-        private val mutableAutostartBlockedAfterReboot = MutableStateFlow(false)
+        private val mutableAutostartManuallyConfirmed = MutableStateFlow(false)
 
-        /** `26-129`: `true` only when the after-the-fact inference is [AutostartBootSignal.Blocked] - the
-         * phone rebooted and the app's `BOOT_COMPLETED` receiver never ran. `SettingsScreen` reads this to
-         * show the specific reason («не запустился автоматически после последней перезагрузки») rather than
-         * `26-128`'s generic recommendation text. Never `true` on the manufacturer guess alone: a guess is
-         * not an observation. */
-        public val autostartBlockedAfterReboot: StateFlow<Boolean> = mutableAutostartBlockedAfterReboot.asStateFlow()
+        /** `26-187`: the *raw* persisted flag, separate from [autostartUiState] - that property already
+         * collapses "boot-confirmed" and "manually confirmed" into the identical green [AutostartUiState
+         * .Confirmed], by design (an operator reading the row need not care which kind of evidence turned it
+         * green). `SettingsScreen`'s expanded card does care, for exactly one thing: whether to offer the
+         * "Напоминать снова" undo control, which only makes sense once *this* operator's own claim, not a
+         * boot observation, is what is currently holding the row green. */
+        public val autostartManuallyConfirmed: StateFlow<Boolean> = mutableAutostartManuallyConfirmed.asStateFlow()
 
         /** `26-128`: where «Настройки автозапуска» leads - `SettingsRoute`'s own click handler reads this
          * to build the `Intent`, since building it needs a `Context` this `ViewModel` may never hold
@@ -203,31 +215,57 @@ public class SettingsViewModel
         }
 
         /**
-         * `26-129`: resolves the after-the-fact autostart signal and folds it onto the manufacturer guess.
-         * Called from `init` and again on `SettingsRoute`'s own `ON_RESUME`, since opening «Настройки
-         * автозапуска» and coming back is exactly the moment the operator may have changed the setting the
-         * *next* reboot will reflect. The disk read runs on [ioDispatcher]; the three outcomes map to:
-         * [AutostartBootSignal.Blocked] → orange + specific reason; [AutostartBootSignal.AutostartConfirmed]
-         * → green, overriding the OEM guess with positive proof; [AutostartBootSignal.NoSignal] → the
-         * `26-128` manufacturer guess, unchanged (this signal only ever *refines*, never invents, a warning).
+         * `26-129`/`26-187`: resolves the after-the-fact boot signal and the persisted manual confirmation,
+         * then folds both onto the manufacturer guess via [resolveAutostartUiState]. Called from `init` and
+         * again on `SettingsRoute`'s own `ON_RESUME`, since opening «Настройки автозапуска» and coming back
+         * is exactly the moment the operator may have changed the setting the *next* reboot will reflect.
+         *
+         * **`26-187`'s own precedence, enforced here rather than merely described.** A [AutostartBootSignal
+         * .Blocked] observation clears the manual-confirmation flag on disk before this function ever reads
+         * it back - an operator's earlier "it's on" claim cannot outlive a reboot that just proved otherwise,
+         * and leaving the flag set would let it silently resurrect the wrong state the next time this same
+         * boot's signal is read again (it does not itself expire).
          */
-        public fun refreshAutostartInference() {
-            viewModelScope.launch {
-                val signal = withContext(ioDispatcher) { autostartInferenceReader.currentSignal() }
-                when (signal) {
-                    AutostartBootSignal.Blocked -> {
-                        mutableAutostartStatus.value = DeviceModeStatus.NeedsAttention
-                        mutableAutostartBlockedAfterReboot.value = true
-                    }
-                    AutostartBootSignal.AutostartConfirmed -> {
-                        mutableAutostartStatus.value = DeviceModeStatus.Ok
-                        mutableAutostartBlockedAfterReboot.value = false
-                    }
-                    AutostartBootSignal.NoSignal -> {
-                        mutableAutostartStatus.value = autostartAdvisor.recommendation()
-                        mutableAutostartBlockedAfterReboot.value = false
-                    }
+        private suspend fun reloadAutostartUiState() {
+            val signal = withContext(ioDispatcher) { autostartInferenceReader.currentSignal() }
+            val manuallyConfirmed =
+                if (signal == AutostartBootSignal.Blocked) {
+                    withContext(ioDispatcher) { autostartManualConfirmStore.setConfirmed(false) }
+                    false
+                } else {
+                    withContext(ioDispatcher) { autostartManualConfirmStore.read() }
                 }
+            mutableAutostartUiState.value =
+                resolveAutostartUiState(
+                    recommendation = autostartAdvisor.recommendation(),
+                    bootSignal = signal,
+                    manuallyConfirmed = manuallyConfirmed,
+                )
+            mutableAutostartManuallyConfirmed.value = manuallyConfirmed
+        }
+
+        public fun refreshAutostartInference() {
+            viewModelScope.launch { reloadAutostartUiState() }
+        }
+
+        /** `26-187`: the expanded card's own manual-confirm checkbox, shown only while [autostartUiState] is
+         * [AutostartUiState.Recommended] - `SettingsScreen`'s own guard, not this function's, since setting
+         * the flag is harmless from any state and the guard belongs where the operator actually sees a
+         * control to trigger it from. */
+        public fun confirmAutostartManually() {
+            viewModelScope.launch {
+                withContext(ioDispatcher) { autostartManualConfirmStore.setConfirmed(true) }
+                reloadAutostartUiState()
+            }
+        }
+
+        /** `26-187`: the expanded card's own «Напоминать снова» undo, shown only while [autostartManuallyConfirmed]
+         * is `true` - see that property's own doc comment for why the row's *own* claim, not a boot
+         * observation, is the one case this undo makes sense for. */
+        public fun clearManualAutostartConfirmation() {
+            viewModelScope.launch {
+                withContext(ioDispatcher) { autostartManualConfirmStore.setConfirmed(false) }
+                reloadAutostartUiState()
             }
         }
 

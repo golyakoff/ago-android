@@ -17,7 +17,9 @@ import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.devices.AutostartAdvisor
 import ago.chat.android.devices.AutostartBootSignal
 import ago.chat.android.devices.AutostartInferenceReader
+import ago.chat.android.devices.AutostartManualConfirmStore
 import ago.chat.android.devices.AutostartSettingsTarget
+import ago.chat.android.devices.AutostartUiState
 import ago.chat.android.devices.BatteryOptimizationChecker
 import ago.chat.android.devices.DeviceModeStatus
 import ago.chat.android.devices.DeviceRegistrar
@@ -303,8 +305,11 @@ class SettingsViewModelTest {
     // ----------------------------------------------------------------------------------- autostart
 
     @Test
-    fun `with no boot signal, autostartStatus falls back to the manufacturer guess and never warns of a blocked reboot`() =
+    fun `with no boot signal and no manual confirmation, a restrictive guess reads Recommended - never a false Off`() =
         runTest(dispatcher) {
+            // `26-187`'s own fails-before case: a `DeviceModeStatus.NeedsAttention` guess with nothing else
+            // to go on used to surface as the old binary "Off" - it must now land on the neutral
+            // `Recommended` state instead, never `Blocked` (which would still be a false claim of fact).
             val advisor =
                 FakeAutostartAdvisor(
                     status = DeviceModeStatus.NeedsAttention,
@@ -317,8 +322,8 @@ class SettingsViewModelTest {
                 )
             advanceUntilIdle()
 
-            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus.value)
-            assertEquals(false, viewModel.autostartBlockedAfterReboot.value)
+            assertEquals(AutostartUiState.Recommended, viewModel.autostartUiState.value)
+            assertEquals(false, viewModel.autostartManuallyConfirmed.value)
             assertEquals(
                 AutostartSettingsTarget.OemComponent("com.example.oem", "com.example.oem.AutostartActivity"),
                 viewModel.autostartSettingsTarget,
@@ -326,9 +331,22 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `a blocked boot signal turns the row orange and flags the specific reason`() =
+    fun `with no boot signal, a non-restrictive guess reads Confirmed`() =
         runTest(dispatcher) {
-            // Even a manufacturer the guess considers fine (Ok) must go orange once a reboot is observed to
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.Ok),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.NoSignal),
+                )
+            advanceUntilIdle()
+
+            assertEquals(AutostartUiState.Confirmed, viewModel.autostartUiState.value)
+        }
+
+    @Test
+    fun `a blocked boot signal turns the row red and flags the specific reason`() =
+        runTest(dispatcher) {
+            // Even a manufacturer the guess considers fine (Ok) must go red once a reboot is observed to
             // have been blocked - the observation overrides the guess, never the other way round.
             val viewModel =
                 viewModelWith(
@@ -337,8 +355,7 @@ class SettingsViewModelTest {
                 )
             advanceUntilIdle()
 
-            assertEquals(DeviceModeStatus.NeedsAttention, viewModel.autostartStatus.value)
-            assertEquals(true, viewModel.autostartBlockedAfterReboot.value)
+            assertEquals(AutostartUiState.Blocked, viewModel.autostartUiState.value)
         }
 
     @Test
@@ -353,8 +370,69 @@ class SettingsViewModelTest {
                 )
             advanceUntilIdle()
 
-            assertEquals(DeviceModeStatus.Ok, viewModel.autostartStatus.value)
-            assertEquals(false, viewModel.autostartBlockedAfterReboot.value)
+            assertEquals(AutostartUiState.Confirmed, viewModel.autostartUiState.value)
+        }
+
+    @Test
+    fun `confirmAutostartManually turns a Recommended guess green and persists the claim`() =
+        runTest(dispatcher) {
+            val manualConfirmStore = FakeAutostartManualConfirmStore()
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.NeedsAttention),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.NoSignal),
+                    autostartManualConfirmStore = manualConfirmStore,
+                )
+            advanceUntilIdle()
+            assertEquals(AutostartUiState.Recommended, viewModel.autostartUiState.value)
+
+            viewModel.confirmAutostartManually()
+            advanceUntilIdle()
+
+            assertEquals(AutostartUiState.Confirmed, viewModel.autostartUiState.value)
+            assertEquals(true, viewModel.autostartManuallyConfirmed.value)
+            assertEquals(true, manualConfirmStore.confirmed)
+        }
+
+    @Test
+    fun `clearManualAutostartConfirmation drops back to the recommendation`() =
+        runTest(dispatcher) {
+            val manualConfirmStore = FakeAutostartManualConfirmStore(initial = true)
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.NeedsAttention),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.NoSignal),
+                    autostartManualConfirmStore = manualConfirmStore,
+                )
+            advanceUntilIdle()
+            assertEquals(AutostartUiState.Confirmed, viewModel.autostartUiState.value)
+
+            viewModel.clearManualAutostartConfirmation()
+            advanceUntilIdle()
+
+            assertEquals(AutostartUiState.Recommended, viewModel.autostartUiState.value)
+            assertEquals(false, viewModel.autostartManuallyConfirmed.value)
+            assertEquals(false, manualConfirmStore.confirmed)
+        }
+
+    @Test
+    fun `a Blocked observation overrides AND clears an existing manual confirmation`() =
+        runTest(dispatcher) {
+            // `26-187`'s own precedence: a real, unfavourable observation cannot be shrugged off by an
+            // earlier "it's on" claim, and the claim itself must not survive to silently resurrect the wrong
+            // state on the next read.
+            val manualConfirmStore = FakeAutostartManualConfirmStore(initial = true)
+            val viewModel =
+                viewModelWith(
+                    autostartAdvisor = FakeAutostartAdvisor(status = DeviceModeStatus.NeedsAttention),
+                    autostartInferenceReader = FakeAutostartInferenceReader(AutostartBootSignal.Blocked),
+                    autostartManualConfirmStore = manualConfirmStore,
+                )
+            advanceUntilIdle()
+
+            assertEquals(AutostartUiState.Blocked, viewModel.autostartUiState.value)
+            assertEquals(false, viewModel.autostartManuallyConfirmed.value)
+            assertEquals(false, manualConfirmStore.confirmed)
         }
 
     // ------------------------------------------------------------------------------------- fakes
@@ -370,6 +448,7 @@ class SettingsViewModelTest {
         batteryOptimizationChecker: BatteryOptimizationChecker = FakeBatteryOptimizationChecker(),
         autostartAdvisor: AutostartAdvisor = FakeAutostartAdvisor(),
         autostartInferenceReader: AutostartInferenceReader = FakeAutostartInferenceReader(),
+        autostartManualConfirmStore: AutostartManualConfirmStore = FakeAutostartManualConfirmStore(),
     ): SettingsViewModel =
         SettingsViewModel(
             identity = identity,
@@ -382,6 +461,7 @@ class SettingsViewModelTest {
             batteryOptimizationChecker = batteryOptimizationChecker,
             autostartAdvisor = autostartAdvisor,
             autostartInferenceReader = autostartInferenceReader,
+            autostartManualConfirmStore = autostartManualConfirmStore,
             ioDispatcher = dispatcher,
         )
 
@@ -418,6 +498,22 @@ class SettingsViewModelTest {
         private val signal: AutostartBootSignal = AutostartBootSignal.NoSignal,
     ) : AutostartInferenceReader {
         override suspend fun currentSignal(): AutostartBootSignal = signal
+    }
+
+    /** `26-187`: an in-memory stand-in for [AutostartManualConfirmStore] - [confirmed] starts at [initial]
+     * and only ever changes through [setConfirmed], the identical "starts fixed, only this class's own
+     * write method moves it" shape [FakeBatteryOptimizationChecker] above already is for its own port. */
+    private class FakeAutostartManualConfirmStore(
+        initial: Boolean = false,
+    ) : AutostartManualConfirmStore {
+        var confirmed: Boolean = initial
+            private set
+
+        override suspend fun read(): Boolean = confirmed
+
+        override suspend fun setConfirmed(confirmed: Boolean) {
+            this.confirmed = confirmed
+        }
     }
 
     /** `26-18`: [SignInViewModelTest][ago.chat.android.signin.SignInViewModelTest]'s own

@@ -1229,12 +1229,18 @@
     <string name="settings_app_suspend_note">На некоторых телефонах (например, Xiaomi/MIUI) в «Сведениях о приложении» есть параметр «Приостановить работу приложения, если оно не используется» — рекомендуется его выключить, иначе уведомления могут приходить с задержкой или не приходить. Android не даёт способа прочитать или открыть этот параметр напрямую, поэтому это рекомендация, а не проверенный факт.</string>
     <string name="settings_app_info_action">Сведения о приложении</string>
 
-    <!-- `26-128`: «Автозапуск» never claims a verified status - see `AutostartAdvisor`'s own doc comment
-         for why Android gives this app no way to read it. `settings_autostart_title_*` still speaks in
-         the same on/off shape `settings_battery_mode_title_*` above does, but `_recommendation_label` and
-         `_limitation_note` below are what keep the expanded card honest about what that value actually is. -->
+    <!-- `26-128`/`26-187`: «Автозапуск» never claims a verified status - see `AutostartAdvisor`'s own doc
+         comment for why Android gives this app no way to read it. `26-128` originally spoke in the same
+         on/off shape `settings_battery_mode_title_*` above does (`Включено`/`Выключено`) - `26-187` retires
+         that: a restrictive-OEM guess with no real observation is not a fact, and `_needs_attention`'s own
+         «Выключено» asserted exactly that fact for an operator who had already turned autostart on. Three
+         titles now match `AutostartUiState`'s own three states one-to-one - `_ok` (green, unchanged),
+         `_recommended` (neutral - "please check", never "off"), `_blocked` (red - the one real observation
+         this row can make). `_recommendation_label` and `_limitation_note` below still keep the expanded
+         card honest about what the neutral state actually is. -->
     <string name="settings_autostart_title_ok">Автозапуск: Включено</string>
-    <string name="settings_autostart_title_needs_attention">Автозапуск: Выключено</string>
+    <string name="settings_autostart_title_recommended">Автозапуск: рекомендуем проверить</string>
+    <string name="settings_autostart_title_blocked">Автозапуск: не запускается</string>
     <!-- `26-129`: the after-the-fact inference's own specific reason - shown only when the app observed that
          the phone rebooted but its BOOT_COMPLETED receiver never ran, evidence the OS blocked autostart. Unlike
          `settings_autostart_*` above (a manufacturer guess), this is a real observation, so it names the fact
@@ -1244,6 +1250,13 @@
     <string name="settings_autostart_open_caption">Откроются настройки автозапуска для этого телефона.</string>
     <string name="settings_autostart_not_needed_text">На этом телефоне отдельная настройка автозапуска, скорее всего, не нужна — обычно достаточно общих настроек батареи.</string>
     <string name="settings_autostart_limitation_note">Android не даёт единого способа прочитать этот статус на большинстве телефонов — точное состояние подтвердить нельзя, поэтому здесь показана рекомендация, а не проверенный факт.</string>
+    <!-- `26-187`: the expanded card's own manual-confirm control - an operator on a restrictive OEM who has
+         already enabled autostart can clear the neutral guess immediately rather than waiting for a reboot
+         that may never come. Cleared automatically (and silently) the moment a real `Blocked` boot
+         observation contradicts it - see `AutostartUiState`'s own doc comment for that precedence. -->
+    <string name="settings_autostart_manual_confirm_checkbox">Автозапуск включён — не напоминать</string>
+    <string name="settings_autostart_manual_confirmed_note">Вы отметили, что автозапуск включён.</string>
+    <string name="settings_autostart_manual_confirm_undo">Напоминать снова</string>
 
     <!-- `26-18`: `PushUnavailableReason`'s own four values - `RuStorePushClient.checkPushAvailability()`'s
          real, named causes (`docs/architecture/push-notifications.md`'s own "What the operator's phone
