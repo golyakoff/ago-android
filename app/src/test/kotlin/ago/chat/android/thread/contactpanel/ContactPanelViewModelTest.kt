@@ -18,6 +18,9 @@ import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNote
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.notes.ConversationNotesResult
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionStatusResult
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.ConversationTagsResult
@@ -45,6 +48,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -86,6 +90,7 @@ class ContactPanelViewModelTest {
         hubEvents: OperatorHubEvents = FakeOperatorHubEvents(),
         conversationsApi: ConversationsApi = FakeConversationsApi(),
         conversationActionsApi: ConversationActionsApi = FakeConversationActionsApi(),
+        visitorRestrictionApi: VisitorRestrictionApi = FakeVisitorRestrictionApi(),
     ) = ContactPanelViewModel(
         visitorSummaryApi = summaryApi,
         contactDetailsApi = contactDetailsApi,
@@ -95,6 +100,7 @@ class ContactPanelViewModelTest {
         hubEvents = hubEvents,
         conversationsApi = conversationsApi,
         conversationActionsApi = conversationActionsApi,
+        visitorRestrictionApi = visitorRestrictionApi,
         ioDispatcher = dispatcher,
     )
 
@@ -1105,12 +1111,19 @@ class ContactPanelViewModelTest {
     private class FakeConversationActionsApi(
         private val grantResult: ConversationActionResult = ConversationActionResult.Failed(NetworkFailure.Unexpected),
         private val revokeResult: ConversationActionResult = ConversationActionResult.Failed(NetworkFailure.Unexpected),
+        private val closeResult: ConversationActionResult = ConversationActionResult.Failed(NetworkFailure.Unexpected),
         private val grantHang: Boolean = false,
+        private val closeHang: Boolean = false,
     ) : ConversationActionsApi {
         var grantCalls = 0
         var revokeCalls = 0
+        var closeCalls = 0
 
-        override suspend fun close(conversationId: String): ConversationActionResult = error("not used by this view model")
+        override suspend fun close(conversationId: String): ConversationActionResult {
+            closeCalls++
+            if (closeHang) awaitCancellation()
+            return closeResult
+        }
 
         override suspend fun grantAttachmentUpload(conversationId: String): ConversationActionResult {
             grantCalls++
@@ -1121,6 +1134,250 @@ class ContactPanelViewModelTest {
         override suspend fun revokeAttachmentUpload(conversationId: String): ConversationActionResult {
             revokeCalls++
             return revokeResult
+        }
+    }
+
+    // ─── 26-153: «Закрыть диалог» + reversible «Ограничить»/«Снять ограничение» ───────────────────────────
+
+    @Test
+    fun `closeConversation fires the one-shot event on success`() =
+        runTest(dispatcher) {
+            val api = FakeConversationActionsApi(closeResult = ConversationActionResult.Succeeded)
+            val viewModel = viewModel(conversationActionsApi = api)
+            val events = mutableListOf<Unit>()
+            val collectJob = launch { viewModel.conversationClosed.collect { events.add(it) } }
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.closeConversation()
+            advanceUntilIdle()
+
+            assertEquals(1, api.closeCalls)
+            assertEquals(1, events.size)
+            // `closing` is deliberately left `true` on success - `closeConversation`'s own doc comment on
+            // why there is no button left on screen to un-disable once the sheet is about to be dismissed.
+            assertTrue(viewModel.state.value.closing)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `a refused close keeps the sheet up and surfaces the server detail`() =
+        runTest(dispatcher) {
+            val api = FakeConversationActionsApi(closeResult = ConversationActionResult.Refused("Не назначено вам."))
+            val viewModel = viewModel(conversationActionsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.closeConversation()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.state.value.closing)
+            assertEquals(CloseActionError.Refused("Не назначено вам."), viewModel.state.value.closeError)
+        }
+
+    @Test
+    fun `a failed close keeps the sheet up and surfaces a generic reason`() =
+        runTest(dispatcher) {
+            val api = FakeConversationActionsApi(closeResult = ConversationActionResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(conversationActionsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.closeConversation()
+            advanceUntilIdle()
+
+            assertEquals(CloseActionError.Failed(NetworkFailure.NoConnection), viewModel.state.value.closeError)
+        }
+
+    @Test
+    fun `closeConversation already in flight is a no-op`() =
+        runTest(dispatcher) {
+            val api = FakeConversationActionsApi(closeHang = true)
+            val viewModel = viewModel(conversationActionsApi = api)
+
+            viewModel.open("c1")
+            advanceUntilIdle()
+            viewModel.closeConversation()
+            dispatcher.scheduler.runCurrent()
+            viewModel.closeConversation()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, api.closeCalls)
+        }
+
+    @Test
+    fun `open with no visitor id lands the restriction section Unavailable`() =
+        runTest(dispatcher) {
+            val api = FakeVisitorRestrictionApi()
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = null)
+            advanceUntilIdle()
+
+            assertEquals(RestrictionSectionState.Unavailable, viewModel.state.value.restriction)
+            assertEquals(0, api.isRestrictedCalls)
+        }
+
+    @Test
+    fun `open with a visitor id reads whether the visitor is restricted`() =
+        runTest(dispatcher) {
+            val api = FakeVisitorRestrictionApi(statusResult = VisitorRestrictionStatusResult.Loaded(restricted = true))
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+
+            assertEquals(RestrictionSectionState.Loaded(restricted = true), viewModel.state.value.restriction)
+            assertEquals(listOf("v1"), api.isRestrictedIds)
+        }
+
+    @Test
+    fun `a failed restriction read becomes the Failed arm, and retryRestriction asks again`() =
+        runTest(dispatcher) {
+            val api = FakeVisitorRestrictionApi(statusResult = VisitorRestrictionStatusResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+            assertEquals(RestrictionSectionState.Failed(NetworkFailure.NoConnection), viewModel.state.value.restriction)
+
+            viewModel.retryRestriction()
+            advanceUntilIdle()
+
+            assertEquals(2, api.isRestrictedCalls)
+        }
+
+    @Test
+    fun `reopening with a resolved visitor id re-reads restriction even for the same conversation`() =
+        runTest(dispatcher) {
+            val api = FakeVisitorRestrictionApi()
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = null)
+            advanceUntilIdle()
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+
+            assertEquals(RestrictionSectionState.Loaded(restricted = false), viewModel.state.value.restriction)
+            assertEquals(1, api.isRestrictedCalls)
+        }
+
+    @Test
+    fun `toggleRestriction blocks an unrestricted visitor and flips the flag on success`() =
+        runTest(dispatcher) {
+            val api =
+                FakeVisitorRestrictionApi(
+                    statusResult = VisitorRestrictionStatusResult.Loaded(restricted = false),
+                    blockResult = VisitorRestrictionActionResult.Succeeded,
+                )
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+            viewModel.toggleRestriction()
+            advanceUntilIdle()
+
+            assertEquals(1, api.blockCalls)
+            assertEquals(0, api.liftCalls)
+            assertEquals(
+                RestrictionSectionState.Loaded(restricted = true),
+                viewModel.state.value.restriction,
+            )
+            // No second read of the (expensive, paged) status endpoint - the flip is derived from the
+            // write's own known outcome, not a re-read.
+            assertEquals(1, api.isRestrictedCalls)
+        }
+
+    @Test
+    fun `toggleRestriction lifts a restricted visitor by their visitor id`() =
+        runTest(dispatcher) {
+            val api =
+                FakeVisitorRestrictionApi(
+                    statusResult = VisitorRestrictionStatusResult.Loaded(restricted = true),
+                    liftResult = VisitorRestrictionActionResult.Succeeded,
+                )
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+            viewModel.toggleRestriction()
+            advanceUntilIdle()
+
+            assertEquals(1, api.liftCalls)
+            assertEquals(0, api.blockCalls)
+            assertEquals(listOf("v1"), api.liftIds)
+            assertEquals(RestrictionSectionState.Loaded(restricted = false), viewModel.state.value.restriction)
+        }
+
+    @Test
+    fun `a refused toggle leaves restricted untouched and surfaces the detail verbatim`() =
+        runTest(dispatcher) {
+            val api =
+                FakeVisitorRestrictionApi(
+                    statusResult = VisitorRestrictionStatusResult.Loaded(restricted = false),
+                    blockResult = VisitorRestrictionActionResult.Refused("Не хватает прав."),
+                )
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+            viewModel.toggleRestriction()
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value.restriction as RestrictionSectionState.Loaded
+            assertEquals(false, loaded.restricted)
+            assertEquals(false, loaded.toggling)
+            assertEquals(RestrictionActionError.Refused("Не хватает прав."), loaded.actionError)
+        }
+
+    @Test
+    fun `a restriction toggle already in flight is a no-op`() =
+        runTest(dispatcher) {
+            val api =
+                FakeVisitorRestrictionApi(
+                    statusResult = VisitorRestrictionStatusResult.Loaded(restricted = false),
+                    blockHang = true,
+                )
+            val viewModel = viewModel(visitorRestrictionApi = api)
+
+            viewModel.open("c1", visitorId = "v1")
+            advanceUntilIdle()
+            viewModel.toggleRestriction()
+            dispatcher.scheduler.runCurrent()
+            viewModel.toggleRestriction()
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(1, api.blockCalls)
+        }
+
+    private class FakeVisitorRestrictionApi(
+        private val statusResult: VisitorRestrictionStatusResult = VisitorRestrictionStatusResult.Loaded(restricted = false),
+        private val blockResult: VisitorRestrictionActionResult = VisitorRestrictionActionResult.Failed(NetworkFailure.Unexpected),
+        private val liftResult: VisitorRestrictionActionResult = VisitorRestrictionActionResult.Failed(NetworkFailure.Unexpected),
+        private val blockHang: Boolean = false,
+    ) : VisitorRestrictionApi {
+        var isRestrictedCalls = 0
+        var blockCalls = 0
+        var liftCalls = 0
+        val isRestrictedIds: MutableList<String> = mutableListOf()
+        val liftIds: MutableList<String> = mutableListOf()
+
+        override suspend fun block(conversationId: String): VisitorRestrictionActionResult {
+            blockCalls++
+            if (blockHang) awaitCancellation()
+            return blockResult
+        }
+
+        override suspend fun lift(visitorId: String): VisitorRestrictionActionResult {
+            liftCalls++
+            liftIds.add(visitorId)
+            return liftResult
+        }
+
+        override suspend fun isRestricted(visitorId: String): VisitorRestrictionStatusResult {
+            isRestrictedCalls++
+            isRestrictedIds.add(visitorId)
+            return statusResult
         }
     }
 }

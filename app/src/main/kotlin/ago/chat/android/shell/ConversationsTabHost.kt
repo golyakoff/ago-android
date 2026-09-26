@@ -76,6 +76,17 @@ public fun ConversationsTabHost(
     // it (hide-not-disable). Defaulted to `false` so every back-contract test constructing this composable
     // directly compiles and behaves unchanged.
     canGrantAttachmentUpload: Boolean = false,
+    // `26-153`: `conversation:close`, computed by [AppShellScreen]'s own `conversationsTab` default and
+    // threaded straight through to [ThreadRoute] alongside `canReadContactDetail`/`canTagConversation`/
+    // `canWriteNote`/`canGrantAttachmentUpload`, which gates the contact-panel's «Закрыть диалог» button
+    // on it (hide-not-disable). Defaulted to `false` so every back-contract test constructing this
+    // composable directly compiles and behaves unchanged.
+    canCloseConversation: Boolean = false,
+    // `26-153`: `conversation:block`, computed the same way and threaded through alongside
+    // `canCloseConversation`, which gates the contact-panel's reversible «Ограничить»/«Снять ограничение»
+    // button on it (hide-not-disable). Defaulted to `false` so every back-contract test constructing this
+    // composable directly compiles and behaves unchanged.
+    canRestrictVisitor: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
@@ -166,6 +177,8 @@ public fun ConversationsTabHost(
                 canTagConversation = canTagConversation,
                 canWriteNote = canWriteNote,
                 canGrantAttachmentUpload = canGrantAttachmentUpload,
+                canCloseConversation = canCloseConversation,
+                canRestrictVisitor = canRestrictVisitor,
                 onBack = {
                     stateHolder.removeState("$SAVEABLE_KEY_THREAD_PREFIX$currentlyOpen")
                     openConversationId = null

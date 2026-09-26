@@ -27,6 +27,12 @@ import ago.chat.android.core.network.realtime.MessageDto
  * establishes), defaulted so this data class's existing construction sites compile unchanged — the same
  * additive discipline [ago.chat.android.core.domain.conversations.ConversationSummary]'s own doc comment
  * states for the wire DTO it mirrors.
+ *
+ * `26-153`: [restriction] is the sixth and final section slice, added the identical additive way. The
+ * close action needs no `Loading`/`Loaded` arm of its own — unlike every read-backed section above, it is
+ * a pure write with nothing to load — so [closing]/[closeError] ride directly on this class, the same
+ * "an in-flight flag plus a last-error field, nothing more" shape a write-only action needs
+ * (`ContactPanelViewModel.closeConversation`'s own doc comment).
  */
 public data class ContactPanelUiState(
     val summary: HeaderSummaryState = HeaderSummaryState.Loading,
@@ -35,6 +41,9 @@ public data class ContactPanelUiState(
     val notes: NotesSectionState = NotesSectionState.Loading,
     val pastDialogs: PastDialogsSectionState = PastDialogsSectionState.Loading,
     val attachmentUpload: AttachmentUploadSectionState = AttachmentUploadSectionState.Loading,
+    val restriction: RestrictionSectionState = RestrictionSectionState.Loading,
+    val closing: Boolean = false,
+    val closeError: CloseActionError? = null,
 )
 
 /**
@@ -424,4 +433,97 @@ public sealed interface AttachmentUploadActionError {
     public data class Failed(
         val reason: NetworkFailure,
     ) : AttachmentUploadActionError
+}
+
+/**
+ * `26-153`: the reversible «Ограничить»/«Снять ограничение» action's own async state — the sixth and
+ * final section slice to grow [ContactPanelUiState] the additive way that type's own doc comment
+ * prescribes, reading and writing through
+ * [ago.chat.android.core.domain.restrictions.VisitorRestrictionApi] (`26-145`). Fetched once at
+ * panel-open time, the identical moment every sibling section's own read fires — [Loaded.restricted] is
+ * what decides which of the two button labels this section draws, per design Q2/Author decision #2 ("one
+ * reversible action").
+ *
+ * **A fourth arm, [Unavailable], beside the usual three.** Every other section here is keyed on the
+ * conversation alone; this one needs the *visitor's* id ([ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.block]
+ * takes a conversation id, but [ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.lift]
+ * and the [ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.isRestricted] read both take
+ * the *visitor's* id instead). [ago.chat.android.thread.ThreadRoute]'s own `visitorId` is `Boolean?` for
+ * exactly one honest reason — a restored thread with no matching queue row yet
+ * (`ThreadRoute`'s own doc comment on `identityUnavailable`) — and in that one case this section has
+ * nothing to check or act on. [Unavailable] names that case rather than reusing [Failed] for it: it is
+ * not that a read failed, it is that there was no read to attempt, the identical "an absent fact is not a
+ * failed one" distinction [ago.chat.android.core.domain.conversations.ConversationSummary.hasAttachmentUploadGrant]'s
+ * own doc comment already draws for a `Boolean?` elsewhere in this app. The section draws nothing for
+ * [Unavailable] — hidden, not an inline error an operator could do nothing about.
+ */
+public sealed interface RestrictionSectionState {
+    public data object Loading : RestrictionSectionState
+
+    /** No visitor id is known for this conversation yet — see this type's own doc comment. */
+    public data object Unavailable : RestrictionSectionState
+
+    /**
+     * [restricted] — whether this visitor is currently blocked on this site
+     * ([ago.chat.android.core.domain.restrictions.VisitorRestrictionApi.isRestricted]'s own membership
+     * read); decides whether this section draws «Ограничить» (`false`) or «Снять ограничение» (`true`).
+     *
+     * [toggling] — `true` while one block/lift write is in flight; the button is disabled while this is
+     * set, the identical single-write in-flight shape [AttachmentUploadSectionState.Loaded.toggling]
+     * already establishes.
+     *
+     * [actionError] — the last toggle outcome when it was not a success, shown non-destructively beneath
+     * the button and cleared the moment a new toggle begins. [restricted] is left exactly as it was
+     * through either non-success arm — a refused or failed toggle never flips the button's own label.
+     */
+    public data class Loaded(
+        val restricted: Boolean,
+        val toggling: Boolean = false,
+        val actionError: RestrictionActionError? = null,
+    ) : RestrictionSectionState
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : RestrictionSectionState
+}
+
+/**
+ * `26-153`: why a block/lift toggle did not take — the two non-success arms of
+ * [ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult], carried into the UI the
+ * identical way [AttachmentUploadActionError]/[TagActionError] already carry their own write's
+ * non-success arms.
+ */
+public sealed interface RestrictionActionError {
+    /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
+     * sentence" posture [AttachmentUploadActionError.Refused] establishes. */
+    public data class Refused(
+        val detail: String,
+    ) : RestrictionActionError
+
+    /** A transport failure — no server sentence to show, so the section renders one generic
+     * «Не удалось изменить ограничение» line, classified by [reason] only if a caller ever needs to. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : RestrictionActionError
+}
+
+/**
+ * `26-153`: why «Закрыть диалог» did not take — the two non-success arms of
+ * [ago.chat.android.core.domain.conversationactions.ConversationActionResult], carried into the UI the
+ * identical way [RestrictionActionError]/[AttachmentUploadActionError] already carry their own write's
+ * non-success arms. There is no `Loading`/`Loaded` counterpart for this action
+ * ([ContactPanelUiState.closing]'s own doc comment states why) — only this one error type is new here.
+ */
+public sealed interface CloseActionError {
+    /** A genuine server refusal — its RFC 7807 `detail` shown verbatim, the same "show the server's own
+     * sentence" posture [RestrictionActionError.Refused] establishes. */
+    public data class Refused(
+        val detail: String,
+    ) : CloseActionError
+
+    /** A transport failure — no server sentence to show, so the section renders one generic
+     * «Не удалось закрыть диалог» line, classified by [reason] only if a caller ever needs to. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : CloseActionError
 }

@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.domain.visitorsummary.VisitorSummary
 import ago.chat.android.thread.contactpanel.sections.AttachmentUploadSection
 import ago.chat.android.thread.contactpanel.sections.ContactDetailsSection
+import ago.chat.android.thread.contactpanel.sections.ConversationActionsSection
 import ago.chat.android.thread.contactpanel.sections.NotesSection
 import ago.chat.android.thread.contactpanel.sections.PastDialogsSection
 import ago.chat.android.thread.contactpanel.sections.TagsSection
@@ -123,6 +124,17 @@ internal fun ContactDetailPanel(
     canGrantAttachmentUpload: Boolean,
     onToggleAttachmentUpload: () -> Unit,
     onRetryAttachmentUpload: () -> Unit,
+    // `26-153`: the panel's own final section - «Закрыть диалог» + reversible
+    // «Ограничить»/«Снять ограничение». `canClose` (`conversation:close`) and `canRestrict`
+    // (`conversation:block`) each gate their own button hide-not-disable (design Q7), independently -
+    // an operator may hold either, both or neither, wired the same way every permission Boolean above is:
+    // the VM stays permission-agnostic, the gate lives here in the UI layer where the permission set is
+    // known ([ago.chat.android.thread.contactpanel.sections.ConversationActionsSection]'s own doc comment).
+    canClose: Boolean,
+    onClose: () -> Unit,
+    canRestrict: Boolean,
+    onToggleRestriction: () -> Unit,
+    onRetryRestriction: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -224,6 +236,26 @@ internal fun ContactDetailPanel(
                 canGrant = canGrantAttachmentUpload,
                 onToggle = onToggleAttachmentUpload,
                 onRetry = onRetryAttachmentUpload,
+            )
+
+            Spacer(modifier = Modifier.height(SectionSpacing))
+
+            // `26-153` (S-K): «Закрыть диалог» + reversible «Ограничить»/«Снять ограничение» - the sixth
+            // and final section slice (`docs/design/26-111-contact-panel-slices.md`). Reads its own arms
+            // off the same state and takes its callbacks from the same VM, the additive convention
+            // documented above; `canClose`/`canRestrict` each gate their own button independently
+            // (hide-not-disable, design Q7), so this call is unconditional here exactly like every other
+            // section's - [ConversationActionsSection] itself decides whether either button, or the whole
+            // section, draws anything.
+            ConversationActionsSection(
+                restriction = state.restriction,
+                closing = state.closing,
+                closeError = state.closeError,
+                canClose = canClose,
+                onClose = onClose,
+                canRestrict = canRestrict,
+                onToggleRestriction = onToggleRestriction,
+                onRetryRestriction = onRetryRestriction,
             )
 
             Spacer(modifier = Modifier.height(SectionSpacing))

@@ -224,6 +224,25 @@
     <string name="attachment_upload_load_failed">Couldn\'t load</string>
     <string name="attachment_upload_toggle_failed">Couldn\'t change the upload permission</string>
 
+    <string name="conversation_actions_close_button">Close conversation</string>
+    <string name="conversation_actions_closing_button">Closing…</string>
+    <string name="conversation_actions_close_confirm_title">Close this conversation?</string>
+    <string name="conversation_actions_close_confirm_body">The visitor\'s chat ends and this conversation cannot be reopened. Closing it also frees your capacity, so you may be assigned a new conversation straight away.</string>
+    <string name="conversation_actions_close_confirm_action">Close</string>
+    <string name="conversation_actions_close_failed">Couldn\'t close the conversation</string>
+    <string name="conversation_actions_restrict_button">Restrict</string>
+    <string name="conversation_actions_restricting_button">Restricting…</string>
+    <string name="conversation_actions_lift_button">Lift restriction</string>
+    <string name="conversation_actions_lifting_button">Lifting restriction…</string>
+    <string name="conversation_actions_restrict_confirm_title">Block this visitor?</string>
+    <string name="conversation_actions_restrict_confirm_body">This visitor is blocked on this site, indefinitely. Every new conversation they start is silently kept from reaching an operator until you lift the block. This conversation itself is not closed. Nothing is shown to the visitor.</string>
+    <string name="conversation_actions_restrict_confirm_action">Yes, block</string>
+    <string name="conversation_actions_lift_confirm_title">Lift this visitor\'s restriction?</string>
+    <string name="conversation_actions_lift_confirm_body">The visitor will be able to write to an operator on this site again, with no restriction. This cannot be undone - the restriction can be reapplied later if needed.</string>
+    <string name="conversation_actions_lift_confirm_action">Yes, lift it</string>
+    <string name="conversation_actions_restriction_load_failed">Couldn\'t load the restriction status</string>
+    <string name="conversation_actions_restriction_action_failed">Couldn\'t change the restriction</string>
+
     <string name="nav_conversations">Conversations</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_team">Team</string>
