@@ -987,6 +987,12 @@ class ContactPanelViewModelTest {
             return if (historyResults.isNotEmpty()) historyResults.removeAt(0) else HistoryPage()
         }
 
+        override suspend fun getConversationHistoryAsSiteConfigureHolder(
+            conversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage = error("not used by this view model")
+
         override suspend fun sendMessage(
             conversationId: String,
             body: String,

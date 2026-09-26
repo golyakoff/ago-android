@@ -121,6 +121,34 @@ public interface OperatorHubEvents {
     ): HistoryPage
 
     /**
+     * `26-98`: `OperatorHub.GetConversationHistoryAsSiteConfigureHolderAsync` - the «Все» list's own
+     * read-only "open one", called with its full three-argument arity every time (`conversationId`,
+     * `beforeSequence`, `pageSize`). Unlike [joinConversation]/[loadOlderHistory], this never assigns
+     * the conversation to the caller - the server-side handler this reaches is gated on
+     * `Permission.SiteConfigure` (the identical permission the «Все» list itself already requires), not
+     * on an assignment, so it succeeds for a conversation the caller holds no standing on at all. Also
+     * unlike [getVisitorHistoryConversation]'s two-id shape, there is only one conversation id here: the
+     * one being read *is* the one being opened, not a different, past conversation of the same visitor.
+     *
+     * Returns the identical [HistoryPage]/[MessageDto] wire shape [loadOlderHistory] does, so the «Все»
+     * list's own read-only thread mode feeds the message renderer it already has with no new content
+     * path. [beforeSequence] is `null` for the initial "most recent page" load and a real cursor for
+     * "load older" - the identical convention [getVisitorHistoryConversation] uses.
+     *
+     * **Deliberately not routed through [MessageSubscription]**, the same posture
+     * [getVisitorHistoryConversation] already takes for the identical reason: this is a pure fetch, not
+     * a live subscription - nothing here adds this connection to any delivery target, so a message sent
+     * while this view is open does not arrive live (`OperatorHub`'s own remarks on this method). A
+     * supervisor reviewing «Все» gets an accurate paginated history, not a second live inbox - reported
+     * as a scope finding, not silently assumed.
+     */
+    public suspend fun getConversationHistoryAsSiteConfigureHolder(
+        conversationId: String,
+        beforeSequence: Long?,
+        pageSize: Int,
+    ): HistoryPage
+
+    /**
      * `26-15`: `OperatorHub.SendMessageAsync`, called with its full four-argument arity every time
      * (`OperatorHub.cs`'s own comment on why a hub method's argument *count* is a wire contract this
      * class must never shorten). The message this call sends is never appended to [messages] directly

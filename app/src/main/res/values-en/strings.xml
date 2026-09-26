@@ -106,7 +106,7 @@
     <string name="conversation_list_tab_all">All</string>
     <string name="conversation_list_all_empty">Nothing found. Try a different status filter.</string>
     <string name="conversation_list_filter_chip">Status</string>
-    <string name="conversation_list_all_read_only_note">View only: someone else\'s conversation can\'t be opened yet.</string>
+    <string name="conversation_list_all_read_only_note">View only: opening a conversation here does not let you reply.</string>
     <string name="conversation_list_filter_heading">Show</string>
     <string name="conversation_list_state_not_started">Not started</string>
     <string name="conversation_list_state_assigned">Assigned</string>
@@ -160,6 +160,7 @@
     <string name="thread_join_failed_title">Couldn\'t open the conversation</string>
     <string name="thread_load_older_action">Load older messages</string>
     <string name="thread_identity_unavailable">Contact unavailable</string>
+    <string name="thread_read_only_note">View only: you can\'t reply from this conversation</string>
 
     <string name="message_bubble_author_operator">Operator</string>
     <string name="message_bubble_author_visitor">Visitor</string>

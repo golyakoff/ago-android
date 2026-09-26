@@ -837,6 +837,104 @@ class ThreadViewModelTest {
             assertEquals(listOf("conv-1"), tracker.closedCalls)
         }
 
+    // ------------------------------------------------------------------------------ read-only open (26-98)
+
+    @Test
+    fun `a read-only open never calls joinConversation - it reads through the site-configure-holder path instead`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            val viewModel = viewModelWith(hub)
+
+            viewModel.open("c1", readOnly = true)
+            advanceUntilIdle()
+
+            assertEquals(
+                "JoinConversationAsync assigns the conversation before it reads - the whole reason this " +
+                    "mode exists is to never call it",
+                emptyList<String>(),
+                hub.joinCalls,
+            )
+            assertEquals(listOf(null), hub.readOnlyHistoryCalls)
+            assertFalse(viewModel.state.value.joining)
+            assertEquals(
+                listOf(1L, 2L, 3L),
+                viewModel.state.value.messages
+                    .map { it.sequence },
+            )
+        }
+
+    @Test
+    fun `loadOlder in read-only mode pages through the same read-only call, never loadOlderHistory`() =
+        runTest(dispatcher) {
+            // `JOIN_PAGE_SIZE`-many messages so the initial read-only page comes back full (`canLoadOlder`),
+            // the identical fixture shape the keyset-boundary tests below use for the ordinary path.
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..(HISTORY_PAGE_SIZE + 5)))
+            val viewModel = viewModelWith(hub)
+
+            viewModel.open("c1", readOnly = true)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.canLoadOlder)
+
+            viewModel.loadOlder()
+            advanceUntilIdle()
+
+            assertEquals(
+                "loadOlderHistory still checks the caller's assignment - never called here",
+                emptyList<Long>(),
+                hub.loadOlderCursors,
+            )
+            assertEquals(2, hub.readOnlyHistoryCalls.size)
+            assertFalse(viewModel.state.value.loadingOlder)
+        }
+
+    @Test
+    fun `markReadUpTo is a no-op in read-only mode`() =
+        runTest(dispatcher) {
+            val api = FakeConversationsApi()
+            val viewModel = viewModelWith(FakeOperatorHubEvents(fixtureAscending = messages(1..3)), conversationsApi = api)
+            viewModel.open("c1", readOnly = true)
+            advanceUntilIdle()
+
+            viewModel.markReadUpTo(3)
+            advanceUntilIdle()
+
+            assertEquals(
+                "MarkConversationReadHandler/Conversation.MarkReadByOperator throws for a caller who is " +
+                    "not this conversation's assigned operator - this mode's caller, by construction, always is one",
+                emptyList<Pair<String, Int>>(),
+                api.markReadCalls,
+            )
+        }
+
+    @Test
+    fun `sendClicked is a no-op in read-only mode`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1", readOnly = true)
+            advanceUntilIdle()
+
+            viewModel.onDraftChanged("hello")
+            viewModel.sendClicked()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<Pair<String, String>>(), hub.sendCalls)
+        }
+
+    @Test
+    fun `retrySend is a no-op in read-only mode`() =
+        runTest(dispatcher) {
+            val hub = FakeOperatorHubEvents(fixtureAscending = messages(1..3))
+            val viewModel = viewModelWith(hub)
+            viewModel.open("c1", readOnly = true)
+            advanceUntilIdle()
+
+            viewModel.retrySend()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<Pair<String, String>>(), hub.sendCalls)
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -959,6 +1057,20 @@ class ThreadViewModelTest {
             beforeSequence: Long?,
             pageSize: Int,
         ): HistoryPage = error("not used by this screen")
+
+        /** `26-98`: every `getConversationHistoryAsSiteConfigureHolder` call, in order - the read-only
+         * open's own sibling to [joinCalls], asserted on to prove a read-only [ThreadViewModel.open]
+         * never calls [joinConversation] at all. */
+        val readOnlyHistoryCalls: MutableList<Long?> = mutableListOf()
+
+        override suspend fun getConversationHistoryAsSiteConfigureHolder(
+            conversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage {
+            readOnlyHistoryCalls.add(beforeSequence)
+            return pageBefore(beforeSequence, pageSize)
+        }
 
         override suspend fun sendMessage(
             conversationId: String,

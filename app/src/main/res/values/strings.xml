@@ -132,7 +132,7 @@
         administrator page is read-only for the same reason. Without this line every tap here would
         simply do nothing and read as a broken row.
     -->
-    <string name="conversation_list_all_read_only_note">Список только для просмотра: открыть чужой диалог пока нельзя.</string>
+    <string name="conversation_list_all_read_only_note">Список только для просмотра: диалог открывается без права ответа.</string>
     <string name="conversation_list_filter_heading">Показывать</string>
 
     <!--
@@ -262,6 +262,13 @@
         it waits for the queue's own answer.
     -->
     <string name="thread_identity_unavailable">Собеседник недоступен</string>
+    <!--
+        `26-98`: the «Все» list's own read-only open - shown in place of the composer whenever
+        `ThreadScreen` is drawn in that mode, so the missing reply control reads as a deliberate view
+        rather than a broken screen (`ConversationListScreen.kt`'s own `conversation_list_all_read_only_note`
+        states the identical reasoning for the list this thread was opened from).
+    -->
+    <string name="thread_read_only_note">Только просмотр: ответить из этого диалога нельзя</string>
 
     <!--
         `26-65`: a bubble's spoken author name, `MessageDto.authorKind`'s three wire values named for a

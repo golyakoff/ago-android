@@ -146,6 +146,12 @@ public fun ConversationListRoute(
     // which every operator holds and which only ever unlocks their own queue.
     canSeeAllConversations: Boolean = false,
     canEraseConversations: Boolean = false,
+    // `26-98`: a tap on the «Все» tab's own row - deliberately a *second* callback from
+    // [onOpenConversation] above, not a second caller of it, because `ConversationsTabHost` needs to
+    // know a row came from this list specifically (to open it read-only) and `onOpenConversation` alone
+    // carries only the id. Defaulted to a no-op so every existing caller/test that never taps this tab
+    // compiles and behaves unchanged.
+    onOpenAllConversation: (String) -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -195,6 +201,12 @@ public fun ConversationListRoute(
             viewModel.onRowOpened(conversationId)
             onOpenConversation(conversationId)
         },
+        // `26-98`: never through `viewModel.onRowOpened` - that call clears this instance's own
+        // `newlyAssignedIds`/`unreadBumps`/`locallyReadIds` bookkeeping, all of it scoped to «Мои»/
+        // «Ожидают» semantics («new assignment» badges, locally-optimistic read state) that a row on the
+        // admin-wide «Все» list has no business triggering, including for the edge case where the same
+        // conversation happens to also be this operator's own.
+        onOpenAllConversation = onOpenAllConversation,
         onSignOut = onSignOut,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -233,6 +245,9 @@ internal fun ConversationListScreen(
     onLoadMoreAll: () -> Unit = {},
     onConfirmErasure: (String) -> Unit = {},
     onDismissEraseFailure: () -> Unit = {},
+    // `26-98`: [AllList]'s own row tap - see [ConversationListRoute]'s own parameter doc comment for why
+    // this is a second callback rather than a second caller of [onOpenConversation].
+    onOpenAllConversation: (String) -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
@@ -384,6 +399,7 @@ internal fun ConversationListScreen(
                                     isLoadingMore = state.isLoadingAll,
                                     onLoadMore = onLoadMoreAll,
                                     onConfirmErasure = onConfirmErasure,
+                                    onOpenConversation = onOpenAllConversation,
                                 )
                             }
                         }
@@ -1258,12 +1274,15 @@ private fun stateFilterLabel(filter: ConversationStateFilter): String =
     }
 
 /**
- * `26-90`: one quiet line saying the list is for looking at, not for opening — the only addition this
- * screen makes that the approved frames do not draw, and it is here because the frames were drawn
- * against an assumption the server does not hold (see [AllRow]'s own doc comment for the full chain).
- * Without it, every tap on this tab does nothing and reads as a broken row; with it, the tab is
- * honest about being a supervisor's view. `ago-console`'s own admin page carries the same limitation
- * and the same explanation.
+ * `26-90`, updated by `26-98`: one quiet line saying what a tap on this tab actually does now - opens
+ * the conversation to read it, never to claim or reply to it. Before `26-98` this said a tap did
+ * nothing at all (`AllRow`'s own doc comment: the server rejected every open); now that a genuine
+ * read-only server path exists, the honest line changed from "you can't open this" to "you can look but
+ * not touch" - [ago.chat.android.thread.ThreadScreen]'s own read-only note (`thread_read_only_note`)
+ * says the identical thing again once the row is actually open, so the fact is stated at both the point
+ * of decision (tap or not) and the point of consequence (composer or not). `ago-console`'s own admin
+ * page has no equivalent second surface - it never gained the "open one" capability this item adds -
+ * so this note no longer claims parity with it.
  */
 @Composable
 private fun AllReadOnlyNote() {
@@ -1300,6 +1319,7 @@ private fun AllList(
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
     onConfirmErasure: (String) -> Unit,
+    onOpenConversation: (String) -> Unit,
 ) {
     if (rows.isEmpty()) {
         EmptyBody(text = stringResource(R.string.conversation_list_all_empty))
@@ -1314,6 +1334,7 @@ private fun AllList(
                 now = now,
                 canErase = canErase,
                 onConfirmErasure = { onConfirmErasure(row.conversationId) },
+                onClick = { onOpenConversation(row.conversationId) },
             )
             HorizontalDivider()
         }
@@ -1344,19 +1365,17 @@ private fun AllList(
  * "hide, don't disable" rule the thread screen's attach control follows. An operator who cannot erase
  * has a row that behaves exactly like «Мои»'s.
  *
- * **The row is not tappable, and that is a server fact rather than a layout choice.** `26-90`'s own
- * Scope expected "the existing unchanged thread screen"; the server does not allow it. Opening a
- * thread goes through `OperatorHub.JoinConversationAsync`, which calls `AssignConversation` →
- * `Conversation.AssignTo` — and that method accepts only a `Waiting` conversation. So a tap here would
- * do one of three things, none of them "read the history": **claim** a waiting conversation out from
- * under the queue (a real write, on a row an administrator is only supervising), throw
- * `InvalidConversationStateException` for one assigned to somebody else, or throw for a closed one —
- * which is most of this tab. `ago-console`'s own `AdminConversationsPage` reached the identical
- * conclusion and is read-only for exactly this reason (its own doc comment: "deliberately read-only
- * summary data, not a way to open an arbitrary conversation's message thread ... doing so would be a
- * materially bigger change than this backlog item scoped"), which is also what this item's own One
- * promise says — "the way they already can from the console". Reported as a scope finding; the line
- * under the filter chip ([AllReadOnlyNote]) is what stops a dead tap from reading as a bug.
+ * **`26-98`: the row is tappable again, and that is a server fact rather than a layout choice too.**
+ * `26-90`'s own paragraph directly above described why a tap here used to be structurally unsafe:
+ * `OperatorHub.JoinConversationAsync` calls `AssignConversation` → `Conversation.AssignTo`, which
+ * accepts only a `Waiting` conversation, so opening a row this way would have claimed a waiting
+ * conversation out from under the queue or thrown for every other state - which is most of this tab.
+ * `26-98` closes that gap with a genuinely different server read
+ * (`GetConversationHistoryAsSiteConfigureHolderQuery`, `ago-chat`) that never calls `AssignTo` at all,
+ * gated on the identical `site:configure` permission this whole tab already requires - so the tap here
+ * calls [onClick] (`ConversationsTabHost`'s own read-only open), never the ordinary
+ * `onOpenConversation` «Мои»/«Ожидают» use. [AllReadOnlyNote] below is updated for this, not removed -
+ * the tab is still not a way to *claim* a conversation, only to read one.
  *
  * **`26-118`: a swipe-to-delete removes the row optimistically.** Confirming the swipe hands the id
  * up to [ConversationListViewModel.confirmErasure], which drops the row from the list at once; there is
@@ -1368,6 +1387,7 @@ private fun AllRow(
     now: OffsetDateTime,
     canErase: Boolean,
     onConfirmErasure: () -> Unit,
+    onClick: () -> Unit,
 ) {
     val swipeable = canErase
     val revealWidthPx = with(LocalDensity.current) { EraseActionWidth.toPx() }
@@ -1413,7 +1433,18 @@ private fun AllRow(
                         },
                     ),
         ) {
-            ConversationRow(row = row, now = now, showStatusLine = true)
+            // `26-64`: the identical `onClickLabel` idiom [MineRow] already uses - TalkBack announces
+            // what this tap actually does rather than the generic "double-tap to activate" hint.
+            ConversationRow(
+                row = row,
+                now = now,
+                showStatusLine = true,
+                modifier =
+                    Modifier.clickable(
+                        onClickLabel = stringResource(R.string.conversation_list_open_action),
+                        onClick = onClick,
+                    ),
+            )
         }
     }
 
