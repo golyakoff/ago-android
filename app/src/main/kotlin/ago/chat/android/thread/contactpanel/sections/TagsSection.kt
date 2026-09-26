@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.Tag
 import ago.chat.android.thread.contactpanel.TagActionError
 import ago.chat.android.thread.contactpanel.TagsSectionState
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
@@ -221,7 +221,9 @@ private fun AddTagControl(
             onClick = { expanded = true },
             label = { Text(text = stringResource(R.string.tags_add)) },
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        // `26-177`: [ScrimmedDropdownMenu] in place of a plain `DropdownMenu` - see its own doc comment for
+        // why this menu, like every other in the app, now dims the screen behind it while open.
+        ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             addable.forEach { tag ->
                 DropdownMenuItem(
                     text = { Text(text = tag.name) },

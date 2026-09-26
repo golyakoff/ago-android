@@ -448,6 +448,131 @@ public object AgoIcons {
                 lineToRelative(-4.8f, 4.8f)
             },
         )
+
+    /**
+     * `26-176`: the Записи `⋮` hub's own «Готовность» row, its [leadingIcon][androidx.compose.material3.DropdownMenuItem].
+     * Modelled on Material Symbols outlined `task_alt` — a circle with a checkmark inside — rather than
+     * imported as that glyph's own filled path, the identical "redraw in this family's stroke treatment"
+     * rule this file's own header states for every icon here. The checkmark is [Check]'s own two-segment
+     * shape, scaled down to sit inside the circle rather than [Check] itself: at `task_alt`'s own
+     * proportions the mark reads as "verified", not as a bare tick.
+     */
+    public val Readiness: ImageVector =
+        strokeIcon(
+            "AgoReadiness",
+            // <circle cx="12" cy="12" r="9"/>
+            { circle(centreX = 12f, centreY = 12f, radius = 9f) },
+            // M8 12.5l2.5 2.5 5-5.5
+            {
+                moveTo(8f, 12.5f)
+                lineToRelative(2.5f, 2.5f)
+                lineToRelative(5f, -5.5f)
+            },
+        )
+
+    /**
+     * `26-176`: the Записи `⋮` hub's own «Календари» row, its leading icon. Modelled on Material Symbols
+     * outlined `calendar_month` — [Bookings]'s own frame, header rule and two hanging rings, plus the one
+     * thing that glyph adds and `i-cal` (drawn for the very different context of a bottom-navigation tab)
+     * never needed: an interior date grid, three columns by two rows, so a calendar-configuration entry in
+     * a text menu does not read as the identical glyph as the Записи tab it sits three taps away from.
+     */
+    public val Calendars: ImageVector =
+        strokeIcon(
+            "AgoCalendars",
+            // <rect x="3" y="5" width="18" height="16" rx="2.5"/>
+            { roundedRect(left = 3f, top = 5f, width = 18f, height = 16f, radius = 2.5f) },
+            // M3 10h18M8 3v4M16 3v4
+            {
+                moveTo(3f, 10f)
+                horizontalLineToRelative(18f)
+                moveTo(8f, 3f)
+                verticalLineToRelative(4f)
+                moveTo(16f, 3f)
+                verticalLineToRelative(4f)
+            },
+            // M9 10v11M15 10v11M3 15.5h18
+            {
+                moveTo(9f, 10f)
+                verticalLineToRelative(11f)
+                moveTo(15f, 10f)
+                verticalLineToRelative(11f)
+                moveTo(3f, 15.5f)
+                horizontalLineToRelative(18f)
+            },
+        )
+
+    /**
+     * `26-176`: the Записи `⋮` hub's own «Мастера» row, its leading icon. Modelled on Material Symbols
+     * outlined `person` — a single head-and-shoulders figure — rather than reusing [Team] (two overlapping
+     * figures, «Команда»'s own bottom-navigation glyph): Мастера is one worker dictionary row at a time,
+     * not a roster of colleagues, so this is [Team]'s own head-circle-plus-shoulder-arc construction with
+     * the second, half-drawn figure dropped and the remaining one centred rather than offset.
+     */
+    public val Masters: ImageVector =
+        strokeIcon(
+            "AgoMasters",
+            // <circle cx="12" cy="8" r="3.2"/>
+            { circle(centreX = 12f, centreY = 8f, radius = 3.2f) },
+            // M5 20c0-3.86 3.13-7 7-7s7 3.14 7 7
+            {
+                moveTo(5f, 20f)
+                curveToRelative(0f, -3.86f, 3.13f, -7f, 7f, -7f)
+                reflectiveCurveToRelative(7f, 3.14f, 7f, 7f)
+            },
+        )
+
+    /**
+     * `26-176`: the Записи `⋮` hub's own «Услуги» row, its leading icon. Modelled on Material Symbols
+     * outlined `format_list_bulleted` — three bulleted lines — rather than [Sliders] (already spoken for
+     * by `AccountAvatarAction`'s own «Настройки» row): a service dictionary is a plain list of named rows,
+     * which is exactly what a bulleted list glyph, not a settings-sliders one, says.
+     */
+    public val Services: ImageVector =
+        strokeIcon(
+            "AgoServices",
+            // <circle cx="4" cy="7" r="1.3"/>
+            { circle(centreX = 4f, centreY = 7f, radius = 1.3f) },
+            // M8 7h12
+            {
+                moveTo(8f, 7f)
+                horizontalLineToRelative(12f)
+            },
+            // <circle cx="4" cy="12" r="1.3"/>
+            { circle(centreX = 4f, centreY = 12f, radius = 1.3f) },
+            // M8 12h12
+            {
+                moveTo(8f, 12f)
+                horizontalLineToRelative(12f)
+            },
+            // <circle cx="4" cy="17" r="1.3"/>
+            { circle(centreX = 4f, centreY = 17f, radius = 1.3f) },
+            // M8 17h12
+            {
+                moveTo(8f, 17f)
+                horizontalLineToRelative(12f)
+            },
+        )
+
+    /**
+     * `26-176`: the Записи `⋮` hub's own «Часы» row, its leading icon. Modelled on Material Symbols
+     * outlined `schedule` — a clock face with two hands meeting at the centre, drawn as one continuous
+     * stroke (12-o'clock tip down to centre, then out toward 4 o'clock) rather than two separate subpaths,
+     * since the hands share their one meeting point and a `moveTo` between them would only add a seam a
+     * real clock hand does not have.
+     */
+    public val Hours: ImageVector =
+        strokeIcon(
+            "AgoHours",
+            // <circle cx="12" cy="12" r="9"/>
+            { circle(centreX = 12f, centreY = 12f, radius = 9f) },
+            // M12 8v4l3 2
+            {
+                moveTo(12f, 8f)
+                verticalLineToRelative(4f)
+                lineToRelative(3f, 2f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */

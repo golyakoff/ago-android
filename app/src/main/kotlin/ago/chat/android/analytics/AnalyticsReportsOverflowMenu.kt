@@ -2,8 +2,8 @@ package ago.chat.android.analytics
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.navigation.AnalyticsReport
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.icons.AgoIcons
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,7 +68,9 @@ internal fun AnalyticsReportsOverflowMenu(
         )
     }
 
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    // `26-177`: [ScrimmedDropdownMenu] in place of a plain `DropdownMenu` - see its own doc comment for why
+    // this menu, like every other in the app, now dims the screen behind it while open.
+    ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         reports.forEach { report ->
             DropdownMenuItem(
                 text = { Text(text = stringResource(report.labelRes())) },

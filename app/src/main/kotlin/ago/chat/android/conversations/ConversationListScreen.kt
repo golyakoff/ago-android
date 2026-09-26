@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.visitorDisplayPrefixParts
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.components.rememberTickingNow
@@ -45,7 +46,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -1241,7 +1241,9 @@ private fun StatusFilterChip(
             },
             modifier = Modifier.testTag(STATUS_FILTER_CHIP_TEST_TAG),
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        // `26-177`: [ScrimmedDropdownMenu] in place of a plain `DropdownMenu` - see its own doc comment for
+        // why this menu, like every other in the app, now dims the screen behind it while open.
+        ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Text(
                 text = stringResource(R.string.conversation_list_filter_heading),
                 style = MaterialTheme.typography.labelMedium,

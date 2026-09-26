@@ -24,9 +24,13 @@ internal enum class BookingsTab {
      * "where am I" screen a tenant opens *before* the four fill screens, not one more fill screen itself. */
     Readiness,
 
-    /** `26-142`: the tenant-configuration screen (menu label «Настройка», primary section «Календари») —
-     * the embed's allowed origins and the calendar roster. A `⋮` config entry, never a segment — see
-     * [visibleBookingsConfigMenuEntries]. */
+    /** `26-142`: the tenant-configuration screen — the calendar roster. A `⋮` config entry, never a
+     * segment — see [visibleBookingsConfigMenuEntries].
+     *
+     * `26-176`: menu label «Календари», not «Настройка» — `26-158` already moved the embed/allowed-origins
+     * section that used to justify the «Настройка» name off this screen entirely
+     * ([CalendarSetupBody]'s own doc comment), so calendars are the only thing left here; this item
+     * catches the menu label up to that fact. */
     Calendars,
 
     /** `26-140`: the worker dictionary, with the full create/edit/delete this product had no screen for

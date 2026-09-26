@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.contactdetails.ContactDetail
 import ago.chat.android.thread.contactpanel.ContactDetailsSectionState
 import ago.chat.android.thread.contactpanel.RowActionError
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -346,7 +346,9 @@ private fun ContactDetailRowMenu(
                 contentDescription = stringResource(R.string.contact_details_row_actions),
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        // `26-177`: [ScrimmedDropdownMenu] in place of a plain `DropdownMenu` - see its own doc comment for
+        // why this menu, like every other in the app, now dims the screen behind it while open.
+        ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (showEdit) {
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.contact_details_action_edit)) },
