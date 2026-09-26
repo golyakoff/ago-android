@@ -19,7 +19,7 @@ import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.applyAppLanguage
 import ago.chat.android.ui.theme.ThemeMode
-import ago.chat.android.ui.theme.agoWarningColors
+import ago.chat.android.ui.theme.agoStatusColors
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -466,7 +466,7 @@ internal fun SettingsScreen(
                                 Text(
                                     text = stringResource(R.string.settings_autostart_blocked_after_reboot),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = agoWarningColors().warning,
+                                    color = agoStatusColors().warning,
                                     modifier = Modifier.padding(top = 2.dp),
                                 )
                             }
@@ -533,7 +533,7 @@ internal fun SettingsScreen(
                             Text(
                                 text = pushUnavailableReasonText(pushUnavailable.reason),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
+                                color = agoStatusColors().dangerText,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                             )
                         }
@@ -544,7 +544,7 @@ internal fun SettingsScreen(
                                 Text(
                                     text = stringResource(R.string.settings_notifications_disabled_text),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error,
+                                    color = agoStatusColors().dangerText,
                                 )
                                 OutlinedButton(onClick = onOpenNotificationSettings, modifier = Modifier.padding(top = 8.dp)) {
                                     Text(text = stringResource(R.string.settings_notifications_open_settings_action))
@@ -592,7 +592,7 @@ private fun pushUnavailableReasonText(reason: PushUnavailableReason): String =
  * **Why the fill colours are computed, not read from `MaterialTheme.colorScheme` for both states.** The
  * green fill reads `colorScheme.tertiary`/`onTertiary` — a real Material 3 role pair `Theme.kt` already
  * wires to `AgoSuccessLight`/`AgoSuccessDark`, with `onTertiary` already tuned per theme for contrast
- * against it. The orange fill has no such pair: `agoWarningColors().warning` is `26-90`'s own token,
+ * against it. The orange fill has no such pair: `agoStatusColors().warning` is `26-90`'s own token,
  * designed as ink-coloured *text* on a pale tint (a status pill), not as a saturated fill a white icon
  * sits on — in dark mode that value is a *bright* amber, so a white icon on it would be unreadable. Rather
  * than force that pill-text token into a fill it was never designed for, this computes the glyph's own
@@ -606,7 +606,7 @@ private fun StatusGlyph(status: DeviceModeStatus) {
     val background =
         when (status) {
             DeviceModeStatus.Ok -> MaterialTheme.colorScheme.tertiary
-            DeviceModeStatus.NeedsAttention -> agoWarningColors().warning
+            DeviceModeStatus.NeedsAttention -> agoStatusColors().warning
         }
     val iconTint =
         when (status) {

@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.ROLE_OPERATOR
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.ui.components.networkFailureText
+import ago.chat.android.ui.theme.agoStatusColors
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
@@ -185,7 +186,7 @@ private fun InviteFormBody(
             Text(
                 text = inviteRefusalMessage(refusal),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = agoStatusColors().dangerText,
                 modifier = Modifier.padding(top = 16.dp),
             )
         }

@@ -4,7 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.devices.openAutostartSettings
 import ago.chat.android.devices.openBatteryOptimizationSettings
 import ago.chat.android.ui.icons.AgoIcons
-import ago.chat.android.ui.theme.agoWarningColors
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,7 +89,7 @@ internal fun BatteryAwarenessSheet(
                 Icon(
                     imageVector = AgoIcons.Warning,
                     contentDescription = null,
-                    tint = agoWarningColors().warning,
+                    tint = agoStatusColors().warning,
                     modifier = Modifier.padding(top = 2.dp),
                 )
                 Text(

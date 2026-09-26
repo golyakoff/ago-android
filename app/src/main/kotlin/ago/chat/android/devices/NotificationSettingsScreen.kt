@@ -3,6 +3,7 @@ package ago.chat.android.devices
 import ago.chat.android.R
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -151,12 +152,12 @@ internal fun NotificationSettingsScreen(
                             Text(
                                 text = stringResource(R.string.notification_settings_push_warning_title),
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.error,
+                                color = agoStatusColors().dangerText,
                             )
                             Text(
                                 text = pushUnavailableReasonText(pushUnavailable.reason),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
+                                color = agoStatusColors().dangerText,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }
@@ -311,7 +312,7 @@ private fun ChannelRow(
                     if (enabled) R.string.notification_settings_channel_state_on else R.string.notification_settings_channel_state_off,
                 ),
             style = MaterialTheme.typography.bodySmall,
-            color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else agoStatusColors().dangerText,
         )
     }
     HorizontalDivider()

@@ -3,6 +3,7 @@ package ago.chat.android.ui.components
 import ago.chat.android.R
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.theme.AgoLive
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -86,7 +87,7 @@ internal fun colorFor(state: OperatorHubConnectionState): Color =
     when (state) {
         OperatorHubConnectionState.Connected -> AgoLive
         OperatorHubConnectionState.Connecting, OperatorHubConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary
-        OperatorHubConnectionState.Disconnected -> MaterialTheme.colorScheme.error
+        OperatorHubConnectionState.Disconnected -> agoStatusColors().dangerText
     }
 
 @Composable

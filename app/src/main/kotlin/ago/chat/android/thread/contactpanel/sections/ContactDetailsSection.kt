@@ -6,6 +6,7 @@ import ago.chat.android.thread.contactpanel.ContactDetailsSectionState
 import ago.chat.android.thread.contactpanel.RowActionError
 import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -261,7 +262,7 @@ private fun ContactDetailRow(
             Text(
                 text = rowErrorText(error),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = agoStatusColors().dangerText,
             )
         }
     }
@@ -407,7 +408,7 @@ private fun AssessmentWord(assessment: String) {
             Text(
                 text = stringResource(R.string.contact_details_assessment_invalid),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = agoStatusColors().dangerText,
             )
 
         else -> Unit

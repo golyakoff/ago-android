@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.analytics.CountComparison
 import ago.chat.android.core.domain.analytics.formatDurationSeconds
 import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,7 +125,7 @@ internal fun AnalyticsInlineMessage(text: String) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             textAlign = TextAlign.Center,
         )
     }

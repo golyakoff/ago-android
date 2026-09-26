@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.tags.Tag
 import ago.chat.android.thread.contactpanel.TagActionError
 import ago.chat.android.thread.contactpanel.TagsSectionState
 import ago.chat.android.ui.components.ScrimmedDropdownMenu
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -162,7 +163,7 @@ private fun LoadedTags(
                     is TagActionError.Failed -> stringResource(R.string.tags_action_failed)
                 },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = agoStatusColors().dangerText,
             modifier = Modifier.padding(top = RowSpacing),
         )
     }

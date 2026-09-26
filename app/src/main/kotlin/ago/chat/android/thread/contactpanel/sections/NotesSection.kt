@@ -6,6 +6,7 @@ import ago.chat.android.thread.contactpanel.AddNoteError
 import ago.chat.android.thread.contactpanel.NotesSectionState
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -280,7 +281,7 @@ private fun NotesSubScreen(
                                 is AddNoteError.Failed -> stringResource(R.string.notes_add_failed)
                             },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = agoStatusColors().dangerText,
                         modifier = Modifier.padding(top = RowSpacing),
                     )
                 }

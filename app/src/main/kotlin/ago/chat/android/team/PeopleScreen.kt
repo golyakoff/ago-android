@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -219,7 +220,7 @@ private fun SeatSummaryRow(role: RoleSeatSummary) {
                 Text(
                     text = stringResource(R.string.people_over_limit_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = agoStatusColors().dangerText,
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }

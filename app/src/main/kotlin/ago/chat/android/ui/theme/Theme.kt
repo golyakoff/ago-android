@@ -85,11 +85,19 @@ private val AgoDarkColorScheme =
         onTertiary = AgoInkDark,
         tertiaryContainer = AgoMintDark,
         onTertiaryContainer = AgoSuccessDark,
+        // `26-183`: `error` is the danger FILL now (`AgoDangerDark` = #B3261E), and everything drawn on
+        // top of it — badge digit, swipe-to-erase caption, the restrict/erase confirm buttons — is pure
+        // white. On-surface danger *text* does not read this role; it reads `AgoStatusColors.dangerText`
+        // (see `AgoDangerTextDark`'s own comment for why one hex cannot be both).
         error = AgoDangerDark,
-        // `--ago-danger` is also a light tone in dark mode (#ff8a80)
-        onError = AgoInkDark,
+        onError = Color.White,
+        // `26-183`: the tinted danger banner (invite-send-failed) stays maroon-filled. Its on-text was
+        // `AgoDangerDark`, which is now the #B3261E fill and would be unreadable on this maroon (≈1:1) —
+        // so it moves to the legible light `AgoDangerTextDark` (≈6.7:1), the Material 3 idiom of a light
+        // tonal on-colour for a soft *container* (white is reserved for the solid `error` fills above),
+        // and the same coral-on-maroon the design source draws for its own `.card.dangerband`.
         errorContainer = AgoDangerTintDark,
-        onErrorContainer = AgoDangerDark,
+        onErrorContainer = AgoDangerTextDark,
         background = AgoPaperDark,
         onBackground = AgoInkDark,
         surface = AgoSurfaceDark,
@@ -140,16 +148,24 @@ public fun AgoChatTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) AgoDarkColorScheme else AgoLightColorScheme
-    // `26-90`: the one `tokens.css` pair Material 3 has no role for, resolved from the same
-    // `darkTheme` answer the scheme above is - see `AgoWarningColors`' own doc comment for why this
+    // `26-90`/`26-183`: the roles Material 3's `ColorScheme` has no clean slot for, resolved from the
+    // same `darkTheme` answer the scheme above is - see `AgoStatusColors`' own doc comment for why this
     // cannot be decided at the call site.
-    val warningColors =
+    val statusColors =
         if (darkTheme) {
-            AgoWarningColors(warning = AgoWarningDark, warningTint = AgoWarningTintDark)
+            AgoStatusColors(
+                warning = AgoWarningDark,
+                warningTint = AgoWarningTintDark,
+                dangerText = AgoDangerTextDark,
+            )
         } else {
-            AgoWarningColors(warning = AgoWarningLight, warningTint = AgoWarningTintLight)
+            AgoStatusColors(
+                warning = AgoWarningLight,
+                warningTint = AgoWarningTintLight,
+                dangerText = AgoDangerLight,
+            )
         }
-    CompositionLocalProvider(LocalAgoWarningColors provides warningColors) {
+    CompositionLocalProvider(LocalAgoStatusColors provides statusColors) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AgoTypography,

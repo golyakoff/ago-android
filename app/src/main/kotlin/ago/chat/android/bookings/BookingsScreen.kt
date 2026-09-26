@@ -16,6 +16,7 @@ import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.components.rememberTickingNow
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1306,7 +1307,7 @@ internal fun ActionErrorBanner(
                 BookingActionErrorUi.InvalidDuration -> stringResource(R.string.services_duration_invalid)
             },
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.error,
+        color = agoStatusColors().dangerText,
         modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
