@@ -731,6 +731,21 @@
     <string name="channels_telegram_token_hint">Get a token from @BotFather on Telegram</string>
     <string name="channels_telegram_disconnect_dialog_body">Disconnect the Telegram bot? Reconnecting will need a fresh token — the old one cannot be entered again.</string>
 
+    <!-- `26-190`/`C3`: Channels → VK. See the ru strings for the full note. -->
+    <string name="channels_vk_title">VK</string>
+    <string name="channels_vk_not_connected_body">Connect a VK community token to receive messages from customers on this channel.</string>
+    <string name="channels_vk_token_label">Community token</string>
+    <string name="channels_vk_token_hint">A community access key with Callback API permissions</string>
+    <string name="channels_vk_disconnect_dialog_body">Disconnect the VK community? Reconnecting will need a fresh token — the old one cannot be entered again. The callback URL and webhook secret will be reset too.</string>
+    <string name="channels_vk_setup_title">VK Callback API setup</string>
+    <string name="channels_vk_setup_body">Copy the callback URL and webhook secret and paste them into your VK community\'s Callback API settings.</string>
+    <string name="channels_vk_copy_callback_url">Copy callback URL</string>
+    <string name="channels_vk_copy_webhook_secret">Copy webhook secret</string>
+    <string name="channels_vk_callback_url_copied">Callback URL copied</string>
+    <string name="channels_vk_webhook_secret_copied">Webhook secret copied</string>
+    <string name="channels_vk_share">Share</string>
+    <string name="channels_vk_secrets_shown_once_hint">The callback URL and webhook secret are shown only once, right after connecting. To see them again, disconnect and reconnect the community with a fresh token.</string>
+
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
     <string name="account_menu_fallback_initial">?</string>

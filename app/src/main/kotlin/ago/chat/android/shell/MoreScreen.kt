@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
 import ago.chat.android.channels.TelegramChannelRoute
+import ago.chat.android.channels.VkChannelRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
@@ -94,9 +95,14 @@ internal fun MoreScreen(
             // (clause 2) via the same `openRowId = null` every drill-in uses.
             CHANNELS_MAX_ROW_ID -> MaxChannelRoute(onBack = { openRowId = null })
             // `26-188`: Каналы → Telegram - a token connect/status/disconnect screen, the first of the
-            // three token channels this scaffold serves (VK follows identically in `C3`). Back returns to
-            // the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            // three token channels this scaffold serves. Back returns to the Ещё list (clause 2) via the
+            // same `openRowId = null` every drill-in uses.
             CHANNELS_TELEGRAM_ROW_ID -> TelegramChannelRoute(onBack = { openRowId = null })
+            // `26-190`/`C3`: Каналы → VK - the third and last token channel this scaffold serves, plus its
+            // own shown-once callback URL/webhook secret reveal drawn inside the shared
+            // [ago.chat.android.channels.ChannelConnectScreen]. Back returns to the Ещё list (clause 2) via
+            // the same `openRowId = null` every drill-in uses.
+            CHANNELS_VK_ROW_ID -> VkChannelRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -203,6 +209,7 @@ internal data class MoreRow(
 internal const val CHANNELS_INSTALL_ROW_ID: String = "channels-install"
 internal const val CHANNELS_MAX_ROW_ID: String = "channels-max"
 internal const val CHANNELS_TELEGRAM_ROW_ID: String = "channels-telegram"
+internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
@@ -221,7 +228,9 @@ internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billi
  *
  * `26-189`/`C2`: MAX takes its own place in that order, directly after Установка виджета and before
  * Telegram - the row order stated in §5.2 is fixed regardless of the order the slices themselves land in.
- * VK follows identically in `C3`. */
+ *
+ * `26-190`/`C3`: VK closes out the three token channels, directly after Telegram and before the still
+ * unbuilt Почта row. */
 internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
@@ -243,6 +252,13 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = CHANNELS_TELEGRAM_ROW_ID,
                     labelRes = R.string.channels_telegram_title,
+                    section = MoreSectionId.Channels,
+                ),
+            )
+            add(
+                MoreRow(
+                    id = CHANNELS_VK_ROW_ID,
+                    labelRes = R.string.channels_vk_title,
                     section = MoreSectionId.Channels,
                 ),
             )
