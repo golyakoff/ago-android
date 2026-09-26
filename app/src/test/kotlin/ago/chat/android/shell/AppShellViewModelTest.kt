@@ -4,6 +4,15 @@ import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.permissions.PermissionsFetch
+import ago.chat.android.core.network.realtime.ConversationAssignedDto
+import ago.chat.android.core.network.realtime.HistoryPage
+import ago.chat.android.core.network.realtime.MessageDeliveredDto
+import ago.chat.android.core.network.realtime.MessageDto
+import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.SendMessageResult
+import ago.chat.android.core.network.realtime.TeamHistoryPage
+import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.data.bookings.PendingBookingsCount
 import ago.chat.android.data.conversations.ConversationsUnreadTotal
 import ago.chat.android.presence.OperatorPresenceController
@@ -12,6 +21,7 @@ import ago.chat.android.session.OperatorIdentityProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -253,12 +263,120 @@ class AppShellViewModelTest {
             assertEquals(0, viewModel.pendingBookingsTotal.value)
         }
 
+    // ---------------------------------------------------------------------- `26-180`: team-unread badge
+
+    @Test
+    fun `teamUnreadTotal starts at zero - a known fact, never a not-loaded-yet state`() =
+        runTest(dispatcher) {
+            val viewModel = viewModelWith(FakeOperatorPermissionsApi(hang = true))
+
+            assertEquals(0, viewModel.teamUnreadTotal.value)
+        }
+
+    @Test
+    fun `a team message from someone else increments teamUnreadTotal`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val identityProvider = FakeOperatorIdentityProvider(OperatorIdentity(displayName = "Андрей", email = "me@example.com"))
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    identityProvider = identityProvider,
+                    teamUnreadCount = TeamUnreadCount(hubEvents, identityProvider),
+                )
+            advanceUntilIdle()
+
+            hubEvents.teamMessages.tryEmit(teamMessage(authorEmail = "colleague@example.com"))
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.teamUnreadTotal.value)
+        }
+
+    /** `26-180`: the identical exclusion `ago-console`'s own `TeamChatUnreadProvider` states for its own
+     * echoed-back send - here read by comparing [ago.chat.android.core.network.realtime.TeamMessageDto.authorEmail]
+     * against [OperatorIdentity.email] instead of a stable operator id, [TeamUnreadCount]'s own doc
+     * comment explains why. */
+    @Test
+    fun `the operator's own echoed-back team message never counts as unread`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val identityProvider = FakeOperatorIdentityProvider(OperatorIdentity(displayName = "Андрей", email = "me@example.com"))
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    identityProvider = identityProvider,
+                    teamUnreadCount = TeamUnreadCount(hubEvents, identityProvider),
+                )
+            advanceUntilIdle()
+
+            hubEvents.teamMessages.tryEmit(teamMessage(authorEmail = "me@example.com"))
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.teamUnreadTotal.value)
+        }
+
+    @Test
+    fun `onTeamTabActiveChanged(true) resets teamUnreadTotal to zero`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val identityProvider = FakeOperatorIdentityProvider(null)
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    identityProvider = identityProvider,
+                    teamUnreadCount = TeamUnreadCount(hubEvents, identityProvider),
+                )
+            advanceUntilIdle()
+            hubEvents.teamMessages.tryEmit(teamMessage(authorEmail = "colleague@example.com"))
+            advanceUntilIdle()
+            assertEquals(1, viewModel.teamUnreadTotal.value)
+
+            viewModel.onTeamTabActiveChanged(true)
+
+            assertEquals(0, viewModel.teamUnreadTotal.value)
+        }
+
+    /** While Команда is the active tab, a live push is rendered directly by the screen itself - it must
+     * not also bump the badge a caller would only see once they leave that tab and come back. */
+    @Test
+    fun `a team message that arrives while the tab is active is never counted`() =
+        runTest(dispatcher) {
+            val hubEvents = FakeOperatorHubEvents()
+            val identityProvider = FakeOperatorIdentityProvider(null)
+            val viewModel =
+                viewModelWith(
+                    FakeOperatorPermissionsApi(hang = true),
+                    identityProvider = identityProvider,
+                    teamUnreadCount = TeamUnreadCount(hubEvents, identityProvider),
+                )
+            advanceUntilIdle()
+            viewModel.onTeamTabActiveChanged(true)
+
+            hubEvents.teamMessages.tryEmit(teamMessage(authorEmail = "colleague@example.com"))
+            advanceUntilIdle()
+            assertEquals(0, viewModel.teamUnreadTotal.value)
+
+            viewModel.onTeamTabActiveChanged(false)
+            hubEvents.teamMessages.tryEmit(teamMessage(authorEmail = "colleague@example.com"))
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.teamUnreadTotal.value)
+        }
+
+    private fun teamMessage(authorEmail: String?): TeamMessageDto =
+        TeamMessageDto(
+            id = "msg-1",
+            sequence = 1,
+            authorEmail = authorEmail,
+        )
+
     private fun viewModelWith(
         api: OperatorPermissionsApi,
         identityProvider: OperatorIdentityProvider = FakeOperatorIdentityProvider(null),
         presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
         unreadTotal: ConversationsUnreadTotal = FakeConversationsUnreadTotal(),
         pendingBookingsCount: PendingBookingsCount = FakePendingBookingsCount(),
+        teamUnreadCount: TeamUnreadCount = TeamUnreadCount(FakeOperatorHubEvents(), identityProvider),
     ): AppShellViewModel =
         AppShellViewModel(
             api = api,
@@ -266,6 +384,7 @@ class AppShellViewModelTest {
             presenceController = presenceController,
             unreadTotal = unreadTotal,
             pendingBookingsCount = pendingBookingsCount,
+            teamUnreadCount = teamUnreadCount,
             ioDispatcher = dispatcher,
         )
 
@@ -332,5 +451,64 @@ class AppShellViewModelTest {
         }
 
         override fun observeCount(): Flow<Int?> = total
+    }
+
+    /** `26-180`: a minimal [OperatorHubEvents] fake - [TeamUnreadCount] only ever reads [teamMessages],
+     * so every other member throws, the identical "this test double has no test of its own for these"
+     * shape `BookingsViewModelTest`'s own `FakeBookingsApi` already establishes. */
+    private class FakeOperatorHubEvents : OperatorHubEvents {
+        override val state = MutableStateFlow(OperatorHubConnectionState.Connected)
+        override val messages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
+        override val allMessages = MutableSharedFlow<MessageDto>(extraBufferCapacity = 1)
+        override val assignments = MutableSharedFlow<ConversationAssignedDto>(extraBufferCapacity = 1)
+        override val messageDelivered = MutableSharedFlow<MessageDeliveredDto>(extraBufferCapacity = 1)
+        override val teamMessages = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+        override val teamMessageRemovals = MutableSharedFlow<TeamMessageDto>(extraBufferCapacity = 16)
+
+        override suspend fun joinConversation(conversationId: String): HistoryPage = error("not exercised here")
+
+        override fun leaveConversation() = error("not exercised here")
+
+        override suspend fun loadOlderHistory(
+            conversationId: String,
+            beforeSequence: Long,
+            pageSize: Int,
+        ): HistoryPage = error("not exercised here")
+
+        override suspend fun getVisitorHistoryConversation(
+            conversationId: String,
+            historicalConversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage = error("not exercised here")
+
+        override suspend fun getConversationHistoryAsSiteConfigureHolder(
+            conversationId: String,
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): HistoryPage = error("not exercised here")
+
+        override suspend fun sendMessage(
+            conversationId: String,
+            body: String,
+            clientMessageId: String,
+            attachmentId: String?,
+        ): SendMessageResult = error("not exercised here")
+
+        override suspend fun reconnectToActiveSite() = error("not exercised here")
+
+        override suspend fun getTeamHistory(
+            beforeSequence: Long?,
+            pageSize: Int,
+        ): TeamHistoryPage = error("not exercised here")
+
+        override suspend fun getTeamDelta(afterSequence: Long): TeamHistoryPage = error("not exercised here")
+
+        override suspend fun sendTeamMessage(
+            body: String,
+            clientMessageId: String,
+        ): SendMessageResult = error("not exercised here")
+
+        override suspend fun removeTeamMessage(teamMessageId: String) = error("not exercised here")
     }
 }
