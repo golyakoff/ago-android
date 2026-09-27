@@ -48,6 +48,8 @@
     <string name="sign_in_tagline">Chat and bookings for your website</string>
     <string name="sign_in_action">Sign in</string>
     <string name="sign_in_working">Signing in…</string>
+    <string name="sign_in_working_stuck_hint">Signing in is taking longer than usual.</string>
+    <string name="sign_in_working_return">Back to sign-in</string>
 
     <string name="sign_in_failed_title">Couldn\'t sign in</string>
     <string name="sign_in_failed_hint">Check your connection and try again.</string>

@@ -29,12 +29,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /**
  * `26-12`: every surface the pre-session flow can show, in one file because they are one flow and
@@ -55,13 +61,18 @@ public fun SignInHost(
     onChooseSite: (String) -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    onCancelSignIn: () -> Unit,
     onOpenConsole: (String) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold { padding ->
             val content = Modifier.fillMaxSize().padding(padding).padding(24.dp)
             when (state) {
-                SignInUiState.Starting, SignInUiState.Working -> WorkingScreen(content)
+                // `26-229`: `Starting` is the pre-read splash and has genuinely nothing to offer yet,
+                // so it never shows the escape; `Working` is the sign-in in flight, and is the one that
+                // can strand an operator if the Custom Tab redirect is lost - only it gets `onCancelSignIn`.
+                SignInUiState.Starting -> WorkingScreen(content, onReturnToSignIn = null)
+                SignInUiState.Working -> WorkingScreen(content, onReturnToSignIn = onCancelSignIn)
                 // `26-45`: the mockup's own gutter is 28dp, not the 24dp every other arm above shares -
                 // this replaces `content` only for this one branch rather than widening it for all six
                 // arms that are still centred messages, not the mockup's left-aligned block.
@@ -109,8 +120,29 @@ public fun SignInHost(
     }
 }
 
+/**
+ * `26-12`'s spinner, and `26-229`'s escape hatch out of it.
+ *
+ * `Working` is the only pre-session state with no control of its own, and the live bug this addresses
+ * is a Custom Tab whose `ago-android://callback` redirect is never delivered back to `MainActivity`:
+ * the round trip never reports, so nothing the view model awaits resolves and the screen stays here
+ * for good. [onReturnToSignIn] is the operator's own way back to the launch screen for exactly that
+ * case — `null` for [SignInUiState.Starting] (the pre-read splash, which has nothing to escape yet)
+ * and wired to [SignInViewModel.cancelSignIn] for [SignInUiState.Working].
+ *
+ * **Offered only after [STUCK_THRESHOLD_MS].** The redirect back normally arrives in well under a
+ * second, and every app-controlled phase this screen also covers — discovery, the PKCE code
+ * exchange, the routing probes — is bounded by its own network timeout and leaves `Working` on its
+ * own. So a control shown immediately would flicker in during every ordinary sign-in; shown only
+ * after a wait a working sign-in would already have cleared, it appears only when the sign-in is
+ * genuinely stuck. The delay never *acts* on its own — it only reveals a control the operator still
+ * has to tap — so unlike a timeout it can never abandon a slow-but-succeeding login.
+ */
 @Composable
-private fun WorkingScreen(modifier: Modifier) {
+private fun WorkingScreen(
+    modifier: Modifier,
+    onReturnToSignIn: (() -> Unit)?,
+) {
     Centred(modifier) {
         CircularProgressIndicator()
         Text(
@@ -118,8 +150,33 @@ private fun WorkingScreen(modifier: Modifier) {
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 16.dp),
         )
+
+        if (onReturnToSignIn != null) {
+            var stuck by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(STUCK_THRESHOLD_MS)
+                stuck = true
+            }
+            if (stuck) {
+                Text(
+                    text = stringResource(R.string.sign_in_working_stuck_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                TextButton(onClick = onReturnToSignIn, modifier = Modifier.padding(top = 8.dp)) {
+                    Text(text = stringResource(R.string.sign_in_working_return))
+                }
+            }
+        }
     }
 }
+
+/** How long a sign-in sits on the spinner before [WorkingScreen] offers a way back to the launch
+ * screen. Comfortably longer than any app-controlled phase's own network timeout, so it is reached
+ * only by a sign-in that has genuinely stopped reporting back (`26-229`). */
+private const val STUCK_THRESHOLD_MS = 20_000L
 
 /**
  * The launch screen. **It names no deployment** — there is deliberately no hostname, environment
@@ -368,6 +425,7 @@ private fun LaunchScreenPreview() {
         onChooseSite = {},
         onRetry = {},
         onSignOut = {},
+        onCancelSignIn = {},
         onOpenConsole = {},
     )
 }
@@ -389,6 +447,7 @@ private fun SitePickerPreview() {
         onChooseSite = {},
         onRetry = {},
         onSignOut = {},
+        onCancelSignIn = {},
         onOpenConsole = {},
     )
 }

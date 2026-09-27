@@ -29,6 +29,17 @@
     <string name="sign_in_working">Выполняется вход…</string>
 
     <!--
+        `26-229`: the escape hatch out of the one otherwise-terminal state. `Выполняется вход`
+        (`Working`) is the only screen with no control at all; if the Custom Tab redirect is never
+        delivered back to `MainActivity`, the app stays on it indefinitely with no way to recover
+        short of killing the process. This hint and the action below appear only after the sign-in
+        has been stuck long enough to be a genuine hang (`SignInScreens.WorkingScreen`), never during
+        the ordinary sub-second routing that also renders this screen.
+    -->
+    <string name="sign_in_working_stuck_hint">Вход занимает больше времени, чем обычно.</string>
+    <string name="sign_in_working_return">Вернуться ко входу</string>
+
+    <!--
         `11-17`, ported: the identity provider refusing and the call *after* a successful sign-in
         failing are different problems with different fixes, so they are different messages. This one
         is Keycloak's own round trip.

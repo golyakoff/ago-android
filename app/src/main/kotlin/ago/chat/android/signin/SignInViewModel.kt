@@ -10,11 +10,11 @@ import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.presence.OperatorPresenceController
-import ago.chat.android.session.SignInFailedException
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -134,7 +134,20 @@ public class SignInViewModel
                 mutableState.value = SignInUiState.Working
                 try {
                     authorizationIntents.send(session.beginAuthorization())
-                } catch (failure: SignInFailedException) {
+                } catch (cancellation: CancellationException) {
+                    // Structured concurrency: a cancelled `viewModelScope` (the Activity going away)
+                    // is not a sign-in failure to render - rethrow so the coroutine machinery sees it,
+                    // the identical split `KtorIdentityApi` already makes around every `catch`.
+                    throw cancellation
+                } catch (failure: Exception) {
+                    // `26-229`: was `catch (SignInFailedException)`, which left every *other* throw to
+                    // kill this coroutine silently and strand the screen on `Working` forever - the
+                    // exact eternal-«Выполняется вход» this item exists to close. The concrete one that
+                    // reached it live is `AuthorizationService.getAuthorizationRequestIntent` throwing
+                    // `ActivityNotFoundException` on a device with no browser AppAuth will launch a
+                    // Custom Tab in; discovery's own failure was already a `SignInFailedException` and
+                    // is still one. Both, and anything else, now land on the recoverable failure screen
+                    // rather than a spinner with no way out.
                     mutableState.value = SignInUiState.SignInFailed(failure.message ?: "")
                 }
             }
@@ -155,7 +168,15 @@ public class SignInViewModel
                 mutableState.value = SignInUiState.Working
                 try {
                     session.completeAuthorization(data)
-                } catch (failure: SignInFailedException) {
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (failure: Exception) {
+                    // `26-229`: broadened from `catch (SignInFailedException)` for the identical reason
+                    // as [beginSignIn] - `completeAuthorization` only throws that today, but nothing
+                    // enforces it, and a throw this `catch` did not name would otherwise leave the
+                    // screen on `Working` with no recovery. `routeNow()` below cannot throw (every arm
+                    // of `PostSignInRouter` is a value, `KtorIdentityApi` turns every failure into
+                    // `Unanswered`), so it stays outside this block deliberately.
                     mutableState.value = SignInUiState.SignInFailed(failure.message ?: "")
                     return@launch
                 }
@@ -176,6 +197,26 @@ public class SignInViewModel
         /** The retry arm's only control. Re-asks the same questions; nothing else changes. */
         public fun retry() {
             resumeSession()
+        }
+
+        /**
+         * `26-229`: the operator's own way out of a stuck [SignInUiState.Working].
+         *
+         * `Working` is the one pre-session state with no terminal of its own: it is left only when
+         * [onAuthorizationResult] fires (the Custom Tab handed a result back) or [beginSignIn]/
+         * [completeAuthorization] throws. When the Custom Tab redirect (`ago-android://callback`) is
+         * never delivered back to `MainActivity` at all — the live hang this item is about — none of
+         * those happen, and nothing this class can await will ever resolve, so there is no server- or
+         * timeout-driven transition to add here: the round trip simply never reports back. This is the
+         * escape hatch for exactly that case — an operator-initiated return to the launch screen, from
+         * where [beginSignIn] starts a wholly fresh authorization (its own `AuthState(config)` reset
+         * discards whatever the stuck attempt left behind). Deliberately **not** [retry]/[resumeSession]:
+         * that re-runs the probe tree against any stored session, where the point here is to get back to
+         * a screen with a button on it. Rendered only after the sign-in has been stuck long enough to be
+         * a genuine hang, never during ordinary routing — `SignInScreens.WorkingScreen`'s own delay.
+         */
+        public fun cancelSignIn() {
+            mutableState.value = SignInUiState.SignedOut
         }
 
         /**
