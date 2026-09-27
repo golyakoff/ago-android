@@ -51,6 +51,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -152,6 +153,16 @@ public fun ConversationListRoute(
     // carries only the id. Defaulted to a no-op so every existing caller/test that never taps this tab
     // compiles and behaves unchanged.
     onOpenAllConversation: (String) -> Unit = {},
+    // `26-227`: `site:configure` - the same permission `canSeeAllConversations` above already reads,
+    // handed a second time under its own name because the two gate two unrelated pieces of UI (the «Все»
+    // segment vs. this screen's own new `⋮` overflow) and a caller reading this file should not have to
+    // infer the second from the first. Drives whether [ConversationListOverflowMenu] draws anything at
+    // all - hide-not-disable, `docs/design/tenant-modules-restrictions-android.md`'s own §"principle".
+    // Defaulted to `false` so every existing caller/test compiles and behaves unchanged.
+    canConfigureSite: Boolean = false,
+    // `26-227`: a tap on the overflow's own «Ограниченные посетители» item. Defaulted to a no-op for the
+    // identical reason every other optional callback on this route already is.
+    onOpenRestricted: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -215,6 +226,8 @@ public fun ConversationListRoute(
         onLoadMoreAll = viewModel::loadMoreAll,
         onConfirmErasure = viewModel::confirmErasure,
         onDismissEraseFailure = viewModel::dismissEraseFailure,
+        canConfigureSite = canConfigureSite,
+        onOpenRestricted = onOpenRestricted,
     )
 }
 
@@ -248,6 +261,11 @@ internal fun ConversationListScreen(
     // `26-98`: [AllList]'s own row tap - see [ConversationListRoute]'s own parameter doc comment for why
     // this is a second callback rather than a second caller of [onOpenConversation].
     onOpenAllConversation: (String) -> Unit = {},
+    // `26-227`: gates the new `⋮` overflow this item adds - see [ConversationListRoute]'s own doc comment
+    // for why this is a second, separately-named read of the same `site:configure` permission
+    // [tabs]/`canSeeAllConversations` are already derived from.
+    canConfigureSite: Boolean = false,
+    onOpenRestricted: () -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
@@ -311,6 +329,16 @@ internal fun ConversationListScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.conversation_list_title)) },
                     actions = {
+                        // `26-227`: the Диалоги overflow this item introduces
+                        // (`docs/design/tenant-modules-restrictions-android.md`'s own finding #3 - the
+                        // old dot+kebab pair `26-90` removed left this top bar with nothing but the
+                        // avatar; this is a new, second `⋮`, not that one's return). Placed *before*
+                        // `AccountAvatarAction` so the avatar stays this bar's own rightmost element,
+                        // the identical placement rule that composable's own doc comment states.
+                        ConversationListOverflowMenu(
+                            canConfigureSite = canConfigureSite,
+                            onOpenRestricted = onOpenRestricted,
+                        )
                         // `26-77`: the avatar replaces the old dot+kebab pair
                         // (`docs/backlog/26-77-*.md`'s own Found table) - a Type-A header's rightmost
                         // element, per that item's own Scope item 1.
@@ -438,6 +466,49 @@ internal fun ConversationListScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * `26-227`: the Диалоги top bar's own new `⋮` — a single, hard-coded item («Ограниченные посетители»),
+ * unlike [ago.chat.android.analytics.AnalyticsReportsOverflowMenu]'s data-driven list, because this
+ * screen has exactly one thing to hang here today (`docs/design/tenant-modules-restrictions-android.md`
+ * §1.5). **Drawn only when [canConfigureSite]** — an operator without `site:configure` sees no `⋮` at
+ * all, the identical hide-not-disable rule that sibling overflow's own doc comment states, restated for
+ * a menu with one entry rather than a filtered list: there is no partial state between "drawn" and "not
+ * drawn" for a single item, so the gate is this composable's own first line rather than a filtered-list
+ * parameter.
+ */
+@Composable
+private fun ConversationListOverflowMenu(
+    canConfigureSite: Boolean,
+    onOpenRestricted: () -> Unit,
+) {
+    if (!canConfigureSite) return
+
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { expanded = true }) {
+        Icon(
+            imageVector = AgoIcons.MoreVertical,
+            contentDescription = stringResource(R.string.conversation_list_overflow_action),
+        )
+    }
+
+    // `26-177`: the same dimming `ScrimmedDropdownMenu` every other menu in this app now uses in place of
+    // a plain `DropdownMenu`.
+    ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(text = stringResource(R.string.restricted_visitors_menu_item)) },
+            trailingIcon = { Icon(imageVector = AgoIcons.ChevronRight, contentDescription = null) },
+            onClick = {
+                // The menu closes *before* the callback runs, never after - the callback navigates, so a
+                // `setExpanded` sequenced after it would land on a composition already being torn down
+                // (`AnalyticsReportsOverflowMenu`'s own doc comment states the identical reasoning).
+                expanded = false
+                onOpenRestricted()
+            },
+        )
     }
 }
 

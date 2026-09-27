@@ -21,6 +21,7 @@ import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.notes.ConversationNotesResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionPageResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionStatusResult
 import ago.chat.android.core.domain.tags.ConversationTag
 import ago.chat.android.core.domain.tags.ConversationTagsApi
@@ -1647,5 +1648,13 @@ class ContactPanelViewModelTest {
             isRestrictedIds.add(visitorId)
             return statusResult
         }
+
+        // `26-227`: this class does not read the oversight list at all - only
+        // `ago.chat.android.restrictions.RestrictedVisitorsViewModel` does, the identical "not used by
+        // this class" posture every other unused port method on this fake already takes.
+        override suspend fun list(
+            before: String?,
+            limit: Int?,
+        ): VisitorRestrictionPageResult = throw UnsupportedOperationException("not used by this class")
     }
 }
