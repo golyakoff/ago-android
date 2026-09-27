@@ -35,6 +35,7 @@ class LaunchScreenTest {
                 onSignIn = {},
                 onChooseSite = {},
                 onRetry = {},
+                onCancelSignIn = {},
                 onSignOut = {},
                 onOpenConsole = {},
             )
