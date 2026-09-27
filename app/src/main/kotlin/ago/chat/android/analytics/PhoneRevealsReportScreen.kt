@@ -7,6 +7,7 @@ import ago.chat.android.bookings.RefusalBody
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Box
@@ -207,9 +208,13 @@ private fun loadMoreFailureMessage(reason: BookingsQueueFailure): String =
  * One reveal: when, which customer, which operator, which surface — `docs/backlog/26-74-*.md`'s own
  * Scope item 4, in that exact order (the console's own four columns, `CalendarPhoneRevealsPage.tsx`).
  *
- * **[reveal.customerId]/[reveal.operatorId] render through [IdentifierText], never a name** — neither is
- * carried on the wire at all ([PhoneReveal]'s own doc comment), so there is nothing here to resolve a
- * name from even if this screen wanted to. [reveal.surface] renders exactly as the server sent it — a
+ * **[reveal.customerId] renders through [ago.chat.android.ui.components.VisitorIdentityText] — the
+ * stored emoji pair ([PhoneRevealsReportViewModel.mergeEmojiPairs]'s own client-side merge, `26-203`)
+ * when chat's person registry has one, or the bare id — and [reveal.operatorId] keeps rendering through
+ * [IdentifierText] alone**, an operator being staff, never a visitor ([PhoneReveal.emojiCreature]'s own
+ * doc comment). Neither id is carried with a name on the wire at all ([PhoneReveal]'s own doc comment),
+ * so there is nothing here to resolve a name from even if this screen wanted to. [reveal.surface] renders
+ * exactly as the server sent it — a
  * plain string this app has no closed vocabulary for beyond its own two callers
  * ([ago.chat.android.core.domain.bookings.BookingRevealSurface]'s own doc comment: a console-originated
  * value is just as valid a [PhoneReveal.surface] as either of this app's own).
@@ -227,7 +232,12 @@ private fun PhoneRevealCard(
             label = stringResource(R.string.analytics_phone_reveals_customer_label),
             modifier = Modifier.padding(top = 4.dp),
         ) {
-            IdentifierText(id = reveal.customerId, style = MaterialTheme.typography.bodyMedium)
+            VisitorIdentityText(
+                id = reveal.customerId,
+                emojiCreature = reveal.emojiCreature,
+                emojiFood = reveal.emojiFood,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         PhoneRevealDetailRow(
             label = stringResource(R.string.analytics_phone_reveals_operator_label),

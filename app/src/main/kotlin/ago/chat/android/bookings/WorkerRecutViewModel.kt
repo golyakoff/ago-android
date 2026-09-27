@@ -3,7 +3,10 @@ package ago.chat.android.bookings
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.core.domain.recut.RecutApi
+import ago.chat.android.core.domain.recut.RecutBooking
 import ago.chat.android.core.domain.recut.RecutBookingDecision
 import ago.chat.android.core.domain.recut.RecutConfirmResult
 import ago.chat.android.core.domain.recut.RecutDecision
@@ -46,6 +49,12 @@ import javax.inject.Inject
  * **One flat [WorkerRecutUiState.Loaded], not a step-by-step sealed hierarchy** — that type's own class
  * doc comment states why, mirroring `ago-console`'s own `CalendarWorkerRecutPage.tsx` state shape rather
  * than this app's usual "one fetch, one state" four-arm pattern.
+ *
+ * `26-203`: [personsApi] is the identical client-side emoji-pair merge
+ * [ago.chat.android.bookings.ContactsViewModel]/[WorkerSlotsViewModel]'s own doc comments state in full —
+ * `RecutBookingPreviewResponse` carries an opaque `personId` and no emoji pair of its own, so
+ * [mergeEmojiPairsIntoPreview] closes that gap on every fresh [preview], the same "one merge, right after
+ * the read that needed it" shape those two sibling classes already establish.
  */
 @HiltViewModel
 internal class WorkerRecutViewModel
@@ -53,6 +62,7 @@ internal class WorkerRecutViewModel
     constructor(
         private val api: RecutApi,
         private val bookingsApi: BookingsApi,
+        private val personsApi: PersonsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState =
@@ -103,14 +113,16 @@ internal class WorkerRecutViewModel
             mutableState.update { loaded.copy(previewing = true, error = null, result = null, confirming = false) }
             viewModelScope.launch {
                 when (val result = withContext(ioDispatcher) { api.preview(workerId, loaded.from) }) {
-                    is RecutPreviewResult.Loaded ->
+                    is RecutPreviewResult.Loaded -> {
+                        val preview = mergeEmojiPairsIntoPreview(result.preview)
                         mutableState.update { current ->
                             (current as? WorkerRecutUiState.Loaded)?.copy(
                                 previewing = false,
-                                preview = result.preview,
+                                preview = preview,
                                 decisions = emptyMap(),
                             ) ?: current
                         }
+                    }
 
                     is RecutPreviewResult.Refused ->
                         mutableState.update { current ->
@@ -311,6 +323,48 @@ internal class WorkerRecutViewModel
                         )
                     },
             )
+
+        /**
+         * `26-203`: reads chat's own person registry for every distinct [RecutBooking.personId] across
+         * every day of [preview] and copies
+         * [ago.chat.android.core.domain.persons.PersonProfile.emojiCreature]/`.emojiFood` onto the
+         * matching rows — the identical [WorkerSlotsViewModel.mergeEmojiPairs] shape, restated for
+         * [RecutPreview]'s nested per-day shape rather than a flat list, the same reason
+         * [replacePhoneInPreview]'s own doc comment gives for its own restatement of
+         * [WorkerSlotsViewModel.replacePhone]. A person id with nobody in the answer, or [personsApi]
+         * itself failing or being unreachable, simply leaves that row's pair `null` — never a failed
+         * preview.
+         */
+        private suspend fun mergeEmojiPairsIntoPreview(preview: RecutPreview): RecutPreview {
+            val personIds =
+                preview.days
+                    .flatMap { it.bookings }
+                    .mapNotNull { it.personId }
+                    .distinct()
+            if (personIds.isEmpty()) return preview
+
+            val persons =
+                when (val result = withContext(ioDispatcher) { personsApi.fetchPersons(personIds) }) {
+                    is PersonsResult.Loaded -> result.persons
+                    is PersonsResult.Failed -> return preview
+                }
+
+            val personsById = persons.associateBy { it.personId }
+            if (personsById.isEmpty()) return preview
+
+            return preview.copy(
+                days =
+                    preview.days.map { day ->
+                        day.copy(
+                            bookings =
+                                day.bookings.map { booking ->
+                                    val person = booking.personId?.let(personsById::get) ?: return@map booking
+                                    booking.copy(emojiCreature = person.emojiCreature, emojiFood = person.emojiFood)
+                                },
+                        )
+                    },
+            )
+        }
 
         private fun today(): String = LocalDate.now(ZoneOffset.UTC).toString()
 

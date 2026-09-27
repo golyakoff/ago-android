@@ -1862,4 +1862,10 @@
     <string name="restricted_visitors_lift_confirm_body">%1$s снова сможет писать в чат.</string>
     <string name="restricted_visitors_lift_confirm_action">Снять ограничение</string>
     <string name="restricted_visitors_lift_failed">Не удалось снять ограничение</string>
+
+    <!-- `26-203`: the shared visitor-label format every booking-vertical screen renders through
+         [ago.chat.android.ui.components.VisitorIdentityText] - `%1$s` is the resolved emoji-pair name
+         ("Сова · Клубника"), `%2$s` the 8-char short id. The identical literal `restricted_visitors_visitor_label`
+         already holds for its own single screen, kept separate rather than shared across features. -->
+    <string name="visitor_label_emoji_and_short_id">%1$s (%2$s)</string>
 </resources>

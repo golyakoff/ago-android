@@ -3,6 +3,10 @@ package ago.chat.android.bookings
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.core.domain.recut.RecutApi
 import ago.chat.android.core.domain.recut.RecutBooking
 import ago.chat.android.core.domain.recut.RecutBookingDecision
@@ -51,7 +55,7 @@ class WorkerRecutViewModelTest {
     @Test
     fun `opening with no initial from defaults to today, previewing nothing yet`() =
         runTest(dispatcher) {
-            val viewModel = WorkerRecutViewModel(FakeRecutApi(), FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(FakeRecutApi(), FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
 
             viewModel.open("w1", initialFrom = null)
 
@@ -64,7 +68,7 @@ class WorkerRecutViewModelTest {
     @Test
     fun `opening with an initial from - reached from the Часы notice - prefills it verbatim`() =
         runTest(dispatcher) {
-            val viewModel = WorkerRecutViewModel(FakeRecutApi(), FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(FakeRecutApi(), FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
 
             viewModel.open("w1", initialFrom = "2026-10-01")
 
@@ -75,7 +79,7 @@ class WorkerRecutViewModelTest {
     fun `re-opening the same worker id still starts fresh - unlike the sibling drill-downs`() =
         runTest(dispatcher) {
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(PREVIEW))
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-01")
             viewModel.preview()
             advanceUntilIdle()
@@ -92,7 +96,7 @@ class WorkerRecutViewModelTest {
     fun `previewing sends the workerId and the typed from, and clears any earlier result`() =
         runTest(dispatcher) {
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(PREVIEW))
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
 
             viewModel.preview()
@@ -110,7 +114,7 @@ class WorkerRecutViewModelTest {
     fun `a second preview while one is in flight is a no-op`() =
         runTest(dispatcher) {
             val recutApi = FakeRecutApi(hangPreview = true)
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
 
             viewModel.preview()
@@ -127,7 +131,7 @@ class WorkerRecutViewModelTest {
         runTest(dispatcher) {
             val recutApi =
                 FakeRecutApi(previewResult = RecutPreviewResult.Refused("Range starts before today.", "recut.from_before_today"))
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2020-01-01")
 
             viewModel.preview()
@@ -143,7 +147,7 @@ class WorkerRecutViewModelTest {
     fun `a transport failure on preview is not dressed up as a refusal`() =
         runTest(dispatcher) {
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Failed(BookingsQueueFailure.Transport))
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
 
             viewModel.preview()
@@ -159,7 +163,12 @@ class WorkerRecutViewModelTest {
     fun `requestConfirm is a no-op until every decidable booking is decided`() =
         runTest(dispatcher) {
             val viewModel =
-                WorkerRecutViewModel(FakeRecutApi(previewResult = RecutPreviewResult.Loaded(PREVIEW)), FakeRecutBookingsApi(), dispatcher)
+                WorkerRecutViewModel(
+                    FakeRecutApi(previewResult = RecutPreviewResult.Loaded(PREVIEW)),
+                    FakeRecutBookingsApi(),
+                    FakeRecutPersonsApi(),
+                    dispatcher,
+                )
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -177,7 +186,7 @@ class WorkerRecutViewModelTest {
     fun `dismissConfirm closes the dialog without sending anything`() =
         runTest(dispatcher) {
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(PREVIEW))
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -198,7 +207,7 @@ class WorkerRecutViewModelTest {
                     previewResult = RecutPreviewResult.Loaded(PREVIEW),
                     confirmResult = RecutConfirmResult.Confirmed(CONFIRMATION),
                 )
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -229,7 +238,7 @@ class WorkerRecutViewModelTest {
                     previewResult = RecutPreviewResult.Loaded(PREVIEW),
                     confirmResult = RecutConfirmResult.Refused("Reload the preview and try again.", "recut.stale"),
                 )
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -256,7 +265,7 @@ class WorkerRecutViewModelTest {
                     previewResult = RecutPreviewResult.Loaded(PREVIEW),
                     confirmResult = RecutConfirmResult.Refused("Some days already re-cut stand.", "recut.day_changed_concurrently"),
                 )
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -280,7 +289,7 @@ class WorkerRecutViewModelTest {
                     previewResult = RecutPreviewResult.Loaded(PREVIEW),
                     confirmResult = RecutConfirmResult.Refused("A decision is missing.", "recut.missing_decision"),
                 )
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -305,7 +314,7 @@ class WorkerRecutViewModelTest {
                     previewResult = RecutPreviewResult.Loaded(PREVIEW),
                     confirmResult = RecutConfirmResult.Failed(BookingsQueueFailure.Transport),
                 )
-            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -337,7 +346,7 @@ class WorkerRecutViewModelTest {
                 )
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(preview))
             val bookingsApi = FakeRecutBookingsApi(revealResult = RevealPhoneResult.Revealed("+70001234567"))
-            val viewModel = WorkerRecutViewModel(recutApi, bookingsApi, dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, bookingsApi, FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -366,7 +375,7 @@ class WorkerRecutViewModelTest {
                 )
             val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(preview))
             val bookingsApi = FakeRecutBookingsApi(revealResult = RevealPhoneResult.Refused("Not entitled to this customer's phone."))
-            val viewModel = WorkerRecutViewModel(recutApi, bookingsApi, dispatcher)
+            val viewModel = WorkerRecutViewModel(recutApi, bookingsApi, FakeRecutPersonsApi(), dispatcher)
             viewModel.open("w1", initialFrom = "2026-09-15")
             viewModel.preview()
             advanceUntilIdle()
@@ -381,6 +390,53 @@ class WorkerRecutViewModelTest {
             val booking = day.bookings.single()
             assertEquals("***1234", booking.phone)
             assertTrue(booking.masked)
+        }
+
+    @Test
+    fun `26-203 the stored emoji pair chat's person registry answers with is merged onto every booking sharing that personId`() =
+        runTest(dispatcher) {
+            val bookingOne = BOOKING_PENDING.copy(bookingId = "b1", personId = "p1")
+            val bookingTwo = BOOKING_PENDING.copy(bookingId = "b2", personId = "p1")
+            val unrelated = BOOKING_PENDING.copy(bookingId = "b3", personId = "p2")
+            val preview =
+                RecutPreview(
+                    days = listOf(RecutDay("2026-09-15", 0, listOf(bookingOne, bookingTwo, unrelated))),
+                    fingerprint = "fp1",
+                )
+            val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(preview))
+            val persons =
+                FakeRecutPersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(PersonProfile(personId = "p1", displayName = null, emojiCreature = "🦉", emojiFood = "🍓")),
+                        ),
+                )
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), persons, dispatcher)
+            viewModel.open("w1", initialFrom = "2026-09-15")
+
+            viewModel.preview()
+            advanceUntilIdle()
+
+            assertEquals(listOf("p1", "p2"), persons.requestedIds)
+            val bookings = (viewModel.state.value as WorkerRecutUiState.Loaded).preview!!.days.flatMap { it.bookings }
+            assertTrue(bookings.filter { it.personId == "p1" }.all { it.emojiCreature == "🦉" && it.emojiFood == "🍓" })
+            assertNull(bookings.single { it.personId == "p2" }.emojiCreature)
+        }
+
+    @Test
+    fun `26-203 an unreachable person registry leaves every booking without a pair, never fails the preview`() =
+        runTest(dispatcher) {
+            val booking = BOOKING_PENDING.copy(personId = "p1")
+            val preview = RecutPreview(days = listOf(RecutDay("2026-09-15", 0, listOf(booking))), fingerprint = "fp1")
+            val recutApi = FakeRecutApi(previewResult = RecutPreviewResult.Loaded(preview))
+            val persons = FakeRecutPersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = WorkerRecutViewModel(recutApi, FakeRecutBookingsApi(), persons, dispatcher)
+            viewModel.open("w1", initialFrom = "2026-09-15")
+
+            viewModel.preview()
+            advanceUntilIdle()
+
+            assertEquals(preview, (viewModel.state.value as WorkerRecutUiState.Loaded).preview)
         }
 
     private companion object {
@@ -407,6 +463,22 @@ class WorkerRecutViewModelTest {
                 slotsInserted = 3,
                 bookingsCancelled = 1,
             )
+    }
+}
+
+/** `26-203`: the identical fake shape [ContactsViewModelTest]'s own `FakePersonsApi`/
+ * [WorkerSlotsViewModelTest]'s own `FakeWorkerSlotsPersonsApi` already establish for [PersonsApi] - named
+ * differently here only for the identical package-wide `private` top-level uniqueness reason
+ * `FakeRecutBookingsApi`'s own doc comment gives. */
+private class FakeRecutPersonsApi(
+    var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+) : PersonsApi {
+    var requestedIds: List<String> = emptyList()
+        private set
+
+    override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+        requestedIds = personIds
+        return result
     }
 }
 

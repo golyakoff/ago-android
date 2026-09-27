@@ -5,8 +5,8 @@ import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.WorkerSlotStatus
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
-import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -174,9 +174,11 @@ private fun WorkerSlotsList(
 
 /**
  * One slot: the business-local time range, the status word, the service (or «—»), and — only when
- * [WorkerSlot.personId] is present — the person, rendered through [IdentifierText] rather than an
- * invented name (`docs/design/26-155-*.md`'s own degraded rendering for a person this screen does not
- * resolve a display name for). The phone is drawn only when the server sent one at all
+ * [WorkerSlot.personId] is present — the person, rendered through
+ * [ago.chat.android.ui.components.VisitorIdentityText]: the stored emoji pair
+ * ([WorkerSlotsViewModel.mergeEmojiPairs]'s own client-side merge, `26-203`) when chat's person registry
+ * has one, or the bare id — never a display name this screen does not resolve
+ * (`docs/design/26-155-*.md`'s own degraded rendering). The phone is drawn only when the server sent one at all
  * ([WorkerSlot.phone]'s own doc comment), masked with the identical «Показать»/«Показ…» reveal pair
  * `26-53` already established, never a second copy of that string pair for this fourth surface.
  */
@@ -204,7 +206,12 @@ private fun WorkerSlotRow(
             )
             slot.personId?.let { personId ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IdentifierText(id = personId, style = MaterialTheme.typography.bodySmall)
+                    VisitorIdentityText(
+                        id = personId,
+                        emojiCreature = slot.emojiCreature,
+                        emojiFood = slot.emojiFood,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     slot.phone?.let { phone ->
                         Text(
                             text = phone,

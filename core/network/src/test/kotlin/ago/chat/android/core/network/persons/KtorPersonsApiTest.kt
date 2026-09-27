@@ -105,6 +105,36 @@ class KtorPersonsApiTest {
         }
 
     @Test
+    fun `26-203 the stored emoji pair is read alongside the name, a missing pair kept honest`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {"persons":[
+                          {"personId":"p1","displayName":"Анна","emojiCreature":"🦉","emojiFood":"🍓"},
+                          {"personId":"p2","displayName":null}
+                        ]}
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.fetchPersons(listOf("p1", "p2"))
+
+            assertEquals(
+                PersonsResult.Loaded(
+                    listOf(
+                        PersonProfile(personId = "p1", displayName = "Анна", emojiCreature = "🦉", emojiFood = "🍓"),
+                        PersonProfile(personId = "p2", displayName = null),
+                    ),
+                ),
+                result,
+            )
+        }
+
+    @Test
     fun `an unknown field on the wire does not break the read`() =
         runTest {
             val api =

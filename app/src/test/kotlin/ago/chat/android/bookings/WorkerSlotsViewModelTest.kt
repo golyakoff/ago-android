@@ -3,6 +3,10 @@ package ago.chat.android.bookings
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.WorkerSlotStatus
 import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
@@ -45,7 +49,8 @@ class WorkerSlotsViewModelTest {
     @Test
     fun `starts Loading before open is called`() =
         runTest(dispatcher) {
-            val viewModel = WorkerSlotsViewModel(FakeWorkerSlotsApi(hangFetch = true), FakeBookingsApi(), dispatcher)
+            val viewModel =
+                WorkerSlotsViewModel(FakeWorkerSlotsApi(hangFetch = true), FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             dispatcher.scheduler.runCurrent()
@@ -57,7 +62,8 @@ class WorkerSlotsViewModelTest {
     fun `every slot from the read is kept, including Cancelled ones`() =
         runTest(dispatcher) {
             val slots = listOf(SLOT_AVAILABLE, SLOT_CANCELLED)
-            val viewModel = WorkerSlotsViewModel(FakeWorkerSlotsApi(slots = slots), FakeBookingsApi(), dispatcher)
+            val viewModel =
+                WorkerSlotsViewModel(FakeWorkerSlotsApi(slots = slots), FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -69,7 +75,8 @@ class WorkerSlotsViewModelTest {
     @Test
     fun `a deployment with no calendar backend is NotConfigured, not a failure`() =
         runTest(dispatcher) {
-            val viewModel = WorkerSlotsViewModel(FakeWorkerSlotsApi(notConfigured = true), FakeBookingsApi(), dispatcher)
+            val viewModel =
+                WorkerSlotsViewModel(FakeWorkerSlotsApi(notConfigured = true), FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -81,7 +88,7 @@ class WorkerSlotsViewModelTest {
     fun `a genuine server refusal is shown verbatim`() =
         runTest(dispatcher) {
             val api = FakeWorkerSlotsApi(refusal = "The range must end on or after it starts.")
-            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -93,7 +100,7 @@ class WorkerSlotsViewModelTest {
     fun `re-opening the same worker id does not re-fetch`() =
         runTest(dispatcher) {
             val api = FakeWorkerSlotsApi(slots = listOf(SLOT_AVAILABLE))
-            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -107,7 +114,7 @@ class WorkerSlotsViewModelTest {
     fun `opening a different worker id re-fetches for it`() =
         runTest(dispatcher) {
             val api = FakeWorkerSlotsApi(slots = listOf(SLOT_AVAILABLE))
-            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
 
             viewModel.open("w1")
             advanceUntilIdle()
@@ -128,7 +135,7 @@ class WorkerSlotsViewModelTest {
             val unrelatedSlot = SLOT_AVAILABLE.copy(eventId = "e4")
             val api = FakeWorkerSlotsApi(slots = listOf(runSlotOne, runSlotTwo, unrelatedSlot))
             val bookingsApi = FakeBookingsApi(revealResult = RevealPhoneResult.Revealed("+70001234567"))
-            val viewModel = WorkerSlotsViewModel(api, bookingsApi, dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, bookingsApi, FakeWorkerSlotsPersonsApi(), dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -147,7 +154,7 @@ class WorkerSlotsViewModelTest {
         runTest(dispatcher) {
             val api = FakeWorkerSlotsApi(slots = listOf(SLOT_AVAILABLE.copy(personId = "p1", phone = "***1234", masked = true)))
             val bookingsApi = FakeBookingsApi(revealResult = RevealPhoneResult.Refused("Not entitled to this customer's phone."))
-            val viewModel = WorkerSlotsViewModel(api, bookingsApi, dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, bookingsApi, FakeWorkerSlotsPersonsApi(), dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
 
@@ -167,7 +174,7 @@ class WorkerSlotsViewModelTest {
     fun `refresh re-reads the same worker id, retry after a failure`() =
         runTest(dispatcher) {
             val api = FakeWorkerSlotsApi(fail = true)
-            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), dispatcher)
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), FakeWorkerSlotsPersonsApi(), dispatcher)
             viewModel.open("w1")
             advanceUntilIdle()
             assertEquals(WorkerSlotsUiState.Failed(BookingsQueueFailure.Transport), viewModel.state.value)
@@ -179,6 +186,58 @@ class WorkerSlotsViewModelTest {
 
             assertNull((viewModel.state.value as WorkerSlotsUiState.Loaded).actionError)
             assertEquals(2, api.fetchCount)
+        }
+
+    @Test
+    fun `26-203 the stored emoji pair chat's person registry answers with is merged onto every slot sharing that personId`() =
+        runTest(dispatcher) {
+            val slotOne = SLOT_AVAILABLE.copy(eventId = "e1", personId = "p1")
+            val slotTwo = SLOT_AVAILABLE.copy(eventId = "e2", personId = "p1")
+            val unrelated = SLOT_AVAILABLE.copy(eventId = "e3", personId = null)
+            val api = FakeWorkerSlotsApi(slots = listOf(slotOne, slotTwo, unrelated))
+            val persons =
+                FakeWorkerSlotsPersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(PersonProfile(personId = "p1", displayName = null, emojiCreature = "🦉", emojiFood = "🍓")),
+                        ),
+                )
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), persons, dispatcher)
+
+            viewModel.open("w1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("p1"), persons.requestedIds)
+            val loaded = viewModel.state.value as WorkerSlotsUiState.Loaded
+            assertTrue(loaded.slots.filter { it.personId == "p1" }.all { it.emojiCreature == "🦉" && it.emojiFood == "🍓" })
+            assertNull(loaded.slots.single { it.eventId == "e3" }.emojiCreature)
+        }
+
+    @Test
+    fun `26-203 an unreachable person registry leaves every slot without a pair, never fails the screen`() =
+        runTest(dispatcher) {
+            val slot = SLOT_AVAILABLE.copy(personId = "p1")
+            val api = FakeWorkerSlotsApi(slots = listOf(slot))
+            val persons = FakeWorkerSlotsPersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), persons, dispatcher)
+
+            viewModel.open("w1")
+            advanceUntilIdle()
+
+            assertEquals(WorkerSlotsUiState.Loaded(slots = listOf(slot)), viewModel.state.value)
+        }
+
+    @Test
+    fun `26-203 a worker with no slot carrying a personId asks the person registry for nothing`() =
+        runTest(dispatcher) {
+            val api = FakeWorkerSlotsApi(slots = listOf(SLOT_AVAILABLE.copy(personId = null)))
+            val persons = FakeWorkerSlotsPersonsApi()
+            val viewModel = WorkerSlotsViewModel(api, FakeBookingsApi(), persons, dispatcher)
+
+            viewModel.open("w1")
+            advanceUntilIdle()
+
+            assertEquals(0, persons.fetchCalls)
         }
 
     private companion object {
@@ -199,6 +258,25 @@ class WorkerSlotsViewModelTest {
                 bookingId = null,
             )
         val SLOT_CANCELLED = SLOT_AVAILABLE.copy(eventId = "e2", status = WorkerSlotStatus.Cancelled, rawStatus = "Cancelled")
+    }
+}
+
+/** `26-203`: the identical fake shape [ContactsViewModelTest]'s own `FakePersonsApi` already establishes
+ * for [PersonsApi] - named differently here only because a `private` top-level class name must be unique
+ * within its package's compiled module, not merely within its own file, the identical reason
+ * `FakeRecutBookingsApi` gives for its own name. */
+private class FakeWorkerSlotsPersonsApi(
+    var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+) : PersonsApi {
+    var fetchCalls: Int = 0
+        private set
+    var requestedIds: List<String> = emptyList()
+        private set
+
+    override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+        fetchCalls++
+        requestedIds = personIds
+        return result
     }
 }
 

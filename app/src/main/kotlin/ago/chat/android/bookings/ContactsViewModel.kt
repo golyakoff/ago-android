@@ -40,9 +40,14 @@ import javax.inject.Inject
  *
  * `26-162`/`adr/0184`: [personsApi] is the display-merge this screen now performs on every load —
  * [api]'s own `ContactResponse` carries a bare `personId` and no name at all any more (the calendar
- * stopped holding a person copy); [mergeDisplayNames] is the one place that gap is closed, reading
+ * stopped holding a person copy); [mergePersonDetails] is the one place that gap is closed, reading
  * chat's own person registry for the ids this page's own read just came back with. Reachability of that
- * second call is never allowed to fail the whole screen — see [mergeDisplayNames]'s own doc comment.
+ * second call is never allowed to fail the whole screen — see [mergePersonDetails]'s own doc comment.
+ *
+ * `26-203`: the same merge now also carries [ago.chat.android.core.domain.persons.PersonProfile.emojiCreature]/
+ * `.emojiFood` onto [Contact] — `26-202`'s own additive pair, read off the identical registry response
+ * [mergePersonDetails] already fetches for the name, so [ContactCard]'s own fallback for a nameless
+ * customer can render the stored emoji pair rather than a bare id.
  */
 @HiltViewModel
 internal class ContactsViewModel
@@ -75,7 +80,7 @@ internal class ContactsViewModel
                 val result = withContext(ioDispatcher) { api.fetchContacts() }
                 val merged =
                     if (result is ContactsResult.Loaded) {
-                        ContactsResult.Loaded(mergeDisplayNames(result.contacts))
+                        ContactsResult.Loaded(mergePersonDetails(result.contacts))
                     } else {
                         result
                     }
@@ -86,14 +91,17 @@ internal class ContactsViewModel
         /**
          * `26-162`/`adr/0184`: reads chat's own person registry for every distinct id [contacts] carries
          * and copies a real [Contact.displayName] onto the rows that got one back — never the other way
-         * round. A person id with nobody in the answer, or [personsApi] itself failing or being
-         * unreachable, simply leaves that row's [Contact.displayName] at whatever [api] already gave it
-         * (`null`, since `ContactResponse` carries no name of its own any more) — `adr/0184`'s own
-         * Consequences: "degrades to name not shown yet", never a failed Клиенты read. [ContactCard]
-         * already renders a `null` name through [ago.chat.android.ui.components.IdentifierText], so this
+         * round. `26-203` widens the same pass to also copy [Contact.emojiCreature]/[Contact.emojiFood]
+         * off the identical [PersonProfile] answer — one request, two facts merged from it, rather than a
+         * second round trip for the pair alone. A person id with nobody in the answer, or [personsApi]
+         * itself failing or being unreachable, simply leaves that row exactly as [api] already gave it
+         * (`displayName` `null`, since `ContactResponse` carries no name of its own any more, and the
+         * emoji fields at their own `null` default) — `adr/0184`'s own Consequences: "degrades to name not
+         * shown yet", restated here for the pair too, never a failed Клиенты read. [ContactCard] already
+         * renders a `null` name/pair through [ago.chat.android.ui.components.VisitorIdentityText], so this
          * merge is the only place that decision needs making.
          */
-        private suspend fun mergeDisplayNames(contacts: List<Contact>): List<Contact> {
+        private suspend fun mergePersonDetails(contacts: List<Contact>): List<Contact> {
             val personIds = contacts.map { it.customerId }.distinct()
             if (personIds.isEmpty()) return contacts
 
@@ -103,11 +111,16 @@ internal class ContactsViewModel
                     is PersonsResult.Failed -> return contacts
                 }
 
-            val namesByPersonId = persons.mapNotNull { person -> person.displayName?.let { name -> person.personId to name } }.toMap()
-            if (namesByPersonId.isEmpty()) return contacts
+            val personsById = persons.associateBy { it.personId }
+            if (personsById.isEmpty()) return contacts
 
             return contacts.map { contact ->
-                namesByPersonId[contact.customerId]?.let { name -> contact.copy(displayName = name) } ?: contact
+                val person = personsById[contact.customerId] ?: return@map contact
+                contact.copy(
+                    displayName = person.displayName ?: contact.displayName,
+                    emojiCreature = person.emojiCreature ?: contact.emojiCreature,
+                    emojiFood = person.emojiFood ?: contact.emojiFood,
+                )
             }
         }
 

@@ -106,7 +106,7 @@ internal class ConfirmedBookingsViewModel
 
         /**
          * `26-162`/`adr/0184`: the identical chat-registry display-merge
-         * [ago.chat.android.bookings.ContactsViewModel.mergeDisplayNames]'s own doc comment describes in
+         * [ago.chat.android.bookings.ContactsViewModel.mergePersonDetails]'s own doc comment describes in
          * full, restated here for [ConfirmedBooking] instead of [ago.chat.android.core.domain.bookings.Contact] —
          * a lookup miss or an unreachable [personsApi] leaves [ConfirmedBooking.customerDisplayName] at
          * `null`, which [confirmedBookingIdentity] already falls back from to the masked phone, then to
