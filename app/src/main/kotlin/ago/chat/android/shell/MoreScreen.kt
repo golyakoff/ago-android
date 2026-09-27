@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.R
 import ago.chat.android.automation.CannedResponsesRoute
 import ago.chat.android.automation.OfflineAutoReplyRoute
+import ago.chat.android.automation.TagsRoute
 import ago.chat.android.channels.BrandingRoute
 import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
@@ -123,6 +124,10 @@ internal fun MoreScreen(
             // way `26-192`/`C5` replaced «Автоответ вне смены»'s. Back returns to the Ещё list (clause 2)
             // via the same `openRowId = null` every drill-in uses.
             AUTOMATION_QUICK_REPLIES_ROW_ID -> CannedResponsesRoute(onBack = { openRowId = null })
+            // `26-225`: Автоматизация → «Метки» - the tag-vocabulary CRUD editor, the second real
+            // Автоматизация branch this scaffold serves. Back returns to the Ещё list (clause 2) via the
+            // same `openRowId = null` every drill-in uses.
+            AUTOMATION_TAGS_ROW_ID -> TagsRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -234,6 +239,7 @@ internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
 internal const val CHANNELS_EMAIL_ROW_ID: String = "channels-email"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
+internal const val AUTOMATION_TAGS_ROW_ID: String = "automation-tags"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 
@@ -328,6 +334,17 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = AUTOMATION_AFTER_HOURS_ROW_ID,
                     labelRes = R.string.more_automation_after_hours_row,
+                    section = MoreSectionId.Automation,
+                ),
+            )
+            // `26-225`: Метки closes out this block, last in
+            // `docs/design/tenant-canned-tags-android.md` §3.2's own order (Готовые ответы · ИИ-подсказки
+            // · Автоответ вне смены · База знаний · Метки - the two unbuilt rows in between are not part
+            // of this item, so Метки sits directly after Автоответ вне смены for now).
+            add(
+                MoreRow(
+                    id = AUTOMATION_TAGS_ROW_ID,
+                    labelRes = R.string.more_automation_tags_row,
                     section = MoreSectionId.Automation,
                 ),
             )

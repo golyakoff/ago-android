@@ -1146,6 +1146,10 @@
          guess, left for review to correct (`docs/backlog/26-77-*.md`'s own Scope item 4). -->
     <string name="more_automation_quick_replies_row">Готовые ответы</string>
     <string name="more_automation_after_hours_row">Автоответ вне смены</string>
+    <!-- `26-225`: Автоматизация's third real row - «Метки», last in `docs/design/tenant-canned-tags-android.md`
+         §3.2's own order (Готовые ответы · ИИ-подсказки · Автоответ вне смены · База знаний · Метки; the
+         two unbuilt rows in between are not part of this item). -->
+    <string name="more_automation_tags_row">Метки</string>
     <string name="more_administration_operators_row">Операторы и роли</string>
     <string name="more_administration_billing_row">Тариф и оплата</string>
     <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
@@ -1411,6 +1415,39 @@
     <!-- %1$s is that response's own trimmed title, naming which response needs a body. -->
     <string name="canned_responses_validation_body_required">Ответу «%1$s» нужен текст.</string>
     <string name="canned_responses_validation_body_too_long">Текст ответа не может превышать %1$d символов.</string>
+
+    <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
+         tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -
+         the same "one resource, two call sites" shape `channels_install_title`/`widget_config_hub_title`
+         already take. Unlike canned's whole-list `PUT`, each of create/rename/delete is its own call
+         (`SiteTagsApi`'s own doc comment), so there is no `..._editor_title` string here - the create and
+         rename dialogs each name themselves instead. Prefixed `automation_tags_`, not plain `tags_` -
+         `26-115`'s conversation-tag sheet already owns that shorter prefix (`tags_section_title` and
+         siblings above), a different screen entirely (§2.5: that one applies/removes a tag on one
+         conversation, this one manages the vocabulary itself). -->
+    <string name="automation_tags_empty">Пока нет меток. Добавьте первую.</string>
+    <string name="automation_tags_add_action">Добавить метку</string>
+    <string name="automation_tags_edit_action">Изменить</string>
+    <string name="automation_tags_delete_action">Удалить</string>
+    <string name="automation_tags_delete_title">Удалить метку?</string>
+    <!-- %1$s is the tag's own name. States the cascade before it happens
+         (`docs/design/tenant-canned-tags-android.md` §2.1: the delete removes this tag from every
+         conversation that carried it, and re-creating the same name does not restore those
+         associations) - the phone's own half of the same honesty
+         `working_hours_delete_message` already models for a different irreversible removal. -->
+    <string name="automation_tags_delete_message">Удалить метку «%1$s»? Она исчезнет со всех диалогов, где была проставлена, — это не отменить.</string>
+    <string name="automation_tags_create_title">Новая метка</string>
+    <string name="automation_tags_rename_title">Переименовать метку</string>
+    <string name="automation_tags_name_label">Название</string>
+    <string name="automation_tags_action_save">Сохранить</string>
+    <string name="automation_tags_action_saving">Сохранение…</string>
+    <!-- `docs/design/tenant-canned-tags-android.md` §2.4: the client-side courtesy check's own two
+         reasons - never the authority (`CreateTagHandler`/`RenameTagHandler` are), so these only stop an
+         obviously-invalid name before a round trip; `Tag.AlreadyExists` is always the server's own
+         answer, shown verbatim, since this check never reads the existing vocabulary to compare against.
+         %1$d below is always `TagBounds.MAX_NAME_LENGTH`. -->
+    <string name="automation_tags_validation_name_required">Метке нужно название.</string>
+    <string name="automation_tags_validation_name_too_long">Название не может превышать %1$d символов.</string>
 
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
