@@ -6,9 +6,12 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.shell.AppShellScreen
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -34,6 +37,14 @@ import org.junit.runner.RunWith
  *
  * `26-91`/`26-94`: the assertions are plain Russian literals - safe because `LocaleForcingTestRunner`
  * pins every instrumented test's own locale to `ru` (`docs/architecture.md`).
+ *
+ * **The positive case scrolls before asserting** - unlike its two siblings, whose own row sits high
+ * enough in `MoreScreen`'s `LazyColumn` to already be composed, «Документы согласий» is Администрирование's
+ * third and last row, pushed below the initial viewport once `site:configure` also draws the three extra
+ * Автоматизация rows above it; a `LazyColumn` never composes a semantics node for an item it has not laid
+ * out, so the fix is a real scroll (`performScrollToNode`) rather than a longer wait or a relaxed
+ * assertion (a CI-observed failure this file's own first version had:
+ * `AssertionError: Failed: assertExists. ... could not find any node ... 'Документы согласий'`).
  */
 @RunWith(AndroidJUnit4::class)
 class ConsentDocumentsGatingTest {
@@ -58,6 +69,14 @@ class ConsentDocumentsGatingTest {
         composeTestRule.onNodeWithText("Ещё").performClick()
 
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
+        // `MoreScreen`'s own list is a `LazyColumn` - with `site:configure` granted, the three extra
+        // Автоматизация rows above push «Документы согласий» (the section's third and last row) below the
+        // initial viewport, so a lazy item that has never been composed has no semantics node at all yet
+        // for a plain `onNodeWithText` to find. `performScrollToNode` drives the scroll container itself
+        // until a matching node is composed, rather than looking one up before it exists - the identical
+        // shape `androidx.compose.ui.test.performScrollToNode`'s own doc recommends for exactly this
+        // "item not yet laid out" case a bare `performScrollTo()` cannot handle.
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Документы согласий"))
         composeTestRule.onNodeWithText("Документы согласий").assertExists()
     }
 
