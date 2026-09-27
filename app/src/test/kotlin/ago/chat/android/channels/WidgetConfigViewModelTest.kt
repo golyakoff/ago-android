@@ -197,6 +197,58 @@ class WidgetConfigViewModelTest {
         }
 
     @Test
+    fun `saving a consent-only committed-copy leaves appearance and behaviour fields intact`() =
+        // `26-217`/`W3`'s own half of the round-trip guarantee `docs/design/tenant-widget-android.md`
+        // §9's Done-when names for this slice - the identical shape the appearance/behaviour tests above
+        // prove, exercised with `WidgetConsentEditor`'s own five-field slice instead. Load-bearing here
+        // in particular: `requireContactConsent` is `[JsonRequired]` on the wire (§1.1) precisely because
+        // an omitted value silently disables a live gate, so this is the one test that must show it is
+        // always sent - never dropped by an unrelated screen's save.
+        runTest(dispatcher) {
+            val committed = fullConfig()
+            val api =
+                FakeWidgetConfigApi(
+                    fetchResult = WidgetConfigResult.Loaded(committed),
+                    updateResult = WidgetConfigWriteResult.Saved(committed),
+                )
+            val viewModel = viewModel(api)
+            advanceUntilIdle()
+
+            // The exact pattern `WidgetConsentEditor` follows: `committed.copy(<its own slice>)`, never a
+            // freshly-built `WidgetConfig`.
+            val consentOnlySave =
+                committed.copy(
+                    noticeText = null,
+                    noticeUrl = null,
+                    requireContactConsent = false,
+                    acceptUnverifiedPhone = false,
+                    allowAttachmentUploadsByDefault = false,
+                )
+            viewModel.save(consentOnlySave)
+            advanceUntilIdle()
+
+            val sent = api.updateCalls.single()
+            assertEquals(consentOnlySave, sent)
+            // Every field this "consent save" never touched must still equal the original committed
+            // value - the structural proof that a Согласие save can never silently reset the appearance
+            // colour/position/panel-title or the behaviour attract-attention/auto-open fields.
+            assertEquals("primaryColorHex must survive an unrelated save untouched", committed.primaryColorHex, sent.primaryColorHex)
+            assertEquals("position must survive an unrelated save untouched", committed.position, sent.position)
+            assertEquals("panelTitle must survive an unrelated save untouched", committed.panelTitle, sent.panelTitle)
+            assertEquals("attractAttention must survive an unrelated save untouched", true, sent.attractAttention)
+            assertEquals("autoOpenEnabled must survive an unrelated save untouched", true, sent.autoOpenEnabled)
+            assertEquals(
+                "autoOpenGreetingText must survive an unrelated save untouched",
+                committed.autoOpenGreetingText,
+                sent.autoOpenGreetingText,
+            )
+            // The one field this test exists to guard: even a save that turns the gate off must still
+            // *send* it explicitly (`false`, as drafted) rather than omit it - the whole point of
+            // `WidgetConfig` carrying it as a non-optional `Boolean`, never a nullable one.
+            assertEquals("requireContactConsent must be sent, never omitted", false, sent.requireContactConsent)
+        }
+
+    @Test
     fun `a refused save keeps committed unchanged and shows the server's own words`() =
         runTest(dispatcher) {
             val committed = fullConfig()

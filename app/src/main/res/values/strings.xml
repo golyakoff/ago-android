@@ -1315,6 +1315,36 @@
          `docs/design/tenant-widget-android.md` §6.2's own remark. -->
     <string name="widget_config_field_contact_capture_confirmation_supporting">Показывается после того, как посетитель укажет контакты. Впишите {name} в любом месте текста — вместо этого подставится указанное имя.</string>
 
+    <!-- `26-217`/`W3` (`docs/design/tenant-widget-android.md` §6.3): «Согласие и запись» - also the
+         editor's own app-bar title, the same "one resource, two call sites" shape
+         `widget_config_group_appearance`/`widget_config_group_behaviour` already take for their own
+         groups. Completes the three-group split `docs/design/tenant-widget-android.md` §2 fixes. -->
+    <string name="widget_config_group_consent">Согласие и запись</string>
+    <!-- The notice's own read-then-edit shape (console `25-24`, restated in
+         `docs/design/tenant-widget-android.md` §6.3): one label over the whole block below, not a panel
+         title, since this screen folds four of the console's own panels into one group. -->
+    <string name="widget_config_field_notice_section_label">Уведомление о согласии</string>
+    <string name="widget_config_field_notice_current_label">Текущий текст</string>
+    <string name="widget_config_field_notice_url_current_label">Ссылка</string>
+    <string name="widget_config_field_notice_not_set">Не задано — посетители не видят никакого уведомления.</string>
+    <string name="widget_config_field_notice_show_fully">Показать полностью</string>
+    <string name="widget_config_field_notice_show_less">Скрыть</string>
+    <string name="widget_config_field_notice_edit">Изменить</string>
+    <string name="widget_config_field_notice_text_label">Текст уведомления (необязательно)</string>
+    <string name="widget_config_field_notice_text_placeholder">Мы используем ваши сообщения, чтобы отвечать на ваши вопросы.</string>
+    <string name="widget_config_field_notice_text_supporting">Показывается посетителю до того, как он начнёт печатать. Если оставить поле пустым, уведомление не показывается вовсе.</string>
+    <string name="widget_config_field_notice_url_label">Ссылка на уведомление (необязательно)</string>
+    <string name="widget_config_field_notice_url_supporting">Ссылка на вашу собственную страницу с политикой. Должна начинаться с https://.</string>
+    <string name="widget_config_field_notice_url_invalid">Ссылка должна быть абсолютным адресом https://.</string>
+    <!-- The `[JsonRequired]` consent gate (§1.1) - the caption names the document without claiming an
+         in-app screen this app does not yet have; the document itself is published elsewhere. -->
+    <string name="widget_config_field_require_consent_label">Требовать согласие перед сбором контактных данных</string>
+    <string name="widget_config_field_require_consent_caption">Пока включено, виджет не запишет телефон или email, пока посетитель не примет опубликованный документ о согласии.</string>
+    <string name="widget_config_field_accept_unverified_phone_label">Пока принимать непроверенный номер телефона</string>
+    <string name="widget_config_field_accept_unverified_phone_caption">Временное послабление, пока не подключён провайдер проверки телефона — бронирование завершается с номером, который посетитель уже назвал, без подтверждения дозвона.</string>
+    <string name="widget_config_field_allow_attachment_uploads_label">Разрешать вложения с первого сообщения</string>
+    <string name="widget_config_field_allow_attachment_uploads_caption">Новые разговоры на этом сайте начинаются с уже разрешённой отправкой файлов — оператор всё равно может изменить это для отдельного разговора.</string>
+
     <!-- `26-192`/`C5` (`docs/design/tenant-channels-android.md` §4): Автоматизация → «Автоответ вне
          смены» - the offline auto-reply editor. Order is behaviour (the server matches first-rule-wins),
          so the description line below states that plainly rather than leaving it implicit. The screen's

@@ -51,11 +51,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * conversation thread's own internal nav, reached from Диалоги, already rests on (§3.1's own statement of
  * why the hub is legal here).
  *
- * **W1 wired only Внешний вид; `26-216`/`W2` adds Поведение и приветствие here.** [WidgetConfigGroup]
- * gains its second entry, and [WidgetConfigHubContent]'s row list its second row — Согласие и запись is
- * `W3`'s own row, added the same way when it lands (`docs/design/tenant-widget-android.md` §8.3) — not
- * drawn disabled here, since a hub row promising a screen that does not exist yet would be worse than a
- * hub that is honestly one row short for now.
+ * **W1 wired Внешний вид, `26-216`/`W2` added Поведение и приветствие, `26-217`/`W3` adds Согласие и
+ * запись here** — [WidgetConfigGroup]'s third and last entry, and [WidgetConfigHubContent]'s third row,
+ * completing the three-group split `docs/design/tenant-widget-android.md` §2 fixes.
  */
 @Composable
 internal fun WidgetConfigRoute(
@@ -88,6 +86,16 @@ internal fun WidgetConfigRoute(
                 onBack = { openGroup = null },
             )
 
+        openGroup == WidgetConfigGroup.Consent && loaded != null ->
+            WidgetConsentEditor(
+                committed = loaded.committed,
+                saving = loaded.saving,
+                saveError = loaded.saveError,
+                savedTick = loaded.savedTick,
+                onSave = viewModel::save,
+                onBack = { openGroup = null },
+            )
+
         else ->
             WidgetConfigHubScreen(
                 state = state,
@@ -98,11 +106,12 @@ internal fun WidgetConfigRoute(
     }
 }
 
-/** The group screens `docs/design/tenant-widget-android.md` §2 fixes — `W1` wired [Appearance];
- * `26-216`/`W2` adds [Behaviour] here. `Consent` joins this enum when `W3` lands. */
+/** The group screens `docs/design/tenant-widget-android.md` §2 fixes — `W1` wired [Appearance],
+ * `26-216`/`W2` added [Behaviour], `26-217`/`W3` adds [Consent] here, completing the three-group split. */
 internal enum class WidgetConfigGroup {
     Appearance,
     Behaviour,
+    Consent,
 }
 
 /**
@@ -161,6 +170,10 @@ private fun WidgetConfigHubContent(onOpenGroup: (WidgetConfigGroup) -> Unit) {
         WidgetConfigGroupRow(
             label = stringResource(R.string.widget_config_group_behaviour),
             onClick = { onOpenGroup(WidgetConfigGroup.Behaviour) },
+        )
+        WidgetConfigGroupRow(
+            label = stringResource(R.string.widget_config_group_consent),
+            onClick = { onOpenGroup(WidgetConfigGroup.Consent) },
         )
     }
 }
