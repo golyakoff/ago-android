@@ -1148,4 +1148,9 @@
     <string name="restricted_visitors_lift_confirm_body">%1$s will be able to message again.</string>
     <string name="restricted_visitors_lift_confirm_action">Lift restriction</string>
     <string name="restricted_visitors_lift_failed">Could not lift the restriction</string>
+
+    <!-- `26-203`: the shared visitor-label format every booking-vertical screen renders through
+         ago.chat.android.ui.components.VisitorIdentityText - %1$s is the resolved emoji-pair name
+         ("Owl · Strawberry"), %2$s the 8-char short id. -->
+    <string name="visitor_label_emoji_and_short_id">%1$s (%2$s)</string>
 </resources>

@@ -20,4 +20,15 @@ public data class PhoneReveal(
     val customerId: String,
     val operatorId: String,
     val surface: String,
+    /** `26-203`: [customerId]'s own stored emoji pair, merged onto this row client-side from chat's own
+     * person registry — [Contact.emojiCreature]'s own doc comment states the full contract this restates.
+     * `ContactPhoneRevealResponse` carries neither field, `null` until
+     * [PhoneRevealsReportViewModel][ago.chat.android.analytics.PhoneRevealsReportViewModel]'s own merge
+     * runs or when chat has no pair for [customerId], never hash-derived from it. **[operatorId] gets no
+     * such pair** — an operator is staff, never a visitor, so the emoji-pair fallback this class's own
+     * two fields exist for does not apply to it; it keeps rendering through
+     * [ago.chat.android.ui.components.IdentifierText] alone. */
+    val emojiCreature: String? = null,
+    /** The other half of [emojiCreature]'s own pair. */
+    val emojiFood: String? = null,
 )

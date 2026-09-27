@@ -10,6 +10,10 @@ import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
+import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonProfile
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -20,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -47,7 +52,7 @@ class PhoneRevealsReportViewModelTest {
     fun `starts Loading before the first answer comes back`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(hangFetch = true)
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             dispatcher.scheduler.runCurrent()
 
@@ -58,7 +63,7 @@ class PhoneRevealsReportViewModelTest {
     fun `asks for the first page on construction alone, with no cursor`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null))
-            PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -71,7 +76,7 @@ class PhoneRevealsReportViewModelTest {
         runTest(dispatcher) {
             val page = listOf(reveal("r2"), reveal("r1"))
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(page, nextBefore = "r1"))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -82,7 +87,7 @@ class PhoneRevealsReportViewModelTest {
     fun `NotConfigured passes straight through`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.NotConfigured)
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -93,7 +98,7 @@ class PhoneRevealsReportViewModelTest {
     fun `a failure carries its own classification through, unedited`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Failed(BookingsQueueFailure.Transport))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
 
             advanceUntilIdle()
 
@@ -104,7 +109,7 @@ class PhoneRevealsReportViewModelTest {
     fun `refresh asks for the first page again, discarding whatever cursor was already in hand`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = "r0"))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             api.result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = null)
@@ -119,7 +124,7 @@ class PhoneRevealsReportViewModelTest {
     fun `load more is a no-op once the cursor is exhausted`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.loadMore()
@@ -132,7 +137,7 @@ class PhoneRevealsReportViewModelTest {
     fun `load more sends the current cursor and appends the next page to the end of the list`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             api.result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null)
@@ -150,7 +155,7 @@ class PhoneRevealsReportViewModelTest {
     fun `load more marks loadingMore immediately, before the server answers`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"), hangFetchMore = true)
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.loadMore()
@@ -166,7 +171,7 @@ class PhoneRevealsReportViewModelTest {
     fun `calling load more twice while the first page is in flight sends exactly one request`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"), hangFetchMore = true)
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             viewModel.loadMore()
@@ -181,7 +186,7 @@ class PhoneRevealsReportViewModelTest {
     fun `a failed load more keeps the rows already on screen and reports its own reason`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"))
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
 
             api.result = PhoneRevealsResult.Failed(BookingsQueueFailure.Transport)
@@ -202,7 +207,7 @@ class PhoneRevealsReportViewModelTest {
     fun `refreshing while a load more is still in flight discards the stale page once it lands`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"), hangFetchMore = true)
-            val viewModel = PhoneRevealsReportViewModel(api = api, ioDispatcher = dispatcher)
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
             advanceUntilIdle()
             viewModel.loadMore()
             dispatcher.scheduler.runCurrent()
@@ -217,6 +222,75 @@ class PhoneRevealsReportViewModelTest {
             // onto it.
             assertEquals(PhoneRevealsReportUiState.NotConfigured, viewModel.state.value)
         }
+
+    @Test
+    fun `26-203 the stored emoji pair chat's person registry answers with is merged onto the matching customer, never the operator`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null))
+            val persons =
+                FakePersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(PersonProfile(personId = "c1", displayName = null, emojiCreature = "🦉", emojiFood = "🍓")),
+                        ),
+                )
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(listOf("c1"), persons.requestedIds)
+            val loaded = (viewModel.state.value as PhoneRevealsReportUiState.Loaded).reveals.single()
+            assertEquals("🦉", loaded.emojiCreature)
+            assertEquals("🍓", loaded.emojiFood)
+        }
+
+    @Test
+    fun `26-203 a load more page is merged the identical way the first page is`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r2")), nextBefore = "r2"))
+            val persons =
+                FakePersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(PersonProfile(personId = "c1", displayName = null, emojiCreature = "🦉", emojiFood = "🍓")),
+                        ),
+                )
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            api.result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null)
+            viewModel.loadMore()
+            advanceUntilIdle()
+
+            val reveals = (viewModel.state.value as PhoneRevealsReportUiState.Loaded).reveals
+            assertEquals(2, reveals.size)
+            assertEquals(listOf("🦉", "🦉"), reveals.map { it.emojiCreature })
+        }
+
+    @Test
+    fun `26-203 an unreachable person registry leaves every reveal without a pair, never fails the report`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = PhoneRevealsResult.Loaded(listOf(reveal("r1")), nextBefore = null))
+            val persons = FakePersonsApi(result = PersonsResult.Failed(NetworkFailure.NoConnection))
+            val viewModel = PhoneRevealsReportViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            val loaded = (viewModel.state.value as PhoneRevealsReportUiState.Loaded).reveals.single()
+            assertNull(loaded.emojiCreature)
+        }
+
+    private class FakePersonsApi(
+        var result: PersonsResult = PersonsResult.Loaded(emptyList()),
+    ) : PersonsApi {
+        var requestedIds: List<String> = emptyList()
+            private set
+
+        override suspend fun fetchPersons(personIds: List<String>): PersonsResult {
+            requestedIds = personIds
+            return result
+        }
+    }
 
     private fun reveal(id: String) =
         PhoneReveal(

@@ -144,7 +144,7 @@ public class BookingsViewModel
 
         /**
          * `26-163`/`adr/0184`: the identical chat-registry display-merge
-         * [ago.chat.android.bookings.ContactsViewModel.mergeDisplayNames]'s own doc comment describes in
+         * [ago.chat.android.bookings.ContactsViewModel.mergePersonDetails]'s own doc comment describes in
          * full, restated here for [PendingBooking] — a lookup miss or an unreachable [personsApi] leaves
          * [PendingBooking.customerDisplayName] at `null`, which
          * [ago.chat.android.core.domain.bookings.pendingBookingIdentity] already falls back from to the

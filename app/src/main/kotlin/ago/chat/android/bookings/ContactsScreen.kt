@@ -2,7 +2,7 @@ package ago.chat.android.bookings
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.Contact
-import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.components.VisitorIdentityText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,9 +93,11 @@ private fun ContactsList(
  * yet (`docs/backlog/26-52-*.md`'s own Out of scope: "a client detail card... is fine here" to omit) —
  * name, the masked phone verbatim, and the no-show count, each read plainly (Scope item 2).
  *
- * A customer with no [Contact.displayName] renders through [IdentifierText] — never a raw GUID, never
- * an invented label (`ui/components/IdentifierText.kt`'s own doc comment,
- * `docs/backlog/26-52-*.md`'s own Done-when).
+ * A customer with no [Contact.displayName] renders through
+ * [ago.chat.android.ui.components.VisitorIdentityText] — the stored emoji pair
+ * ([ContactsViewModel.mergePersonDetails]'s own client-side merge, `26-203`) when chat's person registry
+ * has one for [Contact.customerId], or the bare id, but never a raw GUID and never an invented label
+ * (`ui/components/IdentifierText.kt`'s own doc comment, `docs/backlog/26-52-*.md`'s own Done-when).
  *
  * [Contact.phoneVerifiedAt] and [Contact.phoneConfirmedByOperatorAt] each get their own line, in that
  * fixed order — **never** collapsed into one "verified" line, no matter how tempting that is on a
@@ -121,8 +123,10 @@ private fun ContactCard(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             )
         } else {
-            IdentifierText(
+            VisitorIdentityText(
                 id = contact.customerId,
+                emojiCreature = contact.emojiCreature,
+                emojiFood = contact.emojiFood,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             )
         }

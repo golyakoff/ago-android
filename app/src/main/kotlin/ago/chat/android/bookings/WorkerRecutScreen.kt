@@ -8,8 +8,8 @@ import ago.chat.android.core.domain.recut.RecutConfirmation
 import ago.chat.android.core.domain.recut.RecutDay
 import ago.chat.android.core.domain.recut.RecutDecision
 import ago.chat.android.core.domain.recut.RecutPreview
-import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
@@ -301,10 +301,11 @@ private fun RecutDayCard(
 
 /**
  * One booking inside a re-cut day: the business-local time range, the service (or «—»), the person and
- * masked/revealed phone (the identical [IdentifierText]/«Показать» shape [WorkerSlotsScreen.kt][WorkerSlotRow]
- * already draws, restated for [RecutBooking] rather than [ago.chat.android.core.domain.workerslots.WorkerSlot]),
- * the status word, and either the Отменить/Оставить `FilterChip` pair or, for a recorded no-show, the
- * note stating why it has neither.
+ * masked/revealed phone (the identical [ago.chat.android.ui.components.VisitorIdentityText]/«Показать»
+ * shape [WorkerSlotsScreen.kt][WorkerSlotRow] already draws, restated for [RecutBooking] rather than
+ * [ago.chat.android.core.domain.workerslots.WorkerSlot] — including its own `26-203` emoji-pair merge,
+ * [WorkerRecutViewModel.mergeEmojiPairsIntoPreview]), the status word, and either the Отменить/Оставить
+ * `FilterChip` pair or, for a recorded no-show, the note stating why it has neither.
  */
 @Composable
 private fun RecutBookingRow(
@@ -325,7 +326,12 @@ private fun RecutBookingRow(
                 Text(text = booking.serviceName ?: "—", style = MaterialTheme.typography.bodySmall)
                 booking.personId?.let { personId ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IdentifierText(id = personId, style = MaterialTheme.typography.bodySmall)
+                        VisitorIdentityText(
+                            id = personId,
+                            emojiCreature = booking.emojiCreature,
+                            emojiFood = booking.emojiFood,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                         booking.phone?.let { phone ->
                             Text(
                                 text = phone,

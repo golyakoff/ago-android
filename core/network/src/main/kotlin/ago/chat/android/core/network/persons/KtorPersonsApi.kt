@@ -65,17 +65,25 @@ private data class PersonsWireDto(
     val persons: List<PersonProfileWireDto> = emptyList(),
 )
 
-/** `Ago.Chat.Application.UseCases.GetPersons.PersonProfileDto`, reduced to [PersonProfile]'s own two
- * fields - `channels`/`firstSeenAt`/`lastSeenAt` are all on the wire and simply omitted here, the
- * identical `ignoreUnknownKeys`-backed reduction [PersonProfile]'s own doc comment explains. */
+/** `Ago.Chat.Application.UseCases.GetPersons.PersonProfileDto`, reduced to [PersonProfile]'s own fields -
+ * `channels`/`firstSeenAt`/`lastSeenAt` are all on the wire and simply omitted here, the identical
+ * `ignoreUnknownKeys`-backed reduction [PersonProfile]'s own doc comment explains.
+ *
+ * `26-203`: `emojiCreature`/`emojiFood` join the same additive way - `26-202`'s own pair, already on this
+ * exact wire response (`PersonProfileDto.EmojiCreature`/`.EmojiFood`), simply never read on this side of
+ * the client until now. */
 @Serializable
 private data class PersonProfileWireDto(
     val personId: String,
     val displayName: String? = null,
+    val emojiCreature: String? = null,
+    val emojiFood: String? = null,
 )
 
 private fun PersonProfileWireDto.toDomain() =
     PersonProfile(
         personId = personId,
         displayName = displayName,
+        emojiCreature = emojiCreature,
+        emojiFood = emojiFood,
     )

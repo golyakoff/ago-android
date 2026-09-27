@@ -47,6 +47,17 @@ public data class PersonProfile(
     /** The person's most recently recorded name, or `null` when nobody has recorded one -
      * [PersonProfile]'s own doc comment on why this is never invented from anything else. */
     val displayName: String?,
+    /** `26-203`: `PersonProfileDto.EmojiCreature` (`26-202`'s own additive pair on chat's visitor row,
+     * `Ago.Chat.Application.UseCases.GetPersons.PersonProfileDto`) - the identical operator-side memory
+     * aid [ago.chat.android.core.domain.conversations.ConversationSummary.emojiCreature] and
+     * [ago.chat.android.core.domain.restrictions.VisitorRestriction.emojiCreature] already carry for their
+     * own screens, read here so a calendar-side caller with only an opaque `personId` (`adr/0184`) can
+     * fall back to the same pair rather than a bare id - never a fabricated name and never hash-derived
+     * from [personId]. `null` for a visitor row that predates the pair. */
+    val emojiCreature: String? = null,
+    /** The other half of [emojiCreature]'s own pair - see its doc comment, which this parameter shares in
+     * full. */
+    val emojiFood: String? = null,
 )
 
 /** What asking for a batch of persons came back with - the identical two-arm shape

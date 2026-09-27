@@ -3,6 +3,8 @@ package ago.chat.android.bookings
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
+import ago.chat.android.core.domain.persons.PersonsApi
+import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
 import ago.chat.android.core.domain.workerslots.WorkerSlotsResult
@@ -41,6 +43,13 @@ import javax.inject.Inject
  * "the console's own `new Date()` is a UTC calendar date" choice
  * [ConfirmedBookingsViewModel.refresh]'s own doc comment restates for the same reason. An adjustable
  * range is a follow-up, not this item's own promise.
+ *
+ * `26-203`: [personsApi] is the identical client-side emoji-pair merge
+ * [ago.chat.android.bookings.ContactsViewModel]'s own doc comment states in full —
+ * `WorkerSlotResponse` carries an opaque `personId` and no emoji pair of its own (the pair lives on
+ * chat's own visitor row, `26-202`), so [mergeEmojiPairs] closes that gap the same way
+ * [ContactsViewModel.mergePersonDetails] does for Клиенты, reading chat's own person registry for the
+ * ids this page's own read just came back with.
  */
 @HiltViewModel
 internal class WorkerSlotsViewModel
@@ -48,6 +57,7 @@ internal class WorkerSlotsViewModel
     constructor(
         private val api: WorkerSlotsApi,
         private val bookingsApi: BookingsApi,
+        private val personsApi: PersonsApi,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<WorkerSlotsUiState>(WorkerSlotsUiState.Loading)
@@ -85,7 +95,44 @@ internal class WorkerSlotsViewModel
             viewModelScope.launch {
                 val today = LocalDate.now(ZoneOffset.UTC)
                 val range = defaultWorkerSlotsRange(today)
-                applyResult(withContext(ioDispatcher) { api.fetchSlots(workerId, range.from, range.to) })
+                val result = withContext(ioDispatcher) { api.fetchSlots(workerId, range.from, range.to) }
+                val merged =
+                    if (result is WorkerSlotsResult.Loaded) {
+                        WorkerSlotsResult.Loaded(mergeEmojiPairs(result.slots))
+                    } else {
+                        result
+                    }
+                applyResult(merged)
+            }
+        }
+
+        /**
+         * `26-203`: reads chat's own person registry for every distinct [WorkerSlot.personId] [slots]
+         * carries and copies [ago.chat.android.core.domain.persons.PersonProfile.emojiCreature]/
+         * `.emojiFood` onto the matching rows — the identical
+         * [ago.chat.android.bookings.ContactsViewModel.mergePersonDetails] shape, restated for a flat
+         * [WorkerSlot] list rather than [Contact][ago.chat.android.core.domain.bookings.Contact], and for
+         * the emoji pair alone (this screen never resolved a display name to begin with, so there is none
+         * to merge here). A person id with nobody in the answer, or [personsApi] itself failing or being
+         * unreachable, simply leaves that row's pair `null` — the identical "degrades to id shown, never a
+         * failed screen" posture `adr/0184`'s own Consequences state for the sibling merge.
+         */
+        private suspend fun mergeEmojiPairs(slots: List<WorkerSlot>): List<WorkerSlot> {
+            val personIds = slots.mapNotNull { it.personId }.distinct()
+            if (personIds.isEmpty()) return slots
+
+            val persons =
+                when (val result = withContext(ioDispatcher) { personsApi.fetchPersons(personIds) }) {
+                    is PersonsResult.Loaded -> result.persons
+                    is PersonsResult.Failed -> return slots
+                }
+
+            val personsById = persons.associateBy { it.personId }
+            if (personsById.isEmpty()) return slots
+
+            return slots.map { slot ->
+                val person = slot.personId?.let(personsById::get) ?: return@map slot
+                slot.copy(emojiCreature = person.emojiCreature, emojiFood = person.emojiFood)
             }
         }
 

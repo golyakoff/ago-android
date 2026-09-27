@@ -316,6 +316,61 @@ class ContactsViewModelTest {
         }
 
     @Test
+    fun `26-203 the stored emoji pair chat's person registry answers with is merged onto the matching row`() =
+        runTest(dispatcher) {
+            val bare =
+                Contact(
+                    customerId = "c1",
+                    phone = "+7***5678",
+                    masked = true,
+                    displayName = null,
+                    noShowCount = 0,
+                    phoneVerifiedAt = null,
+                    phoneConfirmedByOperatorAt = null,
+                )
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(bare)))
+            val persons =
+                FakePersonsApi(
+                    result =
+                        PersonsResult.Loaded(
+                            listOf(PersonProfile(personId = "c1", displayName = null, emojiCreature = "🦉", emojiFood = "🍓")),
+                        ),
+                )
+            val viewModel = ContactsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            assertEquals(
+                ContactsUiState.Loaded(listOf(bare.copy(emojiCreature = "🦉", emojiFood = "🍓"))),
+                viewModel.state.value,
+            )
+        }
+
+    @Test
+    fun `26-203 a visitor row that predates the pair keeps both fields null, not a fabricated one`() =
+        runTest(dispatcher) {
+            val bare =
+                Contact(
+                    customerId = "c1",
+                    phone = "+7***5678",
+                    masked = true,
+                    displayName = null,
+                    noShowCount = 0,
+                    phoneVerifiedAt = null,
+                    phoneConfirmedByOperatorAt = null,
+                )
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(bare)))
+            val persons = FakePersonsApi(result = PersonsResult.Loaded(listOf(PersonProfile(personId = "c1", displayName = "Анна"))))
+            val viewModel = ContactsViewModel(api = api, personsApi = persons, ioDispatcher = dispatcher)
+
+            advanceUntilIdle()
+
+            val loaded = (viewModel.state.value as ContactsUiState.Loaded).contacts.single()
+            assertEquals(null, loaded.emojiCreature)
+            assertEquals(null, loaded.emojiFood)
+        }
+
+    @Test
     fun `26-162 an unreachable person registry leaves the row as it was, never fails the screen`() =
         runTest(dispatcher) {
             val bare =
@@ -364,7 +419,7 @@ class ContactsViewModelTest {
      * port, restated for [PersonsApi] - a single canned answer, no server-shaped state to fake. Defaults
      * to an empty [PersonsResult.Loaded] so every pre-existing test above (none of which cares about the
      * merge itself) keeps asserting the identical [Contact] its own fixture already carries: an empty
-     * answer changes nothing ([ContactsViewModel.mergeDisplayNames]'s own doc comment). */
+     * answer changes nothing ([ContactsViewModel.mergePersonDetails]'s own doc comment). */
     private class FakePersonsApi(
         var result: PersonsResult = PersonsResult.Loaded(emptyList()),
     ) : PersonsApi {

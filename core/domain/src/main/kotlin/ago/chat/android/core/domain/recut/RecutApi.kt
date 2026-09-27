@@ -100,6 +100,14 @@ public data class RecutBooking(
     val phone: String?,
     val masked: Boolean,
     val canDecide: Boolean,
+    /** `26-203`: the visitor's own stored emoji pair, merged onto this row client-side from chat's own
+     * person registry — [ago.chat.android.core.domain.bookings.Contact.emojiCreature]'s own doc comment
+     * states the full contract this restates: `RecutBookingPreviewResponse` carries neither field, `null`
+     * until [WorkerRecutViewModel][ago.chat.android.bookings.WorkerRecutViewModel]'s own merge runs or when
+     * chat has no pair for [personId], never hash-derived from it. */
+    val emojiCreature: String? = null,
+    /** The other half of [emojiCreature]'s own pair. */
+    val emojiFood: String? = null,
 )
 
 /** `Ago.Calendar.Contracts.RecutDayPreviewResponse`, field for field — one entry per day in

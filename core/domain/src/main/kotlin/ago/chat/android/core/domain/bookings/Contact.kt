@@ -42,4 +42,15 @@ public data class Contact(
      * `docs/backlog/26-52-*.md`'s own Scope item 3: this fact and [phoneVerifiedAt] stay two facts, no
      * matter how tempting collapsing them is on a small screen. */
     val phoneConfirmedByOperatorAt: String?,
+    /** `26-203`: the visitor's own stored emoji pair (`26-202`'s additive fields on `Ago.Chat.Api`'s
+     * person registry), merged onto this row client-side the identical way [displayName] already is
+     * ([ago.chat.android.bookings.ContactsViewModel]'s own merge step) — `ContactResponse` itself carries
+     * neither field, since the pair lives on chat's own visitor row, not the calendar's. `null` until the
+     * merge runs, or when chat has no pair for this id at all (a row that predates `26-202`, or a lookup
+     * miss/failure) — never hash-derived from [customerId]. Both fields are always present together or
+     * both `null`, the same "additive pair, never one without the other" contract [emojiFood] restates. */
+    val emojiCreature: String? = null,
+    /** The other half of [emojiCreature]'s own pair — see its doc comment, which this parameter shares in
+     * full. */
+    val emojiFood: String? = null,
 )

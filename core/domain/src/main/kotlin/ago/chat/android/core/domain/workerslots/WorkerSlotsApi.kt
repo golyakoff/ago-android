@@ -74,6 +74,14 @@ public data class WorkerSlot(
     val phone: String?,
     val masked: Boolean,
     val bookingId: String?,
+    /** `26-203`: the visitor's own stored emoji pair, merged onto this row client-side from chat's own
+     * person registry — [ago.chat.android.core.domain.bookings.Contact.emojiCreature]'s own doc comment
+     * states the full contract this restates: `WorkerSlotResponse` carries neither field, `null` until
+     * [WorkerSlotsViewModel][ago.chat.android.bookings.WorkerSlotsViewModel]'s own merge runs or when chat
+     * has no pair for [personId], never hash-derived from it. */
+    val emojiCreature: String? = null,
+    /** The other half of [emojiCreature]'s own pair. */
+    val emojiFood: String? = null,
 )
 
 /**
