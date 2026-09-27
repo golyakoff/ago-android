@@ -51,11 +51,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * conversation thread's own internal nav, reached from Диалоги, already rests on (§3.1's own statement of
  * why the hub is legal here).
  *
- * **W1 wires only Внешний вид.** [WidgetConfigGroup] carries a single entry; Поведение и приветствие/
- * Согласие и запись are `W2`/`W3`'s own rows, added to this enum and [WidgetConfigHubContent]'s row list
- * when each lands (`docs/design/tenant-widget-android.md` §8.3) — not drawn disabled here, since a hub row
- * promising a screen that does not exist yet would be worse than a hub that is honestly one row short for
- * now.
+ * **W1 wired only Внешний вид; `26-216`/`W2` adds Поведение и приветствие here.** [WidgetConfigGroup]
+ * gains its second entry, and [WidgetConfigHubContent]'s row list its second row — Согласие и запись is
+ * `W3`'s own row, added the same way when it lands (`docs/design/tenant-widget-android.md` §8.3) — not
+ * drawn disabled here, since a hub row promising a screen that does not exist yet would be worse than a
+ * hub that is honestly one row short for now.
  */
 @Composable
 internal fun WidgetConfigRoute(
@@ -67,29 +67,42 @@ internal fun WidgetConfigRoute(
     BackHandler(enabled = openGroup != null) { openGroup = null }
 
     val loaded = state as? WidgetConfigUiState.Loaded
-    if (openGroup == WidgetConfigGroup.Appearance && loaded != null) {
-        WidgetAppearanceEditor(
-            committed = loaded.committed,
-            saving = loaded.saving,
-            saveError = loaded.saveError,
-            savedTick = loaded.savedTick,
-            onSave = viewModel::save,
-            onBack = { openGroup = null },
-        )
-    } else {
-        WidgetConfigHubScreen(
-            state = state,
-            onRetry = viewModel::refresh,
-            onOpenGroup = { openGroup = it },
-            onBack = onBack,
-        )
+    when {
+        openGroup == WidgetConfigGroup.Appearance && loaded != null ->
+            WidgetAppearanceEditor(
+                committed = loaded.committed,
+                saving = loaded.saving,
+                saveError = loaded.saveError,
+                savedTick = loaded.savedTick,
+                onSave = viewModel::save,
+                onBack = { openGroup = null },
+            )
+
+        openGroup == WidgetConfigGroup.Behaviour && loaded != null ->
+            WidgetBehaviourEditor(
+                committed = loaded.committed,
+                saving = loaded.saving,
+                saveError = loaded.saveError,
+                savedTick = loaded.savedTick,
+                onSave = viewModel::save,
+                onBack = { openGroup = null },
+            )
+
+        else ->
+            WidgetConfigHubScreen(
+                state = state,
+                onRetry = viewModel::refresh,
+                onOpenGroup = { openGroup = it },
+                onBack = onBack,
+            )
     }
 }
 
-/** The group screens `docs/design/tenant-widget-android.md` §2 fixes — `W1` wires [Appearance] alone;
- * `Behaviour`/`Consent` join this enum when `W2`/`W3` land. */
+/** The group screens `docs/design/tenant-widget-android.md` §2 fixes — `W1` wired [Appearance];
+ * `26-216`/`W2` adds [Behaviour] here. `Consent` joins this enum when `W3` lands. */
 internal enum class WidgetConfigGroup {
     Appearance,
+    Behaviour,
 }
 
 /**
@@ -144,6 +157,10 @@ private fun WidgetConfigHubContent(onOpenGroup: (WidgetConfigGroup) -> Unit) {
         WidgetConfigGroupRow(
             label = stringResource(R.string.widget_config_group_appearance),
             onClick = { onOpenGroup(WidgetConfigGroup.Appearance) },
+        )
+        WidgetConfigGroupRow(
+            label = stringResource(R.string.widget_config_group_behaviour),
+            onClick = { onOpenGroup(WidgetConfigGroup.Behaviour) },
         )
     }
 }
