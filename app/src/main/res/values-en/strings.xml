@@ -815,6 +815,28 @@
     <string name="widget_config_field_contact_capture_confirmation_placeholder">Thanks, {name} — your details have been added.</string>
     <string name="widget_config_field_contact_capture_confirmation_supporting">Shown once a visitor submits their contact details. Use {name} anywhere in the text and we\'ll fill in the name they gave.</string>
 
+    <!-- `26-217`/`W3`: "Consent & booking". See the ru strings for the full note. -->
+    <string name="widget_config_group_consent">Consent &amp; booking</string>
+    <string name="widget_config_field_notice_section_label">Consent notice</string>
+    <string name="widget_config_field_notice_current_label">Current text</string>
+    <string name="widget_config_field_notice_url_current_label">Link</string>
+    <string name="widget_config_field_notice_not_set">Not set — visitors see no notice at all.</string>
+    <string name="widget_config_field_notice_show_fully">Show fully</string>
+    <string name="widget_config_field_notice_show_less">Show less</string>
+    <string name="widget_config_field_notice_edit">Edit</string>
+    <string name="widget_config_field_notice_text_label">Notice text (optional)</string>
+    <string name="widget_config_field_notice_text_placeholder">We use your messages to answer your questions.</string>
+    <string name="widget_config_field_notice_text_supporting">Shown to a visitor before they type anything. Leaving it blank shows no notice at all.</string>
+    <string name="widget_config_field_notice_url_label">Notice link (optional)</string>
+    <string name="widget_config_field_notice_url_supporting">A link to your own policy page. Must start with https://.</string>
+    <string name="widget_config_field_notice_url_invalid">The link must be an absolute https:// URL.</string>
+    <string name="widget_config_field_require_consent_label">Require consent before collecting contact details</string>
+    <string name="widget_config_field_require_consent_caption">While this is on, the widget will not record a phone number or email until the visitor accepts your published consent document.</string>
+    <string name="widget_config_field_accept_unverified_phone_label">Accept an unverified phone number for now</string>
+    <string name="widget_config_field_accept_unverified_phone_caption">A temporary relaxation while no phone-verification provider is wired up — a booking completes with whatever number the visitor already gave, without proving they can be reached on it.</string>
+    <string name="widget_config_field_allow_attachment_uploads_label">Allow attachments from the first message</string>
+    <string name="widget_config_field_allow_attachment_uploads_caption">New conversations on this site start with file uploads already allowed — an operator can still change this for any individual conversation.</string>
+
     <!-- `26-192`/`C5`: Automation → "Offline auto-reply". See the ru strings for the full note. -->
     <string name="automation_auto_reply_description">Rules are checked top to bottom — the first match wins.</string>
     <string name="automation_auto_reply_enabled_label">Reply automatically when nobody is online</string>
