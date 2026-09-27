@@ -1489,6 +1489,10 @@
     <string name="consent_current_version_label">Текущая версия</string>
     <string name="consent_no_versions_yet">Ни одной версии ещё не опубликовано</string>
     <string name="consent_older_versions_heading">Предыдущие версии (%1$d)</string>
+    <!-- `26-228` (`docs/design/tenant-consent-android.md` §3.3): one version row's own action into the
+         read-only «Просмотр документа» reader - reads the anonymous published-document surface, never
+         this screen's own tenant-scoped overview (`consent_reader_*` below share that item). -->
+    <string name="consent_reader_open_action">Открыть</string>
     <string name="consent_publish_action">Опубликовать новую версию</string>
     <!-- The per-version "кто принял" expander (`tenant-consent-android.md` §3.2) - subject id shown as
          an 8-char short code, long-press to copy the full GUID. -->
@@ -1500,6 +1504,9 @@
     <string name="consent_acceptances_column_accepted_at">Принято</string>
     <string name="consent_acceptances_subject_visitor">Посетитель</string>
     <string name="consent_acceptances_id_copied">Идентификатор скопирован</string>
+    <!-- `26-228`: the read-only «Просмотр документа» reader (`tenant-consent-android.md` §3.3) - a
+         stateless read of one version's own text via the anonymous published-document surface. -->
+    <string name="consent_reader_not_found">Эта версия больше недоступна</string>
     <!-- The full-screen publish editor (`tenant-consent-android.md` §3.4) - blank-start, always a new
          version, never an edit-in-place. -->
     <string name="consent_publish_description">Опубликованный текст сразу увидят посетители, и новые согласия будут привязаны к этой версии</string>

@@ -87,17 +87,31 @@ internal fun ConsentDocumentsRoute(
     )
 }
 
+/** `26-228`: which version is being read - transient composition state held by [ConsentDocumentsScreen]
+ * ([remember], never a [ConsentDocumentsUiState] arm), the identical role `editingPurpose` already plays
+ * for the publish editor. [version] `null` means "the current version" - the no-`version` reader route,
+ * a moving pointer, never a version string frozen at the moment the row was drawn. */
+private data class ConsentReaderTarget(
+    val documentKey: String,
+    val version: String?,
+    val title: String,
+)
+
 /**
- * The stateless half - an overview, and a full-screen editor, the identical
- * [ago.chat.android.automation.CannedResponsesScreen] shape: **which purpose's editor is open is
- * transient composition state**, via [remember], never a [ConsentDocumentsUiState] arm. A successful
- * publish bumps [ConsentDocumentsUiState.Loaded.savedTick], this screen's own signal to close the
- * editor and return to the overview; a refused/failed/conflicted publish never bumps it, so the editor
- * stays open so the operator can retry or back out.
+ * The stateless half - an overview, a full-screen editor, and a read-only reader, the identical
+ * [ago.chat.android.automation.CannedResponsesScreen] shape: **which purpose's editor is open, and which
+ * version is being read, are both transient composition state**, via [remember], never a
+ * [ConsentDocumentsUiState] arm - the identical reasoning this file's own top-of-file doc comment gives
+ * for `editingPurpose` applies verbatim to [ConsentReaderTarget]. A successful publish bumps
+ * [ConsentDocumentsUiState.Loaded.savedTick], this screen's own signal to close the editor and return to
+ * the overview; a refused/failed/conflicted publish never bumps it, so the editor stays open so the
+ * operator can retry or back out.
  *
- * There is deliberately no [ago.chat.android.documents.ConsentPublishEditorScreen] reader sibling here
- * - reading a version's own published text on the phone is a separate item (this ticket's own scope
- * cut, `tenant-consent-android.md` §1.2/§3.3), so a version's row offers no "Открыть" action.
+ * `26-228` wires the reader `26-226` deliberately left out (`tenant-consent-android.md` §1.2/§3.3's own
+ * scope cut): each version row's own «Открыть» action opens [ConsentDocumentReaderRoute] against the
+ * anonymous [ago.chat.android.core.domain.documents.PublishedDocumentApi], never this screen's own
+ * [ago.chat.android.core.domain.consent.SiteConsentDocumentsApi] - the tenant-scoped overview carries
+ * metadata only, never a body (`tenant-consent-android.md` §1's own remark).
  */
 @Composable
 internal fun ConsentDocumentsScreen(
@@ -109,6 +123,7 @@ internal fun ConsentDocumentsScreen(
     onBack: () -> Unit,
 ) {
     var editingPurpose by remember { mutableStateOf<ConsentPurpose?>(null) }
+    var readerTarget by remember { mutableStateOf<ConsentReaderTarget?>(null) }
 
     val savedTick = (state as? ConsentDocumentsUiState.Loaded)?.savedTick ?: 0
     LaunchedEffect(savedTick) {
@@ -116,7 +131,15 @@ internal fun ConsentDocumentsScreen(
     }
 
     val purpose = editingPurpose
-    if (purpose != null) {
+    val target = readerTarget
+    if (target != null) {
+        ConsentDocumentReaderRoute(
+            documentKey = target.documentKey,
+            version = target.version,
+            title = target.title,
+            onBack = { readerTarget = null },
+        )
+    } else if (purpose != null) {
         ConsentPublishEditorScreen(
             purposeTitle = stringResource(purposeTitleRes(purpose)),
             publishing = (state as? ConsentDocumentsUiState.Loaded)?.publishing ?: false,
@@ -127,6 +150,7 @@ internal fun ConsentDocumentsScreen(
     } else {
         ConsentDocumentsOverviewScreen(
             state = state,
+            onOpenReader = { documentKey, version, title -> readerTarget = ConsentReaderTarget(documentKey, version, title) },
             onRetry = onRetry,
             onExpandAcceptances = onExpandAcceptances,
             onRetryAcceptances = onRetryAcceptances,
@@ -147,6 +171,7 @@ internal fun ConsentDocumentsScreen(
 @Composable
 private fun ConsentDocumentsOverviewScreen(
     state: ConsentDocumentsUiState,
+    onOpenReader: (documentKey: String, version: String?, title: String) -> Unit,
     onRetry: () -> Unit,
     onExpandAcceptances: (AcceptanceKey) -> Unit,
     onRetryAcceptances: (AcceptanceKey) -> Unit,
@@ -184,6 +209,7 @@ private fun ConsentDocumentsOverviewScreen(
                     is ConsentDocumentsUiState.Loaded ->
                         ConsentDocumentsLoadedBody(
                             state = state,
+                            onOpenReader = onOpenReader,
                             onExpandAcceptances = onExpandAcceptances,
                             onRetryAcceptances = onRetryAcceptances,
                             onPublishRequest = onPublishRequest,
@@ -225,6 +251,7 @@ private fun ConsentDocumentsFailedBody(
 @Composable
 private fun ConsentDocumentsLoadedBody(
     state: ConsentDocumentsUiState.Loaded,
+    onOpenReader: (documentKey: String, version: String?, title: String) -> Unit,
     onExpandAcceptances: (AcceptanceKey) -> Unit,
     onRetryAcceptances: (AcceptanceKey) -> Unit,
     onPublishRequest: (ConsentPurpose) -> Unit,
@@ -246,6 +273,7 @@ private fun ConsentDocumentsLoadedBody(
                     ),
                 badgeTone = if (state.overview.contactConsentRequired) BadgeTone.Info else BadgeTone.Danger,
                 acceptances = state.acceptances,
+                onOpenReader = onOpenReader,
                 onExpandAcceptances = onExpandAcceptances,
                 onRetryAcceptances = onRetryAcceptances,
                 onPublishRequest = onPublishRequest,
@@ -260,6 +288,7 @@ private fun ConsentDocumentsLoadedBody(
                 badgeText = stringResource(R.string.consent_marketing_badge),
                 badgeTone = BadgeTone.Info,
                 acceptances = state.acceptances,
+                onOpenReader = onOpenReader,
                 onExpandAcceptances = onExpandAcceptances,
                 onRetryAcceptances = onRetryAcceptances,
                 onPublishRequest = onPublishRequest,
@@ -280,6 +309,7 @@ private fun ConsentPurposePanel(
     badgeText: String,
     badgeTone: BadgeTone,
     acceptances: Map<AcceptanceKey, AcceptancesUiState>,
+    onOpenReader: (documentKey: String, version: String?, title: String) -> Unit,
     onExpandAcceptances: (AcceptanceKey) -> Unit,
     onRetryAcceptances: (AcceptanceKey) -> Unit,
     onPublishRequest: (ConsentPurpose) -> Unit,
@@ -298,7 +328,14 @@ private fun ConsentPurposePanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                ConsentVersionRow(version = current, isCurrent = true)
+                ConsentVersionRow(
+                    version = current,
+                    isCurrent = true,
+                    // `tenant-consent-android.md` §1.2: the current version's own reader read is the
+                    // no-`version` route, not `current.version` again - a moving pointer, never pinned to
+                    // whatever happened to be current when this row was drawn.
+                    onOpen = { onOpenReader(summary.documentKey, null, current.title) },
+                )
                 ConsentAcceptancesExpander(
                     acceptanceKey = AcceptanceKey(purpose, current.version),
                     entryState = acceptances[AcceptanceKey(purpose, current.version)],
@@ -312,8 +349,10 @@ private fun ConsentPurposePanel(
             if (olderVersions.isNotEmpty()) {
                 ConsentOlderVersionsSection(
                     purpose = purpose,
+                    documentKey = summary.documentKey,
                     olderVersions = olderVersions,
                     acceptances = acceptances,
+                    onOpenReader = onOpenReader,
                     onExpandAcceptances = onExpandAcceptances,
                     onRetryAcceptances = onRetryAcceptances,
                     onCopied = onCopied,
@@ -333,8 +372,10 @@ private fun ConsentPurposePanel(
 @Composable
 private fun ConsentOlderVersionsSection(
     purpose: ConsentPurpose,
+    documentKey: String,
     olderVersions: List<ConsentVersion>,
     acceptances: Map<AcceptanceKey, AcceptancesUiState>,
+    onOpenReader: (documentKey: String, version: String?, title: String) -> Unit,
     onExpandAcceptances: (AcceptanceKey) -> Unit,
     onRetryAcceptances: (AcceptanceKey) -> Unit,
     onCopied: () -> Unit,
@@ -356,7 +397,11 @@ private fun ConsentOlderVersionsSection(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
                 olderVersions.forEach { version ->
                     HorizontalDivider()
-                    ConsentVersionRow(version = version, isCurrent = false)
+                    ConsentVersionRow(
+                        version = version,
+                        isCurrent = false,
+                        onOpen = { onOpenReader(documentKey, version.version, version.title) },
+                    )
                     ConsentAcceptancesExpander(
                         acceptanceKey = AcceptanceKey(purpose, version.version),
                         entryState = acceptances[AcceptanceKey(purpose, version.version)],
@@ -370,27 +415,35 @@ private fun ConsentOlderVersionsSection(
     }
 }
 
-/** One version's own title/version/date - no "Открыть" action (this ticket's own scope cut, this
- * file's own top-of-file doc comment). */
+/** One version's own title/version/date, plus (`26-228`) its own «Открыть» action into
+ * [ConsentDocumentReaderRoute] - this row holds neither a document key nor an opinion of its own about
+ * "current"; [onOpen] arrives already closed over the right `(documentKey, version)` pair from
+ * [ConsentPurposePanel]/[ConsentOlderVersionsSection] above. */
 @Composable
 private fun ConsentVersionRow(
     version: ConsentVersion,
     isCurrent: Boolean,
+    onOpen: () -> Unit,
 ) {
-    Column {
-        if (isCurrent) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            if (isCurrent) {
+                Text(
+                    text = stringResource(R.string.consent_current_version_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(text = version.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(
-                text = stringResource(R.string.consent_current_version_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                text = "${version.version} · ${consentVersionDate(version.publishedAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(text = version.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(
-            text = "${version.version} · ${consentVersionDate(version.publishedAt)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        TextButton(onClick = onOpen) {
+            Text(text = stringResource(R.string.consent_reader_open_action))
+        }
     }
 }
 
