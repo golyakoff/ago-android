@@ -1341,7 +1341,7 @@ private fun StatusFilterChip(
 @Composable
 private fun stateFilterLabel(filter: ConversationStateFilter): String =
     when (filter) {
-        ConversationStateFilter.NotStarted -> stringResource(R.string.conversation_list_state_not_started)
+        ConversationStateFilter.NotStarted -> stringResource(R.string.conversation_list_state_waiting)
         ConversationStateFilter.Assigned -> stringResource(R.string.conversation_list_state_assigned)
         ConversationStateFilter.Closed -> stringResource(R.string.conversation_list_state_closed)
     }
@@ -1701,7 +1701,7 @@ private fun RowScope.conversationStatusPill(row: ConversationRowUi) {
 @Composable
 private fun conversationStatusPillText(row: ConversationRowUi): String? =
     when (conversationStateLabel(row.state)) {
-        ConversationStateLabel.Waiting -> stringResource(R.string.conversation_list_state_not_started)
+        ConversationStateLabel.Waiting -> stringResource(R.string.conversation_list_state_waiting)
         ConversationStateLabel.Assigned ->
             row.operatorName?.let { stringResource(R.string.conversation_list_state_assigned_to, it) }
                 ?: stringResource(R.string.conversation_list_state_assigned)

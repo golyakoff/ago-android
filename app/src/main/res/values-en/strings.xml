@@ -110,7 +110,7 @@
     <string name="conversation_list_filter_chip">Status</string>
     <string name="conversation_list_all_read_only_note">View only: opening a conversation here does not let you reply.</string>
     <string name="conversation_list_filter_heading">Show</string>
-    <string name="conversation_list_state_not_started">Not started</string>
+    <string name="conversation_list_state_waiting">Waiting</string>
     <string name="conversation_list_state_assigned">Assigned</string>
     <string name="conversation_list_state_assigned_to">Assigned: %1$s</string>
     <string name="conversation_list_state_closed">Closed</string>

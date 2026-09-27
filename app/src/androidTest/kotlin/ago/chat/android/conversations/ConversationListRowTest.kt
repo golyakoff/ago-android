@@ -55,6 +55,30 @@ class ConversationListRowTest {
         }
     }
 
+    // `26-243`: the «Все» tab is the one place a row's own status pill (`conversationStatusPillText`)
+    // renders, so a `Waiting`-state row's badge is only assertable through this tab, not «Мои».
+    private fun renderAll(row: ConversationRowUi) {
+        composeTestRule.setContent {
+            ConversationListScreen(
+                state =
+                    ConversationListUiState(
+                        hasData = true,
+                        selectedTab = ConversationListTab.All,
+                        all = listOf(row),
+                        allHasData = true,
+                    ),
+                hubConnectionState = OperatorHubConnectionState.Connected,
+                onTabSelected = {},
+                onRefresh = {},
+                onClaim = {},
+                onDismissClaimError = {},
+                onOpenConversation = {},
+                onSignOut = {},
+                tabs = conversationListTabs(canSeeAllConversations = true),
+            )
+        }
+    }
+
     /** Part 1 - `docs/backlog/26-30-*.md`'s own Done-when: a nameless visitor with a known emoji pair
      * renders the emoji-derived name, never the bare code. */
     @Test
@@ -266,5 +290,32 @@ class ConversationListRowTest {
         )
 
         composeTestRule.onNodeWithText("2").assertExists()
+    }
+
+    /**
+     * `26-243`: a queued/waiting conversation's status pill reads «В ожидании», never «Не начат». The
+     * domain distinguishes `Pending` (visitor opened the widget and never wrote — genuinely «не начат»)
+     * from `Waiting` (the visitor wrote, or the conversation was handled then released — «в ожидании»);
+     * the list screen used to render a `Waiting` row with the `Pending`-flavoured
+     * `conversation_list_state_not_started` string, which this fixes to `conversation_list_state_waiting`.
+     */
+    @Test
+    fun aWaitingRowsStatusPillReadsWaitingNotNotStarted() {
+        renderAll(
+            ConversationRowUi(
+                conversationId = "c1",
+                visitorId = visitorId,
+                emojiCreature = "🦊",
+                emojiFood = "🍊",
+                visitorName = "Аня",
+                createdAt = "2026-09-22T09:00:00Z",
+                unreadCount = 0,
+                state = "Waiting",
+                messageCount = 3,
+            ),
+        )
+
+        composeTestRule.onNodeWithText("В ожидании").assertExists()
+        composeTestRule.onNodeWithText("Не начат").assertDoesNotExist()
     }
 }

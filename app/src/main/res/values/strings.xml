@@ -153,7 +153,7 @@
         display name; the bare form is what a row whose holder has no name recorded renders instead -
         never a placeholder name.
     -->
-    <string name="conversation_list_state_not_started">Не начат</string>
+    <string name="conversation_list_state_waiting">В ожидании</string>
     <string name="conversation_list_state_assigned">Назначен</string>
     <string name="conversation_list_state_assigned_to">Назначен: %1$s</string>
     <string name="conversation_list_state_closed">Закрыт</string>
