@@ -149,7 +149,7 @@ class PeopleViewModelTest {
         // [ago.chat.android.team.OperatorInvitesViewModel] do — but this fake still has to answer the
         // interface's write and invite-list methods to compile.
         override suspend fun createInvite(
-            roleName: String,
+            roleNames: Set<String>,
             email: String,
         ): CreateInviteResult = CreateInviteResult.Failed(NetworkFailure.Unexpected)
 

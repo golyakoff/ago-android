@@ -216,7 +216,7 @@ class OperatorInvitesViewModelTest {
         override suspend fun fetchSeatSummary(): SeatSummaryResult = SeatSummaryResult.Loaded(emptyList())
 
         override suspend fun createInvite(
-            roleName: String,
+            roleNames: Set<String>,
             email: String,
         ): CreateInviteResult = CreateInviteResult.Failed(NetworkFailure.Unexpected)
     }

@@ -27,11 +27,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * `26-56`: the invite form's own state machine — the at-capacity pre-flight (never a round trip once the
- * chosen role is already full), the three-arm [CreateInviteResult] folded into [InviteRefusalUi], and
- * [InviteColleagueViewModel.state] never once holding the one-shot [CreateInviteResult.Created] itself
- * (that class's own doc comment says why) — only [onCreated] ever sees it, exactly once, per [submit]
- * call that reaches the server at all.
+ * `26-56`/`26-241`: the invite form's own state machine — the multi-role select, the per-role
+ * at-capacity pre-flight (never a round trip once a selected role is already full), the ≥1-role
+ * requirement, the [CreateInviteResult] arms folded into [InviteRefusalUi] (a server `402`'s
+ * [CreateInviteResult.RoleSeatFull] among them), and [InviteColleagueViewModel.state] never once holding
+ * the one-shot [CreateInviteResult.Created] itself (that class's own doc comment says why) — only
+ * [onCreated] ever sees it, exactly once, per [submit] call that reaches the server at all.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InviteColleagueViewModelTest {
@@ -58,12 +59,12 @@ class InviteColleagueViewModelTest {
     }
 
     @Test
-    fun `starts on the Operator role with an empty email and no refusal`() =
+    fun `starts on the Operator role alone with an empty email and no refusal`() =
         runTest(dispatcher) {
             val viewModel = InviteColleagueViewModel(api = FakeOperatorTeamApi(), oidcConfig = oidcConfig, ioDispatcher = dispatcher)
 
             assertEquals(
-                InviteColleagueFormState(roleName = ROLE_OPERATOR, email = "", submitting = false, refusal = null),
+                InviteColleagueFormState(roleNames = setOf(ROLE_OPERATOR), email = "", submitting = false, refusal = null),
                 viewModel.state.value,
             )
         }
@@ -84,16 +85,19 @@ class InviteColleagueViewModelTest {
         }
 
     @Test
-    fun `roleSelected updates the role and clears a stale refusal`() =
+    fun `roleToggled adds and removes a role, and clears a stale refusal`() =
         runTest(dispatcher) {
             val viewModel = InviteColleagueViewModel(api = FakeOperatorTeamApi(), oidcConfig = oidcConfig, ioDispatcher = dispatcher)
             viewModel.submit(emptyList()) { _, _ -> }
             assertEquals(InviteRefusalUi.EmptyEmail, viewModel.state.value.refusal)
 
-            viewModel.roleSelected(ROLE_ADMIN)
+            viewModel.roleToggled(ROLE_ADMIN, selected = true)
 
-            assertEquals(ROLE_ADMIN, viewModel.state.value.roleName)
-            assertNull("changing the role clears a stale refusal", viewModel.state.value.refusal)
+            assertEquals(setOf(ROLE_OPERATOR, ROLE_ADMIN), viewModel.state.value.roleNames)
+            assertNull("changing the selection clears a stale refusal", viewModel.state.value.refusal)
+
+            viewModel.roleToggled(ROLE_OPERATOR, selected = false)
+            assertEquals(setOf(ROLE_ADMIN), viewModel.state.value.roleNames)
         }
 
     @Test
@@ -110,7 +114,21 @@ class InviteColleagueViewModelTest {
         }
 
     @Test
-    fun `a role already at heldSeats greater or equal to limit is refused before the call, naming the role`() =
+    fun `no role selected is refused before ever calling the server`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi()
+            val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
+            viewModel.emailChanged("kolya@example.com")
+            viewModel.roleToggled(ROLE_OPERATOR, selected = false)
+
+            viewModel.submit(emptyList()) { _, _ -> }
+
+            assertEquals(InviteRefusalUi.NoRoleSelected, viewModel.state.value.refusal)
+            assertEquals("the no-role pre-flight must never make the round trip", 0, api.createInviteCalls)
+        }
+
+    @Test
+    fun `a selected role already at heldSeats greater or equal to limit is refused before the call, naming the role`() =
         runTest(dispatcher) {
             val api = FakeOperatorTeamApi()
             val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
@@ -119,12 +137,69 @@ class InviteColleagueViewModelTest {
 
             viewModel.submit(seatSummary) { _, _ -> }
 
-            assertEquals(InviteRefusalUi.AtCapacity(roleName = ROLE_OPERATOR, limit = 5), viewModel.state.value.refusal)
+            assertEquals(InviteRefusalUi.RolesAtCapacity(listOf(ROLE_OPERATOR)), viewModel.state.value.refusal)
             assertEquals("the at-capacity pre-flight must never make the round trip", 0, api.createInviteCalls)
         }
 
     @Test
-    fun `overLimit heldSeats one below the limit is not at capacity - the boundary is exact`() =
+    fun `deselecting a full role re-enables the submit and the invite goes through`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(createInviteResult = CreateInviteResult.Created("i", "c", "2026-10-01T00:00:00Z", false))
+            val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
+            viewModel.emailChanged("kolya@example.com")
+            // Operator's own pool is full, Admin's has room; both start... no - default is Operator only.
+            viewModel.roleToggled(ROLE_ADMIN, selected = true)
+            val seatSummary =
+                listOf(
+                    RoleSeatSummary(roleName = ROLE_OPERATOR, heldSeats = 5, limit = 5, overLimit = false),
+                    RoleSeatSummary(roleName = ROLE_ADMIN, heldSeats = 0, limit = 2, overLimit = false),
+                )
+
+            // With the full Operator role still ticked, the pre-flight blocks and names it.
+            viewModel.submit(seatSummary) { _, _ -> }
+            assertEquals(InviteRefusalUi.RolesAtCapacity(listOf(ROLE_OPERATOR)), viewModel.state.value.refusal)
+            assertEquals(0, api.createInviteCalls)
+
+            // Untick the full role and the Admin-only invite goes through.
+            viewModel.roleToggled(ROLE_OPERATOR, selected = false)
+            viewModel.submit(seatSummary) { _, _ -> }
+            advanceUntilIdle()
+
+            assertEquals(1, api.createInviteCalls)
+            assertEquals(setOf(ROLE_ADMIN), api.lastRoleNames)
+        }
+
+    @Test
+    fun `a multi-role invite sends both selected role names, in seeded order`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(createInviteResult = CreateInviteResult.Created("i", "c", "2026-10-01T00:00:00Z", false))
+            val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
+            viewModel.emailChanged("kolya@example.com")
+            // Tick Admin first, then confirm the wire set is still seeded-order (Operator, Admin).
+            viewModel.roleToggled(ROLE_ADMIN, selected = true)
+
+            viewModel.submit(emptyList()) { _, _ -> }
+            advanceUntilIdle()
+
+            assertEquals(setOf(ROLE_OPERATOR, ROLE_ADMIN), api.lastRoleNames)
+            assertEquals(listOf(ROLE_OPERATOR, ROLE_ADMIN), api.lastRoleNames?.toList())
+        }
+
+    @Test
+    fun `a single-role invite still sends exactly that one role`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(createInviteResult = CreateInviteResult.Created("i", "c", "2026-10-01T00:00:00Z", false))
+            val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
+            viewModel.emailChanged("kolya@example.com")
+
+            viewModel.submit(emptyList()) { _, _ -> }
+            advanceUntilIdle()
+
+            assertEquals(setOf(ROLE_OPERATOR), api.lastRoleNames)
+        }
+
+    @Test
+    fun `heldSeats one below the limit is not at capacity - the boundary is exact`() =
         runTest(dispatcher) {
             val api = FakeOperatorTeamApi(createInviteResult = CreateInviteResult.Created("i", "c", "2026-10-01T00:00:00Z", false))
             val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
@@ -155,7 +230,7 @@ class InviteColleagueViewModelTest {
             assertEquals("https://office.example.invalid/invite/secret", reportedShareUrl)
             assertEquals(false, reportedSendFailed)
             assertEquals(
-                InviteColleagueFormState(roleName = ROLE_OPERATOR, email = "", submitting = false, refusal = null),
+                InviteColleagueFormState(roleNames = setOf(ROLE_OPERATOR), email = "", submitting = false, refusal = null),
                 viewModel.state.value,
             )
         }
@@ -173,6 +248,22 @@ class InviteColleagueViewModelTest {
 
             assertEquals(true, reportedSendFailed)
             assertNull(viewModel.state.value.refusal)
+        }
+
+    @Test
+    fun `a server 402 naming a full role is surfaced as that role at capacity`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(createInviteResult = CreateInviteResult.RoleSeatFull(ROLE_ADMIN))
+            val viewModel = InviteColleagueViewModel(api = api, oidcConfig = oidcConfig, ioDispatcher = dispatcher)
+            viewModel.emailChanged("kolya@example.com")
+
+            // The client-side pre-flight cannot see the race the server closes, so this reaches the call
+            // (empty summary = nothing known-full) and comes back RoleSeatFull.
+            viewModel.submit(emptyList()) { _, _ -> }
+            advanceUntilIdle()
+
+            assertEquals(InviteRefusalUi.RolesAtCapacity(listOf(ROLE_ADMIN)), viewModel.state.value.refusal)
+            assertEquals(false, viewModel.state.value.submitting)
         }
 
     @Test
@@ -225,16 +316,19 @@ class InviteColleagueViewModelTest {
     ) : OperatorTeamApi {
         var createInviteCalls: Int = 0
             private set
+        var lastRoleNames: Set<String>? = null
+            private set
 
         override suspend fun fetchTeam(): OperatorTeamResult = OperatorTeamResult.Loaded(emptyList())
 
         override suspend fun fetchSeatSummary(): SeatSummaryResult = SeatSummaryResult.Loaded(emptyList())
 
         override suspend fun createInvite(
-            roleName: String,
+            roleNames: Set<String>,
             email: String,
         ): CreateInviteResult {
             createInviteCalls++
+            lastRoleNames = roleNames
             if (hangCreateInvite) awaitCancellation()
             return createInviteResult
         }

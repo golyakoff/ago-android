@@ -230,7 +230,7 @@ class KtorOperatorTeamApiTest {
                     )
                 }
 
-            val result = api.createInvite(roleName = "Operator", email = "kolya@example.com")
+            val result = api.createInvite(roleNames = setOf("Operator", "Admin"), email = "kolya@example.com")
 
             assertEquals(
                 CreateInviteResult.Created(
@@ -242,7 +242,8 @@ class KtorOperatorTeamApiTest {
                 result,
             )
             assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operator-invites", requested)
-            assertTrue(sentBody.contains("\"roleName\":\"Operator\""))
+            // `26-241`: the body now carries a set of role names (`roleNames`), never a single `roleName`.
+            assertTrue(sentBody.contains("\"roleNames\":[\"Operator\",\"Admin\"]"))
             assertTrue(sentBody.contains("\"email\":\"kolya@example.com\""))
         }
 
@@ -258,7 +259,7 @@ class KtorOperatorTeamApiTest {
                     )
                 }
 
-            val result = api.createInvite(roleName = "Admin", email = "admin@example.com") as CreateInviteResult.Created
+            val result = api.createInvite(roleNames = setOf("Admin"), email = "admin@example.com") as CreateInviteResult.Created
 
             assertEquals(true, result.sendFailed)
         }
@@ -275,9 +276,61 @@ class KtorOperatorTeamApiTest {
                     )
                 }
 
-            val result = api.createInvite(roleName = "Operator", email = "not-an-email")
+            val result = api.createInvite(roleNames = setOf("Operator"), email = "not-an-email")
 
             assertEquals(CreateInviteResult.Refused("Укажите корректный email."), result)
+        }
+
+    @Test
+    fun `a 402 SeatLimitReached is the Operator role's own pool, mapped to RoleSeatFull`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"OperatorInvite.SeatLimitReached","detail":"No free operator seats."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleNames = setOf("Operator"), email = "any@example.com")
+
+            // Branches on the `type`, not the `detail` - a typed refusal naming the role, never the words.
+            assertEquals(CreateInviteResult.RoleSeatFull("Operator"), result)
+        }
+
+    @Test
+    fun `a 402 AdminLimitReached is the Admin role's own pool, mapped to RoleSeatFull`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"OperatorInvite.AdminLimitReached","detail":"No free admin seats."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleNames = setOf("Admin"), email = "any@example.com")
+
+            assertEquals(CreateInviteResult.RoleSeatFull("Admin"), result)
+        }
+
+    @Test
+    fun `a 402 with an unknown type falls through to the verbatim detail refusal`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"OperatorInvite.SomethingElse","detail":"Payment required for another reason."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.createInvite(roleNames = setOf("Operator"), email = "any@example.com")
+
+            assertEquals(CreateInviteResult.Refused("Payment required for another reason."), result)
         }
 
     @Test
@@ -287,7 +340,7 @@ class KtorOperatorTeamApiTest {
 
             assertEquals(
                 CreateInviteResult.Failed(NetworkFailure.ServerError(403)),
-                api.createInvite(roleName = "Operator", email = "any@example.com"),
+                api.createInvite(roleNames = setOf("Operator"), email = "any@example.com"),
             )
         }
 
@@ -298,7 +351,7 @@ class KtorOperatorTeamApiTest {
 
             assertEquals(
                 CreateInviteResult.Failed(NetworkFailure.NoConnection),
-                api.createInvite(roleName = "Operator", email = "any@example.com"),
+                api.createInvite(roleNames = setOf("Operator"), email = "any@example.com"),
             )
         }
 
@@ -316,7 +369,7 @@ class KtorOperatorTeamApiTest {
 
             assertEquals(
                 CreateInviteResult.Failed(NetworkFailure.Unexpected),
-                api.createInvite(roleName = "Operator", email = "any@example.com"),
+                api.createInvite(roleNames = setOf("Operator"), email = "any@example.com"),
             )
         }
 
@@ -332,7 +385,7 @@ class KtorOperatorTeamApiTest {
 
             assertEquals(
                 CreateInviteResult.Failed(NetworkFailure.Unexpected),
-                api.createInvite(roleName = "Operator", email = "any@example.com"),
+                api.createInvite(roleNames = setOf("Operator"), email = "any@example.com"),
             )
             assertEquals("no active site must never reach the network", 0, calls)
         }

@@ -11,6 +11,8 @@ import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.ROLE_ADMIN
+import ago.chat.android.core.domain.team.ROLE_OPERATOR
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
@@ -116,7 +118,7 @@ public class KtorOperatorTeamApi(
      * job.
      */
     override suspend fun createInvite(
-        roleName: String,
+        roleNames: Set<String>,
         email: String,
     ): CreateInviteResult {
         val siteId = activeSite.currentSiteId() ?: return CreateInviteResult.Failed(NetworkFailure.Unexpected)
@@ -125,7 +127,7 @@ public class KtorOperatorTeamApi(
             try {
                 client.post("$apiBaseUrl/api/v1/sites/$siteId/operator-invites") {
                     contentType(ContentType.Application.Json)
-                    setBody(CreateOperatorInviteRequestWireDto(roleName = roleName, email = email))
+                    setBody(CreateOperatorInviteRequestWireDto(roleNames = roleNames.toList(), email = email))
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -134,15 +136,21 @@ public class KtorOperatorTeamApi(
             }
 
         if (!response.status.isSuccess()) {
-            val detail =
+            val problem =
                 try {
-                    response.body<ProblemDetailsWireDto>().detail
+                    response.body<ProblemDetailsWireDto>()
                 } catch (cancellation: CancellationException) {
                     throw cancellation
                 } catch (failure: Exception) {
                     null
                 }
-            return detail?.let { CreateInviteResult.Refused(it) }
+            // `26-241`: a `402` naming a per-role seat pool (`type`) becomes a typed
+            // [CreateInviteResult.RoleSeatFull] the sheet can word itself — never folded into the
+            // words-verbatim [Refused] arm, so it branches on the `type`, not the server's `detail`
+            // (`api-design.md`). Any other refusal with a `detail` stays [Refused] (`InvalidEmail`
+            // chief among them); a refusal with neither a known code nor a `detail` is [Failed].
+            inviteSeatFullRole(problem?.type)?.let { return CreateInviteResult.RoleSeatFull(it) }
+            return problem?.detail?.let { CreateInviteResult.Refused(it) }
                 ?: CreateInviteResult.Failed(NetworkFailure.ServerError(response.status.value))
         }
 
@@ -266,10 +274,12 @@ private data class SeatAssignmentSummaryWireDto(
     val roles: List<RoleSeatAssignmentSummaryWireDto>,
 )
 
-/** `operatorTeamApi.ts`'s own `createOperatorInvite` request body — `{roleName, email}`. */
+/** `operatorTeamApi.ts`'s own `createOperatorInvite` request body — `26-241` took it to a set of role
+ * names (`{roleNames, email}`); the legacy single-`roleName` body still works server-side, but this
+ * adapter always sends the plural form now (a one-role invite is a one-element list). */
 @Serializable
 private data class CreateOperatorInviteRequestWireDto(
-    val roleName: String,
+    val roleNames: List<String>,
     val email: String,
 )
 
@@ -283,14 +293,33 @@ private data class CreateOperatorInviteResponseWireDto(
     val sendFailed: Boolean,
 )
 
-/** RFC 7807, read for exactly the one field a refusal needs — the identical
- * `KtorConversationsApi.ProblemDetailsWireDto` shape, restated here rather than shared: each adapter in
- * `:core:network` keeps its own private copy today (`KtorOwnAnalyticsApi`'s own copy is the other
- * precedent), so this file can be read end to end without a jump to a shared type. */
+/** RFC 7807, read for the two fields a refusal needs — [detail] (shown verbatim for `InvalidEmail` and
+ * the like) and, `26-241`, [type] (the machine-readable code the sheet branches on for a per-role
+ * seat-full `402`, `api-design.md`). The identical `KtorConversationsApi.ProblemDetailsWireDto` shape,
+ * restated here rather than shared: each adapter in `:core:network` keeps its own private copy today
+ * (`KtorOwnAnalyticsApi`'s own copy is the other precedent), so this file can be read end to end
+ * without a jump to a shared type. */
 @Serializable
 private data class ProblemDetailsWireDto(
+    val type: String? = null,
     val detail: String? = null,
 )
+
+/** `26-241`: the two `type` values `CreateOperatorInviteHandler` refuses a *per-role* seat-full invite
+ * with — `OperatorInvite.SeatLimitReached` (the Operator role's own pool is full) and
+ * `OperatorInvite.AdminLimitReached` (the Admin role's own). Named here, in the one place the wire
+ * shape is turned into meaning (`api-design.md`: clients branch on the `type`, never the message), so
+ * neither the domain result nor the view model ever spells a raw code. Any other `type` maps to `null`
+ * — the refusal falls through to the words-verbatim [CreateInviteResult.Refused]. */
+private const val INVITE_OPERATOR_SEAT_FULL_CODE = "OperatorInvite.SeatLimitReached"
+private const val INVITE_ADMIN_SEAT_FULL_CODE = "OperatorInvite.AdminLimitReached"
+
+private fun inviteSeatFullRole(type: String?): String? =
+    when (type) {
+        INVITE_OPERATOR_SEAT_FULL_CODE -> ROLE_OPERATOR
+        INVITE_ADMIN_SEAT_FULL_CODE -> ROLE_ADMIN
+        else -> null
+    }
 
 private fun OperatorRoleSeatWireDto.toDomain() = OperatorRoleSeat(roleName = roleName, holdsSeat = holdsSeat)
 
