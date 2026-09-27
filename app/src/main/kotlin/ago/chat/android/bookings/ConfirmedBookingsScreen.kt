@@ -69,6 +69,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -276,8 +277,10 @@ internal fun ConfirmedBookingsBody(
  * feature stays reachable without the drag gesture at all — for TalkBack, and for anyone who would rather
  * tap than pull; while [edgeLoading] names a side, that side's chevron is replaced by a spinner instead
  * (hard requirement 2 of `26-233`'s own brief: "a spinner spins inside the days area on the pulled side").
- * [onJumpToToday] is the third, unrelated control this item adds beside the strip — a plain jump back to
- * today from anywhere, sharing none of the above.
+ * [onJumpToToday] is a plain jump back to today from anywhere, sharing none of the above; `26-233` sat its
+ * «Сегодня» control beside the header, and `26-254` moved that control *inside* the
+ * [ConfirmedDateStripPickerDialog] this header opens — the callback is threaded through unchanged, only
+ * its trigger relocated.
  */
 @Composable
 private fun ConfirmedDateStrip(
@@ -376,62 +379,56 @@ private fun ConfirmedDateStrip(
         }
 
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            // `26-212`: the whole sticky-header lane is the tap target, not just the current label's own
-            // text — the label that owns the slot changes under a moving finger as the strip scrolls (that
-            // is the whole point of `StickyMonthHeaderGeometry`), so pinning the click to one specific
-            // label's own composable would move the tap target out from under an operator mid-scroll. The
-            // header always shows *some* month/year, so "tap the header" reads the same regardless of
-            // which one. `26-233`: now `weight(1f)` rather than `fillMaxWidth()`, sharing this row with the
-            // «Сегодня» control below rather than spanning it.
-            val jumpToDateLabel = stringResource(R.string.bookings_confirmed_jump_to_date_action)
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clipToBounds()
-                        .clickable(onClickLabel = jumpToDateLabel) { showDatePicker = true },
-            ) {
-                labels.forEachIndexed { index, label ->
-                    val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
-                    when {
-                        // Handed off already: scrolled past the left edge, `clipToBounds` would hide it anyway.
-                        index < geometry.currentIndex -> Unit
-                        index == geometry.currentIndex ->
-                            MonthSpanLabel(
-                                text = text,
-                                modifier =
-                                    Modifier
-                                        .padding(start = DateStripEdgePadding)
-                                        .then(
-                                            // Cap the width at the next month's approach; an infinite cap (no
-                                            // next month) leaves the label at its natural width.
-                                            if (geometry.nextMonthStartPx.isFinite()) {
-                                                Modifier.widthIn(max = with(density) { geometry.nextMonthStartPx.toDp() })
-                                            } else {
-                                                Modifier
-                                            },
-                                        ),
-                            )
-                        else ->
-                            MonthSpanLabel(
-                                text = text,
-                                modifier =
-                                    Modifier.offset {
-                                        IntOffset(
-                                            (edgePaddingPx + monthStartChip[index] * chipStridePx - scrollXPx).roundToInt(),
-                                            0,
-                                        )
-                                    },
-                            )
-                    }
+        // `26-212`: the whole sticky-header lane is the tap target, not just the current label's own
+        // text — the label that owns the slot changes under a moving finger as the strip scrolls (that
+        // is the whole point of `StickyMonthHeaderGeometry`), so pinning the click to one specific
+        // label's own composable would move the tap target out from under an operator mid-scroll. The
+        // header always shows *some* month/year, so "tap the header" reads the same regardless of
+        // which one. `26-254`: the header spans the full width again — the «Сегодня» quick-jump that
+        // `26-233` sat beside it has moved *inside* the date-picker dialog this header opens (a
+        // near-target for a far-jump control), so nothing shares this row now.
+        val jumpToDateLabel = stringResource(R.string.bookings_confirmed_jump_to_date_action)
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag(CONFIRMED_STRIP_HEADER_TEST_TAG)
+                    .clipToBounds()
+                    .clickable(onClickLabel = jumpToDateLabel) { showDatePicker = true },
+        ) {
+            labels.forEachIndexed { index, label ->
+                val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
+                when {
+                    // Handed off already: scrolled past the left edge, `clipToBounds` would hide it anyway.
+                    index < geometry.currentIndex -> Unit
+                    index == geometry.currentIndex ->
+                        MonthSpanLabel(
+                            text = text,
+                            modifier =
+                                Modifier
+                                    .padding(start = DateStripEdgePadding)
+                                    .then(
+                                        // Cap the width at the next month's approach; an infinite cap (no
+                                        // next month) leaves the label at its natural width.
+                                        if (geometry.nextMonthStartPx.isFinite()) {
+                                            Modifier.widthIn(max = with(density) { geometry.nextMonthStartPx.toDp() })
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                        )
+                    else ->
+                        MonthSpanLabel(
+                            text = text,
+                            modifier =
+                                Modifier.offset {
+                                    IntOffset(
+                                        (edgePaddingPx + monthStartChip[index] * chipStridePx - scrollXPx).roundToInt(),
+                                        0,
+                                    )
+                                },
+                        )
                 }
-            }
-            // `26-233` hard requirement 4: «Сегодня» - jumps back to the current day from anywhere on this
-            // screen, sharing the row with the month/year tap target above rather than a second row, since
-            // both are the strip's own navigation controls.
-            TextButton(onClick = onJumpToToday) {
-                Text(text = stringResource(R.string.bookings_confirmed_today_action))
             }
         }
         Box(modifier = Modifier.fillMaxWidth().nestedScroll(overscrollConnection)) {
@@ -484,6 +481,10 @@ private fun ConfirmedDateStrip(
                 showDatePicker = false
                 onJumpToDate(date)
             },
+            onJumpToToday = {
+                showDatePicker = false
+                onJumpToToday()
+            },
         )
     }
 }
@@ -504,6 +505,11 @@ private fun ConfirmedDateStrip(
  * files outside this ticket's own scope (`docs/backlog/26-212-*.md` is this screen and its view model) for
  * no behaviour change — flagged, not fixed, the same "report don't fix" call this ticket's own brief asks
  * for any out-of-lane finding.
+ *
+ * `26-254`: this dialog also carries the «Сегодня» quick-jump [onJumpToToday] that `26-233` had sat in the
+ * day-strip header — a near-target for a far-jump control, so a jump-to-today and a jump-to-a-picked-date
+ * live in one place. Material3's `DatePickerDialog` ships no built-in today shortcut, so it is added as a
+ * plain leading `TextButton` in the [confirmButton] slot's own row alongside OK.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -511,18 +517,30 @@ private fun ConfirmedDateStripPickerDialog(
     initialDate: String,
     onDismiss: () -> Unit,
     onPicked: (String) -> Unit,
+    onJumpToToday: () -> Unit,
 ) {
     val pickerState = rememberDatePickerState(initialSelectedDateMillis = epochMillisAtUtcMidnight(initialDate))
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(
-                onClick = {
-                    pickerState.selectedDateMillis?.let { onPicked(localDateAtUtcMidnight(it)) }
-                    onDismiss()
-                },
-            ) {
-                Text(text = stringResource(R.string.analytics_dialog_confirm))
+            // `26-254`: «Сегодня» rides the dialog's own button row alongside OK, no longer the day
+            // strip's header. Material3's `DatePickerDialog` ships no built-in today shortcut, so it is
+            // added here as a plain leading action in the `confirmButton` slot (the slot Material lays out
+            // as a right-aligned row, so «Сегодня» sits just left of OK). It fires the identical
+            // today-jump the header button used to — `onJumpToToday` is threaded through unchanged, the
+            // trigger just relocated — and closes the dialog, since a today jump is itself a picked date.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onJumpToToday) {
+                    Text(text = stringResource(R.string.bookings_confirmed_today_action))
+                }
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { onPicked(localDateAtUtcMidnight(it)) }
+                        onDismiss()
+                    },
+                ) {
+                    Text(text = stringResource(R.string.analytics_dialog_confirm))
+                }
             }
         },
         dismissButton = {
@@ -1170,6 +1188,13 @@ private val DateStripEdgeSpinnerSize = 20.dp
 // enough that the very first pixel of a pull already shows *something*, rather than the icon popping in
 // abruptly once `progress` clears some invisible threshold.
 private const val DATE_STRIP_EDGE_INDICATOR_MIN_ALPHA = 0.25f
+
+// `26-254`: the sticky month/year header's own test tag — the tap target that opens the date-picker
+// dialog (which now also carries the «Сегодня» quick-jump). The header's click is labelled, not
+// content-described, and its month/year text is dynamic, so a stable tag is the only non-brittle handle a
+// Compose UI test has to open the picker. `internal`, mirroring `MENU_SCRIM_TEST_TAG`'s own file-scope
+// const, so the bookings androidTest can reference it without a second copy of the literal.
+internal const val CONFIRMED_STRIP_HEADER_TEST_TAG: String = "confirmedStripHeader"
 
 // `.rtop{gap:8px}` - the identical gap `ConversationListScreen`'s own `RtopGap` names for the same CSS
 // rule, restated here rather than imported since that value is `private` to its own file. `internal`:
