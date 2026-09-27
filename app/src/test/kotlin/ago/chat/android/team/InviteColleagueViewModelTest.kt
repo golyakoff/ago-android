@@ -1,15 +1,18 @@
 package ago.chat.android.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamResult
 import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.ROLE_OPERATOR
+import ago.chat.android.core.domain.team.RemoveOperatorResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
+import ago.chat.android.core.domain.team.ToggleOperatorSeatResult
 import ago.chat.android.session.OidcConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -339,5 +342,19 @@ class InviteColleagueViewModelTest {
         override suspend fun listInvites(): OperatorInvitesResult = OperatorInvitesResult.Loaded(emptyList())
 
         override suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult = RevokeInviteResult.Revoked
+
+        // `26-253`: the three roster writes are [PeopleViewModel]'s, never this sheet's - stubbed to compile.
+        override suspend fun changeOperatorRole(
+            operatorId: String,
+            newRoleName: String,
+        ): ChangeOperatorRoleResult = ChangeOperatorRoleResult.Changed
+
+        override suspend fun removeOperator(operatorId: String): RemoveOperatorResult = RemoveOperatorResult.Removed
+
+        override suspend fun toggleOperatorSeat(
+            operatorId: String,
+            roleName: String,
+            holdsSeat: Boolean,
+        ): ToggleOperatorSeatResult = ToggleOperatorSeatResult.Toggled
     }
 }

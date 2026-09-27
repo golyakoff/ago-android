@@ -333,6 +333,26 @@
     <string name="people_invite_revoke_confirm_button">Revoke</string>
     <string name="people_invite_revoke_failed">Could not revoke that invite. Try again.</string>
 
+    <!-- `26-253`: operator management on Люди - change role, remove, grant/revoke a seat. Wording follows
+         `ago-console`'s own `operatorsTeamChangeRole*`/`operatorsTeamRemove*`/`operatorsTeamGrant`/
+         `Revoke*SeatButton` strings, the same actions the console already offers. `%1$s` in the dialogs
+         is the colleague's name (or a short identifier when there is no name on file). -->
+    <string name="people_seat_grant_operator_button">Grant Operator seat</string>
+    <string name="people_seat_revoke_operator_button">Revoke Operator seat</string>
+    <string name="people_seat_grant_admin_button">Grant Administrator seat</string>
+    <string name="people_seat_revoke_admin_button">Revoke Administrator seat</string>
+    <string name="people_change_role_to_admin_button">Make administrator</string>
+    <string name="people_change_role_to_operator_button">Make operator</string>
+    <string name="people_change_role_dialog_title">Change this colleague\'s role?</string>
+    <string name="people_change_role_to_admin_dialog_body">%1$s will be able to manage the team — invite and remove colleagues, change roles, configure the site — and will stop receiving new conversations unless they also hold a seat.</string>
+    <string name="people_change_role_to_operator_dialog_body">%1$s will no longer be able to manage the team — invite or remove colleagues, change roles, configure the site.</string>
+    <string name="people_change_role_confirm_button">Change role</string>
+    <string name="people_remove_button">Remove</string>
+    <string name="people_remove_dialog_title">Remove this colleague?</string>
+    <string name="people_remove_dialog_body">%1$s: any conversation currently assigned to them is released back to the waiting queue right away. Their history stays intact, but the removal itself cannot be undone.</string>
+    <string name="people_remove_confirm_button">Remove</string>
+    <string name="people_write_last_manager">This site must always have at least one operator who can manage the team. Grant that permission to another colleague first.</string>
+
     <string name="bookings_tab_pending">Waiting</string>
     <string name="bookings_queue_empty">Nothing\'s waiting.</string>
     <string name="nav_bookings_pending_one">%1$d booking awaiting confirmation</string>

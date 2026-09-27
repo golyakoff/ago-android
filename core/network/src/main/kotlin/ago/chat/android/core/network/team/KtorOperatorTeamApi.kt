@@ -2,6 +2,7 @@ package ago.chat.android.core.network.team
 
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInviteListItem
 import ago.chat.android.core.domain.team.OperatorInviteStatus
@@ -13,14 +14,17 @@ import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
 import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.ROLE_OPERATOR
+import ago.chat.android.core.domain.team.RemoveOperatorResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
+import ago.chat.android.core.domain.team.ToggleOperatorSeatResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
@@ -225,6 +229,115 @@ public class KtorOperatorTeamApi(
             RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected)
         }
     }
+
+    /** `POST /api/v1/sites/{siteId}/operators/{operatorId}/role` — `26-253`. `204` is
+     * [ChangeOperatorRoleResult.Changed]; a refusal is read for its RFC 7807 `type` and branched by code
+     * (`api-design.md`), never by the server's `detail`. The two state-conflict codes become typed arms;
+     * any other refusal with a `detail` is shown verbatim, and a refusal with neither is [Failed]. */
+    override suspend fun changeOperatorRole(
+        operatorId: String,
+        newRoleName: String,
+    ): ChangeOperatorRoleResult {
+        val siteId = activeSite.currentSiteId() ?: return ChangeOperatorRoleResult.Failed(NetworkFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/sites/$siteId/operators/$operatorId/role") {
+                    contentType(ContentType.Application.Json)
+                    setBody(ChangeOperatorRoleRequestWireDto(roleName = newRoleName))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ChangeOperatorRoleResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return ChangeOperatorRoleResult.Changed
+        }
+
+        val problem = readProblem(response)
+        return when (problem?.type) {
+            OPERATOR_LAST_MANAGER_CODE -> ChangeOperatorRoleResult.LastManager
+            OPERATOR_ADMIN_LIMIT_CODE -> ChangeOperatorRoleResult.AdminSeatFull
+            else ->
+                problem?.detail?.let { ChangeOperatorRoleResult.Refused(it) }
+                    ?: ChangeOperatorRoleResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+    }
+
+    /** `POST /api/v1/sites/{siteId}/operators/{operatorId}/remove` — `26-253`. `204` is
+     * [RemoveOperatorResult.Removed]; `Operator.IsLastManager` becomes the typed [RemoveOperatorResult.LastManager],
+     * any other `detail`-bearing refusal is shown verbatim, and a refusal with neither is [Failed]. */
+    override suspend fun removeOperator(operatorId: String): RemoveOperatorResult {
+        val siteId = activeSite.currentSiteId() ?: return RemoveOperatorResult.Failed(NetworkFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/sites/$siteId/operators/$operatorId/remove")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return RemoveOperatorResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return RemoveOperatorResult.Removed
+        }
+
+        val problem = readProblem(response)
+        return when (problem?.type) {
+            OPERATOR_LAST_MANAGER_CODE -> RemoveOperatorResult.LastManager
+            else ->
+                problem?.detail?.let { RemoveOperatorResult.Refused(it) }
+                    ?: RemoveOperatorResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+    }
+
+    /** `POST /api/v1/sites/{siteId}/operators/{operatorId}/seat` — `26-253`. `204` is
+     * [ToggleOperatorSeatResult.Toggled]; the two per-role seat-full `402`s become a typed
+     * [ToggleOperatorSeatResult.SeatFull] naming the pool (branching on the `type`, not the `detail`),
+     * any other `detail`-bearing refusal is shown verbatim, and a refusal with neither is [Failed]. */
+    override suspend fun toggleOperatorSeat(
+        operatorId: String,
+        roleName: String,
+        holdsSeat: Boolean,
+    ): ToggleOperatorSeatResult {
+        val siteId = activeSite.currentSiteId() ?: return ToggleOperatorSeatResult.Failed(NetworkFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/sites/$siteId/operators/$operatorId/seat") {
+                    contentType(ContentType.Application.Json)
+                    setBody(ToggleOperatorSeatRequestWireDto(roleName = roleName, holdsSeat = holdsSeat))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ToggleOperatorSeatResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return ToggleOperatorSeatResult.Toggled
+        }
+
+        val problem = readProblem(response)
+        return seatFullRole(problem?.type)?.let { ToggleOperatorSeatResult.SeatFull(it) }
+            ?: problem?.detail?.let { ToggleOperatorSeatResult.Refused(it) }
+            ?: ToggleOperatorSeatResult.Failed(NetworkFailure.ServerError(response.status.value))
+    }
+
+    /** The RFC 7807 body of a refusal, or `null` when the response carried none (or one this adapter could
+     * not read) — the identical read `createInvite`'s own refusal branch already makes inline, extracted
+     * here because the three `26-253` writes each need the same two fields (`type`/`detail`). */
+    private suspend fun readProblem(response: HttpResponse): ProblemDetailsWireDto? =
+        try {
+            response.body<ProblemDetailsWireDto>()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            null
+        }
 }
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. */
@@ -318,6 +431,38 @@ private fun inviteSeatFullRole(type: String?): String? =
     when (type) {
         INVITE_OPERATOR_SEAT_FULL_CODE -> ROLE_OPERATOR
         INVITE_ADMIN_SEAT_FULL_CODE -> ROLE_ADMIN
+        else -> null
+    }
+
+/** `26-253`: `ago-console`'s own `changeOperatorRole` request body — `{roleName}`. */
+@Serializable
+private data class ChangeOperatorRoleRequestWireDto(
+    val roleName: String,
+)
+
+/** `25-170`/`26-253`: `ago-console`'s own `toggleOperatorSeat` request body — `{roleName, holdsSeat}`, a
+ * seat being a fact about one `(operator, role)` pairing. */
+@Serializable
+private data class ToggleOperatorSeatRequestWireDto(
+    val roleName: String,
+    val holdsSeat: Boolean,
+)
+
+/** `26-253`: the `type` codes the three writes branch on. `Operator.IsLastManager` (`ChangeOperatorRoleHandler`/
+ * `RemoveOperatorHandler`'s shared last-manager guard) and the two per-role seat-full codes
+ * (`ToggleOperatorSeatHandler`/`ChangeOperatorRoleHandler`) — named here, in the one place a wire shape
+ * becomes meaning (`api-design.md`: branch on the `type`, never the message), so neither the domain
+ * result nor the view model ever spells a raw code. `Operator.SeatLimitReached` is the Operator pool,
+ * `Operator.AdminLimitReached` the Admin pool — the same two-pool split `INVITE_*_SEAT_FULL_CODE` draws
+ * for the invite write's own distinct codes. */
+private const val OPERATOR_LAST_MANAGER_CODE = "Operator.IsLastManager"
+private const val OPERATOR_SEAT_LIMIT_CODE = "Operator.SeatLimitReached"
+private const val OPERATOR_ADMIN_LIMIT_CODE = "Operator.AdminLimitReached"
+
+private fun seatFullRole(type: String?): String? =
+    when (type) {
+        OPERATOR_SEAT_LIMIT_CODE -> ROLE_OPERATOR
+        OPERATOR_ADMIN_LIMIT_CODE -> ROLE_ADMIN
         else -> null
     }
 

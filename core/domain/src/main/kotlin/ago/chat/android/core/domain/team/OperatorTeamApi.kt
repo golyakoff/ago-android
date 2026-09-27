@@ -86,6 +86,55 @@ public interface OperatorTeamApi {
      * shape — the caller re-reads [listInvites] on success and shows the row's new status instead.
      */
     public suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult
+
+    /**
+     * `26-253`: `POST /api/v1/sites/{siteId}/operators/{operatorId}/role` — sets [operatorId] to hold
+     * exactly [newRoleName] (`ago-console`'s own `changeOperatorRole`, mirrored). `204 No Content` on
+     * success ([ChangeOperatorRoleResult.Changed]).
+     *
+     * `ChangeOperatorRoleHandler`'s own two state-conflict refusals are mapped by **code**, never message
+     * (`api-design.md`: branch on the `type`, never the words) — demoting the site's only manager comes
+     * back as `Operator.IsLastManager` ([ChangeOperatorRoleResult.LastManager]) and promoting past the
+     * Admin pool's own limit as a `402 Operator.AdminLimitReached` ([ChangeOperatorRoleResult.AdminSeatFull]),
+     * so `:app` can word each in the tenant's own Russian rather than showing the server's English detail.
+     * Any other refusal carrying an RFC 7807 `detail` (`Operator.RoleNotFound`, `Operator.NotFound`,
+     * `Operator.AlreadyRemoved` — all near-unreachable from this screen, hide-not-disable and a fresh read
+     * keep the roster honest) is shown verbatim as [ChangeOperatorRoleResult.Refused], the identical split
+     * [CreateInviteResult]'s own `RoleSeatFull`/`Refused` pair already draws for the invite write.
+     */
+    public suspend fun changeOperatorRole(
+        operatorId: String,
+        newRoleName: String,
+    ): ChangeOperatorRoleResult
+
+    /**
+     * `26-253`: `POST /api/v1/sites/{siteId}/operators/{operatorId}/remove` — `204 No Content` on success.
+     * `RemoveOperatorHandler`'s own last-manager guard (`Operator.IsLastManager`) is the one refusal this
+     * screen must word itself ([RemoveOperatorResult.LastManager]); `Operator.NotFound`/`AlreadyRemoved`
+     * (a row already gone by the time the tap lands) surface verbatim as [RemoveOperatorResult.Refused].
+     * The removal's own downstream effect — `Ago.Chat.Worker`'s `OperatorRemovedConsumer` releasing the
+     * removed operator's assigned conversations back to `Waiting` — is out of this call's transaction
+     * (`RemoveOperatorHandler`'s own remarks), so nothing here waits on it; the caller re-reads the roster
+     * and the row is simply gone.
+     */
+    public suspend fun removeOperator(operatorId: String): RemoveOperatorResult
+
+    /**
+     * `26-253`: `POST /api/v1/sites/{siteId}/operators/{operatorId}/seat` — sets whether [operatorId] holds
+     * the [roleName] pairing's own seat to [holdsSeat] (`25-170`: a seat is a fact about one
+     * `(operator, role)` pairing, not the account). `204 No Content` on success. Toggling a seat *on* is
+     * capacity-checked server-side (`ToggleOperatorSeatHandler`): the Operator pool full comes back as
+     * `402 Operator.SeatLimitReached` and the Admin pool full as `402 Operator.AdminLimitReached`, both
+     * mapped by code to [ToggleOperatorSeatResult.SeatFull] naming which role's pool was full — the same
+     * `type`-not-message branch [CreateInviteResult.RoleSeatFull] already makes. Toggling *off* is never
+     * capacity-checked and cannot be refused for capacity. Any other `detail`-bearing refusal is
+     * [ToggleOperatorSeatResult.Refused], shown verbatim.
+     */
+    public suspend fun toggleOperatorSeat(
+        operatorId: String,
+        roleName: String,
+        holdsSeat: Boolean,
+    ): ToggleOperatorSeatResult
 }
 
 /**
@@ -152,6 +201,84 @@ public sealed interface RevokeInviteResult {
     public data class Failed(
         val reason: OperatorTeamFailure,
     ) : RevokeInviteResult
+}
+
+/**
+ * `26-253`: what changing one operator's role came back with — the same multi-arm shape
+ * [CreateInviteResult] establishes for a write the server can genuinely refuse, with the two
+ * state-conflict codes typed rather than shown verbatim ([OperatorTeamApi.changeOperatorRole]'s own doc
+ * comment on why each is branched on the `type`, not the message).
+ */
+public sealed interface ChangeOperatorRoleResult {
+    /** `204`. The operator now holds exactly the requested role; the caller re-reads the roster. */
+    public data object Changed : ChangeOperatorRoleResult
+
+    /** `409 Operator.IsLastManager` — the change would demote the site's only operator who can manage
+     * operators. The remedy is to grant that permission to somebody else first, never a retry. */
+    public data object LastManager : ChangeOperatorRoleResult
+
+    /** `402 Operator.AdminLimitReached` — promoting to the seeded `Admin` role would push the site past
+     * its own [RoleSeatSummary.limit] for that pool. The remedy is an upgrade, not a retry. */
+    public data object AdminSeatFull : ChangeOperatorRoleResult
+
+    /** A refusal carrying an RFC 7807 `detail` this port puts no words of its own to (`Operator.RoleNotFound`,
+     * `Operator.NotFound`, `Operator.AlreadyRemoved`) — shown verbatim. */
+    public data class Refused(
+        val detail: String,
+    ) : ChangeOperatorRoleResult
+
+    /** Transport trouble, or a non-2xx with no `detail` to show. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : ChangeOperatorRoleResult
+}
+
+/**
+ * `26-253`: what removing one operator came back with. The last-manager guard is the one refusal this
+ * screen words itself; everything else with a `detail` is shown verbatim.
+ */
+public sealed interface RemoveOperatorResult {
+    /** `204`. The operator is removed; the caller re-reads the roster and the row is gone. */
+    public data object Removed : RemoveOperatorResult
+
+    /** `409 Operator.IsLastManager` — removing this operator would leave the site with nobody who can
+     * manage operators. */
+    public data object LastManager : RemoveOperatorResult
+
+    /** `Operator.NotFound`/`Operator.AlreadyRemoved` (`404`/`409`) — the row was already gone; shown
+     * verbatim. */
+    public data class Refused(
+        val detail: String,
+    ) : RemoveOperatorResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : RemoveOperatorResult
+}
+
+/**
+ * `26-253`: what toggling one `(operator, role)` seat came back with. A toggle-on refused for capacity is
+ * typed by which pool was full ([SeatFull]), naming the role in seeded literals so `:app` words it
+ * itself — the same `type`-not-message branch [CreateInviteResult.RoleSeatFull] makes for the invite write.
+ */
+public sealed interface ToggleOperatorSeatResult {
+    /** `204`. The pairing now holds (or no longer holds) its seat; the caller re-reads the roster. */
+    public data object Toggled : ToggleOperatorSeatResult
+
+    /** `402` — the pool this toggle-on targeted is full. [roleName] is the seeded literal it belongs to
+     * (`Operator` for `Operator.SeatLimitReached`, `Admin` for `Operator.AdminLimitReached`). */
+    public data class SeatFull(
+        val roleName: String,
+    ) : ToggleOperatorSeatResult
+
+    /** Any other `detail`-bearing refusal (`Operator.NotFound` and the like), shown verbatim. */
+    public data class Refused(
+        val detail: String,
+    ) : ToggleOperatorSeatResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : ToggleOperatorSeatResult
 }
 
 /**
