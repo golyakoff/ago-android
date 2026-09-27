@@ -909,6 +909,7 @@
     <string name="consent_current_version_label">Current version</string>
     <string name="consent_no_versions_yet">Nothing published yet</string>
     <string name="consent_older_versions_heading">Earlier versions (%1$d)</string>
+    <string name="consent_reader_open_action">Open</string>
     <string name="consent_publish_action">Publish new version</string>
     <string name="consent_acceptances_toggle_show">Who accepted</string>
     <string name="consent_acceptances_toggle_hide">Hide</string>
@@ -918,6 +919,7 @@
     <string name="consent_acceptances_column_accepted_at">Accepted</string>
     <string name="consent_acceptances_subject_visitor">Visitor</string>
     <string name="consent_acceptances_id_copied">Id copied</string>
+    <string name="consent_reader_not_found">This version is no longer available</string>
     <string name="consent_publish_description">The published text will be visible to visitors right away, and new consents will be tied to this version</string>
     <string name="consent_publish_title_label">Title</string>
     <string name="consent_publish_body_label">Document text</string>

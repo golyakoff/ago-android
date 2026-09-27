@@ -22,6 +22,7 @@ import ago.chat.android.core.domain.devices.DeviceIdProvider
 import ago.chat.android.core.domain.devices.DeviceRegistrationApi
 import ago.chat.android.core.domain.devices.InstallationIdProvider
 import ago.chat.android.core.domain.devices.PushProvider
+import ago.chat.android.core.domain.documents.PublishedDocumentApi
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
@@ -60,6 +61,7 @@ import ago.chat.android.core.network.conversationactions.KtorConversationActions
 import ago.chat.android.core.network.conversations.KtorConversationsApi
 import ago.chat.android.core.network.createAgoHttpClient
 import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
+import ago.chat.android.core.network.documents.KtorPublishedDocumentApi
 import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.installation.KtorInstallationApi
 import ago.chat.android.core.network.notes.KtorConversationNotesApi
@@ -595,6 +597,19 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteConsentDocumentsApi = KtorSiteConsentDocumentsApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-228`: «Просмотр документа»'s own port — the same `config.apiBaseUrl`
+     * [provideSiteConsentDocumentsApi] above reads, since `GET /api/v1/documents/{documentKey}…` is one
+     * more family of endpoints on that same `Ago.Chat.Api` origin. **No [ActiveSiteSelection]**, unlike
+     * every other provider in this block — this route is anonymous and carries no site at all
+     * ([KtorPublishedDocumentApi]'s own doc comment).
+     */
+    @Provides
+    public fun providePublishedDocumentApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): PublishedDocumentApi = KtorPublishedDocumentApi(client, config.apiBaseUrl)
 
     /**
      * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same
