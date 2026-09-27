@@ -141,6 +141,25 @@ public object AgoIcons {
             { circle(centreX = 12f, centreY = 19f, radius = 1.6f) },
         )
 
+    /**
+     * `26-245` — the conversation list's own search affordance. A ringed magnifier: a circle and its
+     * diagonal handle, drawn stroke-only at the family's uniform 1.8 like every other glyph here.
+     * `<circle cx="10.5" cy="10.5" r="6.5"/>` for the lens and `<path d="M20 20l-4.7-4.7"/>` for the
+     * handle — Material Symbols' own `search` shape, transcribed rather than pulled from
+     * `material-icons-extended` for the reason this file's own top-of-object doc comment states.
+     */
+    public val Search: ImageVector =
+        strokeIcon(
+            "AgoSearch",
+            // <circle cx="10.5" cy="10.5" r="6.5"/>
+            { circle(centreX = 10.5f, centreY = 10.5f, radius = 6.5f) },
+            // M20 20l-4.7-4.7
+            {
+                moveTo(20f, 20f)
+                lineToRelative(-4.7f, -4.7f)
+            },
+        )
+
     /** `i-back` — the thread screen's app-bar back control, replacing `ThreadScreen`'s literal `"←"`. */
     public val Back: ImageVector =
         strokeIcon(

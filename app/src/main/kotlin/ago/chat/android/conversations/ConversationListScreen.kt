@@ -163,6 +163,11 @@ public fun ConversationListRoute(
     // `26-227`: a tap on the overflow's own «Ограниченные посетители» item. Defaulted to a no-op for the
     // identical reason every other optional callback on this route already is.
     onOpenRestricted: () -> Unit = {},
+    // `26-245`: a tap on the top bar's own search icon. Drawn only for a `site:configure` holder (search
+    // is gated on the same permission the «Все» tab and the `⋮` overflow already are) — the icon is
+    // hidden, not disabled, for anyone else. Defaulted to a no-op for the identical reason every other
+    // optional callback on this route already is.
+    onOpenSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -228,6 +233,7 @@ public fun ConversationListRoute(
         onDismissEraseFailure = viewModel::dismissEraseFailure,
         canConfigureSite = canConfigureSite,
         onOpenRestricted = onOpenRestricted,
+        onOpenSearch = onOpenSearch,
     )
 }
 
@@ -266,6 +272,9 @@ internal fun ConversationListScreen(
     // [tabs]/`canSeeAllConversations` are already derived from.
     canConfigureSite: Boolean = false,
     onOpenRestricted: () -> Unit = {},
+    // `26-245`: the top bar's own search icon tap — see [ConversationListRoute]'s own parameter doc
+    // comment. Gated on the same `canConfigureSite` the overflow already is.
+    onOpenSearch: () -> Unit = {},
 ) {
     // `ago-console`'s own `useNow` hook, restated: the one clock read this screen makes, so every
     // elapsed-time label re-renders together rather than each row reading `OffsetDateTime.now()` on
@@ -329,6 +338,19 @@ internal fun ConversationListScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.conversation_list_title)) },
                     actions = {
+                        // `26-245`: the site-wide search entry, gated on the same `site:configure` the
+                        // «Все» tab and the `⋮` overflow already require — hidden, not disabled, for an
+                        // operator without it (`docs/design/tenant-modules-restrictions-android.md`'s own
+                        // §"principle", the identical rule [ConversationListOverflowMenu] follows). Placed
+                        // leftmost of the actions so the overflow and the avatar keep their own order.
+                        if (canConfigureSite) {
+                            IconButton(onClick = onOpenSearch) {
+                                Icon(
+                                    imageVector = AgoIcons.Search,
+                                    contentDescription = stringResource(R.string.conversation_search_action),
+                                )
+                            }
+                        }
                         // `26-227`: the Диалоги overflow this item introduces
                         // (`docs/design/tenant-modules-restrictions-android.md`'s own finding #3 - the
                         // old dot+kebab pair `26-90` removed left this top bar with nothing but the

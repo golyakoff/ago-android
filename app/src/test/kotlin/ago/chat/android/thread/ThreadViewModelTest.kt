@@ -973,6 +973,16 @@ class ThreadViewModelTest {
 
         override suspend fun requestErasure(conversationId: String) = error("not used by this screen")
 
+        // `26-245`: search belongs to the conversation list's own screen, not the thread - the same
+        // "not used by this screen" shape every other unused member of this fake takes.
+        override suspend fun searchConversations(
+            phrase: String,
+            from: String?,
+            to: String?,
+            beforeMessageId: String?,
+            pageSize: Int?,
+        ) = error("not used by this screen")
+
         override suspend fun markRead(
             conversationId: String,
             upToSequence: Int,

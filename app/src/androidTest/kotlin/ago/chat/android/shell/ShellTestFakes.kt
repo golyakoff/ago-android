@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.conversations.SearchConversationsResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
@@ -83,6 +84,16 @@ internal class FakeConversationsApi(
         erasureRequests.add(conversationId)
         return ErasureResult.Accepted
     }
+
+    // `26-245`: the search screen has its own view model and its own test fakes; this shell fake never
+    // reaches it.
+    override suspend fun searchConversations(
+        phrase: String,
+        from: String?,
+        to: String?,
+        beforeMessageId: String?,
+        pageSize: Int?,
+    ): SearchConversationsResult = throw UnsupportedOperationException("not used by these shell tests")
 }
 
 internal class FakeConversationListCache(

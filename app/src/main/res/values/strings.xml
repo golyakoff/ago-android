@@ -1924,6 +1924,24 @@
     <string name="conversation_list_overflow_action">Дополнительно</string>
     <string name="restricted_visitors_menu_item">Ограниченные посетители</string>
 
+    <!--
+        `26-245`: полнотекстовый поиск по всем диалогам сайта — открывается по значку поиска в шапке
+        экрана «Диалоги», доступен только оператору с правом `site:configure` (та же гейт-проверка, что и
+        у вкладки «Все»). `conversation_search_action` — content description значка; остальное — сам
+        экран поиска.
+    -->
+    <string name="conversation_search_action">Поиск</string>
+    <string name="conversation_search_title">Поиск диалогов</string>
+    <string name="conversation_search_field_label">Поиск по сообщениям</string>
+    <string name="conversation_search_field_placeholder">Слово или фраза</string>
+    <string name="conversation_search_prompt">Введите слово или фразу, чтобы искать по всем диалогам сайта.</string>
+    <string name="conversation_search_empty">Ничего не найдено.</string>
+    <string name="conversation_search_range">Искали за период: %1$s – %2$s</string>
+    <string name="conversation_search_failed_title">Не удалось выполнить поиск</string>
+    <string name="conversation_search_author_visitor">Посетитель</string>
+    <string name="conversation_search_author_operator">Оператор</string>
+    <string name="conversation_search_author_system">Система</string>
+
     <string name="restricted_visitors_title">Ограниченные посетители</string>
     <string name="restricted_visitors_refresh_action">Обновить</string>
     <string name="restricted_visitors_empty">Ограничений нет</string>

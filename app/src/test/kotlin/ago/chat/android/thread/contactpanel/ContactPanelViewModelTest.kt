@@ -14,6 +14,7 @@ import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.conversations.SearchConversationsResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.notes.AddNoteResult
 import ago.chat.android.core.domain.notes.ConversationNote
@@ -1375,6 +1376,14 @@ class ContactPanelViewModelTest {
         ): AllConversationsResult = error("not used by this view model")
 
         override suspend fun requestErasure(conversationId: String): ErasureResult = error("not used by this view model")
+
+        override suspend fun searchConversations(
+            phrase: String,
+            from: String?,
+            to: String?,
+            beforeMessageId: String?,
+            pageSize: Int?,
+        ): SearchConversationsResult = error("not used by this view model")
     }
 
     private class FakeConversationActionsApi(
