@@ -28,7 +28,7 @@ public interface OperatorTeamApi {
     public suspend fun fetchSeatSummary(): SeatSummaryResult
 
     /**
-     * `POST /api/v1/sites/{siteId}/operator-invites` — `26-56`: invites [email] into [roleName].
+     * `POST /api/v1/sites/{siteId}/operator-invites` — `26-56`: invites [email] into [roleNames].
      * [CreateInviteResult.Created.code] is the plaintext invite code the server will only ever hand
      * back this once (`ago-console`'s own `CreateOperatorInviteResponseDto` doc comment, mirrored on
      * [CreateInviteResult.Created]'s own). A genuine server refusal — `OperatorInvite.InvalidEmail`
@@ -41,6 +41,15 @@ public interface OperatorTeamApi {
      * 26-56-*.md`'s own Done-when: "no client-side email regex exists in the change" — the server's
      * own `InvalidEmail` refusal is the only check that ever runs against it.
      *
+     * `26-241`: one invite grants a **set** of roles ([roleNames]), each gated against its own seat
+     * pool at send time (`ago-chat`'s own `CreateOperatorInviteHandler`, `ago-chat#383`); a one-role
+     * invite is simply a one-element set. The server refuses a *per-role* seat-full grant with a `402`
+     * whose `type` names which pool was full — mapped by the adapter to
+     * [CreateInviteResult.RoleSeatFull], a typed refusal naming that role, rather than folded into the
+     * words-verbatim [CreateInviteResult.Refused] the way `InvalidEmail` is (`api-design.md`: clients
+     * branch on the `type`, never on the message). The legacy single-`roleName` body still works
+     * server-side, but this port always sends the plural form now.
+     *
      * The at-capacity pre-flight ("does this role already hold `limit` seats") is not this method's
      * job either — [PeopleUiState.Loaded]'s own [RoleSeatSummary.heldSeats]/[RoleSeatSummary.limit],
      * already in hand before this screen ever opens the invite sheet, is what
@@ -48,11 +57,10 @@ public interface OperatorTeamApi {
      * never [RoleSeatSummary.overLimit]'s own `>` — that doc comment states why the two thresholds
      * answer different questions). This method still exists for the ordinary case and the one race the
      * client-side check cannot close (another admin's invite landing between this screen's own load and
-     * this call) — the server's own capacity check, whatever it comes back as, is still just another
-     * [CreateInviteResult.Refused].
+     * this call) — the server's own per-role capacity check comes back as [CreateInviteResult.RoleSeatFull].
      */
     public suspend fun createInvite(
-        roleName: String,
+        roleNames: Set<String>,
         email: String,
     ): CreateInviteResult
 
@@ -225,6 +233,17 @@ public sealed interface CreateInviteResult {
         val code: String,
         val expiresAt: String,
         val sendFailed: Boolean,
+    ) : CreateInviteResult
+
+    /** `26-241`: a `402` whose `type` was one of the two per-role seat-full codes
+     * (`OperatorInvite.SeatLimitReached` = the Operator pool, `OperatorInvite.AdminLimitReached` = the
+     * Admin pool) — [roleName] is the seeded role literal that pool belongs to. A typed refusal rather
+     * than a [Refused] carrying the server's `detail`, so the sheet can name which seat is full in the
+     * tenant's own words (`api-design.md`: branch on the `type`, never the message). Defense in depth
+     * behind [ago.chat.android.team.InviteColleagueViewModel]'s own client-side pre-flight — the server
+     * gates each role in the set at send time and this is that gate refusing one of them. */
+    public data class RoleSeatFull(
+        val roleName: String,
     ) : CreateInviteResult
 
     /** A non-2xx whose body carried a genuine RFC 7807 `detail` — `OperatorInvite.InvalidEmail` chief

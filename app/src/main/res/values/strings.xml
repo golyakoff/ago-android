@@ -532,13 +532,20 @@
     <string name="people_invite_button">Пригласить</string>
     <string name="people_invite_dialog_title">Пригласить коллегу</string>
     <string name="people_invite_email_label">Электронная почта</string>
-    <string name="people_invite_role_label">Роль</string>
+    <!-- `26-241`: the multi-select label - one invite can grant both seeded roles at once. -->
+    <string name="people_invite_roles_label">Роли</string>
+    <!-- `26-241`: `%1$d` seats taken of `%2$d` for one role, shown under each role's checkbox. -->
+    <string name="people_invite_role_seats_taken">занято %1$d из %2$d</string>
     <string name="people_invite_submit">Отправить приглашение</string>
     <string name="people_invite_sending">Отправляем…</string>
     <string name="people_invite_cancel">Отмена</string>
     <string name="people_invite_email_required">Укажите email коллеги.</string>
-    <!-- `%1$s` - the role's own display name (Оператор/Администратор); `%2$d` - that role's seat limit. -->
-    <string name="people_invite_at_capacity">Для роли «%1$s» уже занято максимум мест (%2$d). Освободите место или увеличьте лимит, чтобы пригласить ещё одного коллегу.</string>
+    <!-- `26-241`: shown, and submit disabled, when no role checkbox is ticked. -->
+    <string name="people_invite_no_role_selected">Выберите хотя бы одну роль для приглашения.</string>
+    <!-- `26-241`: `%1$s` - the display name of a selected role whose own seat pool is full (client-side
+         pre-flight, or the server's own per-role `402`). No limit number here: the server `402` does not
+         carry one, and the per-role seat count is already shown under the checkbox above. -->
+    <string name="people_invite_role_seat_full">Для роли «%1$s» нет свободных мест — освободите место или увеличьте лимит.</string>
     <string name="people_invite_send_failed_warning">Приглашение создано, но письмо не удалось отправить. Передайте ссылку коллеге вручную.</string>
     <string name="people_invite_success_title">Приглашение создано</string>
     <string name="people_invite_success_body">Передайте эту ссылку коллеге - она показывается только один раз.</string>

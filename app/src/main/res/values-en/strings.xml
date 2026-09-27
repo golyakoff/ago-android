@@ -290,13 +290,20 @@
     <string name="people_invite_button">Invite</string>
     <string name="people_invite_dialog_title">Invite a colleague</string>
     <string name="people_invite_email_label">Email address</string>
-    <string name="people_invite_role_label">Role</string>
+    <!-- `26-241`: the multi-select label - one invite can grant both seeded roles at once. -->
+    <string name="people_invite_roles_label">Roles</string>
+    <!-- `26-241`: `%1$d` seats taken of `%2$d` for one role, shown under each role's checkbox. -->
+    <string name="people_invite_role_seats_taken">%1$d of %2$d seats taken</string>
     <string name="people_invite_submit">Send invitation</string>
     <string name="people_invite_sending">Sending…</string>
     <string name="people_invite_cancel">Cancel</string>
     <string name="people_invite_email_required">Enter your colleague\'s email.</string>
-    <!-- `%1$s` - the role's own display name (Operator/Administrator); `%2$d` - that role's seat limit. -->
-    <string name="people_invite_at_capacity">The %1$s role already has all %2$d seats taken. Free a seat or raise the limit before inviting another colleague.</string>
+    <!-- `26-241`: shown, and submit disabled, when no role checkbox is ticked. -->
+    <string name="people_invite_no_role_selected">Select at least one role for this invite.</string>
+    <!-- `26-241`: `%1$s` - the display name of a selected role whose own seat pool is full (client-side
+         pre-flight, or the server's own per-role `402`). No limit number here: the server `402` does not
+         carry one, and the per-role seat count is already shown under the checkbox above. -->
+    <string name="people_invite_role_seat_full">The %1$s role has no free seats - free a seat or raise the limit.</string>
     <string name="people_invite_send_failed_warning">The invite was created, but the email could not be delivered. Share the link with your colleague yourself.</string>
     <string name="people_invite_success_title">Invite created</string>
     <string name="people_invite_success_body">Share this link with your colleague - it is only shown once.</string>

@@ -1,8 +1,6 @@
 package ago.chat.android.team
 
 import ago.chat.android.R
-import ago.chat.android.core.domain.team.ROLE_ADMIN
-import ago.chat.android.core.domain.team.ROLE_OPERATOR
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.theme.agoStatusColors
@@ -10,20 +8,19 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -119,7 +117,7 @@ internal fun InviteColleagueSheet(
                 state = formState,
                 seatSummary = seatSummary,
                 onEmailChanged = viewModel::emailChanged,
-                onRoleSelected = viewModel::roleSelected,
+                onRoleToggled = viewModel::roleToggled,
                 onCancel = ::requestDismiss,
                 onSubmit = {
                     viewModel.submit(seatSummary) { shareUrl, sendFailed ->
@@ -132,20 +130,28 @@ internal fun InviteColleagueSheet(
 }
 
 /**
- * `docs/backlog/26-56-*.md`'s own Scope item 2: email, a role choice between the two real role names,
- * and a submit that blocks before ever calling the server once [InviteColleagueViewModel.submit]'s own
- * pre-flight says the chosen role is at capacity — [seatSummary] is threaded straight through from
- * [PeopleUiState.Loaded], never re-read here.
+ * `docs/backlog/26-56-*.md`'s own Scope item 2, generalised by `26-241`: email, a **multi-select** of
+ * the two real role names (a checkbox each, at least one required), and a submit that blocks before ever
+ * calling the server once [InviteColleagueViewModel.submit]'s own pre-flight says a selected role is at
+ * capacity or nothing is selected — [seatSummary] is threaded straight through from
+ * [PeopleUiState.Loaded], never re-read here, and is what both the per-role availability line and the
+ * submit-disabled gate (`submitBlocked`) read.
  */
 @Composable
 private fun InviteFormBody(
     state: InviteColleagueFormState,
     seatSummary: List<RoleSeatSummary>,
     onEmailChanged: (String) -> Unit,
-    onRoleSelected: (String) -> Unit,
+    onRoleToggled: (String, Boolean) -> Unit,
     onCancel: () -> Unit,
     onSubmit: () -> Unit,
 ) {
+    // `26-241`: mirrors the pre-flight [InviteColleagueViewModel.submit] re-checks — submit is disabled
+    // while no role is ticked or any ticked role's own pool is full, with the form (and its checkboxes)
+    // left visible so a tenant can untick a full role and invite the rest, never a whole-form dead-end.
+    val submitBlocked =
+        state.roleNames.isEmpty() || state.roleNames.any { roleSeatFull(seatSummary, it) }
+
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
         Text(
             text = stringResource(R.string.people_invite_dialog_title),
@@ -163,22 +169,37 @@ private fun InviteFormBody(
         )
 
         Text(
-            text = stringResource(R.string.people_invite_role_label),
+            text = stringResource(R.string.people_invite_roles_label),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
         )
-        val roleOptions = listOf(ROLE_OPERATOR, ROLE_ADMIN)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            roleOptions.forEachIndexed { index, roleName ->
-                SegmentedButton(
-                    selected = state.roleName == roleName,
-                    onClick = { onRoleSelected(roleName) },
-                    shape = SegmentedButtonDefaults.itemShape(index, roleOptions.size),
+        // `26-241`: one checkbox per seeded role, in `INVITE_ROLE_ORDER` (the same order `roleNames` goes
+        // on the wire in) — the Android mirror of `ago-console`'s own checkbox list. Each row names the
+        // role and its own live seat availability; a full role's count is shown in the danger colour so
+        // the reason a ticked role blocks submit is visible on the row itself, not only in the message.
+        INVITE_ROLE_ORDER.forEach { roleName ->
+            val roleSummary = seatSummary.firstOrNull { it.roleName == roleName }
+            val full = roleSeatFull(seatSummary, roleName)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Checkbox(
+                    checked = state.roleNames.contains(roleName),
+                    onCheckedChange = { onRoleToggled(roleName, it) },
                     enabled = !state.submitting,
-                    label = { Text(text = roleDisplayName(roleName)) },
-                    icon = {},
                 )
+                Column(modifier = Modifier.padding(start = 4.dp)) {
+                    Text(text = roleDisplayName(roleName), style = MaterialTheme.typography.bodyLarge)
+                    if (roleSummary != null) {
+                        Text(
+                            text = stringResource(R.string.people_invite_role_seats_taken, roleSummary.heldSeats, roleSummary.limit),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (full) agoStatusColors().dangerText else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
 
@@ -193,7 +214,7 @@ private fun InviteFormBody(
 
         Button(
             onClick = onSubmit,
-            enabled = !state.submitting,
+            enabled = !state.submitting && !submitBlocked,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text(text = stringResource(if (state.submitting) R.string.people_invite_sending else R.string.people_invite_submit))
@@ -212,8 +233,14 @@ private fun InviteFormBody(
 private fun inviteRefusalMessage(refusal: InviteRefusalUi): String =
     when (refusal) {
         InviteRefusalUi.EmptyEmail -> stringResource(R.string.people_invite_email_required)
-        is InviteRefusalUi.AtCapacity ->
-            stringResource(R.string.people_invite_at_capacity, roleDisplayName(refusal.roleName), refusal.limit)
+        InviteRefusalUi.NoRoleSelected -> stringResource(R.string.people_invite_no_role_selected)
+        is InviteRefusalUi.RolesAtCapacity ->
+            // `26-241`: one line per full role — `map` is inline, so the @Composable `roleDisplayName`
+            // and `stringResource` calls inside its lambda are legal. Both the client-side pre-flight
+            // (every selected full role) and a server `402` (the one role it refused) render here.
+            refusal.roleNames
+                .map { stringResource(R.string.people_invite_role_seat_full, roleDisplayName(it)) }
+                .joinToString("\n")
         is InviteRefusalUi.ServerRefusal -> refusal.detail
         is InviteRefusalUi.Unavailable -> networkFailureText(refusal.reason)
     }
