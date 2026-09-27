@@ -11,6 +11,7 @@ import ago.chat.android.channels.TelegramChannelRoute
 import ago.chat.android.channels.VkChannelRoute
 import ago.chat.android.channels.WidgetConfigRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.documents.ConsentDocumentsRoute
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
@@ -54,7 +55,9 @@ import androidx.compose.ui.unit.dp
  * «Операторы и роли»/«Тариф и оплата» still open [PlaceholderDestinationScreen], because neither real
  * screen is built in this app yet. `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real
  * branch ([OfflineAutoReplyRoute]); `26-220` does the same for «Готовые ответы»
- * ([CannedResponsesRoute]), so neither Автоматизация row is one of them any more.
+ * ([CannedResponsesRoute]), so neither Автоматизация row is one of them any more. `26-226` gives
+ * Администрирование its own first real row - «Документы согласий» ([ConsentDocumentsRoute]) - leaving
+ * «Операторы и роли»/«Тариф и оплата» the only two placeholders left in this screen.
  *
  * ## Back-button contract clause 2
  *
@@ -128,6 +131,10 @@ internal fun MoreScreen(
             // Автоматизация branch this scaffold serves. Back returns to the Ещё list (clause 2) via the
             // same `openRowId = null` every drill-in uses.
             AUTOMATION_TAGS_ROW_ID -> TagsRoute(onBack = { openRowId = null })
+            // `26-226`: Администрирование → «Документы согласий» - the consent-document read/publish/
+            // acceptances editor, the first real Администрирование branch this scaffold serves. Back
+            // returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            ADMINISTRATION_DOCUMENTS_ROW_ID -> ConsentDocumentsRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -242,6 +249,7 @@ internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hou
 internal const val AUTOMATION_TAGS_ROW_ID: String = "automation-tags"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
+internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
 
 /** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
  * opens [PlaceholderDestinationScreen] rather than a finished screen.
@@ -363,6 +371,20 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 section = MoreSectionId.Administration,
             ),
         )
+        // `26-226`: Администрирование's first real row - «Документы согласий»
+        // (`docs/design/tenant-consent-android.md`), gated on `site:configure` like every other real
+        // row this screen serves (`site:configure` is consent's *only* gate, rail and server alike -
+        // that design doc's own top-of-file note). Sits directly after Тариф и оплата,
+        // `navigation.md`'s own listed order (продукты, оплата, документы, …).
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_DOCUMENTS_ROW_ID,
+                    labelRes = R.string.more_administration_documents_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
     }
 
 /** `ago-console/src/shell/consoleNav.ts`'s own `buildSection`, ported: a section with no rows is not
