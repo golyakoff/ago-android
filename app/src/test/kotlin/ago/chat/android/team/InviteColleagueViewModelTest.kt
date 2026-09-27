@@ -5,9 +5,9 @@ import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamResult
-import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.ROLE_OPERATOR
+import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
 import ago.chat.android.session.OidcConfig

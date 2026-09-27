@@ -3,12 +3,12 @@ package ago.chat.android.core.network.team
 import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.CreateInviteResult
-import ago.chat.android.core.domain.team.OperatorRoleSeat
-import ago.chat.android.core.domain.team.OperatorTeamApi
-import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorInviteListItem
 import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorInvitesResult
+import ago.chat.android.core.domain.team.OperatorRoleSeat
+import ago.chat.android.core.domain.team.OperatorTeamApi
+import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
