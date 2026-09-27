@@ -1,8 +1,11 @@
 package ago.chat.android.core.network.restrictions
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.restrictions.RestrictionKind
+import ago.chat.android.core.domain.restrictions.VisitorRestriction
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionPageResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionStatusResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -13,6 +16,8 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
+import java.time.Instant
+import java.time.OffsetDateTime
 
 /**
  * `26-145`: the adapter behind [VisitorRestrictionApi] — the same "the whole status-code-to-meaning
@@ -80,6 +85,49 @@ public class KtorVisitorRestrictionApi(
             }
 
             before = page.nextBeforeId ?: return VisitorRestrictionStatusResult.Loaded(restricted = false)
+        }
+    }
+
+    /**
+     * `26-227`: `GET /api/v1/visitor-restrictions?before=&limit=` — the tenant oversight screen's own
+     * page read (see [VisitorRestrictionApi.list]'s own doc comment). `before`/`limit` are appended only
+     * when non-null, the identical convention
+     * [ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi] already uses for its own
+     * keyset cursor, so their absence means "the newest page, the server's own default page size".
+     */
+    override suspend fun list(
+        before: String?,
+        limit: Int?,
+    ): VisitorRestrictionPageResult {
+        val response =
+            try {
+                client.get("$apiBaseUrl/api/v1/visitor-restrictions") {
+                    before?.let { parameter("before", it) }
+                    limit?.let { parameter("limit", it) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return VisitorRestrictionPageResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return VisitorRestrictionPageResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+
+        return try {
+            val page = response.body<VisitorRestrictionsPageWireDto>()
+            VisitorRestrictionPageResult.Loaded(
+                items = page.items.map { it.toDomain() },
+                nextBeforeId = page.nextBeforeId,
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `200` whose body (or one of its rows) does not match the promised shape - a missing
+            // `restrictedAt`, an unparseable timestamp - is not "no restrictions on file"; the identical
+            // `KtorVisitorHistoryApi`/`shapeGuard.ts` lesson [VisitorRestriction]'s own doc comment states.
+            VisitorRestrictionPageResult.Failed(NetworkFailure.from(failure))
         }
     }
 
@@ -155,3 +203,74 @@ private data class VisitorRestrictionListItemWireDto(
     val visitorId: String,
     val liftedAt: String? = null,
 )
+
+/**
+ * `26-227`: the *full* `VisitorRestrictionsEndpoints.VisitorRestrictionListResponse` — a second, wider
+ * wire DTO for the same JSON payload [VisitorRestrictionListWireDto] above already parses a reduced view
+ * of. Kept separate rather than widening that one in place: [isRestricted]'s own existing tests post a
+ * response carrying only `id`/`visitorId`/`kind`/`liftedAt`, and giving the shared DTO non-optional
+ * `restrictedAt`/`restrictedBy`/`sourceConversationId` fields — required, per [VisitorRestriction]'s own
+ * shape-guard doc comment — would fail those fixtures' deserialization for a read that never asked for
+ * those fields in the first place. Each read parses exactly the shape its own contract needs, the same
+ * "a reduced view for a narrower question" split [VisitorRestrictionListItemWireDto]'s own doc comment
+ * already draws relative to the server's full row.
+ */
+@Serializable
+private data class VisitorRestrictionsPageWireDto(
+    val items: List<VisitorRestrictionRowWireDto>,
+    val nextBeforeId: String? = null,
+)
+
+/**
+ * `26-227`: one row of [VisitorRestrictionsPageWireDto] — every field
+ * `VisitorRestrictionsEndpoints.VisitorRestrictionListItemDto` carries. `id`/`visitorId`/`kind`/
+ * `restrictedAt`/`restrictedBy`/`sourceConversationId` carry no default, so a row missing any of them
+ * fails deserialization and [KtorVisitorRestrictionApi.list] classifies the whole page `Unexpected`
+ * rather than silently dropping the row — [VisitorRestriction]'s own doc comment states why.
+ * `expiresAt`/`liftedAt`/`liftedBy`/`emojiCreature`/`emojiFood` are genuinely optional on the wire and
+ * default to `null`.
+ */
+@Serializable
+private data class VisitorRestrictionRowWireDto(
+    val id: String,
+    val visitorId: String,
+    val kind: String,
+    val restrictedAt: String,
+    val restrictedBy: String,
+    val sourceConversationId: String,
+    val expiresAt: String? = null,
+    val liftedAt: String? = null,
+    val liftedBy: String? = null,
+    val emojiCreature: String? = null,
+    val emojiFood: String? = null,
+)
+
+/**
+ * `restrictedAt` is required-and-present on the wire, so it parses through the throwing
+ * [String.toRequiredInstant] — a malformed value fails this row's whole page rather than silently
+ * becoming a wrong, invented instant (`VisitorRestriction.restrictedAt`'s own non-nullable shape leaves
+ * no honest `null` to fall back to, unlike [expiresAt]/[liftedAt] just below). `kind` falls back to
+ * [RestrictionKind.Block] for anything other than the two known wire spellings — [RestrictionKind]'s own
+ * doc comment on why that direction is the fail-safe one.
+ */
+private fun VisitorRestrictionRowWireDto.toDomain(): VisitorRestriction =
+    VisitorRestriction(
+        id = id,
+        visitorId = visitorId,
+        kind = if (kind == "Spam") RestrictionKind.Spam else RestrictionKind.Block,
+        restrictedAt = restrictedAt.toRequiredInstant(),
+        restrictedBy = restrictedBy,
+        expiresAt = expiresAt?.toRequiredInstant(),
+        sourceConversationId = sourceConversationId,
+        liftedAt = liftedAt?.toRequiredInstant(),
+        liftedBy = liftedBy,
+        emojiCreature = emojiCreature,
+        emojiFood = emojiFood,
+    )
+
+/** Unlike [String.toInstantOrNull]-shaped helpers elsewhere in this module, this one *throws* on a
+ * malformed value rather than degrading to `null` — deliberately, per [VisitorRestrictionRowWireDto]'s
+ * own doc comment: every timestamp on this row is either genuinely absent (handled by the nullable
+ * caller before this is ever invoked) or must parse, and [list]'s own outer `catch` is what turns that
+ * throw into the honest `Failed(Unexpected)` the shape-guard discipline asks for. */
+private fun String.toRequiredInstant(): Instant = OffsetDateTime.parse(this).toInstant()

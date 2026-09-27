@@ -242,6 +242,16 @@ internal fun AppShellScreen(
             // «Снять ограничение» button (hide-not-disable, design Q7) - computed the same way, independent
             // of `canCloseConversation` above: an operator may hold either, both, or neither.
             canRestrictVisitor = permissions.holds(Permission.CONVERSATION_BLOCK),
+            // `26-227`: `site:configure` - the same permission `canSeeAllConversations` above already
+            // reads, handed to the list's own new `⋮` overflow under its own name
+            // (`ConversationsTabHost`'s own parameter doc comment states why: the two gate unrelated UI).
+            canConfigureSite = permissions.holds(Permission.SITE_CONFIGURE),
+            // `26-227`: `conversation:block` **or** `conversation:mark_spam` - gates the restrictions
+            // list's own per-row «Снять» button, independent of `canConfigureSite`
+            // (`docs/design/tenant-modules-restrictions-android.md` §3.4: an operator may hold the
+            // whole-site read without either write permission, or vice versa).
+            canLiftRestriction =
+                permissions.holds(Permission.CONVERSATION_BLOCK) || permissions.holds(Permission.CONVERSATION_MARK_SPAM),
         )
     },
     // `26-48`: the identical "Hilt-avoidance slot" [conversationsTab] above already is, for

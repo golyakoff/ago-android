@@ -3,6 +3,7 @@ package ago.chat.android.shell
 import ago.chat.android.conversations.ConversationListRoute
 import ago.chat.android.conversations.ConversationListViewModel
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.restrictions.RestrictedVisitorsRoute
 import ago.chat.android.thread.ThreadRoute
 import ago.chat.android.thread.ThreadViewModel
 import androidx.compose.runtime.Composable
@@ -39,6 +40,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * [ThreadViewModel] is scoped per open conversation in production (`hiltViewModel()`'s own default
  * scoping to the current back stack entry) — a plain default parameter would have to call `hiltViewModel()`
  * outside this function's own composition, which is not legal Compose.
+ *
+ * `26-227` grows the "hand-rolled back stack" this comment names to a **third** state,
+ * `openRestricted` — the list's own new `⋮` overflow drills into [RestrictedVisitorsRoute] the identical
+ * way a row tap drills into a thread, and back returns to the list for free (this composable renders the
+ * list whenever `openRestricted` is `false`), the same reasoning the design doc's own doc comment states
+ * for why this is one more state on the existing host rather than a second navigation mechanism beside
+ * it (`docs/design/tenant-modules-restrictions-android.md` §1.5).
  */
 @Composable
 public fun ConversationsTabHost(
@@ -92,11 +100,27 @@ public fun ConversationsTabHost(
     // button on it (hide-not-disable). Defaulted to `false` so every back-contract test constructing this
     // composable directly compiles and behaves unchanged.
     canRestrictVisitor: Boolean = false,
+    // `26-227`: `site:configure` - gates the conversation list's own new `⋮` overflow and, once opened,
+    // this destination's «Ограниченные посетители» screen. Named apart from `canSeeAllConversations`
+    // (the identical permission) because the two gate unrelated UI - `ConversationListRoute`'s own
+    // parameter doc comment states the same reasoning. Defaulted to `false` so every back-contract test
+    // constructing this composable directly compiles and behaves unchanged.
+    canConfigureSite: Boolean = false,
+    // `26-227`: `conversation:block` **or** `conversation:mark_spam` - gates the per-row «Снять» button
+    // on the restrictions list, independent of `canConfigureSite` above (an operator can hold the read
+    // without either write permission, or vice versa - the server checks them separately too,
+    // `docs/design/tenant-modules-restrictions-android.md` §3.4). Defaulted to `false` for the same
+    // back-contract-test reason.
+    canLiftRestriction: Boolean = false,
     viewModel: ConversationListViewModel = hiltViewModel(),
     threadViewModel: @Composable () -> ThreadViewModel = { hiltViewModel() },
 ) {
     val listState by viewModel.state.collectAsStateWithLifecycle()
     var openConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+    // `26-227`: a third state beside list/thread - see this file's own top-of-file doc comment for why a
+    // state here rather than a second `NavHost` destination. `rememberSaveable` so the drill-in survives
+    // rotation/process death exactly as long as [openConversationId] already does.
+    var openRestricted by rememberSaveable { mutableStateOf(false) }
     // `26-98`: which open, if any, is the «Все» list's own read-only one - holds `openConversationId`'s
     // own value again when it is, `null` otherwise, rather than a plain `Boolean`: a `Boolean` alone
     // would stay `true` across a *different* conversation later opened the ordinary way unless every one
@@ -145,7 +169,18 @@ public fun ConversationsTabHost(
     }
 
     val currentlyOpen = openConversationId
-    if (currentlyOpen == null) {
+    if (openRestricted) {
+        // `26-227`: the overflow's own drill-in - its own `SAVEABLE_KEY_RESTRICTED` key, the identical
+        // per-branch `SaveableStateProvider` shape [SAVEABLE_KEY_LIST]/[SAVEABLE_KEY_THREAD_PREFIX] below
+        // already use, so the list's own scroll position and filters survive going to this screen and
+        // back exactly the way they already survive opening a thread (back-button contract clause 1).
+        stateHolder.SaveableStateProvider(SAVEABLE_KEY_RESTRICTED) {
+            RestrictedVisitorsRoute(
+                onBack = { openRestricted = false },
+                canLift = canLiftRestriction,
+            )
+        }
+    } else if (currentlyOpen == null) {
         stateHolder.SaveableStateProvider(SAVEABLE_KEY_LIST) {
             ConversationListRoute(
                 activeSiteId = activeSiteId,
@@ -170,6 +205,8 @@ public fun ConversationsTabHost(
                 onOpenSettings = onOpenSettings,
                 canSeeAllConversations = canSeeAllConversations,
                 canEraseConversations = canEraseConversations,
+                canConfigureSite = canConfigureSite,
+                onOpenRestricted = { openRestricted = true },
             )
         }
     } else {
@@ -252,3 +289,4 @@ public fun ConversationsTabHost(
 
 private const val SAVEABLE_KEY_LIST = "conversation-list"
 private const val SAVEABLE_KEY_THREAD_PREFIX = "thread:"
+private const val SAVEABLE_KEY_RESTRICTED = "restricted-visitors"

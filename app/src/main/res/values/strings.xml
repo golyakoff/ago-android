@@ -1818,4 +1818,41 @@
     <string name="visitor_emoji_name_peach">Персик</string>
     <string name="visitor_emoji_name_avocado">Авокадо</string>
     <string name="visitor_emoji_name_pineapple">Ананас</string>
+
+    <!--
+        `26-227`: «Ограниченные посетители» - the tenant-admin oversight screen this item adds
+        (`docs/design/tenant-modules-restrictions-android.md` §1), reached from the Диалоги conversation
+        list's own new `⋮` overflow (that design's finding #3 - not a Ещё row). `conversation_list_overflow_action`
+        is the overflow icon's own content description; `restricted_visitors_*` is everything on the
+        screen itself.
+    -->
+    <string name="conversation_list_overflow_action">Дополнительно</string>
+    <string name="restricted_visitors_menu_item">Ограниченные посетители</string>
+
+    <string name="restricted_visitors_title">Ограниченные посетители</string>
+    <string name="restricted_visitors_refresh_action">Обновить</string>
+    <string name="restricted_visitors_empty">Ограничений нет</string>
+    <string name="restricted_visitors_load_more">Загрузить ещё</string>
+    <string name="restricted_visitors_loading_more">Загрузка…</string>
+
+    <string name="restricted_visitors_kind_spam">Спам</string>
+    <string name="restricted_visitors_kind_block">Блокировка</string>
+
+    <string name="restricted_visitors_status_active">Активно</string>
+    <string name="restricted_visitors_status_expired">Истекло</string>
+    <string name="restricted_visitors_status_lifted">Снято</string>
+
+    <!-- `%1$s` is the visitor's own display label ("Сова · Клубника (a0f3c952)") joined by
+         [ago.chat.android.restrictions.restrictedVisitorLabel] - never a raw id alone. -->
+    <string name="restricted_visitors_visitor_label">%1$s (%2$s)</string>
+    <string name="restricted_visitors_restricted_by">Кем: %1$s</string>
+    <string name="restricted_visitors_expires_at">До: %1$s</string>
+    <string name="restricted_visitors_expires_never">Бессрочно</string>
+
+    <string name="restricted_visitors_lift_action">Снять</string>
+    <string name="restricted_visitors_lifting_action">Снимаем…</string>
+    <string name="restricted_visitors_lift_confirm_title">Снять ограничение?</string>
+    <string name="restricted_visitors_lift_confirm_body">%1$s снова сможет писать в чат.</string>
+    <string name="restricted_visitors_lift_confirm_action">Снять ограничение</string>
+    <string name="restricted_visitors_lift_failed">Не удалось снять ограничение</string>
 </resources>

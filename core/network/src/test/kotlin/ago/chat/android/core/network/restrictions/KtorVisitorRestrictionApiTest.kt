@@ -1,7 +1,10 @@
 package ago.chat.android.core.network.restrictions
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.restrictions.RestrictionKind
+import ago.chat.android.core.domain.restrictions.VisitorRestriction
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionActionResult
+import ago.chat.android.core.domain.restrictions.VisitorRestrictionPageResult
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionStatusResult
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
@@ -19,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.IOException
+import java.time.Instant
 
 /**
  * `26-145`: block, lift and the is-restricted membership read, driven through the real client
@@ -243,6 +247,184 @@ class KtorVisitorRestrictionApiTest {
             val api = apiFor { respond("""{"somethingElseEntirely":true}""", HttpStatusCode.OK, jsonHeaders()) }
 
             assertEquals(VisitorRestrictionStatusResult.Failed(NetworkFailure.Unexpected), api.isRestricted("v1"))
+        }
+
+    // ------------------------------------------- GET /api/v1/visitor-restrictions (26-227's own list())
+
+    @Test
+    fun `list with no cursor asks for the newest page and sends neither query parameter`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor { request ->
+                    requestedUrl = request.url.toString()
+                    respond("""{"items":[],"nextBeforeId":null}""", HttpStatusCode.OK, jsonHeaders())
+                }
+
+            assertEquals(VisitorRestrictionPageResult.Loaded(emptyList(), null), api.list(before = null, limit = null))
+            assertEquals("$baseUrl/api/v1/visitor-restrictions", requestedUrl)
+        }
+
+    @Test
+    fun `list sends before and limit only when given`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor { request ->
+                    requestedUrl = request.url.toString()
+                    respond("""{"items":[],"nextBeforeId":null}""", HttpStatusCode.OK, jsonHeaders())
+                }
+
+            api.list(before = "r9", limit = 50)
+
+            assertEquals("$baseUrl/api/v1/visitor-restrictions?before=r9&limit=50", requestedUrl)
+        }
+
+    @Test
+    fun `a fully-populated row parses every field, including the stored emoji pair`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "items": [
+                            {
+                              "id": "r1",
+                              "visitorId": "v1",
+                              "kind": "Block",
+                              "restrictedAt": "2026-09-25T10:00:00+00:00",
+                              "restrictedBy": "op1",
+                              "sourceConversationId": "c1",
+                              "expiresAt": null,
+                              "liftedAt": null,
+                              "liftedBy": null,
+                              "emojiCreature": "🦉",
+                              "emojiFood": "🍓"
+                            }
+                          ],
+                          "nextBeforeId": "r1"
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val expected =
+                VisitorRestriction(
+                    id = "r1",
+                    visitorId = "v1",
+                    kind = RestrictionKind.Block,
+                    restrictedAt = Instant.parse("2026-09-25T10:00:00Z"),
+                    restrictedBy = "op1",
+                    expiresAt = null,
+                    sourceConversationId = "c1",
+                    liftedAt = null,
+                    liftedBy = null,
+                    emojiCreature = "🦉",
+                    emojiFood = "🍓",
+                )
+            assertEquals(VisitorRestrictionPageResult.Loaded(listOf(expected), "r1"), api.list(before = null, limit = null))
+        }
+
+    @Test
+    fun `a row from a visitor that predates the emoji pair carries both halves null, never a guess`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "items": [
+                            {
+                              "id": "r1", "visitorId": "v1", "kind": "Spam", "restrictedAt": "2026-09-25T10:00:00Z",
+                              "restrictedBy": "op1", "sourceConversationId": "c1", "expiresAt": "2026-09-25T11:00:00Z"
+                            }
+                          ],
+                          "nextBeforeId": null
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.list(before = null, limit = null) as VisitorRestrictionPageResult.Loaded
+            val row = result.items.single()
+            assertEquals(null, row.emojiCreature)
+            assertEquals(null, row.emojiFood)
+            assertEquals(RestrictionKind.Spam, row.kind)
+            assertEquals(Instant.parse("2026-09-25T11:00:00Z"), row.expiresAt)
+        }
+
+    @Test
+    fun `an unrecognised kind spelling parses as Block, the fail-safe direction`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {"items":[{"id":"r1","visitorId":"v1","kind":"SomethingNew","restrictedAt":"2026-09-25T10:00:00Z",
+                        "restrictedBy":"op1","sourceConversationId":"c1"}],"nextBeforeId":null}
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.list(before = null, limit = null) as VisitorRestrictionPageResult.Loaded
+            assertEquals(RestrictionKind.Block, result.items.single().kind)
+        }
+
+    @Test
+    fun `a 403 on list is a server error`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(VisitorRestrictionPageResult.Failed(NetworkFailure.ServerError(403)), api.list(before = null, limit = null))
+        }
+
+    @Test
+    fun `a dropped connection on list is a transport failure`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(VisitorRestrictionPageResult.Failed(NetworkFailure.NoConnection), api.list(before = null, limit = null))
+        }
+
+    @Test
+    fun `a row missing a required field fails the whole page, never a silently dropped row`() =
+        runTest {
+            val api =
+                apiFor {
+                    // No `sourceConversationId` - a genuinely required field per `VisitorRestriction`'s own
+                    // shape-guard contract.
+                    respond(
+                        """{"items":[{"id":"r1","visitorId":"v1","kind":"Block","restrictedAt":"2026-09-25T10:00:00Z",
+                        "restrictedBy":"op1"}],"nextBeforeId":null}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            assertEquals(VisitorRestrictionPageResult.Failed(NetworkFailure.Unexpected), api.list(before = null, limit = null))
+        }
+
+    @Test
+    fun `a required timestamp that will not parse fails the whole page, never an invented instant`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"items":[{"id":"r1","visitorId":"v1","kind":"Block","restrictedAt":"not-a-date",
+                        "restrictedBy":"op1","sourceConversationId":"c1"}],"nextBeforeId":null}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            assertEquals(VisitorRestrictionPageResult.Failed(NetworkFailure.Unexpected), api.list(before = null, limit = null))
         }
 
     private fun jsonHeaders() = headersOf("Content-Type", ContentType.Application.Json.toString())

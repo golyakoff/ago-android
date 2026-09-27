@@ -1,6 +1,7 @@
 package ago.chat.android.core.domain.restrictions
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import java.time.Instant
 
 /**
  * `26-145` (S-C of the `26-111` contact-detail panel): the port the panel's «Ограничить» /
@@ -72,6 +73,88 @@ public interface VisitorRestrictionApi {
      * restrictions pushed the row off page one.
      */
     public suspend fun isRestricted(visitorId: String): VisitorRestrictionStatusResult
+
+    /**
+     * `26-227`: `GET /api/v1/visitor-restrictions?before=&limit=` — the tenant's own oversight list
+     * (`docs/design/tenant-modules-restrictions-android.md` §1), keyset-paged by [before]/[limit] the
+     * identical way [ago.chat.android.core.domain.conversations.ConversationsApi.fetchAllConversations]
+     * already pages its own site-wide list. Gated `site:configure` server-side
+     * (`GetVisitorRestrictionsForSiteHandler`) — the *stronger* gate [isRestricted]'s own doc comment
+     * already names, since this is the same cross-operator, whole-site read that method's `GET` call
+     * happens to reuse for a narrower membership question.
+     *
+     * Lives on this port, beside [block]/[lift]/[isRestricted], rather than a second port of its own:
+     * all four are the one `visitor-restrictions` server resource — the design doc's own reasoning for
+     * why a second port here would split one server noun across two adapters for no gain.
+     */
+    public suspend fun list(
+        before: String?,
+        limit: Int?,
+    ): VisitorRestrictionPageResult
+}
+
+/**
+ * `26-227`: one keyset page of `GET /api/v1/visitor-restrictions` — the tenant oversight screen's own
+ * read, the identical two-arm shape [VisitorRestrictionStatusResult] already establishes for the port's
+ * other read: every cause of "the read failed" renders as the same one banner.
+ */
+public sealed interface VisitorRestrictionPageResult {
+    public data class Loaded(
+        val items: List<VisitorRestriction>,
+        val nextBeforeId: String?,
+    ) : VisitorRestrictionPageResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : VisitorRestrictionPageResult
+}
+
+/**
+ * `26-227`: one `visitor_restrictions` row, read back for the tenant's own oversight screen — every
+ * field `VisitorRestrictionsEndpoints.VisitorRestrictionListItemDto` carries. [restrictedAt] is
+ * non-nullable on the wire and stays so here; a `200` body whose row is missing it (or any other
+ * required field) fails to parse and the whole page classifies [NetworkFailure.Unexpected] rather than
+ * silently dropping the row — the identical shape-guard discipline
+ * [ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi]'s own wire DTO already applies to
+ * its required fields.
+ *
+ * [emojiCreature]/[emojiFood] are `26-202`'s own additive pair — `null` for a visitor row that predates
+ * it, the identical absent-means-absent contract
+ * [ago.chat.android.core.domain.conversations.ConversationSummary.emojiCreature] already carries. This
+ * screen's own Done-when needs a visitor rendered as "Сова · Клубника (a0f3c952)", never a raw id alone
+ * or a client-derived guess (`reference_visitor_emoji_pair_is_stored`: the pair is *stored*, read here,
+ * never hashed from [visitorId]) — these two fields are what make that possible without a second round
+ * trip per row.
+ */
+public data class VisitorRestriction(
+    public val id: String,
+    public val visitorId: String,
+    public val kind: RestrictionKind,
+    public val restrictedAt: Instant,
+    public val restrictedBy: String,
+    public val expiresAt: Instant?,
+    public val sourceConversationId: String,
+    public val liftedAt: Instant?,
+    public val liftedBy: String?,
+    public val emojiCreature: String? = null,
+    public val emojiFood: String? = null,
+)
+
+/**
+ * `26-227`: `VisitorRestrictionKind`'s own two wire spellings (`"Spam"`/`"Block"`), parsed in the
+ * adapter rather than carried as a raw string — unlike [kind] on the server's own domain enum, this
+ * screen draws a differently-tinted badge per kind (design doc §1.4: "Spam = accent/brand tint, Block =
+ * danger tint"), which needs a closed, exhaustive vocabulary to switch over rather than an open string
+ * `:app` would have to re-validate.
+ *
+ * An unrecognised wire value parses as [Block] — fail-safe, per the design doc's own instruction: never
+ * under-report a restriction as the less dangerous kind. This can only happen if the server ever adds a
+ * third kind before this app's own vocabulary catches up; it must never render as "not restricted at
+ * all" in that case.
+ */
+public enum class RestrictionKind {
+    Spam,
+    Block,
 }
 
 /** What blocking or lifting one visitor came back with — the identical three-arm shape
