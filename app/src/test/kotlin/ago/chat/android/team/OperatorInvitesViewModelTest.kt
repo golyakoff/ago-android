@@ -1,6 +1,7 @@
 package ago.chat.android.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInviteListItem
 import ago.chat.android.core.domain.team.OperatorInviteStatus
@@ -8,8 +9,10 @@ import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RemoveOperatorResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.SeatSummaryResult
+import ago.chat.android.core.domain.team.ToggleOperatorSeatResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -219,5 +222,20 @@ class OperatorInvitesViewModelTest {
             roleNames: Set<String>,
             email: String,
         ): CreateInviteResult = CreateInviteResult.Failed(NetworkFailure.Unexpected)
+
+        // `26-253`: this suite drives neither of the three roster writes ([PeopleViewModel] does) — the
+        // fake still answers them to satisfy the interface.
+        override suspend fun changeOperatorRole(
+            operatorId: String,
+            newRoleName: String,
+        ): ChangeOperatorRoleResult = ChangeOperatorRoleResult.Changed
+
+        override suspend fun removeOperator(operatorId: String): RemoveOperatorResult = RemoveOperatorResult.Removed
+
+        override suspend fun toggleOperatorSeat(
+            operatorId: String,
+            roleName: String,
+            holdsSeat: Boolean,
+        ): ToggleOperatorSeatResult = ToggleOperatorSeatResult.Toggled
     }
 }

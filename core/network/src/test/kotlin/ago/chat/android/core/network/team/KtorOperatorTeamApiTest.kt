@@ -1,6 +1,7 @@
 package ago.chat.android.core.network.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorInvitesResult
@@ -8,9 +9,11 @@ import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RemoveOperatorResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
+import ago.chat.android.core.domain.team.ToggleOperatorSeatResult
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
 import ago.chat.android.core.network.installAgoRestDefaults
@@ -557,6 +560,236 @@ class KtorOperatorTeamApiTest {
 
             assertEquals(RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected), api.revokeInvite("inv-9"))
             assertEquals("no active site must never reach the network", 0, calls)
+        }
+
+    // ------------------------------ POST .../operators/{operatorId}/role (`26-253`)
+
+    @Test
+    fun `a 204 role change is Changed, posted with the new role name in the body`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            var sentBody = ""
+            val api =
+                apiFor(siteId) { request ->
+                    requested = request.method to request.url.toString()
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(ChangeOperatorRoleResult.Changed, api.changeOperatorRole("op-9", "Admin"))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operators/op-9/role", requested)
+            assertTrue(sentBody.contains("\"roleName\":\"Admin\""))
+        }
+
+    @Test
+    fun `a 409 IsLastManager role change is mapped by code to LastManager, never the detail`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.IsLastManager","detail":"This site must always have a manager."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(ChangeOperatorRoleResult.LastManager, api.changeOperatorRole("op-9", "Operator"))
+        }
+
+    @Test
+    fun `a 402 AdminLimitReached role change is mapped by code to AdminSeatFull`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.AdminLimitReached","detail":"Admin limit reached."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(ChangeOperatorRoleResult.AdminSeatFull, api.changeOperatorRole("op-9", "Admin"))
+        }
+
+    @Test
+    fun `an unknown role-change refusal with a detail is shown verbatim`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.RoleNotFound","detail":"Site has no role named 'Ghost'."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(
+                ChangeOperatorRoleResult.Refused("Site has no role named 'Ghost'."),
+                api.changeOperatorRole("op-9", "Ghost"),
+            )
+        }
+
+    @Test
+    fun `a role-change refusal with no problem-details body is a server error, never a fabricated string`() =
+        runTest {
+            val api = apiFor(siteId) { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(ChangeOperatorRoleResult.Failed(NetworkFailure.ServerError(403)), api.changeOperatorRole("op-9", "Admin"))
+        }
+
+    @Test
+    fun `a dropped connection on a role change is a transport failure`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(ChangeOperatorRoleResult.Failed(NetworkFailure.NoConnection), api.changeOperatorRole("op-9", "Admin"))
+        }
+
+    @Test
+    fun `no active site on a role change is Failed, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(ChangeOperatorRoleResult.Failed(NetworkFailure.Unexpected), api.changeOperatorRole("op-9", "Admin"))
+            assertEquals("no active site must never reach the network", 0, calls)
+        }
+
+    // ------------------------------ POST .../operators/{operatorId}/remove (`26-253`)
+
+    @Test
+    fun `a 204 removal is Removed, posted to the remove path`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            val api =
+                apiFor(siteId) { request ->
+                    requested = request.method to request.url.toString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(RemoveOperatorResult.Removed, api.removeOperator("op-9"))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operators/op-9/remove", requested)
+        }
+
+    @Test
+    fun `a 409 IsLastManager removal is mapped by code to LastManager`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.IsLastManager","detail":"This site must always have a manager."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(RemoveOperatorResult.LastManager, api.removeOperator("op-9"))
+        }
+
+    @Test
+    fun `an already-removed operator surfaces its detail verbatim`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.AlreadyRemoved","detail":"Operator op-9 has already been removed."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(RemoveOperatorResult.Refused("Operator op-9 has already been removed."), api.removeOperator("op-9"))
+        }
+
+    @Test
+    fun `a dropped connection on a removal is a transport failure`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(RemoveOperatorResult.Failed(NetworkFailure.NoConnection), api.removeOperator("op-9"))
+        }
+
+    // ------------------------------ POST .../operators/{operatorId}/seat (`26-253`)
+
+    @Test
+    fun `a 204 seat toggle is Toggled, posted with the role and new value in the body`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            var sentBody = ""
+            val api =
+                apiFor(siteId) { request ->
+                    requested = request.method to request.url.toString()
+                    sentBody = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(ToggleOperatorSeatResult.Toggled, api.toggleOperatorSeat("op-9", "Operator", holdsSeat = true))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operators/op-9/seat", requested)
+            assertTrue(sentBody.contains("\"roleName\":\"Operator\""))
+            assertTrue(sentBody.contains("\"holdsSeat\":true"))
+        }
+
+    @Test
+    fun `a 402 SeatLimitReached toggle is the Operator pool, mapped to SeatFull`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.SeatLimitReached","detail":"No free operator seats."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(ToggleOperatorSeatResult.SeatFull("Operator"), api.toggleOperatorSeat("op-9", "Operator", holdsSeat = true))
+        }
+
+    @Test
+    fun `a 402 AdminLimitReached toggle is the Admin pool, mapped to SeatFull`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.AdminLimitReached","detail":"No free admin seats."}""",
+                        HttpStatusCode.PaymentRequired,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(ToggleOperatorSeatResult.SeatFull("Admin"), api.toggleOperatorSeat("op-9", "Admin", holdsSeat = true))
+        }
+
+    @Test
+    fun `an unknown seat-toggle refusal with a detail is shown verbatim`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"type":"Operator.NotFound","detail":"Operator op-9 was not found for this site."}""",
+                        HttpStatusCode.NotFound,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(
+                ToggleOperatorSeatResult.Refused("Operator op-9 was not found for this site."),
+                api.toggleOperatorSeat("op-9", "Operator", holdsSeat = false),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on a seat toggle is a transport failure`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                ToggleOperatorSeatResult.Failed(NetworkFailure.NoConnection),
+                api.toggleOperatorSeat("op-9", "Operator", holdsSeat = true),
+            )
         }
 
     private fun apiFor(

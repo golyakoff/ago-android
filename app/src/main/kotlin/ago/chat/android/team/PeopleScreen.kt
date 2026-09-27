@@ -6,14 +6,17 @@ import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.ROLE_ADMIN
+import ago.chat.android.core.domain.team.ROLE_OPERATOR
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.ui.components.IdentifierText
+import ago.chat.android.ui.components.networkFailureText
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -84,6 +87,9 @@ public fun PeopleRoute(
         onRetryInvites = invitesViewModel::refresh,
         onRevokeInvite = invitesViewModel::revoke,
         onInviteClicked = { showInviteSheet = true },
+        onChangeRole = viewModel::changeRole,
+        onRemoveOperator = viewModel::removeOperator,
+        onToggleSeat = viewModel::toggleSeat,
     )
 
     if (showInviteSheet) {
@@ -115,6 +121,9 @@ internal fun PeopleScreen(
     onRetryInvites: () -> Unit,
     onRevokeInvite: (String) -> Unit,
     onInviteClicked: () -> Unit,
+    onChangeRole: (operatorId: String, newRoleName: String) -> Unit,
+    onRemoveOperator: (operatorId: String) -> Unit,
+    onToggleSeat: (operatorId: String, roleName: String, holdsSeat: Boolean) -> Unit,
 ) {
     // `26-242`: the revoke confirmation lives here rather than in the view model — it is transient UI
     // intent, not state the server or a rotation needs to survive. `remember` (not `rememberSaveable`):
@@ -125,6 +134,13 @@ internal fun PeopleScreen(
     // `ListOperatorInvitesHandler`/`RevokeOperatorInviteHandler` gate on — so nothing here needs a second
     // gate of its own; an operator who cannot manage operators never sees this screen at all.
     var revokeTarget by remember { mutableStateOf<OperatorInviteListItem?>(null) }
+    // `26-253`: the role-change and removal confirmations, held the same transient way — a role change
+    // and a removal are both real, consequence-bearing changes to a colleague's access, so each is
+    // confirmed before it fires (`ChangeOperatorRoleButton`/`RemoveOperatorButton`'s own dialogs). The
+    // seat toggle takes none, deliberately: it is reversible with the same tap and loses no data
+    // (`SeatToggleButton`'s own doc comment), so it fires straight through.
+    var changeRoleTarget by remember { mutableStateOf<OperatorTeamMember?>(null) }
+    var removeTarget by remember { mutableStateOf<OperatorTeamMember?>(null) }
 
     when (state) {
         PeopleUiState.Loading -> PeopleLoadingBody()
@@ -135,9 +151,14 @@ internal fun PeopleScreen(
                 PeopleContent(
                     members = state.members,
                     seatSummary = state.seatSummary,
+                    pendingWrite = state.pendingWrite,
+                    writeRefusal = state.writeRefusal,
                     invitesState = invitesState,
                     onRetryInvites = onRetryInvites,
                     onRevokeClicked = { revokeTarget = it },
+                    onChangeRoleClicked = { changeRoleTarget = it },
+                    onRemoveClicked = { removeTarget = it },
+                    onToggleSeat = onToggleSeat,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -151,6 +172,28 @@ internal fun PeopleScreen(
                 revokeTarget = null
             },
             onDismiss = { revokeTarget = null },
+        )
+    }
+
+    changeRoleTarget?.let { target ->
+        ChangeRoleConfirmDialog(
+            member = target,
+            onConfirm = { newRoleName ->
+                onChangeRole(target.operatorId, newRoleName)
+                changeRoleTarget = null
+            },
+            onDismiss = { changeRoleTarget = null },
+        )
+    }
+
+    removeTarget?.let { target ->
+        RemoveOperatorConfirmDialog(
+            member = target,
+            onConfirm = {
+                onRemoveOperator(target.operatorId)
+                removeTarget = null
+            },
+            onDismiss = { removeTarget = null },
         )
     }
 }
@@ -217,9 +260,14 @@ private fun failureMessage(reason: OperatorTeamFailure): String =
 private fun PeopleContent(
     members: List<OperatorTeamMember>,
     seatSummary: List<RoleSeatSummary>,
+    pendingWrite: OperatorWriteInFlight?,
+    writeRefusal: OperatorWriteRefusal?,
     invitesState: OperatorInvitesUiState,
     onRetryInvites: () -> Unit,
     onRevokeClicked: (OperatorInviteListItem) -> Unit,
+    onChangeRoleClicked: (OperatorTeamMember) -> Unit,
+    onRemoveClicked: (OperatorTeamMember) -> Unit,
+    onToggleSeat: (operatorId: String, roleName: String, holdsSeat: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -245,7 +293,14 @@ private fun PeopleContent(
             }
         } else {
             items(members, key = { it.operatorId }) { member ->
-                OperatorCard(member = member)
+                OperatorCard(
+                    member = member,
+                    pendingWrite = pendingWrite?.takeIf { it.operatorId == member.operatorId },
+                    refusal = writeRefusal?.takeIf { it.operatorId == member.operatorId }?.reason,
+                    onChangeRoleClicked = { onChangeRoleClicked(member) },
+                    onRemoveClicked = { onRemoveClicked(member) },
+                    onToggleSeat = onToggleSeat,
+                )
                 HorizontalDivider()
             }
         }
@@ -347,9 +402,25 @@ private fun SeatSummaryRow(role: RoleSeatSummary) {
  * role** — never one per person. An operator with two roles shows two seat facts, the direct
  * consequence of [OperatorTeamMember.roles] being a list at all ([ago.chat.android.core.domain.team.OperatorRoleSeat]'s
  * own doc comment).
+ *
+ * `26-253`: also this row's own three writes, mirroring `OperatorsTeamPage`'s per-row actions — a seat
+ * toggle beside each role's own badge, plus a change-role and a remove action for the operator as a
+ * whole. [pendingWrite] is non-null only when *this* row has a write in flight (the caller filters it by
+ * operator id); the control that fired it shows a spinner in its place and takes no second tap, the same
+ * in-flight-replaces-the-control shape `InviteRow`'s own revoke already uses. [refusal] is this row's own
+ * last refusal (if any), rendered inline beneath the actions the same way `OperatorsTeamPage` shows each
+ * button's own failure.
  */
 @Composable
-private fun OperatorCard(member: OperatorTeamMember) {
+private fun OperatorCard(
+    member: OperatorTeamMember,
+    pendingWrite: OperatorWriteInFlight?,
+    refusal: OperatorWriteRefusalReason?,
+    onChangeRoleClicked: () -> Unit,
+    onRemoveClicked: () -> Unit,
+    onToggleSeat: (operatorId: String, roleName: String, holdsSeat: Boolean) -> Unit,
+) {
+    val anyWriteInFlight = pendingWrite != null
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         val nameStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
         val displayName = member.displayName
@@ -373,7 +444,10 @@ private fun OperatorCard(member: OperatorTeamMember) {
         }
 
         member.roles.forEach { role ->
-            Row(modifier = Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = roleDisplayName(role.roleName),
                     style = MaterialTheme.typography.labelMedium,
@@ -381,9 +455,155 @@ private fun OperatorCard(member: OperatorTeamMember) {
                     modifier = Modifier.padding(end = 8.dp),
                 )
                 SeatBadge(holdsSeat = role.holdsSeat)
+                Spacer(modifier = Modifier.weight(1f))
+                val seatToggleInFlight =
+                    pendingWrite?.action == OperatorWriteAction.ToggleSeat && pendingWrite.roleName == role.roleName
+                if (seatToggleInFlight) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    TextButton(
+                        onClick = { onToggleSeat(member.operatorId, role.roleName, !role.holdsSeat) },
+                        enabled = !anyWriteInFlight,
+                    ) {
+                        Text(text = seatToggleLabel(roleName = role.roleName, holdsSeat = role.holdsSeat))
+                    }
+                }
             }
         }
+
+        // `26-253`: the operator-level actions, mirroring `ChangeOperatorRoleButton`/`RemoveOperatorButton`.
+        // A change of role and a removal are both confirmed first (this screen's own dialogs), so these
+        // buttons only open the confirmation — the write itself fires from the dialog's confirm.
+        val isAdmin = member.roles.any { it.roleName == ROLE_ADMIN }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (pendingWrite?.action == OperatorWriteAction.ChangeRole) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                val changeRoleLabel =
+                    if (isAdmin) R.string.people_change_role_to_operator_button else R.string.people_change_role_to_admin_button
+                TextButton(onClick = onChangeRoleClicked, enabled = !anyWriteInFlight) {
+                    Text(text = stringResource(changeRoleLabel))
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            if (pendingWrite?.action == OperatorWriteAction.Remove) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                TextButton(onClick = onRemoveClicked, enabled = !anyWriteInFlight) {
+                    Text(
+                        text = stringResource(R.string.people_remove_button),
+                        color = agoStatusColors().dangerText,
+                    )
+                }
+            }
+        }
+
+        refusal?.let {
+            Text(
+                text = operatorWriteRefusalMessage(it),
+                style = MaterialTheme.typography.bodySmall,
+                color = agoStatusColors().dangerText,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
+}
+
+/** `26-253`: the seat toggle's own label, role-qualified and stating the row's next state — the direct
+ * mirror of `SeatToggleButton`'s own `operatorsTeamGrant/RevokeOperator/AdminSeatButton` four-way choice
+ * (a row can show one toggle per role, so an unqualified "Grant/Revoke seat" would be ambiguous). */
+@Composable
+private fun seatToggleLabel(
+    roleName: String,
+    holdsSeat: Boolean,
+): String =
+    stringResource(
+        when {
+            roleName == ROLE_ADMIN && holdsSeat -> R.string.people_seat_revoke_admin_button
+            roleName == ROLE_ADMIN -> R.string.people_seat_grant_admin_button
+            holdsSeat -> R.string.people_seat_revoke_operator_button
+            else -> R.string.people_seat_grant_operator_button
+        },
+    )
+
+/** `26-253`: the one place a [OperatorWriteRefusalReason] becomes a Russian sentence — the identical
+ * `:app`-words-it split `inviteRefusalMessage`/`networkFailureText` already draw. [OperatorWriteRefusalReason.ServerRefusal]
+ * shows the server's own `detail` verbatim (`ago-console` shows the identical message for these codes);
+ * every other arm is worded here. */
+@Composable
+private fun operatorWriteRefusalMessage(reason: OperatorWriteRefusalReason): String =
+    when (reason) {
+        OperatorWriteRefusalReason.LastManager -> stringResource(R.string.people_write_last_manager)
+        is OperatorWriteRefusalReason.SeatFull ->
+            stringResource(R.string.people_invite_role_seat_full, roleDisplayName(reason.roleName))
+        is OperatorWriteRefusalReason.ServerRefusal -> reason.detail
+        is OperatorWriteRefusalReason.Unavailable -> networkFailureText(reason.reason)
+    }
+
+/** `26-253`: `ChangeOperatorRoleButton`'s own confirm-before-firing dialog — a role change is a real
+ * authorization change either way (it can end a colleague's ability to administer, or grant it), so it
+ * names what the colleague gains or loses before the tap commits. The direction is decided by whether the
+ * operator already holds the `Admin` role, exactly as the console's own button decides. */
+@Composable
+private fun ChangeRoleConfirmDialog(
+    member: OperatorTeamMember,
+    onConfirm: (newRoleName: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isAdmin = member.roles.any { it.roleName == ROLE_ADMIN }
+    val newRoleName = if (isAdmin) ROLE_OPERATOR else ROLE_ADMIN
+    val name = member.displayName ?: member.operatorId.take(8)
+    val bodyRes =
+        if (isAdmin) R.string.people_change_role_to_operator_dialog_body else R.string.people_change_role_to_admin_dialog_body
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.people_change_role_dialog_title)) },
+        text = { Text(text = stringResource(bodyRes, name)) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(newRoleName) }) {
+                Text(text = stringResource(R.string.people_change_role_confirm_button))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.people_invite_cancel))
+            }
+        },
+    )
+}
+
+/** `26-253`: `RemoveOperatorButton`'s own confirm-before-firing dialog — removal states its consequence
+ * (the operator's assigned conversations return to the waiting queue, and the removal cannot be undone),
+ * not merely the fact, and names the colleague so the operator removes the one they meant to. */
+@Composable
+private fun RemoveOperatorConfirmDialog(
+    member: OperatorTeamMember,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val name = member.displayName ?: member.operatorId.take(8)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.people_remove_dialog_title)) },
+        text = { Text(text = stringResource(R.string.people_remove_dialog_body, name)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.people_remove_confirm_button),
+                    color = agoStatusColors().dangerText,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.people_invite_cancel))
+            }
+        },
+    )
 }
 
 /** `ConversationListScreen`'s own private `StatusPill` shape, restated locally rather than shared — the

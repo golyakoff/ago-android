@@ -580,6 +580,28 @@
     <string name="people_invite_revoke_failed">Не удалось отозвать приглашение. Попробуйте ещё раз.</string>
 
     <!--
+        `26-253`: управление операторами на Люди - смена роли, удаление, выделение/возврат места.
+        Формулировки следуют `ago-console`'s own `operatorsTeamChangeRole*`/`operatorsTeamRemove*`/
+        `operatorsTeamGrant`/`Revoke*SeatButton` (`ru.ts`), где тот же набор действий уже есть в консоли.
+        `%1$s` в диалогах - имя коллеги (или короткий идентификатор, если имени нет).
+    -->
+    <string name="people_seat_grant_operator_button">Выделить место оператора</string>
+    <string name="people_seat_revoke_operator_button">Забрать место оператора</string>
+    <string name="people_seat_grant_admin_button">Выделить место администратора</string>
+    <string name="people_seat_revoke_admin_button">Забрать место администратора</string>
+    <string name="people_change_role_to_admin_button">Сделать администратором</string>
+    <string name="people_change_role_to_operator_button">Сделать оператором</string>
+    <string name="people_change_role_dialog_title">Изменить роль этого коллеги?</string>
+    <string name="people_change_role_to_admin_dialog_body">%1$s сможет управлять командой — приглашать и удалять коллег, менять роли, настраивать сайт — и перестанет получать новые обращения, если только за ним не закреплено место.</string>
+    <string name="people_change_role_to_operator_dialog_body">%1$s больше не сможет управлять командой — приглашать и удалять коллег, менять роли, настраивать сайт.</string>
+    <string name="people_change_role_confirm_button">Изменить роль</string>
+    <string name="people_remove_button">Удалить</string>
+    <string name="people_remove_dialog_title">Удалить этого коллегу?</string>
+    <string name="people_remove_dialog_body">%1$s: все назначенные на него обращения сразу вернутся в очередь ожидания. История сохранится, но удаление отменить будет нельзя.</string>
+    <string name="people_remove_confirm_button">Удалить</string>
+    <string name="people_write_last_manager">На сайте всегда должен оставаться хотя бы один оператор, который управляет командой. Сначала дайте это право другому коллеге.</string>
+
+    <!--
         `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
         that segment has no screen behind it yet (this file's own `BookingsScreen`/`bookings_tab_pending`
         doc comment - the identical "a row exists only for a screen that exists" rule

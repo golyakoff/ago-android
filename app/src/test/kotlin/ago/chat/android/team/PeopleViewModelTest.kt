@@ -1,6 +1,7 @@
 package ago.chat.android.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
@@ -8,9 +9,11 @@ import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RemoveOperatorResult
 import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
+import ago.chat.android.core.domain.team.ToggleOperatorSeatResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -21,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -128,12 +132,210 @@ class PeopleViewModelTest {
             assertEquals(PeopleUiState.Loaded(emptyList(), emptyList()), viewModel.state.value)
         }
 
+    // ---------------------------------------------------------------- `26-253`: the three roster writes
+
+    @Test
+    fun `a successful role change re-reads the whole roster and clears the in-flight marker`() =
+        runTest(dispatcher) {
+            val member = memberHoldingOperator("op-1")
+            val api = FakeOperatorTeamApi(teamResult = OperatorTeamResult.Loaded(listOf(member)))
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            assertEquals(1, api.fetchTeamCalls)
+
+            viewModel.changeRole(operatorId = "op-1", newRoleName = "Admin")
+            advanceUntilIdle()
+
+            assertEquals("Admin", api.lastChangeRoleName)
+            assertEquals("success re-reads the roster", 2, api.fetchTeamCalls)
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertNull(loaded.pendingWrite)
+            assertNull(loaded.writeRefusal)
+        }
+
+    @Test
+    fun `a last-manager refusal on a role change is pinned to the row and leaves the roster untouched`() =
+        runTest(dispatcher) {
+            val member = memberHoldingOperator("op-1")
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(member)),
+                    changeRoleResult = ChangeOperatorRoleResult.LastManager,
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.changeRole(operatorId = "op-1", newRoleName = "Operator")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertEquals(OperatorWriteRefusal("op-1", OperatorWriteRefusalReason.LastManager), loaded.writeRefusal)
+            assertNull("a refused write clears the in-flight marker", loaded.pendingWrite)
+            assertEquals(listOf(member), loaded.members)
+            assertEquals("a refusal must not re-read the roster", 1, api.fetchTeamCalls)
+        }
+
+    @Test
+    fun `an admin-pool-full role change surfaces the target role as seat-full`() =
+        runTest(dispatcher) {
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))),
+                    changeRoleResult = ChangeOperatorRoleResult.AdminSeatFull,
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.changeRole(operatorId = "op-1", newRoleName = "Admin")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertEquals(
+                OperatorWriteRefusal("op-1", OperatorWriteRefusalReason.SeatFull("Admin")),
+                loaded.writeRefusal,
+            )
+        }
+
+    @Test
+    fun `a successful removal re-reads the roster`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))))
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.removeOperator(operatorId = "op-1")
+            advanceUntilIdle()
+
+            assertEquals("op-1", api.lastRemovedOperatorId)
+            assertEquals(2, api.fetchTeamCalls)
+            assertNull((viewModel.state.value as PeopleUiState.Loaded).writeRefusal)
+        }
+
+    @Test
+    fun `a last-manager refusal on a removal is pinned to the row`() =
+        runTest(dispatcher) {
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))),
+                    removeResult = RemoveOperatorResult.LastManager,
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.removeOperator(operatorId = "op-1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertEquals(OperatorWriteRefusal("op-1", OperatorWriteRefusalReason.LastManager), loaded.writeRefusal)
+            assertEquals(1, api.fetchTeamCalls)
+        }
+
+    @Test
+    fun `a successful seat toggle re-reads the roster with the new value on the wire`() =
+        runTest(dispatcher) {
+            val api = FakeOperatorTeamApi(teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))))
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.toggleSeat(operatorId = "op-1", roleName = "Operator", holdsSeat = true)
+            advanceUntilIdle()
+
+            assertEquals(Triple("op-1", "Operator", true), api.lastToggle)
+            assertEquals(2, api.fetchTeamCalls)
+        }
+
+    @Test
+    fun `a seat-full toggle refusal names the role whose pool was full`() =
+        runTest(dispatcher) {
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))),
+                    toggleResult = ToggleOperatorSeatResult.SeatFull("Admin"),
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.toggleSeat(operatorId = "op-1", roleName = "Admin", holdsSeat = true)
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertEquals(
+                OperatorWriteRefusal("op-1", OperatorWriteRefusalReason.SeatFull("Admin")),
+                loaded.writeRefusal,
+            )
+            assertEquals("a refused toggle must not re-read the roster", 1, api.fetchTeamCalls)
+        }
+
+    @Test
+    fun `transport trouble on a write surfaces as Unavailable, never a fabricated message`() =
+        runTest(dispatcher) {
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))),
+                    toggleResult = ToggleOperatorSeatResult.Failed(NetworkFailure.NoConnection),
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.toggleSeat(operatorId = "op-1", roleName = "Operator", holdsSeat = false)
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as PeopleUiState.Loaded
+            assertEquals(
+                OperatorWriteRefusal("op-1", OperatorWriteRefusalReason.Unavailable(NetworkFailure.NoConnection)),
+                loaded.writeRefusal,
+            )
+        }
+
+    @Test
+    fun `a second write while one is already in flight is ignored`() =
+        runTest(dispatcher) {
+            val api =
+                FakeOperatorTeamApi(
+                    teamResult = OperatorTeamResult.Loaded(listOf(memberHoldingOperator("op-1"))),
+                    hangWrites = true,
+                )
+            val viewModel = PeopleViewModel(api = api, ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.removeOperator(operatorId = "op-1")
+            dispatcher.scheduler.runCurrent()
+            val pending = (viewModel.state.value as PeopleUiState.Loaded).pendingWrite
+            assertEquals(OperatorWriteInFlight("op-1", OperatorWriteAction.Remove), pending)
+
+            // A second write of any kind must not fire while the first is outstanding.
+            viewModel.changeRole(operatorId = "op-1", newRoleName = "Admin")
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals("the in-flight guard must stop a second write", 0, api.changeRoleCalls)
+        }
+
+    private fun memberHoldingOperator(operatorId: String) =
+        OperatorTeamMember(
+            operatorId = operatorId,
+            displayName = "Аня",
+            email = "anya@example.com",
+            roles = listOf(OperatorRoleSeat(roleName = "Operator", holdsSeat = true)),
+        )
+
     private class FakeOperatorTeamApi(
         var teamResult: OperatorTeamResult = OperatorTeamResult.Loaded(emptyList()),
         var summaryResult: SeatSummaryResult = SeatSummaryResult.Loaded(emptyList()),
         private val hangFetchTeam: Boolean = false,
+        private val changeRoleResult: ChangeOperatorRoleResult = ChangeOperatorRoleResult.Changed,
+        private val removeResult: RemoveOperatorResult = RemoveOperatorResult.Removed,
+        private val toggleResult: ToggleOperatorSeatResult = ToggleOperatorSeatResult.Toggled,
+        private val hangWrites: Boolean = false,
     ) : OperatorTeamApi {
         var fetchTeamCalls: Int = 0
+            private set
+        var changeRoleCalls: Int = 0
+            private set
+        var lastChangeRoleName: String? = null
+            private set
+        var lastRemovedOperatorId: String? = null
+            private set
+        var lastToggle: Triple<String, String, Boolean>? = null
             private set
 
         override suspend fun fetchTeam(): OperatorTeamResult {
@@ -156,5 +358,31 @@ class PeopleViewModelTest {
         override suspend fun listInvites(): OperatorInvitesResult = OperatorInvitesResult.Loaded(emptyList())
 
         override suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult = RevokeInviteResult.Revoked
+
+        override suspend fun changeOperatorRole(
+            operatorId: String,
+            newRoleName: String,
+        ): ChangeOperatorRoleResult {
+            changeRoleCalls++
+            lastChangeRoleName = newRoleName
+            if (hangWrites) awaitCancellation()
+            return changeRoleResult
+        }
+
+        override suspend fun removeOperator(operatorId: String): RemoveOperatorResult {
+            lastRemovedOperatorId = operatorId
+            if (hangWrites) awaitCancellation()
+            return removeResult
+        }
+
+        override suspend fun toggleOperatorSeat(
+            operatorId: String,
+            roleName: String,
+            holdsSeat: Boolean,
+        ): ToggleOperatorSeatResult {
+            lastToggle = Triple(operatorId, roleName, holdsSeat)
+            if (hangWrites) awaitCancellation()
+            return toggleResult
+        }
     }
 }
