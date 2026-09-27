@@ -1384,6 +1384,34 @@
     <string name="automation_auto_reply_validation_keyword_too_long">Ключевое слово не может превышать %1$d символов.</string>
     <string name="automation_auto_reply_validation_reply_too_long">Ответ не может превышать %1$d символов.</string>
 
+    <!-- `26-220` (`docs/design/tenant-canned-tags-android.md` §1): Автоматизация → «Готовые ответы» - the
+         canned-response library editor. The screen's own app-bar title reuses
+         `more_automation_quick_replies_row` - the same "one resource, two call sites" shape
+         `channels_install_title`/`widget_config_hub_title` already take. There is no per-item endpoint
+         (`CannedResponsesApi`'s own doc comment): every add/edit/delete is one whole-list `PUT`. -->
+    <string name="canned_responses_empty">Пока нет готовых ответов. Добавьте первый.</string>
+    <string name="canned_responses_add_action">Добавить готовый ответ</string>
+    <string name="canned_responses_delete_action">Удалить</string>
+    <!-- %1$s is the response's own title, naming which one will be removed. -->
+    <string name="canned_responses_delete_title">Удалить готовый ответ?</string>
+    <string name="canned_responses_delete_message">Удалить готовый ответ «%1$s»?</string>
+    <string name="canned_responses_editor_title">Готовый ответ</string>
+    <string name="canned_responses_title_label">Заголовок</string>
+    <string name="canned_responses_body_label">Текст ответа</string>
+    <string name="canned_responses_action_save">Сохранить</string>
+    <string name="canned_responses_action_saving">Сохранение…</string>
+    <string name="canned_responses_saved">Сохранено</string>
+    <!-- `docs/design/tenant-canned-tags-android.md` §1.5: the client-side courtesy check's own five
+         reasons, mirroring `cannedResponsesValidation.ts#validateDraft` in order - never the authority
+         (`UpdateCannedResponsesHandler` is), so these only stop an obviously-invalid list before a round
+         trip. %1$d below is always one of `CannedResponseBounds`' own constants. -->
+    <string name="canned_responses_validation_too_many">На сайте не может быть больше %1$d готовых ответов.</string>
+    <string name="canned_responses_validation_title_required">Готовому ответу нужен заголовок.</string>
+    <string name="canned_responses_validation_title_too_long">Заголовок не может превышать %1$d символов.</string>
+    <!-- %1$s is that response's own trimmed title, naming which response needs a body. -->
+    <string name="canned_responses_validation_body_required">Ответу «%1$s» нужен текст.</string>
+    <string name="canned_responses_validation_body_too_long">Текст ответа не может превышать %1$d символов.</string>
+
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on
          file (`AgoAuthSession`'s own `parsedIdToken` can genuinely be null or nameless - the identity

@@ -621,6 +621,29 @@ public object AgoIcons {
                 lineToRelative(3f, 2f)
             },
         )
+
+    /**
+     * `26-220`: the app's first [androidx.compose.material3.FloatingActionButton]'s own glyph — «Готовые
+     * ответы»'s "add a response" FAB (`docs/design/tenant-canned-tags-android.md` §1.5 names the mockup
+     * symbol `i-plus`). Two perpendicular strokes, Material Symbols' own `add` shape in this family's
+     * stroke treatment - a glyph simple enough to transcribe faithfully with no sprite reference at hand,
+     * unlike this file's own drag-handle precedent (`OfflineAutoReplyScreen`'s own doc comment), which
+     * borrowed an existing icon rather than invent one because *that* shape was not this trivial.
+     */
+    public val Plus: ImageVector =
+        strokeIcon(
+            "AgoPlus",
+            // M12 5v14
+            {
+                moveTo(12f, 5f)
+                verticalLineToRelative(14f)
+            },
+            // M5 12h14
+            {
+                moveTo(5f, 12f)
+                horizontalLineToRelative(14f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */
