@@ -56,12 +56,15 @@ class BackContractMoreScreenTest {
             )
         }
 
-        // Visit Команда first, then Ещё, then open one of Автоматизация's own real rows - the identical
-        // "previous bottom-bar destination" the clause distinguishes from, restated for a real row now
-        // that Настройки is no longer one of them.
+        // Visit Команда first, then Ещё, then open one of Администрирование's own placeholder rows - the
+        // identical "previous bottom-bar destination" the clause distinguishes from. `26-220` moved
+        // Автоматизация's own two real rows (Готовые ответы, Автоответ вне смены) under `site:configure`,
+        // so with `emptySet()` permissions Операторы и роли is this suite's own still-Hilt-free row -
+        // `PlaceholderDestinationScreen` needs no Hilt component, the identical boundary
+        // `WidgetInstallGatingTest`'s own doc comment states for why its own real rows are never opened here.
         composeTestRule.onNodeWithText("Команда").performClick()
         composeTestRule.onNodeWithText("Ещё").performClick()
-        composeTestRule.onNodeWithText("Готовые ответы").performClick()
+        composeTestRule.onNodeWithText("Операторы и роли").performClick()
         composeTestRule.waitForIdle()
 
         triggerBackPress(composeTestRule)
@@ -69,7 +72,7 @@ class BackContractMoreScreenTest {
 
         // Back landed on the Ещё list - its own row is showing again - not on Команда, the tab that
         // was current immediately before Ещё.
-        composeTestRule.onNodeWithText("Готовые ответы").assertExists()
+        composeTestRule.onNodeWithText("Операторы и роли").assertExists()
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
     }
 
@@ -110,17 +113,20 @@ class BackContractMoreScreenTest {
         // `AppShellContent`'s own doc comment states why this is an ordinary `NavHost` pop rather than
         // a mechanism special-cased for this destination.
         composeTestRule.onNodeWithText("SETTINGS_MARKER").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Готовые ответы").assertExists()
+        composeTestRule.onNodeWithText("Операторы и роли").assertExists()
         composeTestRule.onNodeWithText("DIALOGI_MARKER").assertDoesNotExist()
     }
 
     /** Ещё's own list-of-lists no longer carries a Настройки row at all - `26-77`'s own Done-when
-     * ("the old single 'Настройки' row is gone"), and Автоматизация/Администрирование now show real
-     * rows rather than nothing.
+     * ("the old single 'Настройки' row is gone"), and Администрирование now shows real rows rather than
+     * nothing.
      *
-     * `26-192`/`C5`: «Автоответ вне смены» is no longer one of the unconditional rows this test proves -
-     * it moved under the `site:configure` gate (`docs/design/tenant-channels-android.md` §4.4), and
-     * `OfflineAutoReplyGatingTest` is where its own with/without-permission cases live, the identical
+     * `26-192`/`C5` moved «Автоответ вне смены» under the `site:configure` gate
+     * (`docs/design/tenant-channels-android.md` §4.4); `26-220` moved «Готовые ответы» the same way
+     * (`docs/design/tenant-canned-tags-android.md` §3.3) - with no `site:configure` at all, Автоматизация
+     * now has zero rows and is not drawn ([buildMoreSections]'s own "a section with no rows is not
+     * returned at all"), exactly as Каналы already behaves. `OfflineAutoReplyGatingTest` and
+     * `CannedResponsesGatingTest` are where each row's own with-permission case lives, the identical
      * split `WidgetInstallGatingTest` already establishes for «Установка виджета». This test keeps
      * proving the rows that are still unconditional. */
     @Test
@@ -142,12 +148,14 @@ class BackContractMoreScreenTest {
 
         composeTestRule.onNodeWithText("Настройки").assertDoesNotExist()
         // `SectionLabel` uppercases its own text at render time (its own doc comment: "Uppercase is
-        // applied here, not in strings.xml") - these two are section headings, so they need
-        // `ignoreCase = true` against the resource's own sentence-case source string. The row labels
-        // below are plain `Text`, not `SectionLabel`, and match verbatim.
-        composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertExists()
-        composeTestRule.onNodeWithText("Готовые ответы").assertExists()
-        // No `site:configure` - `OfflineAutoReplyGatingTest` proves the row's own with-permission case.
+        // applied here, not in strings.xml") - this is a section heading, so it needs `ignoreCase = true`
+        // against the resource's own sentence-case source string. The row labels below are plain `Text`,
+        // not `SectionLabel`, and match verbatim.
+        // No `site:configure` - both Автоматизация rows are gated (`CannedResponsesGatingTest`,
+        // `OfflineAutoReplyGatingTest` prove their own with-permission cases), so the section itself has
+        // nothing left to draw.
+        composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Готовые ответы").assertDoesNotExist()
         composeTestRule.onNodeWithText("Автоответ вне смены").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()
@@ -175,7 +183,7 @@ class BackContractMoreScreenTest {
         }
 
         composeTestRule.onNodeWithText("Ещё").performClick()
-        composeTestRule.onNodeWithText("Готовые ответы").assertExists()
+        composeTestRule.onNodeWithText("Операторы и роли").assertExists()
 
         triggerBackPress(composeTestRule)
         composeTestRule.waitForIdle()

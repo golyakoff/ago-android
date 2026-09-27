@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.automation.CannedResponsesRoute
 import ago.chat.android.automation.OfflineAutoReplyRoute
 import ago.chat.android.channels.BrandingRoute
 import ago.chat.android.channels.InstallWidgetRoute
@@ -48,11 +49,11 @@ import androidx.compose.ui.unit.dp
  * `settingsScreen` parameter at all, since nothing inside it opens Settings any more —
  * [AppShellScreen]'s own `NavHost` owns that now, one level up.
  *
- * **Every row without its own branch below is honest about not existing yet.** Автоматизация's «Готовые
- * ответы» and Администрирование's «Операторы и роли»/«Тариф и оплата» still open
- * [PlaceholderDestinationScreen], because none of their own real screens are built in this app yet.
- * `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real branch
- * ([OfflineAutoReplyRoute]), so it is no longer one of them.
+ * **Every row without its own branch below is honest about not existing yet.** Администрирование's
+ * «Операторы и роли»/«Тариф и оплата» still open [PlaceholderDestinationScreen], because neither real
+ * screen is built in this app yet. `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real
+ * branch ([OfflineAutoReplyRoute]); `26-220` does the same for «Готовые ответы»
+ * ([CannedResponsesRoute]), so neither Автоматизация row is one of them any more.
  *
  * ## Back-button contract clause 2
  *
@@ -117,6 +118,11 @@ internal fun MoreScreen(
             // replacing this row's own `PlaceholderDestinationScreen` branch (`26-77`'s own stopgap).
             // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
             AUTOMATION_AFTER_HOURS_ROW_ID -> OfflineAutoReplyRoute(onBack = { openRowId = null })
+            // `26-220`: Автоматизация → «Готовые ответы» - the canned-response library editor, replacing
+            // this row's own `PlaceholderDestinationScreen` branch (`26-77`'s own stopgap) the identical
+            // way `26-192`/`C5` replaced «Автоответ вне смены»'s. Back returns to the Ещё list (clause 2)
+            // via the same `openRowId = null` every drill-in uses.
+            AUTOMATION_QUICK_REPLIES_ROW_ID -> CannedResponsesRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -303,20 +309,21 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 ),
             )
         }
-        add(
-            MoreRow(
-                id = AUTOMATION_QUICK_REPLIES_ROW_ID,
-                labelRes = R.string.more_automation_quick_replies_row,
-                section = MoreSectionId.Automation,
-            ),
-        )
-        // `26-192`/`C5`: unlike the still-unbuilt «Готовые ответы» row above, this row now opens a real
-        // screen (`OfflineAutoReplyRoute`) gated on `site:configure` behind the server the identical way
-        // - so it moves under the same `canConfigureSite` gate the six Каналы rows already use, matching
-        // the console rail's own Автоматизация section (`docs/design/tenant-channels-android.md` §4.4).
-        // Added right after Готовые ответы rather than inside the block above, so the Автоматизация
-        // section's own row order is unchanged from before this item when `canConfigureSite` is true.
+        // `26-192`/`C5` gated «Автоответ вне смены» on `canConfigureSite` once it opened a real screen
+        // (`OfflineAutoReplyRoute`) behind the server's own identical gate; `26-220` does the same for
+        // «Готовые ответы» (`CannedResponsesRoute`), so both now sit in one block, in
+        // `docs/design/tenant-canned-tags-android.md` §3.2's own order (Готовые ответы before Автоответ
+        // вне смены) - a section with no rows is still not drawn at all ([buildMoreSections]), so an
+        // operator without the permission sees no Автоматизация header either, exactly as Каналы already
+        // behaves.
         if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = AUTOMATION_QUICK_REPLIES_ROW_ID,
+                    labelRes = R.string.more_automation_quick_replies_row,
+                    section = MoreSectionId.Automation,
+                ),
+            )
             add(
                 MoreRow(
                     id = AUTOMATION_AFTER_HOURS_ROW_ID,

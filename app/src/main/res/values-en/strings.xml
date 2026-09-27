@@ -861,6 +861,23 @@
     <string name="automation_auto_reply_validation_keyword_too_long">A keyword cannot exceed %1$d characters.</string>
     <string name="automation_auto_reply_validation_reply_too_long">A reply cannot exceed %1$d characters.</string>
 
+    <string name="canned_responses_empty">No canned responses yet. Add the first one.</string>
+    <string name="canned_responses_add_action">Add canned response</string>
+    <string name="canned_responses_delete_action">Delete</string>
+    <string name="canned_responses_delete_title">Delete canned response?</string>
+    <string name="canned_responses_delete_message">Delete the canned response \"%1$s\"?</string>
+    <string name="canned_responses_editor_title">Canned response</string>
+    <string name="canned_responses_title_label">Title</string>
+    <string name="canned_responses_body_label">Response text</string>
+    <string name="canned_responses_action_save">Save</string>
+    <string name="canned_responses_action_saving">Saving…</string>
+    <string name="canned_responses_saved">Saved</string>
+    <string name="canned_responses_validation_too_many">A site cannot have more than %1$d canned responses.</string>
+    <string name="canned_responses_validation_title_required">A canned response needs a title.</string>
+    <string name="canned_responses_validation_title_too_long">A title cannot exceed %1$d characters.</string>
+    <string name="canned_responses_validation_body_required">The response \"%1$s\" needs text.</string>
+    <string name="canned_responses_validation_body_too_long">A response\'s text cannot exceed %1$d characters.</string>
+
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
     <string name="account_menu_fallback_initial">?</string>
