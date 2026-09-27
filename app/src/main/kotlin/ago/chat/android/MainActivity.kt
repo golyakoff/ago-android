@@ -245,6 +245,7 @@ public class MainActivity : ComponentActivity() {
                     onChooseSite = viewModel::chooseSite,
                     onRetry = viewModel::retry,
                     onSignOut = viewModel::signOut,
+                    onCancelSignIn = viewModel::cancelSignIn,
                     onOpenConsole = ::openInBrowser,
                 )
                 // `26-128`: composed here, over the whole signed-in shell, rather than inside

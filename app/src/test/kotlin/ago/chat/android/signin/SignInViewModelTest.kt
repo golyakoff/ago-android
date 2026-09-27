@@ -250,6 +250,62 @@ class SignInViewModelTest {
             assertTrue(viewModel.state.value !is SignInUiState.SignInFailed)
         }
 
+    /**
+     * `26-229`: the eternal-«Выполняется вход» this item exists to close. Before the fix, `beginSignIn`
+     * caught only `SignInFailedException`, so any *other* throw from `beginAuthorization` (live, an
+     * `ActivityNotFoundException` when no browser can host the Custom Tab) killed the coroutine that had
+     * just set `Working` and left the screen on the spinner with no way out. A plain `IllegalStateException`
+     * stands for that class of throw here: what matters is that it is not a `SignInFailedException`.
+     */
+    @Test
+    fun `a non-SignInFailed throw from beginAuthorization lands on the failure screen, not a stuck spinner`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    session =
+                        FakeSession(
+                            hasSession = false,
+                            beginAuthorizationError = IllegalStateException("no browser to launch a Custom Tab"),
+                        ),
+                )
+            advanceUntilIdle()
+            assertEquals(SignInUiState.SignedOut, viewModel.state.value)
+
+            viewModel.beginSignIn()
+            advanceUntilIdle()
+
+            assertTrue(
+                "a failed launch must render a recoverable failure, never leave the screen on Working",
+                viewModel.state.value is SignInUiState.SignInFailed,
+            )
+        }
+
+    /**
+     * `26-229`: the escape hatch itself. A sign-in whose Custom Tab result never comes back leaves the
+     * view model on `Working` with nothing to await — here the authorization `Intent` is handed off and
+     * buffered but never launched or completed, which is exactly that stuck state. `cancelSignIn` is the
+     * operator's own way back to the launch screen from it.
+     */
+    @Test
+    fun `cancelSignIn returns a stuck sign-in to the launch screen`() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    session = FakeSession(hasSession = false, authorizationIntent = Intent()),
+                )
+            advanceUntilIdle()
+
+            viewModel.beginSignIn()
+            advanceUntilIdle()
+            assertEquals(SignInUiState.Working, viewModel.state.value)
+
+            viewModel.cancelSignIn()
+
+            assertEquals(SignInUiState.SignedOut, viewModel.state.value)
+        }
+
     @Test
     fun `signing out discards the session and returns to the launch screen`() =
         runTest(dispatcher) {
@@ -369,13 +425,21 @@ class SignInViewModelTest {
     private class FakeSession(
         private val hasSession: Boolean,
         private val signOutIntent: Intent? = null,
+        // `26-229`: most tests never begin an authorization, so both default to "not exercised". A test
+        // that drives the flow into `Working` passes `authorizationIntent`; one that proves a failed
+        // launch no longer strands `Working` passes `beginAuthorizationError`.
+        private val authorizationIntent: Intent? = null,
+        private val beginAuthorizationError: Throwable? = null,
     ) : SignInSession {
         var signOuts: Int = 0
             private set
 
         override suspend fun hasSession(): Boolean = hasSession
 
-        override suspend fun beginAuthorization(): Intent = throw UnsupportedOperationException("not exercised here")
+        override suspend fun beginAuthorization(): Intent {
+            beginAuthorizationError?.let { throw it }
+            return authorizationIntent ?: throw UnsupportedOperationException("not exercised here")
+        }
 
         override suspend fun completeAuthorization(data: Intent): Unit = throw UnsupportedOperationException("not exercised here")
 
