@@ -2,6 +2,7 @@ package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
+import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.DayGroup
@@ -155,6 +156,95 @@ internal class ConfirmedBookingsViewModel
         }
 
         /**
+         * `26-233`: the «Сегодня» control — jumps [anchorDate] back to today's own UTC calendar date and
+         * re-fetches around it, the identical [refresh]-through-[anchorDate] shape [onDatePicked] already
+         * uses for a picked date. A full [ConfirmedBookingsUiState.Loading] pass, unlike
+         * [onPullToLoadWeek] below: this is reached "from anywhere" (the ticket's own wording) rather than
+         * mid-gesture on a strip already on screen, so there is no existing day list worth keeping visible
+         * while it loads — the same full-reload shape a date-picker jump already takes.
+         */
+        fun jumpToToday() {
+            anchorDate = LocalDate.now(ZoneOffset.UTC)
+            refresh()
+        }
+
+        /**
+         * `26-233`: the day strip's own rubber-band edge-pull — [ConfirmedBookingsScreen.kt]'s
+         * `ConfirmedDateStrip` calls this once a pull past either edge crosses its trigger distance.
+         * Unlike [onDatePicked]/[jumpToToday], this never swaps the whole screen to
+         * [ConfirmedBookingsUiState.Loading]: the operator is mid-gesture on a strip that already shows a
+         * week of real data, so [state] stays [ConfirmedBookingsUiState.Loaded] throughout, with
+         * [ConfirmedBookingsUiState.Loaded.edgeLoading] naming which side is in flight for the strip's own
+         * in-lane spinner to read. A no-op while [state] is not already [ConfirmedBookingsUiState.Loaded]
+         * (there is no strip to have been pulled) or while an edge load is already in flight (a second
+         * pull on the same side, or the far side, before the first answers back — the identical
+         * one-in-flight-at-a-time guard [reveal] already applies per customer, applied here to the strip
+         * as a whole since it has only one edge loading at once).
+         *
+         * The requested week is fetched *before* [anchorDate] moves — a [ConfirmedBookingsResult.Failed]/
+         * [ConfirmedBookingsResult.NotConfigured] answer leaves [anchorDate] exactly where the strip still
+         * visibly is, so a failed pull can be retried by pulling again rather than leaving the anchor
+         * pointing at a week the screen never actually loaded.
+         */
+        fun onPullToLoadWeek(direction: DateStripEdgeLoad) {
+            val loaded = mutableState.value as? ConfirmedBookingsUiState.Loaded ?: return
+            if (loaded.edgeLoading != null) return
+            val requestedAnchor =
+                when (direction) {
+                    DateStripEdgeLoad.Previous -> anchorDate.minusDays(WEEK_SPAN_DAYS)
+                    DateStripEdgeLoad.Next -> anchorDate.plusDays(WEEK_SPAN_DAYS)
+                }
+            mutableState.update { current ->
+                if (current is ConfirmedBookingsUiState.Loaded) current.copy(edgeLoading = direction) else current
+            }
+            viewModelScope.launch {
+                val range = confirmedBookingsRange(requestedAnchor)
+                when (val result = withContext(ioDispatcher) { api.fetchConfirmedBookings(range.from, range.to) }) {
+                    is ConfirmedBookingsResult.Loaded -> {
+                        anchorDate = requestedAnchor
+                        val days = groupByDayThenWorker(mergeDisplayNames(result.bookings))
+                        // `26-233`: "snap to the new week's first day" - `selectedDate = range.from` is
+                        // the identical rule the initial today-anchored load and [onDatePicked] both
+                        // already follow; a brand-new [ConfirmedBookingsUiState.Loaded] rather than
+                        // `loaded.copy(...)`, since `days`/`strip`/`selectedDate` all replace the prior
+                        // week's own values wholesale, not merge with them.
+                        mutableState.update {
+                            ConfirmedBookingsUiState.Loaded(
+                                days = days,
+                                strip = confirmedBookingsStrip(range, days),
+                                selectedDate = range.from,
+                            )
+                        }
+                    }
+
+                    // A deployment cannot genuinely stop running AGO Calendar mid-session, but the type
+                    // still has to be exhausted - kept as a graceful "the pull didn't work", not a crash
+                    // or a fabricated empty week.
+                    ConfirmedBookingsResult.NotConfigured ->
+                        mutableState.update { current ->
+                            if (current is ConfirmedBookingsUiState.Loaded) {
+                                current.copy(
+                                    edgeLoading = null,
+                                    actionError = BookingActionErrorUi.Unavailable(BookingsQueueFailure.Unexpected),
+                                )
+                            } else {
+                                current
+                            }
+                        }
+
+                    is ConfirmedBookingsResult.Failed ->
+                        mutableState.update { current ->
+                            if (current is ConfirmedBookingsUiState.Loaded) {
+                                current.copy(edgeLoading = null, actionError = BookingActionErrorUi.Unavailable(result.reason))
+                            } else {
+                                current
+                            }
+                        }
+                }
+            }
+        }
+
+        /**
          * `26-117`: the booking-detail sheet's own «Показать» — `docs/backlog/26-117-*.md`'s own hard
          * requirement 9 reusing the identical audited reveal `26-53` already established, keyed here by
          * [BookingRevealSurface.ANDROID_BOOKINGS] rather than [BookingRevealSurface.ANDROID_CONTACTS] so
@@ -223,3 +313,10 @@ internal class ConfirmedBookingsViewModel
                 )
             }
     }
+
+/** `26-233`: one week, in days - the span [onPullToLoadWeek] shifts [ConfirmedBookingsViewModel.anchorDate]
+ * by so two consecutively-loaded weeks sit back-to-back with no gap and no overlap. Not
+ * `ago.chat.android.core.domain.bookings.ConfirmedBookingsRange`'s own `RANGE_HORIZON_DAYS` (6, the last
+ * day *within* a window measured from its first) - this is the window's own full width, one more than
+ * that, the distance from one window's first day to the next window's first day. */
+private const val WEEK_SPAN_DAYS = 7L

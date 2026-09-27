@@ -11,10 +11,13 @@ import ago.chat.android.core.domain.bookings.confirmedBookingIdentity
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.bookings.confirmedBookingsMonthLabels
 import ago.chat.android.ui.icons.AgoIcons
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +35,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,26 +51,39 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -99,6 +116,8 @@ internal fun ConfirmedBookingsBody(
     onRetry: () -> Unit,
     onReveal: (String) -> Unit,
     onOpenDialog: (String) -> Unit,
+    onPullToLoadWeek: (DateStripEdgeLoad) -> Unit,
+    onJumpToToday: () -> Unit,
 ) {
     when (state) {
         ConfirmedBookingsUiState.Loading -> LoadingBody()
@@ -131,8 +150,11 @@ internal fun ConfirmedBookingsBody(
                 ConfirmedDateStrip(
                     strip = state.strip,
                     selectedDate = state.selectedDate,
+                    edgeLoading = state.edgeLoading,
                     onSelectDay = onSelectDay,
                     onJumpToDate = onJumpToDate,
+                    onPullToLoadWeek = onPullToLoadWeek,
+                    onJumpToToday = onJumpToToday,
                 )
                 val selectedDay = state.selectedDay
                 Box(modifier = Modifier.weight(1f)) {
@@ -235,13 +257,37 @@ internal fun ConfirmedBookingsBody(
  * as an ordinary [ConfirmedBookingsUiState.Loaded] carrying a new [strip] anchored on that day, the
  * identical shape a plain retry already produces, so this composable itself needs no branch for "did the
  * strip move because of a pick or a retry".
+ *
+ * `26-233`: the month/year jump above is for a *far* move; this item adds the near-term one, entirely
+ * inside the `LazyRow` lane below rather than through a second dialog. Reaching either end of the strip
+ * and continuing to drag past it now rubber-bands the whole lane (a diminishing-returns stretch,
+ * [rubberBandPull]) and, once the drag has gone far enough, calls [onPullToLoadWeek] for the corresponding
+ * [DateStripEdgeLoad] — [ConfirmedBookingsViewModel.onPullToLoadWeek]'s own doc comment has the full
+ * "why a week, why re-anchored, why not a full-screen reload" reasoning. A [NestedScrollConnection] is the
+ * chosen idiom, not a second `pointerInput` drag detector layered over the `LazyRow`: `LazyRow`'s own
+ * `scrollable()` already participates in Compose's nested-scroll system and forwards exactly the
+ * *unconsumed* leftover of a drag once it has hit either end — the one piece of information "how far past
+ * the edge is this drag" needs, and the one thing a sibling pointer-input gesture detector has no
+ * reliable way to recover once the inner `LazyRow` has already consumed the touch stream. This is the
+ * identical mechanism Material3's own vertical `PullToRefreshBox`/`pullToRefresh` is built on; Compose
+ * ships no horizontal equivalent, which is why this is hand-rolled rather than a library call.
+ * [DateStripEdgeIndicator] draws the pulled side's own directional chevron (the ticket's own suggested
+ * "elastic arrow in the pull direction") and doubles as a plain tap target for the identical load, so the
+ * feature stays reachable without the drag gesture at all — for TalkBack, and for anyone who would rather
+ * tap than pull; while [edgeLoading] names a side, that side's chevron is replaced by a spinner instead
+ * (hard requirement 2 of `26-233`'s own brief: "a spinner spins inside the days area on the pulled side").
+ * [onJumpToToday] is the third, unrelated control this item adds beside the strip — a plain jump back to
+ * today from anywhere, sharing none of the above.
  */
 @Composable
 private fun ConfirmedDateStrip(
     strip: List<ConfirmedBookingsStripDay>,
     selectedDate: String,
+    edgeLoading: DateStripEdgeLoad?,
     onSelectDay: (String) -> Unit,
     onJumpToDate: (String) -> Unit,
+    onPullToLoadWeek: (DateStripEdgeLoad) -> Unit,
+    onJumpToToday: () -> Unit,
 ) {
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     val weekdayLabels = stringArrayResource(R.array.bookings_weekday_short)
@@ -272,69 +318,161 @@ private fun ConfirmedDateStrip(
         }
     val geometry = stickyMonthHeaderGeometry(monthDayCounts, chipStridePx, scrollXPx)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        // `26-212`: the whole sticky-header lane is the tap target, not just the current label's own text
-        // — the label that owns the slot changes under a moving finger as the strip scrolls (that is the
-        // whole point of `StickyMonthHeaderGeometry`), so pinning the click to one specific label's own
-        // composable would move the tap target out from under an operator mid-scroll. The header always
-        // shows *some* month/year, so "tap the header" reads the same regardless of which one.
-        val jumpToDateLabel = stringResource(R.string.bookings_confirmed_jump_to_date_action)
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-                    .clickable(onClickLabel = jumpToDateLabel) { showDatePicker = true },
-        ) {
-            labels.forEachIndexed { index, label ->
-                val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
-                when {
-                    // Handed off already: scrolled past the left edge, `clipToBounds` would hide it anyway.
-                    index < geometry.currentIndex -> Unit
-                    index == geometry.currentIndex ->
-                        MonthSpanLabel(
-                            text = text,
-                            modifier =
-                                Modifier
-                                    .padding(start = DateStripEdgePadding)
-                                    .then(
-                                        // Cap the width at the next month's approach; an infinite cap (no
-                                        // next month) leaves the label at its natural width.
-                                        if (geometry.nextMonthStartPx.isFinite()) {
-                                            Modifier.widthIn(max = with(density) { geometry.nextMonthStartPx.toDp() })
-                                        } else {
-                                            Modifier
-                                        },
-                                    ),
-                        )
-                    else ->
-                        MonthSpanLabel(
-                            text = text,
-                            modifier =
-                                Modifier.offset {
-                                    IntOffset(
-                                        (edgePaddingPx + monthStartChip[index] * chipStridePx - scrollXPx).roundToInt(),
-                                        0,
-                                    )
-                                },
-                        )
+    // `26-233` hard requirement 3: "snap to the new week's first day". `strip`'s own identity only
+    // changes when a fresh fetch actually replaced it — a plain [onSelectDay] tap never touches this list,
+    // only `selectedDate` — so keying on it here fires exactly at "new data arrived" (an edge-pulled week,
+    // a date-picker jump, or a today jump), never on every recomposition. Index `0` is always the new
+    // window's own first day, the same `selectedDate == range.from` invariant every load path already
+    // keeps.
+    LaunchedEffect(strip) {
+        listState.scrollToItem(0)
+    }
+
+    val pullScope = rememberCoroutineScope()
+    // Raw, effectively-unbounded finger-drag distance past whichever edge is being pulled — positive at
+    // the start (Previous), negative at the end (Next). Deliberately *not* the same value the visible
+    // stretch is drawn from: [rubberBandPull] derives a diminishing-returns visual from it, so the raw
+    // distance can keep growing (bounded only to stop an accidental runaway) while the drawn stretch
+    // itself asymptotically caps at [DateStripPullVisualMax].
+    val rawPull = remember { Animatable(0f) }
+    val visualMaxPx = with(density) { DateStripPullVisualMax.toPx() }
+    val triggerPx = with(density) { DateStripPullTriggerDistance.toPx() }
+    val rawBoundPx = with(density) { DateStripPullRawBound.toPx() }
+
+    val overscrollConnection =
+        remember(edgeLoading, onPullToLoadWeek) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    // No new pull while a week from the last one is still in flight - the identical
+                    // one-in-flight-at-a-time guard `onPullToLoadWeek`'s own doc comment states for why it
+                    // is a no-op in that state.
+                    if (edgeLoading != null || source != NestedScrollSource.UserInput || available.x == 0f) return Offset.Zero
+                    val pullsPrevious = available.x > 0f && !listState.canScrollBackward
+                    val pullsNext = available.x < 0f && !listState.canScrollForward
+                    if (!pullsPrevious && !pullsNext) return Offset.Zero
+                    pullScope.launch {
+                        rawPull.snapTo((rawPull.value + available.x).coerceIn(-rawBoundPx, rawBoundPx))
+                    }
+                    // Consumed in full: the drag's own leftover becomes this gesture's pull rather than a
+                    // system-drawn edge glow fighting it for the same touch.
+                    return Offset(available.x, 0f)
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    val pulled = rawPull.value
+                    when {
+                        pulled >= triggerPx -> onPullToLoadWeek(DateStripEdgeLoad.Previous)
+                        pulled <= -triggerPx -> onPullToLoadWeek(DateStripEdgeLoad.Next)
+                    }
+                    rawPull.animateTo(0f, animationSpec = spring())
+                    // Never claims the fling itself - only the drag that preceded it was this gesture's.
+                    return Velocity.Zero
                 }
             }
         }
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(DateStripChipGap),
-            contentPadding = PaddingValues(start = DateStripEdgePadding, end = DateStripEdgePadding, top = 4.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            items(strip, key = { it.date }) { day ->
-                DateStripChip(
-                    day = day,
-                    weekdayLabel = weekdayLabels.getOrElse(day.weekday) { "" },
-                    selected = day.date == selectedDate,
-                    onClick = { onSelectDay(day.date) },
-                )
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            // `26-212`: the whole sticky-header lane is the tap target, not just the current label's own
+            // text — the label that owns the slot changes under a moving finger as the strip scrolls (that
+            // is the whole point of `StickyMonthHeaderGeometry`), so pinning the click to one specific
+            // label's own composable would move the tap target out from under an operator mid-scroll. The
+            // header always shows *some* month/year, so "tap the header" reads the same regardless of
+            // which one. `26-233`: now `weight(1f)` rather than `fillMaxWidth()`, sharing this row with the
+            // «Сегодня» control below rather than spanning it.
+            val jumpToDateLabel = stringResource(R.string.bookings_confirmed_jump_to_date_action)
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clipToBounds()
+                        .clickable(onClickLabel = jumpToDateLabel) { showDatePicker = true },
+            ) {
+                labels.forEachIndexed { index, label ->
+                    val text = "${monthLabels.getOrElse(label.monthValue - 1) { "" }} ${label.year}"
+                    when {
+                        // Handed off already: scrolled past the left edge, `clipToBounds` would hide it anyway.
+                        index < geometry.currentIndex -> Unit
+                        index == geometry.currentIndex ->
+                            MonthSpanLabel(
+                                text = text,
+                                modifier =
+                                    Modifier
+                                        .padding(start = DateStripEdgePadding)
+                                        .then(
+                                            // Cap the width at the next month's approach; an infinite cap (no
+                                            // next month) leaves the label at its natural width.
+                                            if (geometry.nextMonthStartPx.isFinite()) {
+                                                Modifier.widthIn(max = with(density) { geometry.nextMonthStartPx.toDp() })
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                            )
+                        else ->
+                            MonthSpanLabel(
+                                text = text,
+                                modifier =
+                                    Modifier.offset {
+                                        IntOffset(
+                                            (edgePaddingPx + monthStartChip[index] * chipStridePx - scrollXPx).roundToInt(),
+                                            0,
+                                        )
+                                    },
+                            )
+                    }
+                }
             }
+            // `26-233` hard requirement 4: «Сегодня» - jumps back to the current day from anywhere on this
+            // screen, sharing the row with the month/year tap target above rather than a second row, since
+            // both are the strip's own navigation controls.
+            TextButton(onClick = onJumpToToday) {
+                Text(text = stringResource(R.string.bookings_confirmed_today_action))
+            }
+        }
+        Box(modifier = Modifier.fillMaxWidth().nestedScroll(overscrollConnection)) {
+            LazyRow(
+                state = listState,
+                horizontalArrangement = Arrangement.spacedBy(DateStripChipGap),
+                contentPadding = PaddingValues(start = DateStripEdgePadding, end = DateStripEdgePadding, top = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(rubberBandPull(rawPull.value, visualMaxPx).roundToInt(), 0) },
+            ) {
+                items(strip, key = { it.date }) { day ->
+                    DateStripChip(
+                        day = day,
+                        weekdayLabel = weekdayLabels.getOrElse(day.weekday) { "" },
+                        selected = day.date == selectedDate,
+                        onClick = { onSelectDay(day.date) },
+                    )
+                }
+            }
+            DateStripEdgeIndicator(
+                alignment = Alignment.CenterStart,
+                pull = rubberBandPull(rawPull.value, visualMaxPx).coerceAtLeast(0f),
+                maxPull = visualMaxPx,
+                loading = edgeLoading == DateStripEdgeLoad.Previous,
+                icon = AgoIcons.Back,
+                contentDescription = stringResource(R.string.bookings_confirmed_load_previous_week_action),
+                loadingDescription = stringResource(R.string.bookings_confirmed_loading_week),
+                onClick = { onPullToLoadWeek(DateStripEdgeLoad.Previous) },
+            )
+            DateStripEdgeIndicator(
+                alignment = Alignment.CenterEnd,
+                pull = (-rubberBandPull(rawPull.value, visualMaxPx)).coerceAtLeast(0f),
+                maxPull = visualMaxPx,
+                loading = edgeLoading == DateStripEdgeLoad.Next,
+                icon = AgoIcons.ChevronRight,
+                contentDescription = stringResource(R.string.bookings_confirmed_load_next_week_action),
+                loadingDescription = stringResource(R.string.bookings_confirmed_loading_week),
+                onClick = { onPullToLoadWeek(DateStripEdgeLoad.Next) },
+            )
         }
     }
 
@@ -519,6 +657,79 @@ private fun DateStripChip(
                     Column(modifier = Modifier.fillMaxSize().background(color = contentColor, shape = CircleShape)) {}
                 }
             }
+        }
+    }
+}
+
+/**
+ * `26-233`: [rawPull]'s own diminishing-returns visual — `0` at `rawPull == 0`, approaching but never
+ * reaching [max] as [rawPull] grows, sign preserved. The classic rubber-band constant formula
+ * (`f(x) = max·|x| / (|x| + max)`, the same shape iOS's own `UIScrollView` overscroll uses): easy to reason
+ * about (a pure function of two numbers, no easing curve to tune) and it naturally saturates near [max]
+ * without a hard clamp of its own, which is what lets [DateStripPullTriggerDistance] sit *past* [max] in
+ * raw terms — the visual stretch is already most of the way to its cap by the time the gesture actually
+ * triggers a week load, the same "resistance builds, then it gives" feel a real rubber band has.
+ */
+private fun rubberBandPull(
+    rawPull: Float,
+    max: Float,
+): Float {
+    if (max <= 0f) return 0f
+    val magnitude = max * (abs(rawPull) / (abs(rawPull) + max))
+    return if (rawPull >= 0f) magnitude else -magnitude
+}
+
+/**
+ * `26-233`: one edge of the day strip's own rubber-band affordance — a directional chevron that fades in
+ * as [pull] grows toward [maxPull], swapped for a spinner while [loading] (hard requirement 2: "a spinner
+ * spins inside the days area on the pulled side"). Drawn as a `BoxScope` extension so it can
+ * [androidx.compose.foundation.layout.BoxScope.align] itself to the caller's own edge inside the `Box`
+ * that also holds the `LazyRow` — the identical positioning shape [ConfirmedDateStrip]'s own sticky-header
+ * labels already use for a fixed offset, applied here through `align` instead since this indicator sits at
+ * a corner rather than a scroll-derived pixel position.
+ *
+ * Also a real tap target throughout, never only a gesture hint — [onClick] fires the identical
+ * [ago.chat.android.bookings.ConfirmedBookingsViewModel.onPullToLoadWeek] call a completed pull would, so
+ * the whole feature stays reachable with a plain tap: for TalkBack (which cannot perform a rubber-band
+ * drag), and for anyone who would simply rather tap than pull. Disabled while [loading] — the identical
+ * one-in-flight-at-a-time guard the view model itself already enforces, stated again here so a double-tap
+ * cannot even attempt a second request while the first is still in flight.
+ */
+@Composable
+private fun BoxScope.DateStripEdgeIndicator(
+    alignment: Alignment,
+    pull: Float,
+    maxPull: Float,
+    loading: Boolean,
+    icon: ImageVector,
+    contentDescription: String,
+    loadingDescription: String,
+    onClick: () -> Unit,
+) {
+    if (!loading && pull <= 0f) return
+    val progress = if (maxPull > 0f) (pull / maxPull).coerceIn(0f, 1f) else 0f
+    Box(
+        modifier =
+            Modifier
+                .align(alignment)
+                .size(width = DateStripChipWidth, height = DateStripEdgeIndicatorHeight)
+                .clickable(onClickLabel = contentDescription, enabled = !loading, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(DateStripEdgeSpinnerSize).semantics { this.contentDescription = loadingDescription },
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                // The function returns above while `pull <= 0f`, so this branch only ever draws mid-pull -
+                // opacity ramps from barely-visible at the first pixel of pull to fully opaque as `pull`
+                // approaches `maxPull`, rather than popping in at full strength the instant the drag starts.
+                modifier = Modifier.alpha(progress.coerceAtLeast(DATE_STRIP_EDGE_INDICATOR_MIN_ALPHA)),
+            )
         }
     }
 }
@@ -935,6 +1146,30 @@ private val DateStripDotSize = 6.dp
 // the sticky label's own pinned left edge so a label sits flush over its first chip. One name, so the two
 // can never drift apart.
 private val DateStripEdgePadding = 16.dp
+
+// `26-233`: the rubber-band edge-pull's own metrics. `DateStripPullVisualMax` is the stretch's own asymptotic
+// cap (`rubberBandPull`'s own doc comment) - how far the strip and the edge chevron ever visibly move.
+// `DateStripPullTriggerDistance` is a *raw* finger-drag distance, deliberately larger than the visual cap: by
+// the time a real drag has gone this far past the edge the visual stretch already reads as "fully pulled",
+// so the trigger lands on the same "resistance, then it gives" beat a real elastic band has, rather than
+// firing the instant the visual indicator looks maxed out. `DateStripPullRawBound` only stops the raw
+// accumulator (never itself drawn) from growing without limit while a finger keeps dragging well past the
+// trigger distance.
+private val DateStripPullVisualMax = 28.dp
+private val DateStripPullTriggerDistance = 72.dp
+private val DateStripPullRawBound = 240.dp
+
+// `26-233`: the edge indicator's own footprint - `DateStripChipWidth` wide (the same lane a day chip
+// occupies, so the chevron/spinner sits where the stretched-away chip would have been) and tall enough to
+// clear the chip's own weekday/number/dot column without needing an intrinsic-height measurement pass
+// (`LazyRow` does not support one). `DateStripEdgeSpinnerSize` is Material's own small-spinner size.
+private val DateStripEdgeIndicatorHeight = 64.dp
+private val DateStripEdgeSpinnerSize = 20.dp
+
+// `26-233`: the chevron's own opacity floor mid-pull, before `progress` has climbed far from zero - just
+// enough that the very first pixel of a pull already shows *something*, rather than the icon popping in
+// abruptly once `progress` clears some invisible threshold.
+private const val DATE_STRIP_EDGE_INDICATOR_MIN_ALPHA = 0.25f
 
 // `.rtop{gap:8px}` - the identical gap `ConversationListScreen`'s own `RtopGap` names for the same CSS
 // rule, restated here rather than imported since that value is `private` to its own file. `internal`:

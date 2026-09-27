@@ -710,6 +710,17 @@
          (`Modifier.clickable(onClickLabel = ...)`), read by TalkBack alongside the header's own visible
          month/year text. -->
     <string name="bookings_confirmed_jump_to_date_action">Перейти к дате</string>
+    <!-- `26-233`: the day strip's own «Сегодня» control - a quick jump back to the current day from
+         anywhere on this screen, sitting beside the month/year tap target above rather than replacing it
+         (that one stays for a far jump; this one is for "I paged away, take me back"). -->
+    <string name="bookings_confirmed_today_action">Сегодня</string>
+    <!-- `26-233`: the day strip's own rubber-band edge-pull - each edge's own accessibility label, read
+         by TalkBack for the directional chevron and (while a pull is loading) announced by the spinner
+         that replaces it. Both are real tap targets too, not only gesture hints, so the label doubles as
+         the click label for an operator who taps instead of drags. -->
+    <string name="bookings_confirmed_load_previous_week_action">Загрузить предыдущую неделю</string>
+    <string name="bookings_confirmed_load_next_week_action">Загрузить следующую неделю</string>
+    <string name="bookings_confirmed_loading_week">Загрузка недели</string>
 
     <!--
         `26-52`: Записи's own «Клиенты» segment - this tenant's own customer base, read-only

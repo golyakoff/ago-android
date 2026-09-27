@@ -28,6 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * `26-51`: the range read, grouped once and sliced per selected day — the identical
@@ -149,6 +150,141 @@ class ConfirmedBookingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, api.confirmedFetchCalls)
+        }
+
+    @Test
+    fun `26-233 pulling to load the next week re-anchors past the current window and snaps to its first day`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            val today = (viewModel.state.value as ConfirmedBookingsUiState.Loaded).selectedDate
+            assertEquals(1, api.confirmedFetchCalls)
+
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Next)
+            advanceUntilIdle()
+
+            assertEquals(2, api.confirmedFetchCalls)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            val expectedAnchor = LocalDate.parse(today).plusDays(7).toString()
+            assertEquals(expectedAnchor, state.selectedDate)
+            assertEquals(expectedAnchor, state.strip.first().date)
+            assertEquals(null, state.edgeLoading)
+        }
+
+    @Test
+    fun `26-233 pulling to load the previous week re-anchors before the current window and snaps to its first day`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            val today = (viewModel.state.value as ConfirmedBookingsUiState.Loaded).selectedDate
+
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Previous)
+            advanceUntilIdle()
+
+            assertEquals(2, api.confirmedFetchCalls)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            val expectedAnchor = LocalDate.parse(today).minusDays(7).toString()
+            assertEquals(expectedAnchor, state.selectedDate)
+            assertEquals(expectedAnchor, state.strip.first().date)
+        }
+
+    @Test
+    fun `26-233 a pull marks the strip's own edgeLoading before the week answers back`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            api.hangFetch = true
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Previous)
+            dispatcher.scheduler.runCurrent()
+
+            val state = viewModel.state.value
+            assertTrue(state is ConfirmedBookingsUiState.Loaded)
+            assertEquals(DateStripEdgeLoad.Previous, (state as ConfirmedBookingsUiState.Loaded).edgeLoading)
+        }
+
+    @Test
+    fun `26-233 a pull is ignored while another edge load is already in flight`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            assertEquals(1, api.confirmedFetchCalls)
+
+            api.hangFetch = true
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Previous)
+            dispatcher.scheduler.runCurrent()
+            // A pull on the far edge, before the first one has answered - still a no-op, since only one
+            // edge can be loading at a time.
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Next)
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(2, api.confirmedFetchCalls)
+        }
+
+    @Test
+    fun `26-233 a failed pull clears edgeLoading, surfaces the failure, and leaves the window unmoved`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            val loadedBefore = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+
+            api.result = ConfirmedBookingsResult.Failed(BookingsQueueFailure.Transport)
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Next)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            assertEquals(null, state.edgeLoading)
+            assertEquals(BookingActionErrorUi.Unavailable(BookingsQueueFailure.Transport), state.actionError)
+            // The window itself never moved - the anchor only advances once a fetch for the requested
+            // week actually succeeds ([ConfirmedBookingsViewModel.onPullToLoadWeek]'s own doc comment).
+            assertEquals(loadedBefore.selectedDate, state.selectedDate)
+            assertEquals(loadedBefore.strip, state.strip)
+        }
+
+    @Test
+    fun `26-233 retrying after a failed pull asks for the identical week again, not a week further`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            api.result = ConfirmedBookingsResult.Failed(BookingsQueueFailure.Transport)
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Next)
+            advanceUntilIdle()
+            val failedRange = api.lastFetchedRange
+
+            api.result = ConfirmedBookingsResult.Loaded(emptyList())
+            viewModel.onPullToLoadWeek(DateStripEdgeLoad.Next)
+            advanceUntilIdle()
+
+            assertEquals(failedRange, api.lastFetchedRange)
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            assertEquals(failedRange?.first, state.selectedDate)
+        }
+
+    @Test
+    fun `26-233 today jumps the anchor back to today's own UTC date and reloads`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(result = ConfirmedBookingsResult.Loaded(emptyList()))
+            val viewModel = ConfirmedBookingsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            val today = (viewModel.state.value as ConfirmedBookingsUiState.Loaded).selectedDate
+
+            viewModel.onDatePicked("2026-10-15")
+            advanceUntilIdle()
+            assertEquals("2026-10-15", (viewModel.state.value as ConfirmedBookingsUiState.Loaded).selectedDate)
+
+            viewModel.jumpToToday()
+            advanceUntilIdle()
+
+            val state = viewModel.state.value as ConfirmedBookingsUiState.Loaded
+            assertEquals(today, state.selectedDate)
+            assertEquals(today, state.strip.first().date)
         }
 
     @Test
@@ -349,7 +485,10 @@ class ConfirmedBookingsViewModelTest {
 
     private class FakeBookingsApi(
         var result: ConfirmedBookingsResult = ConfirmedBookingsResult.NotConfigured,
-        private val hangFetch: Boolean = false,
+        // `26-233`: a `var`, not the original `val` - the edge-pull tests need a fetch to hang only from a
+        // point *after* the initial load already answered (toggled mid-test), unlike every earlier test's
+        // own constructor-time-only need.
+        var hangFetch: Boolean = false,
         var revealResult: RevealPhoneResult = RevealPhoneResult.Revealed("+79991234567"),
         private val hangReveal: Boolean = false,
     ) : BookingsApi {
