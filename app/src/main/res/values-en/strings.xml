@@ -795,6 +795,26 @@
     <string name="widget_config_action_save">Save</string>
     <string name="widget_config_saved">Saved</string>
 
+    <!-- `26-216`/`W2`: "Behaviour & greeting". See the ru strings for the full note. -->
+    <string name="widget_config_group_behaviour">Behaviour &amp; greeting</string>
+    <string name="widget_config_field_attract_attention_label">Attract attention while closed</string>
+    <string name="widget_config_field_attract_attention_caption">Pulses the launcher a few times, then stops — never while the panel is open, never after it has been dismissed. Always off for a visitor whose browser asks for reduced motion, whatever this setting says.</string>
+    <string name="widget_config_field_auto_open_label">Open the widget automatically</string>
+    <string name="widget_config_field_auto_open_caption">After the delay below, the panel opens itself and shows your greeting — drawn only in the visitor\'s browser, never sent anywhere, unless they actually write to you.</string>
+    <string name="widget_config_field_auto_open_delay_label">Delay before opening</string>
+    <string name="widget_config_auto_open_delay_15">15 seconds</string>
+    <string name="widget_config_auto_open_delay_30">30 seconds</string>
+    <string name="widget_config_auto_open_delay_45">45 seconds</string>
+    <string name="widget_config_auto_open_delay_60">60 seconds</string>
+    <string name="widget_config_auto_open_delay_90">90 seconds</string>
+    <string name="widget_config_auto_open_delay_120">120 seconds</string>
+    <string name="widget_config_field_auto_open_greeting_label">Greeting text</string>
+    <string name="widget_config_field_auto_open_greeting_placeholder">Hi, need any help finding something?</string>
+    <string name="widget_config_field_auto_open_greeting_required">Auto-open needs a greeting — there is no default text.</string>
+    <string name="widget_config_field_contact_capture_confirmation_label">Confirmation text (optional)</string>
+    <string name="widget_config_field_contact_capture_confirmation_placeholder">Thanks, {name} — your details have been added.</string>
+    <string name="widget_config_field_contact_capture_confirmation_supporting">Shown once a visitor submits their contact details. Use {name} anywhere in the text and we\'ll fill in the name they gave.</string>
+
     <!-- `26-192`/`C5`: Automation → "Offline auto-reply". See the ru strings for the full note. -->
     <string name="automation_auto_reply_description">Rules are checked top to bottom — the first match wins.</string>
     <string name="automation_auto_reply_enabled_label">Reply automatically when nobody is online</string>

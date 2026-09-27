@@ -154,6 +154,49 @@ class WidgetConfigViewModelTest {
         }
 
     @Test
+    fun `saving a behaviour-only committed-copy leaves appearance and consent fields intact`() =
+        // `26-216`/`W2`'s own half of the round-trip guarantee `docs/design/tenant-widget-android.md`
+        // §9's Done-when names for this slice - the identical shape the appearance test above proves,
+        // exercised with `WidgetBehaviourEditor`'s own five-field slice instead.
+        runTest(dispatcher) {
+            val committed = fullConfig()
+            val api =
+                FakeWidgetConfigApi(
+                    fetchResult = WidgetConfigResult.Loaded(committed),
+                    updateResult = WidgetConfigWriteResult.Saved(committed),
+                )
+            val viewModel = viewModel(api)
+            advanceUntilIdle()
+
+            // The exact pattern `WidgetBehaviourEditor` follows: `committed.copy(<its own slice>)`, never
+            // a freshly-built `WidgetConfig`.
+            val behaviourOnlySave =
+                committed.copy(
+                    attractAttention = false,
+                    autoOpenEnabled = false,
+                    autoOpenDelay = WidgetAutoOpenDelay.Seconds15,
+                    autoOpenGreetingText = null,
+                    contactCaptureConfirmationText = null,
+                )
+            viewModel.save(behaviourOnlySave)
+            advanceUntilIdle()
+
+            val sent = api.updateCalls.single()
+            assertEquals(behaviourOnlySave, sent)
+            // Every field this "behaviour save" never touched must still equal the original committed
+            // value - the structural proof that a Поведение save can never silently reset
+            // `requireContactConsent`, the appearance colour/position, or any other non-slice field.
+            assertEquals("requireContactConsent must survive an unrelated save untouched", true, sent.requireContactConsent)
+            assertEquals("primaryColorHex must survive an unrelated save untouched", committed.primaryColorHex, sent.primaryColorHex)
+            assertEquals("position must survive an unrelated save untouched", committed.position, sent.position)
+            assertEquals(
+                "allowAttachmentUploadsByDefault must survive an unrelated save untouched",
+                true,
+                sent.allowAttachmentUploadsByDefault,
+            )
+        }
+
+    @Test
     fun `a refused save keeps committed unchanged and shows the server's own words`() =
         runTest(dispatcher) {
             val committed = fullConfig()
