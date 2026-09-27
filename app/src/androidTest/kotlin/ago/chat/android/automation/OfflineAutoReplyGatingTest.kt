@@ -71,11 +71,14 @@ class OfflineAutoReplyGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // No `site:configure` - the row is gone, but Автоматизация itself still shows («Готовые ответы»
-        // stays unconditional), unlike Каналы which disappears entirely with no rows left
-        // (`buildMoreSections`'s own "a section with no rows is not returned at all" rule).
+        // No `site:configure` - the row is gone, and (since `26-220` moved «Готовые ответы» under the
+        // same gate) Автоматизация itself is gone too: every row the section has left is gated, so
+        // `buildMoreSections`'s own "a section with no rows is not returned at all" rule drops the
+        // header entirely, exactly as Каналы already behaves and as
+        // `CannedResponsesGatingTest.withoutSiteConfigure_theCannedResponsesRowIsHidden` already proves
+        // for the sibling row.
         composeTestRule.onNodeWithText("Автоответ вне смены").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertExists()
+        composeTestRule.onNodeWithText("Автоматизация", ignoreCase = true).assertDoesNotExist()
     }
 
     // Deliberately no "opening the row shows the real screen" case here: unlike the gating assertions

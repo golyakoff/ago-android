@@ -68,9 +68,16 @@ class ContactDetailPanelTest {
         composeTestRule.waitForIdle()
 
         // The sheet is up and shows the header: the panel root, H4 «Первый визит …» and H5 «N диалог(ов)».
+        // The H5 matcher pins the count ("7 диалогов", from `conversationCount = 7` above) rather than the
+        // bare substring "диалог": `26-151` added the always-rendered «Прошлые диалоги» row
+        // (`PastDialogsSection`, gated by no permission - see its own doc comment), which also contains
+        // that substring, so "диалог" alone now matches two nodes. The count digit is unique to H5's own
+        // text (`ContactPanelSummaryLine`/`summaryLineText`) because the row's own trailing count is a
+        // loading spinner by default (`ContactPanelUiState.pastDialogs` defaults to
+        // `PastDialogsSectionState.Loading`), never a number.
         composeTestRule.onNodeWithTag(CONTACT_PANEL_TEST_TAG).assertExists()
         composeTestRule.onNodeWithText("Первый визит", substring = true).assertExists()
-        composeTestRule.onNodeWithText("диалог", substring = true).assertExists()
+        composeTestRule.onNodeWithText("7 диалогов", substring = true).assertExists()
     }
 
     @Composable
