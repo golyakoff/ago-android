@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 
 /**
@@ -74,7 +75,10 @@ internal fun AnalyticsReportsOverflowMenu(
         reports.forEach { report ->
             DropdownMenuItem(
                 text = { Text(text = stringResource(report.labelRes())) },
-                trailingIcon = { Icon(imageVector = AgoIcons.ChevronRight, contentDescription = null) },
+                // `26-244`: a leading glyph and no trailing chevron, matching the Записи `⋮` hub
+                // ([ago.chat.android.bookings.BookingsScreen]'s own `BookingsConfigMenu`) — decorative,
+                // `contentDescription = null`, since the row's own text already names it.
+                leadingIcon = { Icon(imageVector = report.iconGlyph(), contentDescription = null) },
                 onClick = {
                     expanded = false
                     onOpenReport(report)
@@ -103,4 +107,27 @@ internal fun AnalyticsReport.labelRes(): Int =
         AnalyticsReport.TagBreakdown -> R.string.analytics_report_tag_breakdown
         AnalyticsReport.BookingFunnel -> R.string.analytics_report_booking_funnel
         AnalyticsReport.PhoneReveals -> R.string.analytics_report_phone_reveals
+    }
+
+/**
+ * `26-244`: the leading glyph each report row draws — [AnalyticsReportsOverflowMenu]'s own
+ * [DropdownMenuItem.leadingIcon], matching the Записи `⋮` hub
+ * ([ago.chat.android.bookings.BookingsScreen]'s own `configMenuIconFor`). Exhaustive on purpose, for the
+ * identical forcing-function reason [labelRes] above is: a new [AnalyticsReport] member stops this file
+ * compiling until it is given a glyph, so the menu can never list a row without one.
+ *
+ * Not `@Composable` (unlike [labelRes], which resolves an `R` string id): this reads a plain
+ * [ImageVector] value off the [AgoIcons] object with no composition around it, the identical shape
+ * `configMenuIconFor` takes — which also makes the mapping reachable from a plain JVM unit test rather
+ * than only an instrumented one. Two glyphs are reused ([AgoIcons.Analytics] for the site-wide metrics
+ * report, [AgoIcons.Call] for phone reveals); the other three are `26-244`'s own new Feather-derived
+ * glyphs on [AgoIcons].
+ */
+internal fun AnalyticsReport.iconGlyph(): ImageVector =
+    when (this) {
+        AnalyticsReport.Site -> AgoIcons.Analytics
+        AnalyticsReport.Conversion -> AgoIcons.Trend
+        AnalyticsReport.TagBreakdown -> AgoIcons.Tag
+        AnalyticsReport.BookingFunnel -> AgoIcons.Funnel
+        AnalyticsReport.PhoneReveals -> AgoIcons.Call
     }
