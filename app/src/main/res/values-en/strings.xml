@@ -700,6 +700,7 @@
     <string name="more_administration_operators_row">Operators &amp; roles</string>
     <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
     <string name="more_administration_billing_row">Plan &amp; billing</string>
+    <string name="more_administration_documents_row">Consent documents</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
     <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
@@ -892,6 +893,42 @@
     <string name="automation_tags_action_saving">Saving…</string>
     <string name="automation_tags_validation_name_required">A tag needs a name.</string>
     <string name="automation_tags_validation_name_too_long">A name cannot exceed %1$d characters.</string>
+
+    <string name="consent_contact_panel_title">Consent to collect contact details</string>
+    <string name="consent_marketing_panel_title">Consent to marketing</string>
+    <string name="consent_contact_required_badge">The widget requires this consent before collecting contact details</string>
+    <string name="consent_contact_not_required_badge">This document requires nothing while consent collection is off. Turn on “Require consent before collecting contact details” on the “Site widget” screen.</string>
+    <string name="consent_marketing_badge">This consent never requires anything — it only records who agreed to marketing</string>
+    <string name="consent_current_version_label">Current version</string>
+    <string name="consent_no_versions_yet">Nothing published yet</string>
+    <string name="consent_older_versions_heading">Earlier versions (%1$d)</string>
+    <string name="consent_publish_action">Publish new version</string>
+    <string name="consent_acceptances_toggle_show">Who accepted</string>
+    <string name="consent_acceptances_toggle_hide">Hide</string>
+    <string name="consent_acceptances_privacy_note">Shows only who and when — no IP address or browser</string>
+    <string name="consent_acceptances_empty">Nobody has accepted this version yet</string>
+    <string name="consent_acceptances_column_who">Who</string>
+    <string name="consent_acceptances_column_accepted_at">Accepted</string>
+    <string name="consent_acceptances_subject_visitor">Visitor</string>
+    <string name="consent_acceptances_id_copied">Id copied</string>
+    <string name="consent_publish_description">The published text will be visible to visitors right away, and new consents will be tied to this version</string>
+    <string name="consent_publish_title_label">Title</string>
+    <string name="consent_publish_body_label">Document text</string>
+    <string name="consent_publish_paste_action">Paste from clipboard</string>
+    <string name="consent_publish_action_save">Publish</string>
+    <string name="consent_publish_action_publishing">Publishing…</string>
+    <string name="consent_publish_confirm_title">Publish a new version?</string>
+    <string name="consent_publish_confirm_message">Publish a new version of “%1$s”? Visitors will see this text right away.</string>
+    <string name="consent_publish_confirm_action">Publish</string>
+    <string name="consent_publish_discard_title">Leave without publishing?</string>
+    <string name="consent_publish_discard_message">The text you entered will not be saved.</string>
+    <string name="consent_publish_discard_action">Leave</string>
+    <string name="consent_publish_saved_snackbar">Version published</string>
+    <string name="consent_publish_conflict_message">Publishing conflicted with a simultaneous publish. Try again.</string>
+    <string name="consent_publish_validation_title_required">A title is required.</string>
+    <string name="consent_publish_validation_title_too_long">The title cannot exceed %1$d characters.</string>
+    <string name="consent_publish_validation_body_required">The text cannot be empty.</string>
+    <string name="consent_publish_validation_body_too_long">The text cannot exceed %1$d characters.</string>
 
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>

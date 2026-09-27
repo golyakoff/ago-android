@@ -1152,6 +1152,12 @@
     <string name="more_automation_tags_row">Метки</string>
     <string name="more_administration_operators_row">Операторы и роли</string>
     <string name="more_administration_billing_row">Тариф и оплата</string>
+    <!-- `26-226`: Администрирование's first real row - «Документы согласий»
+         (`docs/design/tenant-consent-android.md`), reusing `navigation.md`'s own §"Ад" order (продукты,
+         оплата, документы, …) by sitting directly after Тариф и оплата. One resource for both the Ещё
+         row label and the screen's own app-bar title, the identical "one word, one string" shape
+         `more_automation_quick_replies_row` already establishes for its own screen. -->
+    <string name="more_administration_documents_row">Документы согласий</string>
     <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
          retired `analytics_placeholder_body`, worded generically now that more than one destination
          needs it. -->
@@ -1448,6 +1454,53 @@
          %1$d below is always `TagBounds.MAX_NAME_LENGTH`. -->
     <string name="automation_tags_validation_name_required">Метке нужно название.</string>
     <string name="automation_tags_validation_name_too_long">Название не может превышать %1$d символов.</string>
+
+    <!-- `26-226` (`docs/design/tenant-consent-android.md`): Администрирование → «Документы согласий» -
+         two purposes' consent documents, read/publish/see-who-accepted. Wording ported from
+         `ago-console`'s own `DocumentsPage.tsx`/`ru.ts` (`documentsContactPanelTitle` and friends) rather
+         than re-invented, since both surfaces describe the identical tenant-facing concept. -->
+    <string name="consent_contact_panel_title">Согласие на сбор контактных данных</string>
+    <string name="consent_marketing_panel_title">Согласие на рассылку</string>
+    <string name="consent_contact_required_badge">Виджет требует это согласие перед приёмом контактов</string>
+    <string name="consent_contact_not_required_badge">Этот документ ничего не требует, пока сбор согласия выключен. Включите «Требовать согласие перед сбором контактных данных» на экране «Виджет на сайте».</string>
+    <string name="consent_marketing_badge">Это согласие никогда ничего не требует — оно только фиксирует, кто согласился на маркетинг</string>
+    <string name="consent_current_version_label">Текущая версия</string>
+    <string name="consent_no_versions_yet">Ни одной версии ещё не опубликовано</string>
+    <string name="consent_older_versions_heading">Предыдущие версии (%1$d)</string>
+    <string name="consent_publish_action">Опубликовать новую версию</string>
+    <!-- The per-version "кто принял" expander (`tenant-consent-android.md` §3.2) - subject id shown as
+         an 8-char short code, long-press to copy the full GUID. -->
+    <string name="consent_acceptances_toggle_show">Кто принял</string>
+    <string name="consent_acceptances_toggle_hide">Скрыть</string>
+    <string name="consent_acceptances_privacy_note">Показаны только кто и когда — без IP-адреса и браузера</string>
+    <string name="consent_acceptances_empty">Пока никто не принял эту версию</string>
+    <string name="consent_acceptances_column_who">Кто</string>
+    <string name="consent_acceptances_column_accepted_at">Принято</string>
+    <string name="consent_acceptances_subject_visitor">Посетитель</string>
+    <string name="consent_acceptances_id_copied">Идентификатор скопирован</string>
+    <!-- The full-screen publish editor (`tenant-consent-android.md` §3.4) - blank-start, always a new
+         version, never an edit-in-place. -->
+    <string name="consent_publish_description">Опубликованный текст сразу увидят посетители, и новые согласия будут привязаны к этой версии</string>
+    <string name="consent_publish_title_label">Заголовок</string>
+    <string name="consent_publish_body_label">Текст документа</string>
+    <string name="consent_publish_paste_action">Вставить из буфера</string>
+    <string name="consent_publish_action_save">Опубликовать</string>
+    <string name="consent_publish_action_publishing">Публикация…</string>
+    <string name="consent_publish_confirm_title">Опубликовать новую версию?</string>
+    <string name="consent_publish_confirm_message">Опубликовать новую версию «%1$s»? Посетители сразу увидят этот текст.</string>
+    <string name="consent_publish_confirm_action">Опубликовать</string>
+    <string name="consent_publish_discard_title">Выйти без публикации?</string>
+    <string name="consent_publish_discard_message">Введённый текст не сохранится.</string>
+    <string name="consent_publish_discard_action">Выйти</string>
+    <string name="consent_publish_saved_snackbar">Версия опубликована</string>
+    <string name="consent_publish_conflict_message">Публикация конфликтует с одновременной публикацией. Повторите.</string>
+    <!-- The client-side courtesy check (`ago.chat.android.documents.validateConsentPublishDraft`) -
+         never the authority; a slip-through is refused server-side as `Document.Invalid`.
+         %1$d below is always `ConsentDocumentBounds.MAX_TITLE_LENGTH`/`MAX_BODY_LENGTH`. -->
+    <string name="consent_publish_validation_title_required">Укажите заголовок.</string>
+    <string name="consent_publish_validation_title_too_long">Заголовок не может превышать %1$d символов.</string>
+    <string name="consent_publish_validation_body_required">Текст не может быть пустым.</string>
+    <string name="consent_publish_validation_body_too_long">Текст не может превышать %1$d символов.</string>
 
     <!-- `26-77`: the account menu ([ago.chat.android.ui.components.AccountAvatarAction]) - the avatar
          button's own accessible name, and the two honest fallbacks for an identity with no name on

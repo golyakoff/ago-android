@@ -12,6 +12,7 @@ import ago.chat.android.core.domain.branding.SiteBrandingApi
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
 import ago.chat.android.core.domain.cannedresponses.CannedResponsesApi
 import ago.chat.android.core.domain.channels.ChannelConnectionApi
+import ago.chat.android.core.domain.consent.SiteConsentDocumentsApi
 import ago.chat.android.core.domain.contactdetails.ContactDetailsApi
 import ago.chat.android.core.domain.conversationactions.ConversationActionsApi
 import ago.chat.android.core.domain.conversations.ComposerDraftStore
@@ -53,6 +54,7 @@ import ago.chat.android.core.network.branding.KtorSiteBrandingApi
 import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
 import ago.chat.android.core.network.cannedresponses.KtorCannedResponsesApi
 import ago.chat.android.core.network.channels.KtorChannelConnectionApi
+import ago.chat.android.core.network.consent.KtorSiteConsentDocumentsApi
 import ago.chat.android.core.network.contactdetails.KtorContactDetailsApi
 import ago.chat.android.core.network.conversationactions.KtorConversationActionsApi
 import ago.chat.android.core.network.conversations.KtorConversationsApi
@@ -579,6 +581,20 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteTagsApi = KtorSiteTagsApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-226`: Администрирование → «Документы согласий»'s own port — the same `config.apiBaseUrl`
+     * [provideSiteTagsApi] above reads, since `GET`/`POST /api/v1/sites/{siteId}/consent-documents…`
+     * is one more family of endpoints on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection],
+     * the identical shape [provideSiteTagsApi] above already threads it through for — every route here
+     * carries the site id in the URL itself.
+     */
+    @Provides
+    public fun provideSiteConsentDocumentsApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): SiteConsentDocumentsApi = KtorSiteConsentDocumentsApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same
