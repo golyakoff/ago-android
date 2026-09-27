@@ -3,9 +3,11 @@ package ago.chat.android.core.network.conversations
 import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationQueue
+import ago.chat.android.core.domain.conversations.ConversationSearchHit
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.conversations.SearchConversationsResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.InMemoryActiveSite
 import ago.chat.android.core.network.MutableAccessTokenProvider
@@ -479,6 +481,165 @@ class KtorConversationsApiTest {
 
             assertEquals(ErasureResult.Failed(NetworkFailure.NoConnection), api.requestErasure("c1"))
             assertEquals("exactly one attempt - an irreversible write is never retried by this adapter", 1, calls)
+        }
+
+    // --------------------------------------------------------------- `26-245`: GET /conversations/search
+
+    @Test
+    fun `every search parameter is sent on the query string`() =
+        runTest {
+            val requested = mutableListOf<Pair<HttpMethod, String>>()
+            val api =
+                apiFor(recordTo = requested) {
+                    respond(
+                        """{"results":[],"nextBeforeMessageId":null,"searchedFrom":"2026-06-28T00:00:00Z","searchedTo":"2026-09-28T00:00:00Z"}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            api.searchConversations(
+                phrase = "refund please",
+                from = "2026-08-01T00:00:00Z",
+                to = "2026-09-01T00:00:00Z",
+                beforeMessageId = "m9",
+                pageSize = 50,
+            )
+
+            val url = requested.single().second
+            assertEquals(HttpMethod.Get, requested.single().first)
+            // Ktor URL-encodes the phrase's space; assert on the encoded form the wire actually carries.
+            assertTrue(url, url.contains("phrase=refund"))
+            assertTrue(url, url.contains("from=2026-08-01"))
+            assertTrue(url, url.contains("to=2026-09-01"))
+            assertTrue(url, url.contains("beforeMessageId=m9"))
+            assertTrue(url, url.contains("pageSize=50"))
+        }
+
+    @Test
+    fun `optional bounds are omitted from the query string when null`() =
+        runTest {
+            val requested = mutableListOf<Pair<HttpMethod, String>>()
+            val api =
+                apiFor(recordTo = requested) {
+                    respond(
+                        """{"results":[],"nextBeforeMessageId":null,"searchedFrom":"2026-06-28T00:00:00Z","searchedTo":"2026-09-28T00:00:00Z"}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            api.searchConversations(phrase = "hi", from = null, to = null, beforeMessageId = null, pageSize = null)
+
+            val url = requested.single().second
+            assertTrue(url, url.contains("phrase=hi"))
+            assertTrue(url, !url.contains("from="))
+            assertTrue(url, !url.contains("to="))
+            assertTrue(url, !url.contains("beforeMessageId="))
+            assertTrue(url, !url.contains("pageSize="))
+        }
+
+    @Test
+    fun `a page maps its hits, its keyset cursor and the range the server actually searched`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """
+                        {
+                          "results": [
+                            {
+                              "conversationId":"c1","messageId":"m1","sequence":7,"matchedBody":"I need a refund",
+                              "authorKind":"Visitor","createdAt":"2026-09-22T09:00:00Z","conversationState":"Assigned"
+                            },
+                            {
+                              "conversationId":"c2","messageId":"m2","sequence":3,"matchedBody":"refund issued",
+                              "authorKind":"Operator","createdAt":"2026-09-20T08:00:00Z","conversationState":"Closed"
+                            }
+                          ],
+                          "nextBeforeMessageId":"m2",
+                          "searchedFrom":"2026-06-28T00:00:00Z",
+                          "searchedTo":"2026-09-28T00:00:00Z"
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val page = (api.searchConversations("refund", null, null, null, 50) as SearchConversationsResult.Loaded).page
+
+            assertEquals("m2", page.nextBeforeMessageId)
+            assertEquals("2026-06-28T00:00:00Z", page.searchedFrom)
+            assertEquals("2026-09-28T00:00:00Z", page.searchedTo)
+            assertEquals(
+                ConversationSearchHit(
+                    conversationId = "c1",
+                    messageId = "m1",
+                    sequence = 7,
+                    matchedBody = "I need a refund",
+                    authorKind = "Visitor",
+                    createdAt = "2026-09-22T09:00:00Z",
+                    conversationState = "Assigned",
+                ),
+                page.results.first(),
+            )
+            assertEquals("Operator", page.results[1].authorKind)
+        }
+
+    @Test
+    fun `a 400 invalid-query with a problem-details body is a refusal shown verbatim`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"type":"Conversation.SearchInvalidQuery","detail":"Начало периода должно быть раньше конца."}""",
+                        HttpStatusCode.BadRequest,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            assertEquals(
+                SearchConversationsResult.Refused("Начало периода должно быть раньше конца."),
+                api.searchConversations("refund", "2026-09-01T00:00:00Z", "2026-08-01T00:00:00Z", null, 50),
+            )
+        }
+
+    @Test
+    fun `a search refusal with no problem-details body classifies as a server error, never a fabricated string`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(
+                SearchConversationsResult.Failed(NetworkFailure.ServerError(403)),
+                api.searchConversations("refund", null, null, null, 50),
+            )
+        }
+
+    @Test
+    fun `a dropped connection on search is a failed read, never an empty result set`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(
+                SearchConversationsResult.Failed(NetworkFailure.NoConnection),
+                api.searchConversations("refund", null, null, null, 50),
+            )
+        }
+
+    @Test
+    fun `a 200 that dropped the shape is a failed read, never an empty result set`() =
+        runTest {
+            val api =
+                apiFor {
+                    respond(
+                        """{"somethingElseEntirely":true}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertTrue(api.searchConversations("refund", null, null, null, 50) is SearchConversationsResult.Failed)
         }
 
     private fun apiFor(

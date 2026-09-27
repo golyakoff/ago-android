@@ -2,6 +2,7 @@ package ago.chat.android.shell
 
 import ago.chat.android.conversations.ConversationListRoute
 import ago.chat.android.conversations.ConversationListViewModel
+import ago.chat.android.conversations.ConversationSearchRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.restrictions.RestrictedVisitorsRoute
 import ago.chat.android.thread.ThreadRoute
@@ -121,6 +122,14 @@ public fun ConversationsTabHost(
     // state here rather than a second `NavHost` destination. `rememberSaveable` so the drill-in survives
     // rotation/process death exactly as long as [openConversationId] already does.
     var openRestricted by rememberSaveable { mutableStateOf(false) }
+    // `26-245`: a fourth state beside list/thread/restricted — the list's own search icon drills into
+    // [ConversationSearchRoute] the identical way the overflow drills into restricted visitors, and back
+    // returns to the list for free. Opening a hit from search sets [openConversationId]/
+    // [readOnlyConversationId] (a conversation open takes precedence over this flag below), so back from
+    // a hit returns to the search results rather than the list, while [openSearch] is left set —
+    // `rememberSaveable` so the drill-in survives rotation/process death exactly as [openConversationId]
+    // and [openRestricted] already do.
+    var openSearch by rememberSaveable { mutableStateOf(false) }
     // `26-98`: which open, if any, is the «Все» list's own read-only one - holds `openConversationId`'s
     // own value again when it is, `null` otherwise, rather than a plain `Boolean`: a `Boolean` alone
     // would stay `true` across a *different* conversation later opened the ordinary way unless every one
@@ -169,7 +178,12 @@ public fun ConversationsTabHost(
     }
 
     val currentlyOpen = openConversationId
-    if (openRestricted) {
+    // `26-245`: each drill-in flag is guarded by `currentlyOpen == null`, so a conversation open — from a
+    // «Мои»/«Ожидают» row, an «Все» row, or a **search hit** — takes precedence over [openRestricted] and
+    // [openSearch] and falls through to the thread branch below. That is what makes "tap a search hit →
+    // read its (read-only) thread → back → the search results are still there" true: opening a hit sets
+    // [openConversationId] (thread shows) while [openSearch] stays set, and back clears only the former.
+    if (openRestricted && currentlyOpen == null) {
         // `26-227`: the overflow's own drill-in - its own `SAVEABLE_KEY_RESTRICTED` key, the identical
         // per-branch `SaveableStateProvider` shape [SAVEABLE_KEY_LIST]/[SAVEABLE_KEY_THREAD_PREFIX] below
         // already use, so the list's own scroll position and filters survive going to this screen and
@@ -178,6 +192,22 @@ public fun ConversationsTabHost(
             RestrictedVisitorsRoute(
                 onBack = { openRestricted = false },
                 canLift = canLiftRestriction,
+            )
+        }
+    } else if (openSearch && currentlyOpen == null) {
+        // `26-245`: the search icon's own drill-in — its own `SAVEABLE_KEY_SEARCH` key, the identical
+        // per-branch `SaveableStateProvider` shape every other branch here uses. A hit tap opens the
+        // conversation **read-only** (`readOnlyConversationId`), the same way the «Все» tab's own row
+        // does and for the same server reason (`ConversationSearchViewModel`'s own doc comment) — never
+        // through `ConversationListViewModel.onRowOpened`, whose «Мои»/«Ожидают» bookkeeping a site-wide
+        // search hit has no business triggering, the identical bypass `onOpenAllConversation` below makes.
+        stateHolder.SaveableStateProvider(SAVEABLE_KEY_SEARCH) {
+            ConversationSearchRoute(
+                onBack = { openSearch = false },
+                onOpenHit = { conversationId ->
+                    openConversationId = conversationId
+                    readOnlyConversationId = conversationId
+                },
             )
         }
     } else if (currentlyOpen == null) {
@@ -207,6 +237,7 @@ public fun ConversationsTabHost(
                 canEraseConversations = canEraseConversations,
                 canConfigureSite = canConfigureSite,
                 onOpenRestricted = { openRestricted = true },
+                onOpenSearch = { openSearch = true },
             )
         }
     } else {
@@ -290,3 +321,4 @@ public fun ConversationsTabHost(
 private const val SAVEABLE_KEY_LIST = "conversation-list"
 private const val SAVEABLE_KEY_THREAD_PREFIX = "thread:"
 private const val SAVEABLE_KEY_RESTRICTED = "restricted-visitors"
+private const val SAVEABLE_KEY_SEARCH = "conversation-search"

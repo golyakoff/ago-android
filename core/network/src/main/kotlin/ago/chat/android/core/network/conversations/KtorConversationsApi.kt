@@ -4,10 +4,13 @@ import ago.chat.android.core.domain.conversations.AllConversationsPage
 import ago.chat.android.core.domain.conversations.AllConversationsResult
 import ago.chat.android.core.domain.conversations.ClaimResult
 import ago.chat.android.core.domain.conversations.ConversationQueue
+import ago.chat.android.core.domain.conversations.ConversationSearchHit
+import ago.chat.android.core.domain.conversations.ConversationSearchPage
 import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.conversations.SearchConversationsResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -215,6 +218,65 @@ public class KtorConversationsApi(
 
         return detail?.let { ErasureResult.Refused(it) } ?: ErasureResult.Failed(NetworkFailure.ServerError(response.status.value))
     }
+
+    /**
+     * `26-245`: `GET /api/v1/conversations/search?phrase=…&from=…&to=…&beforeMessageId=…&pageSize=…` —
+     * the site-wide full-text search, gated server-side by `site:configure`. Every optional parameter is
+     * appended only when present, the identical shape [fetchAllConversations] above already uses for its
+     * own optional `beforeId`.
+     *
+     * The three-arm mapping is [claim]'s, verbatim: a `2xx` whose body is the promised shape is
+     * [SearchConversationsResult.Loaded]; a `2xx` whose body is *not* is
+     * [SearchConversationsResult.Failed] rather than a silent empty result set (the identical
+     * "a bad shape is not an empty answer" rule [fetchQueue] states); a non-2xx with an RFC 7807 `detail`
+     * (a `400 Conversation.SearchInvalidQuery`) is [SearchConversationsResult.Refused] shown verbatim;
+     * and a transport failure or a bare non-2xx with no `detail` is [SearchConversationsResult.Failed]
+     * carrying a classification this class never fabricates a sentence for.
+     */
+    override suspend fun searchConversations(
+        phrase: String,
+        from: String?,
+        to: String?,
+        beforeMessageId: String?,
+        pageSize: Int?,
+    ): SearchConversationsResult {
+        val response =
+            try {
+                client.get("$apiBaseUrl/api/v1/conversations/search") {
+                    parameter("phrase", phrase)
+                    from?.let { parameter("from", it) }
+                    to?.let { parameter("to", it) }
+                    beforeMessageId?.let { parameter("beforeMessageId", it) }
+                    pageSize?.let { parameter("pageSize", it) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return SearchConversationsResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return try {
+                SearchConversationsResult.Loaded(response.body<SearchConversationsResponseWireDto>().toDomain())
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                SearchConversationsResult.Failed(NetworkFailure.from(failure))
+            }
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { SearchConversationsResult.Refused(it) }
+            ?: SearchConversationsResult.Failed(NetworkFailure.ServerError(response.status.value))
+    }
 }
 
 /** `Ago.Chat.Api.Conversations.ConversationsEndpoints.MarkConversationReadRequest` - the one field
@@ -320,4 +382,48 @@ private fun AllConversationsForSiteResponseWireDto.toDomain() =
     AllConversationsPage(
         conversations = conversations.map { it.toDomain() },
         nextBeforeId = nextBeforeId,
+    )
+
+/** `26-245`: `Ago.Chat.Contracts.ConversationSearchResultDto` — one full-text search hit, mirrored
+ * field-for-field. `sequence` is a `Long` for the same reason the console reads it as a `number` it
+ * never truncates: it is a per-conversation ordinal that the click-through position depends on. */
+@Serializable
+private data class ConversationSearchResultWireDto(
+    val conversationId: String,
+    val messageId: String,
+    val sequence: Long,
+    val matchedBody: String,
+    val authorKind: String,
+    val createdAt: String,
+    val conversationState: String,
+)
+
+/** `26-245`: `Ago.Chat.Contracts.SearchConversationsResponse`. `nextBeforeMessageId` defaults `null`
+ * (the last page), `searchedFrom`/`searchedTo` are always present — the server echoes the range it
+ * actually used even when the caller sent neither bound. */
+@Serializable
+private data class SearchConversationsResponseWireDto(
+    val results: List<ConversationSearchResultWireDto>,
+    val nextBeforeMessageId: String? = null,
+    val searchedFrom: String,
+    val searchedTo: String,
+)
+
+private fun ConversationSearchResultWireDto.toDomain() =
+    ConversationSearchHit(
+        conversationId = conversationId,
+        messageId = messageId,
+        sequence = sequence,
+        matchedBody = matchedBody,
+        authorKind = authorKind,
+        createdAt = createdAt,
+        conversationState = conversationState,
+    )
+
+private fun SearchConversationsResponseWireDto.toDomain() =
+    ConversationSearchPage(
+        results = results.map { it.toDomain() },
+        nextBeforeMessageId = nextBeforeMessageId,
+        searchedFrom = searchedFrom,
+        searchedTo = searchedTo,
     )

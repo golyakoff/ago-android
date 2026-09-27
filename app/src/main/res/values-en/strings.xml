@@ -1182,6 +1182,19 @@
     <string name="conversation_list_overflow_action">More</string>
     <string name="restricted_visitors_menu_item">Restricted visitors</string>
 
+    <!-- `26-245`: site-wide full-text conversation search - see values/strings.xml's own comment for this block. -->
+    <string name="conversation_search_action">Search</string>
+    <string name="conversation_search_title">Search conversations</string>
+    <string name="conversation_search_field_label">Search messages</string>
+    <string name="conversation_search_field_placeholder">Word or phrase</string>
+    <string name="conversation_search_prompt">Enter a word or phrase to search across every conversation on the site.</string>
+    <string name="conversation_search_empty">Nothing found.</string>
+    <string name="conversation_search_range">Searched: %1$s – %2$s</string>
+    <string name="conversation_search_failed_title">Search failed</string>
+    <string name="conversation_search_author_visitor">Visitor</string>
+    <string name="conversation_search_author_operator">Operator</string>
+    <string name="conversation_search_author_system">System</string>
+
     <string name="restricted_visitors_title">Restricted visitors</string>
     <string name="restricted_visitors_refresh_action">Refresh</string>
     <string name="restricted_visitors_empty">No restrictions</string>

@@ -99,6 +99,97 @@ public interface ConversationsApi {
      * "erasing" state instead; that lingering placeholder is what `26-118` replaced.
      */
     public suspend fun requestErasure(conversationId: String): ErasureResult
+
+    /**
+     * `26-245`: `GET /api/v1/conversations/search` — site-wide full-text search across every
+     * conversation on the site, gated server-side by `site:configure` (`SearchConversationsHandler`'s
+     * own remarks — the same permission `fetchAllConversations` above already requires, and deliberately
+     * *not* `conversation:read`), ported field-for-field from `ago-console`'s own
+     * `conversationsApi.ts#searchConversations`.
+     *
+     * [phrase] is the only required parameter; [from]/[to] are ISO-8601 bounds (omit both to let the
+     * server default its own three-month window — never inferred or pre-filled here, since the
+     * response's own [ConversationSearchPage.searchedFrom]/[ConversationSearchPage.searchedTo] are the
+     * only honest source for "what range did this actually search", the identical reasoning the console
+     * reader states). [beforeMessageId] is the keyset cursor — the previous page's
+     * [ConversationSearchPage.nextBeforeMessageId], omitted for the first page.
+     *
+     * **Three arms, the same split [claim] already draws, not the two [fetchQueue] has.** A `400`
+     * `Conversation.SearchInvalidQuery` (an invalid `from >= to` range) carries a genuine RFC 7807
+     * `detail` a caller shows verbatim ([SearchConversationsResult.Refused]); a dropped connection, a
+     * bare non-2xx with no `detail` (a `403` that should never reach here because the entry point is
+     * hidden without `site:configure`), or a `2xx` whose body is not the promised shape is
+     * [SearchConversationsResult.Failed] carrying a classification this port never fabricates a sentence
+     * for — never a silent empty result set.
+     */
+    public suspend fun searchConversations(
+        phrase: String,
+        from: String?,
+        to: String?,
+        beforeMessageId: String?,
+        pageSize: Int?,
+    ): SearchConversationsResult
+}
+
+/**
+ * `26-245`: one full-text search hit (`Ago.Chat.Contracts.ConversationSearchResultDto`), carried
+ * field-for-field from the wire. [matchedBody] is the **complete** matched message body, never a
+ * snippet or a highlighted excerpt — `SearchConversationsHandler` computes no highlight server-side and
+ * a `plainto_tsquery` match is a stemmed token match rather than a literal substring, so this app draws
+ * the body as-is rather than inventing a client-side highlight (the identical reasoning that DTO's own
+ * doc comment states in the console). [sequence] is the message's per-conversation ordinal, carried for
+ * parity with the console's own click-through (`?at=<sequence>`) even though this app opens a hit
+ * read-only rather than positioned — see [ago.chat.android.conversations.ConversationSearchViewModel]'s
+ * own doc comment. [authorKind]/[conversationState] are carried as their raw wire spelling, unparsed
+ * here — the identical "the classification is `:core:domain`'s, the prose is `:app`'s" split
+ * [ConversationSummary.state] already establishes.
+ */
+public data class ConversationSearchHit(
+    public val conversationId: String,
+    public val messageId: String,
+    public val sequence: Long,
+    public val matchedBody: String,
+    public val authorKind: String,
+    public val createdAt: String,
+    public val conversationState: String,
+)
+
+/**
+ * `26-245`: one page of `GET /api/v1/conversations/search`
+ * (`Ago.Chat.Contracts.SearchConversationsResponse`). [nextBeforeMessageId] is `null` on the last page
+ * — the server sends it only when the page it just cut was full, so "null" genuinely means "there is no
+ * next page", the identical keyset contract [AllConversationsPage.nextBeforeId] already carries.
+ * [searchedFrom]/[searchedTo] are the range the server actually used — always present even when the
+ * caller sent neither and the handler defaulted them — read back rather than assumed from the request,
+ * this item's own "the bound is visible, not silent" done-when.
+ */
+public data class ConversationSearchPage(
+    public val results: List<ConversationSearchHit>,
+    public val nextBeforeMessageId: String?,
+    public val searchedFrom: String,
+    public val searchedTo: String,
+)
+
+/** `26-245`: what one page of search came back with — the same three arms [ClaimResult]/[ErasureResult]
+ * have, for the same reasons: a genuine server refusal ([Refused]) carries its own `detail` and is shown
+ * verbatim, anything that kept the call from being a genuine answer ([Failed]) is a classification
+ * rather than a fabricated sentence, and neither is ever an empty result set. */
+public sealed interface SearchConversationsResult {
+    public data class Loaded(
+        val page: ConversationSearchPage,
+    ) : SearchConversationsResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — a `400 Conversation.SearchInvalidQuery`
+     * for a `from >= to` range, shown to the operator as-is. */
+    public data class Refused(
+        val detail: String,
+    ) : SearchConversationsResult
+
+    /** A transport failure, a bare non-2xx with no `detail`, or a `2xx` whose body was not the promised
+     * shape — a classification, never a fabricated `detail`. */
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : SearchConversationsResult
 }
 
 /** `26-90`: one page of `GET /api/v1/conversations/all`

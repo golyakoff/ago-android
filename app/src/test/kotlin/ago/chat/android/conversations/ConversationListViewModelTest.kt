@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.conversations.ConversationSummary
 import ago.chat.android.core.domain.conversations.ConversationsApi
 import ago.chat.android.core.domain.conversations.ErasureResult
 import ago.chat.android.core.domain.conversations.QueueResult
+import ago.chat.android.core.domain.conversations.SearchConversationsResult
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.network.realtime.ConversationAssignedDto
 import ago.chat.android.core.network.realtime.HistoryPage
@@ -1370,6 +1371,17 @@ class ConversationListViewModelTest {
             erasureCalls.add(conversationId)
             return erasureResult(conversationId)
         }
+
+        // `26-245`: search belongs to `ConversationSearchViewModel`, not this screen's own view model -
+        // the identical "not used by this class" posture this fake already takes for the methods a given
+        // caller never reaches (see `ConversationSearchViewModelTest`'s own fake for the mirror image).
+        override suspend fun searchConversations(
+            phrase: String,
+            from: String?,
+            to: String?,
+            beforeMessageId: String?,
+            pageSize: Int?,
+        ): SearchConversationsResult = throw UnsupportedOperationException("not used by this class")
     }
 
     private class FakeConversationListCache(
