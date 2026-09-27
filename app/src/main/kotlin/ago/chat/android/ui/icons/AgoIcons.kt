@@ -644,6 +644,84 @@ public object AgoIcons {
                 horizontalLineToRelative(14f)
             },
         )
+
+    /**
+     * `26-244`: the Аналитика `⋮` hub's own «По меткам» row, its [leadingIcon][androidx.compose.material3.DropdownMenuItem].
+     * Feather's own `tag` glyph — a luggage-tag body with a small punched hole — transcribed verbatim, the
+     * identical "borrow a Feather outline that already matches this family's `stroke-width:2`, round-cap,
+     * round-join treatment" reasoning [Call] above states for `phone`. The hole is Feather's own `<line
+     * x1="7" y1="7" x2="7.01" y2="7"/>` dot convention (a zero-ish-length round-capped stroke), the same one
+     * [Exclamation] draws — not a `<circle>` — kept as its own subpath so it never joins the body outline.
+     */
+    public val Tag: ImageVector =
+        strokeIcon(
+            "AgoTag",
+            // M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z
+            {
+                moveTo(20.59f, 13.41f)
+                lineToRelative(-7.17f, 7.17f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, -2.83f, 0f)
+                lineTo(2f, 12f)
+                verticalLineTo(2f)
+                horizontalLineToRelative(10f)
+                lineToRelative(8.59f, 8.59f)
+                arcToRelative(2f, 2f, 0f, isMoreThanHalf = false, isPositiveArc = true, 0f, 2.82f)
+                close()
+            },
+            // M7 7h.01
+            {
+                moveTo(7f, 7f)
+                lineToRelative(0.01f, 0f)
+            },
+        )
+
+    /**
+     * `26-244`: the Аналитика `⋮` hub's own «Конверсия» row, its leading icon. Feather's own `trending-up`
+     * glyph — a zig-zag line rising to an arrowhead in the top-right corner — transcribed verbatim from its
+     * two `<polyline>`s (a polyline is a bare `moveTo` + `lineTo` chain, no `close()`), the identical Feather
+     * borrowing reasoning [Call]/[Tag] give. Conversion is a rate that a report exists to move upward, which
+     * is exactly what a trending-up arrow says and a bar chart ([Analytics], spoken for by «По сайту») does not.
+     */
+    public val Trend: ImageVector =
+        strokeIcon(
+            "AgoTrend",
+            // <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            {
+                moveTo(23f, 6f)
+                lineTo(13.5f, 15.5f)
+                lineTo(8.5f, 10.5f)
+                lineTo(1f, 18f)
+            },
+            // <polyline points="17 6 23 6 23 12"/>
+            {
+                moveTo(17f, 6f)
+                lineTo(23f, 6f)
+                lineTo(23f, 12f)
+            },
+        )
+
+    /**
+     * `26-244`: the Аналитика `⋮` hub's own «Воронка записи» row, its leading icon. Feather's own `filter`
+     * glyph — the funnel every booking-flow report is named for — transcribed verbatim from its single
+     * `<polygon>` (a closed `moveTo`/`lineTo` ring, hence the trailing [close]). Preferred over reusing
+     * [Bookings] so a funnel report does not read as the identical calendar glyph as the Записи tab it
+     * reports on.
+     */
+    public val Funnel: ImageVector =
+        strokeIcon(
+            "AgoFunnel",
+            // <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            {
+                moveTo(22f, 3f)
+                lineTo(2f, 3f)
+                lineTo(10f, 12.46f)
+                lineTo(10f, 19f)
+                lineTo(14f, 21f)
+                lineTo(14f, 12.46f)
+                lineTo(22f, 3f)
+                close()
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */

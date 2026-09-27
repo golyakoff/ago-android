@@ -160,6 +160,32 @@ class AgoIconsTest {
     }
 
     /**
+     * `26-244`: the three new Аналитика `⋮` hub glyphs — Feather's own `tag`, `trending-up` and `filter`,
+     * borrowed verbatim the identical way [AgoIcons.Call] borrows Feather's `phone` (that glyph's own
+     * `AgoIcons.kt` doc comment), so unlike the `26-176` set above these three *are* held to [PathParser]
+     * node-for-node. `trending-up`/`filter` come from Feather `<polyline>`/`<polygon>`s, expanded to the
+     * `d` string an implicit-`L` polyline (`filter` closed with `z`) is equivalent to.
+     */
+    @Test
+    fun `the 26-244 analytics-menu glyphs are their Feather source paths, node for node`() {
+        // <path d="M20.59 13.41...z"/> — the tag body; the punched hole is Feather's own dot <line>, held
+        // structurally as a second subpath below rather than transcribed.
+        assertTranscribed(
+            AgoIcons.Tag,
+            0,
+            "M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z",
+        )
+        assertEquals(2, paths(AgoIcons.Tag).size)
+
+        // <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/> and <polyline points="17 6 23 6 23 12"/>
+        assertTranscribed(AgoIcons.Trend, 0, "M23 6L13.5 15.5L8.5 10.5L1 18")
+        assertTranscribed(AgoIcons.Trend, 1, "M17 6L23 6L23 12")
+
+        // <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        assertTranscribed(AgoIcons.Funnel, 0, "M22 3L2 3L10 12.46L10 19L14 21L14 12.46L22 3z")
+    }
+
+    /**
      * The mockup's whole icon family shares one treatment — `fill:none; stroke:currentColor;
      * stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round` — and an icon that quietly drops
      * one of those reads as a different family rather than as a bug, which is why every glyph is held
@@ -190,6 +216,9 @@ class AgoIconsTest {
                 AgoIcons.Masters,
                 AgoIcons.Services,
                 AgoIcons.Hours,
+                AgoIcons.Tag,
+                AgoIcons.Trend,
+                AgoIcons.Funnel,
             )
         icons.forEach { icon ->
             assertEquals(icon.name, 24f, icon.viewportWidth, 0f)
