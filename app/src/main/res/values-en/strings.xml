@@ -397,6 +397,11 @@
     <string name="bookings_confirmed_reschedule_load_failed_unexpected">Couldn\'t load the available slots.</string>
     <!-- `26-212`: see the RU file. -->
     <string name="bookings_confirmed_jump_to_date_action">Jump to date</string>
+    <!-- `26-233`: see the RU file. -->
+    <string name="bookings_confirmed_today_action">Today</string>
+    <string name="bookings_confirmed_load_previous_week_action">Load previous week</string>
+    <string name="bookings_confirmed_load_next_week_action">Load next week</string>
+    <string name="bookings_confirmed_loading_week">Loading week</string>
 
     <string name="bookings_tab_clients">Clients</string>
     <string name="bookings_contacts_empty">This tenant has no customers yet.</string>

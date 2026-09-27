@@ -177,6 +177,8 @@ public fun BookingsRoute(
     val onJumpToDate: (String) -> Unit
     val onRetryConfirmed: () -> Unit
     val onRevealConfirmed: (String) -> Unit
+    val onPullToLoadWeek: (DateStripEdgeLoad) -> Unit
+    val onJumpToToday: () -> Unit
     if (showConfirmedSegment) {
         val confirmedViewModel: ConfirmedBookingsViewModel = hiltViewModel()
         val collectedConfirmedState by confirmedViewModel.state.collectAsStateWithLifecycle()
@@ -185,12 +187,17 @@ public fun BookingsRoute(
         onJumpToDate = confirmedViewModel::onDatePicked
         onRetryConfirmed = confirmedViewModel::refresh
         onRevealConfirmed = confirmedViewModel::reveal
+        // `26-233`: the day strip's own rubber-band edge-pull and «Сегодня» control.
+        onPullToLoadWeek = confirmedViewModel::onPullToLoadWeek
+        onJumpToToday = confirmedViewModel::jumpToToday
     } else {
         confirmedState = null
         onSelectDay = {}
         onJumpToDate = {}
         onRetryConfirmed = {}
         onRevealConfirmed = {}
+        onPullToLoadWeek = {}
+        onJumpToToday = {}
     }
     // `26-117`: the booking-detail sheet's own «Перейти к диалогу» / chat icon
     // (`docs/backlog/26-117-*.md`'s own "Dialog link") reuses the identical cross-tab thread navigation
@@ -489,6 +496,8 @@ public fun BookingsRoute(
         onJumpToDate = onJumpToDate,
         onRetryConfirmed = onRetryConfirmed,
         onRevealConfirmed = onRevealConfirmed,
+        onPullToLoadWeek = onPullToLoadWeek,
+        onJumpToToday = onJumpToToday,
         onOpenDialog = onOpenDialog,
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
@@ -632,6 +641,8 @@ internal fun BookingsScreen(
     onJumpToDate: (String) -> Unit,
     onRetryConfirmed: () -> Unit,
     onRevealConfirmed: (String) -> Unit,
+    onPullToLoadWeek: (DateStripEdgeLoad) -> Unit,
+    onJumpToToday: () -> Unit,
     onOpenDialog: (String) -> Unit,
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
@@ -929,6 +940,8 @@ internal fun BookingsScreen(
                                 onRetry = onRetryConfirmed,
                                 onReveal = onRevealConfirmed,
                                 onOpenDialog = onOpenDialog,
+                                onPullToLoadWeek = onPullToLoadWeek,
+                                onJumpToToday = onJumpToToday,
                             )
                         }
 

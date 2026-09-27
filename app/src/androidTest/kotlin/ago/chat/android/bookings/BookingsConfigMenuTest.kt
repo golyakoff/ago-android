@@ -54,6 +54,8 @@ class BookingsConfigMenuTest {
                 onJumpToDate = {},
                 onRetryConfirmed = {},
                 onRevealConfirmed = {},
+                onPullToLoadWeek = {},
+                onJumpToToday = {},
                 onOpenDialog = {},
                 contactsState = null,
                 onRetryContacts = {},
