@@ -136,7 +136,7 @@ with nothing behind it is the dead-menu shape `26-40` already refused for the th
 | `/automation/canned` | `site:configure` | **redesign** | "One blank row kept at the bottom to type into" is a desktop idiom that fails on a soft keyboard. Becomes a list + FAB, with each response edited on its own screen. Order is preserved because the operator arranged it. |
 | `/automation/ai-suggestions` | `site:configure` | **as-is** | A switch plus explanatory copy, and the on-screen note that it is the *same* switch `/account/ai` writes — that note must survive the port, because discovering the sharing by surprise is exactly what it exists to prevent. |
 | `/automation/auto-reply` | `site:configure` | **redesign** | Keyword rules where **order is behaviour** (first rule wins). The trailing-blank-row editor becomes a reorderable list with drag handles, and the ordering rule stays stated on screen. |
-| `/automation/faq` | `site:configure` | **as-is** | Module registration and knowledge-base management. |
+| `/automation/faq` | `site:configure` | **as-is** — Модули panel built (read-only) — `26-199`/`M1`; knowledge base pending — `M2` | Module *status*, read-only (`adr/0151` removed every tenant-facing module write) and knowledge-base editing — two panels on one screen, calling two different backends (`docs/design/tenant-modules-restrictions-android.md` §2). |
 | `/automation/tags` | `site:configure` | **redesign** | Same list + FAB shape as canned responses. Vocabulary only — applying a tag happens in the conversation sheet, as in the console. |
 
 ## 9. Администрирование — administration (8 routes)

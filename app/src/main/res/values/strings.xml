@@ -1168,9 +1168,15 @@
          guess, left for review to correct (`docs/backlog/26-77-*.md`'s own Scope item 4). -->
     <string name="more_automation_quick_replies_row">Готовые ответы</string>
     <string name="more_automation_after_hours_row">Автоответ вне смены</string>
-    <!-- `26-225`: Автоматизация's third real row - «Метки», last in `docs/design/tenant-canned-tags-android.md`
+    <!-- `26-199`/`M1`: Автоматизация's fourth real row - «База знаний», directly after «Автоответ вне
+         смены» and before «Метки» - `docs/design/tenant-canned-tags-android.md` §3.2's own order in full
+         (Готовые ответы · ИИ-подсказки · Автоответ вне смены · База знаний · Метки; ИИ-подсказки remains
+         the one row still unbuilt). One resource for both the Ещё row label and the screen's own app-bar
+         title, the identical "one word, one string" shape `more_automation_tags_row` already establishes. -->
+    <string name="more_automation_faq_row">База знаний</string>
+    <!-- `26-225`: Автоматизация's fifth real row - «Метки», last in `docs/design/tenant-canned-tags-android.md`
          §3.2's own order (Готовые ответы · ИИ-подсказки · Автоответ вне смены · База знаний · Метки; the
-         two unbuilt rows in between are not part of this item). -->
+         one unbuilt row in between, ИИ-подсказки, is not part of this item). -->
     <string name="more_automation_tags_row">Метки</string>
     <string name="more_administration_operators_row">Операторы и роли</string>
     <string name="more_administration_billing_row">Тариф и оплата</string>
@@ -1443,6 +1449,34 @@
     <!-- %1$s is that response's own trimmed title, naming which response needs a body. -->
     <string name="canned_responses_validation_body_required">Ответу «%1$s» нужен текст.</string>
     <string name="canned_responses_validation_body_too_long">Текст ответа не может превышать %1$d символов.</string>
+
+    <!-- `26-199`/`M1` (`docs/design/tenant-modules-restrictions-android.md` §2.1): Автоматизация →
+         «База знаний» - the site's enabled-module list, read-only (`adr/0151` removed every tenant-facing
+         module write; a tenant never turns a module on for itself). The screen's own app-bar title reuses
+         `more_automation_faq_row` - the same "one resource, two call sites" shape
+         `more_automation_tags_row`/`automation_tags_*` already establishes for its own screen. Prefixed
+         `automation_modules_`, matching this port's own package name (`ModulesApi`), since `M2`'s own
+         knowledge-base panel will carry its own `automation_faq_kb_` prefix rather than sharing this one -
+         two independent panels on one screen, two independent string families. -->
+    <string name="automation_modules_empty">Ни один модуль не подключён. AGO подключает их — напишите нам.</string>
+    <!-- %1$s is the module's own trigger words, already comma-joined - the same "one string, one already-
+         formatted list" shape `restricted_visitors_restricted_by` takes for its own single interpolated
+         value. -->
+    <string name="automation_modules_trigger_words">Слова-триггеры: %1$s</string>
+    <!-- %1$s is the module's own service URL (`EnabledModule.entryPoint`) - shown, never dialled, by this
+         read-only screen. -->
+    <string name="automation_modules_entry_point">Точка входа: %1$s</string>
+    <!-- `22-17`'s own audit distinction: `true` when the platform owner enabled this module rather than
+         the tenant's own operator. -->
+    <string name="automation_modules_granted_by_owner_badge">Включено владельцем</string>
+    <!-- %1$s is the device-zone date this screen already formats - never a raw ISO string. Drawn only
+         when `EnabledModule.expiresAt` is set; a grant that does not expire draws no line at all, the
+         identical hide-rather-than-state-a-negative choice `channels_install_origins_hint` already makes
+         for its own always-true case. -->
+    <string name="automation_modules_expires_at">До %1$s</string>
+    <!-- A status read an operator opens to check, not a live queue - no auto-refresh poll, the identical
+         posture `restricted_visitors_refresh_action` already states for its own top bar. -->
+    <string name="automation_modules_refresh_action">Обновить</string>
 
     <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
          tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -

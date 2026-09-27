@@ -12,6 +12,7 @@ import ago.chat.android.channels.VkChannelRoute
 import ago.chat.android.channels.WidgetConfigRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.documents.ConsentDocumentsRoute
+import ago.chat.android.faq.ModulesFaqRoute
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
@@ -55,7 +56,9 @@ import androidx.compose.ui.unit.dp
  * «Операторы и роли»/«Тариф и оплата» still open [PlaceholderDestinationScreen], because neither real
  * screen is built in this app yet. `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real
  * branch ([OfflineAutoReplyRoute]); `26-220` does the same for «Готовые ответы»
- * ([CannedResponsesRoute]), so neither Автоматизация row is one of them any more. `26-226` gives
+ * ([CannedResponsesRoute]), `26-225` for «Метки» ([TagsRoute]), and `26-199`/`M1` for «База знаний»
+ * ([ModulesFaqRoute] - read-only for now, `adr/0151`; `M2`, a separate item, adds a knowledge-base panel
+ * to the same screen), so none of Автоматизация's four built rows is one of them any more. `26-226` gives
  * Администрирование its own first real row - «Документы согласий» ([ConsentDocumentsRoute]) - leaving
  * «Операторы и роли»/«Тариф и оплата» the only two placeholders left in this screen.
  *
@@ -127,7 +130,12 @@ internal fun MoreScreen(
             // way `26-192`/`C5` replaced «Автоответ вне смены»'s. Back returns to the Ещё list (clause 2)
             // via the same `openRowId = null` every drill-in uses.
             AUTOMATION_QUICK_REPLIES_ROW_ID -> CannedResponsesRoute(onBack = { openRowId = null })
-            // `26-225`: Автоматизация → «Метки» - the tag-vocabulary CRUD editor, the second real
+            // `26-199`/`M1`: Автоматизация → «База знаний» - the read-only enabled-module list
+            // (`docs/design/tenant-modules-restrictions-android.md` §2.1; `adr/0151` removed every
+            // tenant-facing module write, so this row is a status read, not a form). Back returns to the
+            // Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            AUTOMATION_FAQ_ROW_ID -> ModulesFaqRoute(onBack = { openRowId = null })
+            // `26-225`: Автоматизация → «Метки» - the tag-vocabulary CRUD editor, the third real
             // Автоматизация branch this scaffold serves. Back returns to the Ещё list (clause 2) via the
             // same `openRowId = null` every drill-in uses.
             AUTOMATION_TAGS_ROW_ID -> TagsRoute(onBack = { openRowId = null })
@@ -246,6 +254,7 @@ internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
 internal const val CHANNELS_EMAIL_ROW_ID: String = "channels-email"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
+internal const val AUTOMATION_FAQ_ROW_ID: String = "automation-faq"
 internal const val AUTOMATION_TAGS_ROW_ID: String = "automation-tags"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
@@ -345,10 +354,23 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                     section = MoreSectionId.Automation,
                 ),
             )
+            // `26-199`/`M1`: «База знаний» takes its own place directly after «Автоответ вне смены» and
+            // before «Метки» below - the real order `docs/design/tenant-canned-tags-android.md` §3.2
+            // states in full (Готовые ответы · ИИ-подсказки · Автоответ вне смены · База знаний · Метки;
+            // ИИ-подсказки remains the one row still unbuilt). Read-only (`adr/0151`) - see
+            // `ModulesFaqScreen`'s own doc comment for why the file is named for the combined screen `M2`
+            // will extend, rather than for this item's own Модули-only scope.
+            add(
+                MoreRow(
+                    id = AUTOMATION_FAQ_ROW_ID,
+                    labelRes = R.string.more_automation_faq_row,
+                    section = MoreSectionId.Automation,
+                ),
+            )
             // `26-225`: Метки closes out this block, last in
             // `docs/design/tenant-canned-tags-android.md` §3.2's own order (Готовые ответы · ИИ-подсказки
-            // · Автоответ вне смены · База знаний · Метки - the two unbuilt rows in between are not part
-            // of this item, so Метки sits directly after Автоответ вне смены for now).
+            // · Автоответ вне смены · База знаний · Метки - the one unbuilt row in between, ИИ-подсказки,
+            // is not part of this item).
             add(
                 MoreRow(
                     id = AUTOMATION_TAGS_ROW_ID,

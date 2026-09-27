@@ -703,6 +703,8 @@
 
     <string name="more_automation_quick_replies_row">Canned responses</string>
     <string name="more_automation_after_hours_row">Offline auto-reply</string>
+    <!-- `26-199`/`M1`: "Knowledge base" — see the ru strings for the full note and row order. -->
+    <string name="more_automation_faq_row">Knowledge base</string>
     <string name="more_automation_tags_row">Tags</string>
     <string name="more_administration_operators_row">Operators &amp; roles</string>
     <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
@@ -886,6 +888,14 @@
     <string name="canned_responses_validation_title_too_long">A title cannot exceed %1$d characters.</string>
     <string name="canned_responses_validation_body_required">The response \"%1$s\" needs text.</string>
     <string name="canned_responses_validation_body_too_long">A response\'s text cannot exceed %1$d characters.</string>
+
+    <!-- `26-199`/`M1`: the read-only Модули panel — see the ru strings for the full note. -->
+    <string name="automation_modules_empty">No modules are enabled. AGO adds them — ask us.</string>
+    <string name="automation_modules_trigger_words">Trigger words: %1$s</string>
+    <string name="automation_modules_entry_point">Entry point: %1$s</string>
+    <string name="automation_modules_granted_by_owner_badge">Enabled by owner</string>
+    <string name="automation_modules_expires_at">Until %1$s</string>
+    <string name="automation_modules_refresh_action">Refresh</string>
 
     <string name="automation_tags_empty">No tags yet. Add the first one.</string>
     <string name="automation_tags_add_action">Add tag</string>
