@@ -548,6 +548,31 @@
     <string name="people_invite_done_button">Готово</string>
 
     <!--
+        `26-242`: отправленные приглашения под списком операторов на Люди - список и отзыв. Формулировки
+        следуют `ago-console`'s own `operatorsTeamInvite*`/`operatorsTeamInviteStatus*` (`ru.ts`), где тот
+        же факт показан на обеих поверхностях. `people_invite_status_send_failed` - это префикс, к которому
+        код ошибки SMTP добавляется отдельно, ровно как в `OperatorsTeamPage`'s own `inviteStatusLabel`.
+        Роли в строке приглашения нет: `26-241` добавил мультироль только при создании приглашения, а
+        список их не возвращает - зеркалим реальный контракт.
+    -->
+    <string name="people_invites_list_title">Приглашения</string>
+    <!-- `%1$s` - дата и время в часовом поясе устройства. -->
+    <string name="people_invite_sent_label">Отправлено: %1$s</string>
+    <!-- `%1$s` - дата и время в часовом поясе устройства. -->
+    <string name="people_invite_expires_label">Действует до: %1$s</string>
+    <string name="people_invite_status_sent">Отправлено</string>
+    <string name="people_invite_status_send_failed">ошибка отправки приглашения, код ошибки smtp-сервера:</string>
+    <string name="people_invite_status_revoked">Отозвано</string>
+    <string name="people_invite_status_redeemed">Принято</string>
+    <string name="people_invite_status_expired">Истекло</string>
+    <string name="people_invite_revoke_button">Отозвать</string>
+    <string name="people_invite_revoke_dialog_title">Отозвать приглашение?</string>
+    <!-- `%1$s` - почта приглашённого. -->
+    <string name="people_invite_revoke_dialog_body">%1$s больше не сможет воспользоваться этим приглашением.</string>
+    <string name="people_invite_revoke_confirm_button">Отозвать</string>
+    <string name="people_invite_revoke_failed">Не удалось отозвать приглашение. Попробуйте ещё раз.</string>
+
+    <!--
         `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
         that segment has no screen behind it yet (this file's own `BookingsScreen`/`bookings_tab_pending`
         doc comment - the identical "a row exists only for a screen that exists" rule

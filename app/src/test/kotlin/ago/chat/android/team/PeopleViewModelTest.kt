@@ -2,11 +2,13 @@ package ago.chat.android.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
 import kotlinx.coroutines.Dispatchers
@@ -142,12 +144,17 @@ class PeopleViewModelTest {
 
         override suspend fun fetchSeatSummary(): SeatSummaryResult = summaryResult
 
-        // `26-56`: never exercised from this suite — [PeopleViewModel] never calls it, only
-        // [ago.chat.android.team.InviteColleagueViewModel] does — but this fake still has to answer the
-        // interface's third method to compile.
+        // `26-56`/`26-242`: never exercised from this suite — [PeopleViewModel] never calls create,
+        // list or revoke, only [ago.chat.android.team.InviteColleagueViewModel] and
+        // [ago.chat.android.team.OperatorInvitesViewModel] do — but this fake still has to answer the
+        // interface's write and invite-list methods to compile.
         override suspend fun createInvite(
             roleName: String,
             email: String,
         ): CreateInviteResult = CreateInviteResult.Failed(NetworkFailure.Unexpected)
+
+        override suspend fun listInvites(): OperatorInvitesResult = OperatorInvitesResult.Loaded(emptyList())
+
+        override suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult = RevokeInviteResult.Revoked
     }
 }

@@ -2,8 +2,10 @@ package ago.chat.android.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.ROLE_ADMIN
 import ago.chat.android.core.domain.team.ROLE_OPERATOR
 import ago.chat.android.core.domain.team.RoleSeatSummary
@@ -236,5 +238,12 @@ class InviteColleagueViewModelTest {
             if (hangCreateInvite) awaitCancellation()
             return createInviteResult
         }
+
+        // `26-242`: never exercised from this suite - [InviteColleagueViewModel] never lists or revokes,
+        // only [ago.chat.android.team.OperatorInvitesViewModel] does - but the fake still answers the
+        // interface's two new methods to compile.
+        override suspend fun listInvites(): OperatorInvitesResult = OperatorInvitesResult.Loaded(emptyList())
+
+        override suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult = RevokeInviteResult.Revoked
     }
 }

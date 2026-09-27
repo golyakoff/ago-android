@@ -6,8 +6,12 @@ import ago.chat.android.core.domain.team.CreateInviteResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.team.OperatorTeamFailure
+import ago.chat.android.core.domain.team.OperatorInviteListItem
+import ago.chat.android.core.domain.team.OperatorInviteStatus
+import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
 import io.ktor.client.HttpClient
@@ -160,6 +164,59 @@ public class KtorOperatorTeamApi(
             CreateInviteResult.Failed(NetworkFailure.from(failure))
         }
     }
+
+    /** `GET /api/v1/sites/{siteId}/operator-invites` — `26-242`. A read, so it classifies exactly the
+     * way [fetchTeam] does: a dropped connection is [OperatorTeamFailure.Transport], any non-2xx or a
+     * `200` whose body is not the promised shape (an unrecognised `status` enum member among them) is
+     * [OperatorTeamFailure.Unexpected], never a silently-empty invite list. */
+    override suspend fun listInvites(): OperatorInvitesResult {
+        val siteId = activeSite.currentSiteId() ?: return OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected)
+
+        val response =
+            try {
+                client.get("$apiBaseUrl/api/v1/sites/$siteId/operator-invites")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return OperatorInvitesResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected)
+        }
+
+        return try {
+            OperatorInvitesResult.Loaded(response.body<ListOperatorInvitesResponseWireDto>().invites.map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            OperatorInvitesResult.Failed(classify(failure))
+        }
+    }
+
+    /** `POST /api/v1/sites/{siteId}/operator-invites/{operatorInviteId}/revoke` — `26-242`, `204 No
+     * Content` on success. No body to parse either way, so success is just "the status was 2xx"; a
+     * dropped connection is [OperatorTeamFailure.Transport] and any non-2xx (the server's own
+     * already-redeemed/already-revoked refusal among them) is [OperatorTeamFailure.Unexpected] — the
+     * caller re-reads [listInvites] and lets the row's new status speak, never a message parsed here. */
+    override suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult {
+        val siteId = activeSite.currentSiteId() ?: return RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$apiBaseUrl/api/v1/sites/$siteId/operator-invites/$operatorInviteId/revoke")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return RevokeInviteResult.Failed(classify(failure))
+            }
+
+        return if (response.status.isSuccess()) {
+            RevokeInviteResult.Revoked
+        } else {
+            RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected)
+        }
+    }
 }
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. */
@@ -247,3 +304,55 @@ private fun OperatorTeamMemberWireDto.toDomain() =
 
 private fun RoleSeatAssignmentSummaryWireDto.toDomain() =
     RoleSeatSummary(roleName = roleName, heldSeats = heldSeats, limit = limit, overLimit = overLimit)
+
+/** `operatorTeamApi.ts`'s own `OperatorInviteListEntryDto`, mirrored field for field. [status] is a
+ * string enum sent as `OperatorInviteListStatus`'s member name; an unrecognised member fails
+ * deserialisation, which the read's own `catch` turns into [OperatorTeamFailure.Unexpected] — the
+ * identical shape-mismatch posture the roster reads above already take, never a silent fallback. */
+@Serializable
+private enum class OperatorInviteStatusWireDto {
+    Sent,
+    SendFailed,
+    Revoked,
+    Redeemed,
+    Expired,
+}
+
+/** `operatorTeamApi.ts`'s own `OperatorInviteListEntryDto`. [smtpErrorCode] is nullable and present only
+ * for a [OperatorInviteStatusWireDto.SendFailed] row. */
+@Serializable
+private data class OperatorInviteListEntryWireDto(
+    val operatorInviteId: String,
+    val email: String,
+    val createdAt: String,
+    val expiresAt: String,
+    val status: OperatorInviteStatusWireDto,
+    val smtpErrorCode: String? = null,
+)
+
+/** `operatorTeamApi.ts`'s own `ListOperatorInvitesResponseDto`. [invites] carries no default, for the
+ * identical shape-mismatch reason [OperatorTeamResponseWireDto.operators] does not — a `200` with an
+ * unrelated body must be caught, never read as a genuinely empty invite list. */
+@Serializable
+private data class ListOperatorInvitesResponseWireDto(
+    val invites: List<OperatorInviteListEntryWireDto>,
+)
+
+private fun OperatorInviteStatusWireDto.toDomain(): OperatorInviteStatus =
+    when (this) {
+        OperatorInviteStatusWireDto.Sent -> OperatorInviteStatus.Sent
+        OperatorInviteStatusWireDto.SendFailed -> OperatorInviteStatus.SendFailed
+        OperatorInviteStatusWireDto.Revoked -> OperatorInviteStatus.Revoked
+        OperatorInviteStatusWireDto.Redeemed -> OperatorInviteStatus.Redeemed
+        OperatorInviteStatusWireDto.Expired -> OperatorInviteStatus.Expired
+    }
+
+private fun OperatorInviteListEntryWireDto.toDomain() =
+    OperatorInviteListItem(
+        operatorInviteId = operatorInviteId,
+        email = email,
+        createdAt = createdAt,
+        expiresAt = expiresAt,
+        status = status.toDomain(),
+        smtpErrorCode = smtpErrorCode,
+    )
