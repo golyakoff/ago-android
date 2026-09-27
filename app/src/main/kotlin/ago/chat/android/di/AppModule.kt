@@ -33,6 +33,7 @@ import ago.chat.android.core.domain.recut.RecutApi
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
+import ago.chat.android.core.domain.tags.SiteTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
 import ago.chat.android.core.domain.visitorhistory.VisitorHistoryApi
 import ago.chat.android.core.domain.visitorsummary.VisitorSummaryApi
@@ -70,6 +71,7 @@ import ago.chat.android.core.network.recut.KtorRecutApi
 import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
+import ago.chat.android.core.network.tags.KtorSiteTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
 import ago.chat.android.core.network.visitorhistory.KtorVisitorHistoryApi
 import ago.chat.android.core.network.visitorsummary.KtorVisitorSummaryApi
@@ -561,6 +563,22 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): CannedResponsesApi = KtorCannedResponsesApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-225`: the Автоматизация → «Метки» screen's own port — the same `config.apiBaseUrl`
+     * [provideCannedResponsesApi] above reads, since `GET`/`POST /api/v1/sites/{siteId}/tags` and
+     * `PUT`/`DELETE .../tags/{tagId}` are one more family of endpoints on that same `Ago.Chat.Api`
+     * origin. Needs [ActiveSiteSelection], the identical shape [provideCannedResponsesApi] above already
+     * threads it through for — every one of the four routes carries the site id in the URL itself. A
+     * separate binding from [provideConversationTagsApi] above, deliberately — [SiteTagsApi]'s own doc
+     * comment states why a new port, not three more methods on that one.
+     */
+    @Provides
+    public fun provideSiteTagsApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): SiteTagsApi = KtorSiteTagsApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-71`: [ago.chat.android.analytics.ConversionReportViewModel]'s own port — the same

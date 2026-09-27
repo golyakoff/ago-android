@@ -696,6 +696,7 @@
 
     <string name="more_automation_quick_replies_row">Canned responses</string>
     <string name="more_automation_after_hours_row">Offline auto-reply</string>
+    <string name="more_automation_tags_row">Tags</string>
     <string name="more_administration_operators_row">Operators &amp; roles</string>
     <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
     <string name="more_administration_billing_row">Plan &amp; billing</string>
@@ -877,6 +878,20 @@
     <string name="canned_responses_validation_title_too_long">A title cannot exceed %1$d characters.</string>
     <string name="canned_responses_validation_body_required">The response \"%1$s\" needs text.</string>
     <string name="canned_responses_validation_body_too_long">A response\'s text cannot exceed %1$d characters.</string>
+
+    <string name="automation_tags_empty">No tags yet. Add the first one.</string>
+    <string name="automation_tags_add_action">Add tag</string>
+    <string name="automation_tags_edit_action">Edit</string>
+    <string name="automation_tags_delete_action">Delete</string>
+    <string name="automation_tags_delete_title">Delete tag?</string>
+    <string name="automation_tags_delete_message">Delete the tag \"%1$s\"? It will disappear from every conversation it was applied to — this cannot be undone.</string>
+    <string name="automation_tags_create_title">New tag</string>
+    <string name="automation_tags_rename_title">Rename tag</string>
+    <string name="automation_tags_name_label">Name</string>
+    <string name="automation_tags_action_save">Save</string>
+    <string name="automation_tags_action_saving">Saving…</string>
+    <string name="automation_tags_validation_name_required">A tag needs a name.</string>
+    <string name="automation_tags_validation_name_too_long">A name cannot exceed %1$d characters.</string>
 
     <string name="account_menu_open_action">Account menu</string>
     <string name="account_menu_unknown_name">Operator</string>
