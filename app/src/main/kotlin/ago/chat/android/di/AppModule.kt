@@ -27,6 +27,7 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.identity.IdentityApi
 import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.installation.InstallationApi
+import ago.chat.android.core.domain.modules.ModulesApi
 import ago.chat.android.core.domain.notes.ConversationNotesApi
 import ago.chat.android.core.domain.permissions.OperatorPermissionsApi
 import ago.chat.android.core.domain.persons.PersonsApi
@@ -64,6 +65,7 @@ import ago.chat.android.core.network.devices.KtorDeviceRegistrationApi
 import ago.chat.android.core.network.documents.KtorPublishedDocumentApi
 import ago.chat.android.core.network.identity.KtorIdentityApi
 import ago.chat.android.core.network.installation.KtorInstallationApi
+import ago.chat.android.core.network.modules.KtorModulesApi
 import ago.chat.android.core.network.notes.KtorConversationNotesApi
 import ago.chat.android.core.network.permissions.KtorOperatorPermissionsApi
 import ago.chat.android.core.network.persons.KtorPersonsApi
@@ -597,6 +599,21 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteConsentDocumentsApi = KtorSiteConsentDocumentsApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-199`/`M1`: Автоматизация → «База знаний»'s own read-only Модули port — the same
+     * `config.apiBaseUrl` [provideSiteConsentDocumentsApi] above reads, since
+     * `GET /api/v1/sites/{siteId}/modules` is one more endpoint on that same `Ago.Chat.Api` origin, not
+     * the FAQ knowledge base's own (`M2`'s own separate `ago-faq` origin). Needs [ActiveSiteSelection],
+     * the identical shape [provideSiteConsentDocumentsApi] above already threads it through for — this
+     * route too carries the site id in the URL itself.
+     */
+    @Provides
+    public fun provideModulesApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): ModulesApi = KtorModulesApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-228`: «Просмотр документа»'s own port — the same `config.apiBaseUrl`
