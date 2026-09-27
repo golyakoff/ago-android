@@ -2,10 +2,13 @@ package ago.chat.android.core.network.team
 
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInviteStatus
+import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
 import ago.chat.android.core.domain.team.OperatorTeamFailure
 import ago.chat.android.core.domain.team.OperatorTeamMember
 import ago.chat.android.core.domain.team.OperatorTeamResult
+import ago.chat.android.core.domain.team.RevokeInviteResult
 import ago.chat.android.core.domain.team.RoleSeatSummary
 import ago.chat.android.core.domain.team.SeatSummaryResult
 import ago.chat.android.core.network.InMemoryActiveSite
@@ -331,6 +334,175 @@ class KtorOperatorTeamApiTest {
                 CreateInviteResult.Failed(NetworkFailure.Unexpected),
                 api.createInvite(roleName = "Operator", email = "any@example.com"),
             )
+            assertEquals("no active site must never reach the network", 0, calls)
+        }
+
+    // --------------------------------------------- GET .../sites/{siteId}/operator-invites (`26-242`)
+
+    @Test
+    fun `the invite list is read with the current site id in the path, statuses mapped`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(siteId) { request ->
+                    requestedUrl = request.url.toString()
+                    respond(
+                        """
+                        {
+                          "invites": [
+                            {"operatorInviteId":"inv-1","email":"a@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null},
+                            {"operatorInviteId":"inv-2","email":"b@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"SendFailed","smtpErrorCode":"550"},
+                            {"operatorInviteId":"inv-3","email":"c@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Revoked","smtpErrorCode":null},
+                            {"operatorInviteId":"inv-4","email":"d@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Redeemed","smtpErrorCode":null},
+                            {"operatorInviteId":"inv-5","email":"e@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Expired","smtpErrorCode":null}
+                          ]
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.listInvites() as OperatorInvitesResult.Loaded
+
+            assertEquals(
+                listOf(
+                    OperatorInviteStatus.Sent,
+                    OperatorInviteStatus.SendFailed,
+                    OperatorInviteStatus.Revoked,
+                    OperatorInviteStatus.Redeemed,
+                    OperatorInviteStatus.Expired,
+                ),
+                result.invites.map { it.status },
+            )
+            assertEquals("550", result.invites[1].smtpErrorCode)
+            assertEquals("2026-09-20T10:00:00Z", result.invites[0].createdAt)
+            assertEquals("$baseUrl/api/v1/sites/$siteId/operator-invites", requestedUrl)
+        }
+
+    @Test
+    fun `an empty invite list is Loaded with no entries`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"invites":[]}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(OperatorInvitesResult.Loaded(emptyList()), api.listInvites())
+        }
+
+    @Test
+    fun `an unrecognised status member fails the read as Unexpected, never a silent fallback`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"invites":[{"operatorInviteId":"x","email":"x@example.com","createdAt":"2026-09-20T10:00:00Z","expiresAt":"2026-09-27T10:00:00Z","status":"SomethingNew","smtpErrorCode":null}]}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+        }
+
+    @Test
+    fun `a 200 that dropped the invite-list shape is Unexpected, never an empty list`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"somethingElseEntirely":true}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+        }
+
+    @Test
+    fun `a 5xx on the invite-list read is Unexpected`() =
+        runTest {
+            val api = apiFor(siteId) { respondError(HttpStatusCode.ServiceUnavailable) }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+        }
+
+    @Test
+    fun `a dropped connection on the invite-list read is Transport`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Transport), api.listInvites())
+        }
+
+    @Test
+    fun `no active site on the invite-list read is Unexpected, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+            assertEquals("no active site must never reach the network", 0, calls)
+        }
+
+    // ------------------------ POST .../operator-invites/{operatorInviteId}/revoke (`26-242`)
+
+    @Test
+    fun `a 204 revoke is Revoked, posted to the revoke path`() =
+        runTest {
+            var requested: Pair<HttpMethod, String>? = null
+            val api =
+                apiFor(siteId) { request ->
+                    requested = request.method to request.url.toString()
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(RevokeInviteResult.Revoked, api.revokeInvite("inv-9"))
+            assertEquals(HttpMethod.Post to "$baseUrl/api/v1/sites/$siteId/operator-invites/inv-9/revoke", requested)
+        }
+
+    @Test
+    fun `a non-2xx revoke is Unexpected - the server's own already-redeemed guard is the real check`() =
+        runTest {
+            val api = apiFor(siteId) { respondError(HttpStatusCode.Conflict) }
+
+            assertEquals(RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected), api.revokeInvite("inv-9"))
+        }
+
+    @Test
+    fun `a dropped connection on revoke is Transport`() =
+        runTest {
+            val api = apiFor(siteId) { throw IOException("unexpected end of stream") }
+
+            assertEquals(RevokeInviteResult.Failed(OperatorTeamFailure.Transport), api.revokeInvite("inv-9"))
+        }
+
+    @Test
+    fun `no active site on revoke is Unexpected, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(RevokeInviteResult.Failed(OperatorTeamFailure.Unexpected), api.revokeInvite("inv-9"))
             assertEquals("no active site must never reach the network", 0, calls)
         }
 

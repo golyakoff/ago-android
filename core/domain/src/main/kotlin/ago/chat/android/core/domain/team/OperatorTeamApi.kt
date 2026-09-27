@@ -55,6 +55,95 @@ public interface OperatorTeamApi {
         roleName: String,
         email: String,
     ): CreateInviteResult
+
+    /**
+     * `26-242`: `GET /api/v1/sites/{siteId}/operator-invites` — every invite the site has ever sent,
+     * each with the status the server computed for it ([OperatorInviteListItem]). A read, so it carries
+     * the same two-arm [OperatorTeamFailure] the two roster reads above already do, never
+     * [CreateInviteResult]'s three-arm write shape: there is nothing here for the server to *refuse*
+     * with a `detail`, only a list to hand back or a call that did not answer usefully. Gated
+     * server-side by the identical `site:manage_operators` this whole «Люди» segment is already only
+     * reachable behind (`ListOperatorInvitesHandler`), so this method needs no permission argument of
+     * its own — a caller who could not manage operators never reaches the screen that calls it.
+     */
+    public suspend fun listInvites(): OperatorInvitesResult
+
+    /**
+     * `26-242`: `POST /api/v1/sites/{siteId}/operator-invites/{operatorInviteId}/revoke` — `204 No
+     * Content` on success. The server's own `RevokeOperatorInviteHandler` is the load-bearing guard for
+     * "only a still-pending invite can be revoked" (an already-redeemed or already-revoked invite is
+     * refused there); this app only *offers* the action on a revocable row ([OperatorInviteListItem.isRevocable])
+     * as a courtesy, never as the real check. Either the revoke took effect or it did not, so this
+     * carries the same two-arm [OperatorTeamFailure] a read does rather than a `detail`-bearing refusal
+     * shape — the caller re-reads [listInvites] on success and shows the row's new status instead.
+     */
+    public suspend fun revokeInvite(operatorInviteId: String): RevokeInviteResult
+}
+
+/**
+ * `26-242`: one row of the sent-invite list — mirrors `ago-console`'s own `OperatorInviteListEntryDto`
+ * (`operatorTeamApi.ts`) field for field, which is itself the real, verified shape of
+ * `ago-chat`'s `OperatorInviteListEntryResponse`. [createdAt]/[expiresAt] are the raw ISO-8601 instants
+ * the server sent (`adr/0011`, `date-and-time.md`): the screen renders them in the device zone, this
+ * port never reformats them. There is no role on this row: `26-241` added multi-role to invite
+ * *creation*, but the list read store and its response were not extended to carry roles, so mirroring
+ * the real contract means this row has none to show.
+ */
+public data class OperatorInviteListItem(
+    val operatorInviteId: String,
+    val email: String,
+    val createdAt: String,
+    val expiresAt: String,
+    val status: OperatorInviteStatus,
+    /** Present only when [status] is [OperatorInviteStatus.SendFailed] — the SMTP relay's own error
+     * code, shown appended to the "delivery failed" wording exactly as `OperatorsTeamPage` shows it. */
+    val smtpErrorCode: String?,
+)
+
+/**
+ * `26-242`: the five states `ago-chat`'s own `OperatorInviteListStatus` computes and sends as its enum
+ * member name (`api-design.md`: "clients branch on the member, never on a message"). An unrecognised
+ * name is treated by the adapter as a shape mismatch (the whole read fails as
+ * [OperatorTeamFailure.Unexpected]), the same posture every other wire shape in `:core:network` already
+ * takes — never silently coerced to a fallback that would mislabel a real invite.
+ */
+public enum class OperatorInviteStatus {
+    Sent,
+    SendFailed,
+    Revoked,
+    Redeemed,
+    Expired,
+
+    ;
+
+    /** Only a still-pending invite can be revoked — the same `row.status === "Sent" || "SendFailed"`
+     * predicate `OperatorsTeamPage` uses to decide whether to draw the revoke action at all. A revoked,
+     * redeemed or expired invite is terminal and the button is hidden (hide-not-disable, `adr/0151`). */
+    public val isRevocable: Boolean
+        get() = this == Sent || this == SendFailed
+}
+
+/** What listing the site's invites came back with — the same two-arm read shape [OperatorTeamResult]
+ * and [SeatSummaryResult] already carry, for the identical reason. */
+public sealed interface OperatorInvitesResult {
+    public data class Loaded(
+        val invites: List<OperatorInviteListItem>,
+    ) : OperatorInvitesResult
+
+    public data class Failed(
+        val reason: OperatorTeamFailure,
+    ) : OperatorInvitesResult
+}
+
+/** What revoking one invite came back with. A write that cannot be *refused* with words (the server
+ * either applied it or answered a bare non-2xx), so it needs no `detail`-bearing arm — just took-effect
+ * or did-not, the latter classified into the same [OperatorTeamFailure] a read uses. */
+public sealed interface RevokeInviteResult {
+    public data object Revoked : RevokeInviteResult
+
+    public data class Failed(
+        val reason: OperatorTeamFailure,
+    ) : RevokeInviteResult
 }
 
 /**
