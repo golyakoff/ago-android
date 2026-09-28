@@ -3,6 +3,7 @@ package ago.chat.android.core.network.team
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInviteEffectiveStatus
 import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorInvitesResult
 import ago.chat.android.core.domain.team.OperatorRoleSeat
@@ -86,6 +87,33 @@ class KtorOperatorTeamApiTest {
                 result,
             )
             assertEquals("$baseUrl/api/v1/sites/$siteId/operators", requestedUrl)
+        }
+
+    @Test
+    fun `26-263 - joinedAt round-trips, and is null for the founder`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """
+                        {
+                          "operators": [
+                            {"operatorId":"op-1","displayName":"Аня","email":"anya@example.com",
+                             "roles":[{"roleName":"Operator","holdsSeat":true}],"joinedAt":"2026-09-21T08:00:00Z"},
+                            {"operatorId":"op-founder","displayName":"Основатель","email":"f@example.com",
+                             "roles":[{"roleName":"Admin","holdsSeat":true}]}
+                          ]
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val members = (api.fetchTeam() as OperatorTeamResult.Loaded).members
+
+            assertEquals("2026-09-21T08:00:00Z", members[0].joinedAt)
+            assertEquals("the founder was never invited, so has no join instant", null, members[1].joinedAt)
         }
 
     @Test
@@ -407,15 +435,20 @@ class KtorOperatorTeamApiTest {
                         {
                           "invites": [
                             {"operatorInviteId":"inv-1","email":"a@example.com","createdAt":"2026-09-20T10:00:00Z",
-                             "expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null},
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null,
+                             "roles":["Operator"],"effectiveStatus":"Pending","redeemedAt":null,"removedAt":null},
                             {"operatorInviteId":"inv-2","email":"b@example.com","createdAt":"2026-09-20T10:00:00Z",
-                             "expiresAt":"2026-09-27T10:00:00Z","status":"SendFailed","smtpErrorCode":"550"},
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"SendFailed","smtpErrorCode":"550",
+                             "roles":["Operator","Admin"],"effectiveStatus":"Pending","redeemedAt":null,"removedAt":null},
                             {"operatorInviteId":"inv-3","email":"c@example.com","createdAt":"2026-09-20T10:00:00Z",
-                             "expiresAt":"2026-09-27T10:00:00Z","status":"Revoked","smtpErrorCode":null},
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Revoked","smtpErrorCode":null,
+                             "roles":["Admin"],"effectiveStatus":"Revoked","redeemedAt":null,"removedAt":null},
                             {"operatorInviteId":"inv-4","email":"d@example.com","createdAt":"2026-09-20T10:00:00Z",
-                             "expiresAt":"2026-09-27T10:00:00Z","status":"Redeemed","smtpErrorCode":null},
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Redeemed","smtpErrorCode":null,
+                             "roles":["Operator"],"effectiveStatus":"InTeam","redeemedAt":"2026-09-21T08:00:00Z","removedAt":null},
                             {"operatorInviteId":"inv-5","email":"e@example.com","createdAt":"2026-09-20T10:00:00Z",
-                             "expiresAt":"2026-09-27T10:00:00Z","status":"Expired","smtpErrorCode":null}
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Expired","smtpErrorCode":null,
+                             "roles":[],"effectiveStatus":"Expired","redeemedAt":null,"removedAt":null}
                           ]
                         }
                         """.trimIndent(),
@@ -442,6 +475,81 @@ class KtorOperatorTeamApiTest {
         }
 
     @Test
+    fun `26-263 - the three new invite fields and the role set round-trip verbatim`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """
+                        {
+                          "invites": [
+                            {"operatorInviteId":"inv-1","email":"a@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null,
+                             "roles":["Operator","Admin"],"effectiveStatus":"Pending","redeemedAt":null,"removedAt":null},
+                            {"operatorInviteId":"inv-2","email":"b@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Redeemed","smtpErrorCode":null,
+                             "roles":["Operator"],"effectiveStatus":"Removed",
+                             "redeemedAt":"2026-09-21T08:00:00Z","removedAt":"2026-09-25T12:00:00Z","revokedAt":null},
+                            {"operatorInviteId":"inv-3","email":"c@example.com","createdAt":"2026-09-20T10:00:00Z",
+                             "expiresAt":"2026-09-27T10:00:00Z","status":"Revoked","smtpErrorCode":null,
+                             "roles":["Admin"],"effectiveStatus":"Revoked",
+                             "redeemedAt":null,"removedAt":null,"revokedAt":"2026-09-24T09:30:00Z"}
+                          ]
+                        }
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val invites = (api.listInvites() as OperatorInvitesResult.Loaded).invites
+
+            assertEquals(listOf("Operator", "Admin"), invites[0].roles)
+            assertEquals(OperatorInviteEffectiveStatus.Pending, invites[0].effectiveStatus)
+            assertEquals(null, invites[0].redeemedAt)
+            assertEquals(null, invites[0].removedAt)
+            assertEquals(null, invites[0].revokedAt)
+
+            assertEquals(OperatorInviteEffectiveStatus.Removed, invites[1].effectiveStatus)
+            assertEquals("2026-09-21T08:00:00Z", invites[1].redeemedAt)
+            assertEquals("2026-09-25T12:00:00Z", invites[1].removedAt)
+            assertEquals(null, invites[1].revokedAt)
+
+            assertEquals(OperatorInviteEffectiveStatus.Revoked, invites[2].effectiveStatus)
+            assertEquals("2026-09-24T09:30:00Z", invites[2].revokedAt)
+        }
+
+    @Test
+    fun `26-263 - an unrecognised effectiveStatus member fails the read as Unexpected, never a fallback`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"invites":[{"operatorInviteId":"x","email":"x@example.com","createdAt":"2026-09-20T10:00:00Z","expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null,"roles":[],"effectiveStatus":"BrandNewState","redeemedAt":null,"removedAt":null}]}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+        }
+
+    @Test
+    fun `26-263 - a missing effectiveStatus fails the read as Unexpected, never a silently defaulted status`() =
+        runTest {
+            val api =
+                apiFor(siteId) {
+                    respond(
+                        """{"invites":[{"operatorInviteId":"x","email":"x@example.com","createdAt":"2026-09-20T10:00:00Z","expiresAt":"2026-09-27T10:00:00Z","status":"Sent","smtpErrorCode":null,"roles":[]}]}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(OperatorInvitesResult.Failed(OperatorTeamFailure.Unexpected), api.listInvites())
+        }
+
+    @Test
     fun `an empty invite list is Loaded with no entries`() =
         runTest {
             val api =
@@ -462,7 +570,7 @@ class KtorOperatorTeamApiTest {
             val api =
                 apiFor(siteId) {
                     respond(
-                        """{"invites":[{"operatorInviteId":"x","email":"x@example.com","createdAt":"2026-09-20T10:00:00Z","expiresAt":"2026-09-27T10:00:00Z","status":"SomethingNew","smtpErrorCode":null}]}""",
+                        """{"invites":[{"operatorInviteId":"x","email":"x@example.com","createdAt":"2026-09-20T10:00:00Z","expiresAt":"2026-09-27T10:00:00Z","status":"SomethingNew","smtpErrorCode":null,"roles":[],"effectiveStatus":"Pending","redeemedAt":null,"removedAt":null}]}""",
                         HttpStatusCode.OK,
                         headersOf("Content-Type", ContentType.Application.Json.toString()),
                     )

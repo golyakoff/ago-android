@@ -138,13 +138,22 @@ public interface OperatorTeamApi {
 }
 
 /**
- * `26-242`: one row of the sent-invite list — mirrors `ago-console`'s own `OperatorInviteListEntryDto`
- * (`operatorTeamApi.ts`) field for field, which is itself the real, verified shape of
- * `ago-chat`'s `OperatorInviteListEntryResponse`. [createdAt]/[expiresAt] are the raw ISO-8601 instants
- * the server sent (`adr/0011`, `date-and-time.md`): the screen renders them in the device zone, this
- * port never reformats them. There is no role on this row: `26-241` added multi-role to invite
- * *creation*, but the list read store and its response were not extended to carry roles, so mirroring
- * the real contract means this row has none to show.
+ * `26-242`: one row of the sent-invite list — mirrors `ago-chat`'s own `OperatorInviteListEntryResponse`
+ * (`OperatorInviteEndpoints`) field for field. [createdAt]/[expiresAt]/[redeemedAt]/[removedAt] are the
+ * raw ISO-8601 instants the server sent (`adr/0011`, `date-and-time.md`): the screen renders them in the
+ * device zone, this port never reformats them.
+ *
+ * `26-258`: [roles] is the role SET this invite grants, as the role names (`["Operator", "Admin"]`) —
+ * the read-side mirror of the multi-role write `26-241` added to creation, so a still-pending invite row
+ * can show which role(s) it will confer. A single-role invite is a one-element list, an invite with no
+ * roles reads as an empty list; the server orders them alphabetically so the row is stable across reads.
+ *
+ * `26-263`: [effectiveStatus] is the effective team-membership status the «Команда → Люди» page drives
+ * its sections and pills off — a **second, distinct** status from [status] (the invite's delivery
+ * lifecycle, unchanged, still carrying the SMTP-failure wording where the screen uses it). [redeemedAt]
+ * is when the invite was redeemed (the «Принято» line), `null` while still pending; [removedAt] is the
+ * redeemed operator's own removal instant (the «Удалено» line), non-`null` only when [effectiveStatus]
+ * is [OperatorInviteEffectiveStatus.Removed].
  */
 public data class OperatorInviteListItem(
     val operatorInviteId: String,
@@ -155,7 +164,38 @@ public data class OperatorInviteListItem(
     /** Present only when [status] is [OperatorInviteStatus.SendFailed] — the SMTP relay's own error
      * code, shown appended to the "delivery failed" wording exactly as `OperatorsTeamPage` shows it. */
     val smtpErrorCode: String?,
+    /** `26-258`: the role name(s) this invite grants (`["Operator"]`, `["Operator", "Admin"]`, …),
+     * alphabetically ordered server-side; empty when the invite grants none. */
+    val roles: List<String>,
+    /** `26-263`: the effective team-membership status the «Люди» page sections and pills read from. */
+    val effectiveStatus: OperatorInviteEffectiveStatus,
+    /** `26-263`: when the invite was redeemed («Принято»); `null` while still pending. */
+    val redeemedAt: String?,
+    /** `26-263`: the redeemed operator's removal instant («Удалено»); non-`null` only when
+     * [effectiveStatus] is [OperatorInviteEffectiveStatus.Removed]. */
+    val removedAt: String?,
+    /** `26-263`: when the invite was revoked («Отозвано»); non-`null` only when [effectiveStatus] is
+     * [OperatorInviteEffectiveStatus.Revoked]. `null` from an older backend that does not send it yet —
+     * the screen then shows the «Отозвано» state with no date rather than substituting another instant. */
+    val revokedAt: String?,
 )
+
+/**
+ * `26-263`: the five effective team-membership states `ago-chat`'s own `OperatorInviteEffectiveStatus`
+ * computes and sends as its enum member name (`api-design.md`: "clients branch on the member, never on a
+ * message"). A **separate** enum from [OperatorInviteStatus] (the delivery lifecycle) — the «Люди» page
+ * partitions the invite list into sections off *this* status: [Pending] → «Приглашения», [InTeam] →
+ * shown via the roster (never in the invite list), [Removed]/[Revoked]/[Expired] → «Архив». An
+ * unrecognised name fails the whole read as [OperatorTeamFailure.Unexpected], the identical
+ * shape-mismatch posture [OperatorInviteStatus] takes.
+ */
+public enum class OperatorInviteEffectiveStatus {
+    Pending,
+    InTeam,
+    Removed,
+    Revoked,
+    Expired,
+}
 
 /**
  * `26-242`: the five states `ago-chat`'s own `OperatorInviteListStatus` computes and sends as its enum
@@ -306,6 +346,10 @@ public data class OperatorTeamMember(
     /** Plural for the identical `25-170` reason [OperatorRoleSeat] itself states — a founder holding
      * both seeded roles shows two seat facts, never one. */
     val roles: List<OperatorRoleSeat>,
+    /** `26-263`: the redeemed instant of the invite this member joined through (the «Принято» line on
+     * their card), the raw ISO-8601 the server sent. `null` for the founder — never invited, so there is
+     * no join instant to show; the card then shows just their roles. */
+    val joinedAt: String? = null,
 )
 
 /** What answering "who is on this site, and what are they holding" came back with. */

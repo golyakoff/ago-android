@@ -741,6 +741,37 @@ public object AgoIcons {
                 close()
             },
         )
+
+    /**
+     * `26-263`: the Команда `⋮` overflow's own «Пригласить» row, its [leadingIcon][androidx.compose.material3.DropdownMenuItem].
+     * The design source's own `i-user-plus` sprite (`ago-android-design/tokens.js`), transcribed verbatim
+     * — a single figure (head + shoulders) with a plus sign to its lower-right — the same "mirror the
+     * mockup's `i-*` symbol as its own [strokeIcon]" reasoning every other glyph in this family follows,
+     * rather than pulling in `material-icons-extended` for one `PersonAdd`. Four subpaths (the head, the
+     * shoulders arc, and the plus's two strokes) so no `close()`d shape bleeds its join into the next.
+     */
+    public val AddPerson: ImageVector =
+        strokeIcon(
+            "AgoAddPerson",
+            // <circle cx="9" cy="8" r="3.2"/>
+            { circle(centreX = 9f, centreY = 8f, radius = 3.2f) },
+            // M3 20c0-3.2 2.7-5.2 6-5.2 1.1 0 2.2.25 3.1.7
+            {
+                moveTo(3f, 20f)
+                curveToRelative(0f, -3.2f, 2.7f, -5.2f, 6f, -5.2f)
+                curveToRelative(1.1f, 0f, 2.2f, 0.25f, 3.1f, 0.7f)
+            },
+            // M17 11v6
+            {
+                moveTo(17f, 11f)
+                verticalLineToRelative(6f)
+            },
+            // M14 14h6
+            {
+                moveTo(14f, 14f)
+                horizontalLineToRelative(6f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */
