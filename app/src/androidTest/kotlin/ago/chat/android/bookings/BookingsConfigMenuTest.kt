@@ -60,6 +60,7 @@ class BookingsConfigMenuTest {
                 contactsState = null,
                 onRetryContacts = {},
                 onRevealContact = {},
+                onContactsSearchQueryChange = {},
                 servicesState = null,
                 onRetryServices = {},
                 onEditService = {},
