@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -64,10 +65,14 @@ class DeviceStorageDisclosureTest {
         // container until the row is composed rather than looking it up before it exists.
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
         // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
-        // `LazyColumn` and pushing «Справка» (the last `site:configure` Администрирование row) further down:
-        // let the scroll and the lazy (re)composition it triggers settle before asserting, rather than
-        // racing the assert against a node `performScrollToNode` has only just begun to lay out.
-        composeTestRule.waitForIdle()
+        // `LazyColumn` and pushing «Справка» (the last `site:configure` Администрирование row) further down.
+        // On a slow CI emulator a single `waitForIdle()` after the scroll still races the lazy (re)layout —
+        // the assert ran while «Справка» was only just being composed. A **bounded poll** waits for the
+        // node to actually appear (up to 5s) rather than settling once, the same shape
+        // `BackContractDialogsTabTest`'s own `waitUntil`/`onAllNodesWithText` guard already uses.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Справка").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Справка").assertExists()
     }
 
@@ -90,7 +95,12 @@ class DeviceStorageDisclosureTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
-        composeTestRule.waitForIdle()
+        // Bounded poll for the freshly-scrolled-to «Справка» before clicking it — the same slow-CI lazy
+        // (re)layout race the positive gating case above guards against, here ahead of a `performClick`
+        // rather than an `assertExists`.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Справка").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Справка").performClick()
 
         // The disclosure heading and the not-cookies warning are the top of the static screen.

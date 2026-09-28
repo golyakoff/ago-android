@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -78,10 +79,14 @@ class ConsentDocumentsGatingTest {
         // "item not yet laid out" case a bare `performScrollTo()` cannot handle.
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Документы согласий"))
         // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
-        // `LazyColumn` and pushing this already-deep Администрирование row further down: let the scroll and
-        // the lazy (re)composition it triggers settle before asserting, rather than racing the assert
-        // against a node that `performScrollToNode` has only just begun to lay out.
-        composeTestRule.waitForIdle()
+        // `LazyColumn` and pushing this already-deep Администрирование row further down. On a slow CI
+        // emulator a single `waitForIdle()` after the scroll still races the lazy (re)layout — the assert
+        // ran while «Документы согласий» was only just being composed. A **bounded poll** waits for the node
+        // to actually appear (up to 5s) rather than settling once, the same shape
+        // `BackContractDialogsTabTest`'s own `waitUntil`/`onAllNodesWithText` guard already uses.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Документы согласий").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Документы согласий").assertExists()
     }
 
