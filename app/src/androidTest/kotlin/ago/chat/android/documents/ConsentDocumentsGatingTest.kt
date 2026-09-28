@@ -69,6 +69,10 @@ class ConsentDocumentsGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
+        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that even the
+        // «Администрирование» section header now starts below the initial viewport; a `LazyColumn` composes
+        // no semantics node for an unlaid item, so scroll the header into view before asserting it exists.
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Администрирование"))
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         // `MoreScreen`'s own list is a `LazyColumn` - with `site:configure` granted, the three extra
         // Автоматизация rows above push «Документы согласий» (the section's third and last row) below the
