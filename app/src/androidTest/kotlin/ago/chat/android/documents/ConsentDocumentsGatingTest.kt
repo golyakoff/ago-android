@@ -69,11 +69,12 @@ class ConsentDocumentsGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that even the
-        // «Администрирование» section header now starts below the initial viewport; a `LazyColumn` composes
-        // no semantics node for an unlaid item, so scroll the header into view before asserting it exists.
-        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Администрирование"))
-        composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
+        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that the deep
+        // Администрирование rows now start below the initial viewport; a `LazyColumn` composes no semantics
+        // node for an unlaid item, so drive the scroll container to «Документы согласий» itself (the gated
+        // row this test is about) rather than asserting an off-screen section header first. The
+        // `withoutSiteConfigure` case keeps the «Администрирование» header assertion, where the shorter list
+        // keeps it on screen.
         // `MoreScreen`'s own list is a `LazyColumn` - with `site:configure` granted, the three extra
         // Автоматизация rows above push «Документы согласий» (the section's third and last row) below the
         // initial viewport, so a lazy item that has never been composed has no semantics node at all yet
