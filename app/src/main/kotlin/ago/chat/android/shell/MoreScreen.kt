@@ -2,6 +2,7 @@ package ago.chat.android.shell
 
 import ago.chat.android.R
 import ago.chat.android.accountdeletion.AccountDeletionRoute
+import ago.chat.android.automation.AiReplyDraftRoute
 import ago.chat.android.automation.CannedResponsesRoute
 import ago.chat.android.automation.OfflineAutoReplyRoute
 import ago.chat.android.automation.TagsRoute
@@ -156,6 +157,11 @@ internal fun MoreScreen(
             // way `26-192`/`C5` replaced «Автоответ вне смены»'s. Back returns to the Ещё list (clause 2)
             // via the same `openRowId = null` every drill-in uses.
             AUTOMATION_QUICK_REPLIES_ROW_ID -> CannedResponsesRoute(onBack = { openRowId = null })
+            // `26-246`: Автоматизация → «ИИ-подсказки» - the AI reply-draft on/off switch, mirroring
+            // `ago-console`'s own `AiReplyDraftPage`. The last unbuilt Автоматизация row named in
+            // `docs/design/tenant-canned-tags-android.md` §3.2's own order. Back returns to the Ещё list
+            // (clause 2) via the same `openRowId = null` every drill-in uses.
+            AUTOMATION_AI_SUGGESTIONS_ROW_ID -> AiReplyDraftRoute(onBack = { openRowId = null })
             // `26-199`/`M1`: Автоматизация → «База знаний» - the read-only enabled-module list
             // (`docs/design/tenant-modules-restrictions-android.md` §2.1; `adr/0151` removed every
             // tenant-facing module write, so this row is a status read, not a form). Back returns to the
@@ -306,6 +312,7 @@ internal const val CHANNELS_TELEGRAM_ROW_ID: String = "channels-telegram"
 internal const val CHANNELS_VK_ROW_ID: String = "channels-vk"
 internal const val CHANNELS_EMAIL_ROW_ID: String = "channels-email"
 internal const val AUTOMATION_QUICK_REPLIES_ROW_ID: String = "automation-quick-replies"
+internal const val AUTOMATION_AI_SUGGESTIONS_ROW_ID: String = "automation-ai-suggestions"
 internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hours"
 internal const val AUTOMATION_FAQ_ROW_ID: String = "automation-faq"
 internal const val AUTOMATION_TAGS_ROW_ID: String = "automation-tags"
@@ -406,6 +413,19 @@ internal fun buildMoreRows(
                 MoreRow(
                     id = AUTOMATION_QUICK_REPLIES_ROW_ID,
                     labelRes = R.string.more_automation_quick_replies_row,
+                    section = MoreSectionId.Automation,
+                ),
+            )
+            // `26-246`: «ИИ-подсказки» takes its own place directly after «Готовые ответы» and before
+            // «Автоответ вне смены» - the exact slot `docs/design/tenant-canned-tags-android.md` §3.2's own
+            // order names (Готовые ответы · ИИ-подсказки · Автоответ вне смены · База знаний · Метки), the
+            // one row that order had left unbuilt. Gated on `canConfigureSite` like every other real
+            // Автоматизация row - the same permission `ago-console`'s own `AiReplyDraftPage` gates
+            // `/automation/ai-suggestions` on.
+            add(
+                MoreRow(
+                    id = AUTOMATION_AI_SUGGESTIONS_ROW_ID,
+                    labelRes = R.string.more_automation_ai_suggestions_row,
                     section = MoreSectionId.Automation,
                 ),
             )

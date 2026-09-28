@@ -2,6 +2,7 @@ package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
 import ago.chat.android.core.domain.accountdeletion.AccountDeletionApi
+import ago.chat.android.core.domain.ai.AiReplyDraftApi
 import ago.chat.android.core.domain.analytics.BookingFunnelReportApi
 import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
@@ -48,6 +49,7 @@ import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleApi
 import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
 import ago.chat.android.core.network.accountdeletion.KtorAccountDeletionApi
+import ago.chat.android.core.network.ai.KtorAiReplyDraftApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
@@ -561,6 +563,20 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): OfflineAutoReplyApi = KtorOfflineAutoReplyApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-246`: the Автоматизация → «ИИ-подсказки» screen's own port — the same `config.apiBaseUrl`
+     * [provideOfflineAutoReplyApi] above reads, since `GET`/`POST /api/v1/sites/{siteId}/ai-add-on` is one
+     * more endpoint family on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection], the identical
+     * shape [provideOfflineAutoReplyApi] above already threads it through for — every route carries the
+     * site id in the URL itself.
+     */
+    @Provides
+    public fun provideAiReplyDraftApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): AiReplyDraftApi = KtorAiReplyDraftApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-220`: the Автоматизация → «Готовые ответы» screen's own port — the same `config.apiBaseUrl`

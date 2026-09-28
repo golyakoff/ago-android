@@ -750,6 +750,8 @@
     <string name="more_settings_row">Settings</string>
 
     <string name="more_automation_quick_replies_row">Canned responses</string>
+    <!-- `26-246`: "AI suggestions" — see the ru strings for the full note and row order. -->
+    <string name="more_automation_ai_suggestions_row">AI suggestions</string>
     <string name="more_automation_after_hours_row">Offline auto-reply</string>
     <!-- `26-199`/`M1`: "Knowledge base" — see the ru strings for the full note and row order. -->
     <string name="more_automation_faq_row">Knowledge base</string>
@@ -928,6 +930,21 @@
     <string name="automation_auto_reply_validation_reply_required">The rule for \"%1$s\" needs a reply.</string>
     <string name="automation_auto_reply_validation_keyword_too_long">A keyword cannot exceed %1$d characters.</string>
     <string name="automation_auto_reply_validation_reply_too_long">A reply cannot exceed %1$d characters.</string>
+
+    <!-- `26-246`: Automation → "AI suggestions" — the AI reply-draft on/off switch. See the ru strings
+         for the full note. -->
+    <string name="automation_ai_draft_intro">While you answer a visitor, AGO can suggest a draft reply based on the conversation. You always write the message that is sent — the draft on its own is never sent.</string>
+    <string name="automation_ai_draft_what_leaves_heading">What leaves this installation</string>
+    <string name="automation_ai_draft_what_leaves">A draft request sends this conversation\'s recent messages, as plain text, to YandexGPT — the provider named in the AI-features agreement. Nothing else is sent — no contact details, no attachments, no other conversations\' data.</string>
+    <string name="automation_ai_draft_not_purchased">This account has not enabled the AI module, so reply drafts are unavailable. Enabling and setting it up is done in the web console.</string>
+    <string name="automation_ai_draft_setup_incomplete">Before you can enable reply drafts, accept the AI-features agreement and make the lawful-basis declaration — that is done in the web console.</string>
+    <string name="automation_ai_draft_status_on">Enabled</string>
+    <string name="automation_ai_draft_status_off">Disabled</string>
+    <string name="automation_ai_draft_effective_from">Only conversations created from this moment on are sent: %1$s</string>
+    <string name="automation_ai_draft_shared_switch_note">This is the same switch as on the AI-features page. Turning it off here also stops the background categorisation of closed conversations.</string>
+    <string name="automation_ai_draft_enable_action">Enable reply drafts</string>
+    <string name="automation_ai_draft_disable_action">Disable reply drafts</string>
+    <string name="automation_ai_draft_saved">Saved</string>
 
     <string name="canned_responses_empty">No canned responses yet. Add the first one.</string>
     <string name="canned_responses_add_action">Add canned response</string>

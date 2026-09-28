@@ -1221,6 +1221,12 @@
          Администрирование has no prior mockup content, so these two are this item's own placeholder
          guess, left for review to correct (`docs/backlog/26-77-*.md`'s own Scope item 4). -->
     <string name="more_automation_quick_replies_row">Готовые ответы</string>
+    <!-- `26-246`: Автоматизация → «ИИ-подсказки» - the AI reply-draft on/off switch (`ago-console`'s own
+         `AiReplyDraftPage`). Directly after «Готовые ответы» and before «Автоответ вне смены»,
+         `docs/design/tenant-canned-tags-android.md` §3.2's own order (Готовые ответы · ИИ-подсказки ·
+         Автоответ вне смены · База знаний · Метки). One resource for both the Ещё row label and the
+         screen's own app-bar title, the same "one word, one string" shape the rows above establish. -->
+    <string name="more_automation_ai_suggestions_row">ИИ-подсказки</string>
     <string name="more_automation_after_hours_row">Автоответ вне смены</string>
     <!-- `26-199`/`M1`: Автоматизация's fourth real row - «База знаний», directly after «Автоответ вне
          смены» and before «Метки» - `docs/design/tenant-canned-tags-android.md` §3.2's own order in full
@@ -1498,6 +1504,30 @@
     <string name="automation_auto_reply_validation_reply_required">Правилу «%1$s» нужен ответ.</string>
     <string name="automation_auto_reply_validation_keyword_too_long">Ключевое слово не может превышать %1$d символов.</string>
     <string name="automation_auto_reply_validation_reply_too_long">Ответ не может превышать %1$d символов.</string>
+
+    <!-- `26-246` (`ago-console`'s own `AiReplyDraftPage`): Автоматизация → «ИИ-подсказки» - the AI
+         reply-draft on/off switch. One shared per-site switch, read and written by two console doors: this
+         reply-draft screen and the console's own AI-features page (`AiAddOnPage`, `25-04`), which is where
+         the add-on is bought and its terms accepted - not built in this app, so the two incomplete states
+         below are read-only notes rather than a control that would only be refused. Copy carried from
+         `AiReplyDraftPage`'s own `aiReplyDraft*` strings. -->
+    <string name="automation_ai_draft_intro">Пока вы отвечаете посетителю, AGO может предложить черновик ответа на основе переписки. Отправляемое сообщение всегда пишете вы сами - черновик сам по себе никогда не отправляется.</string>
+    <string name="automation_ai_draft_what_leaves_heading">Что покидает эту инсталляцию</string>
+    <string name="automation_ai_draft_what_leaves">Запрос черновика передаёт недавние сообщения этого диалога, в виде обычного текста, YandexGPT - поставщику, указанному в соглашении об ИИ-функциях. Больше ничего не передаётся - ни контактные данные, ни вложения, ни данные других диалогов.</string>
+    <!-- Shown when the account has not bought the AI add-on at all - `AiAddOnStatusDto.purchased` is false. -->
+    <string name="automation_ai_draft_not_purchased">Этот кабинет не подключил ИИ-модуль, поэтому черновики ответов недоступны. Подключение и настройка выполняются в веб-кабинете.</string>
+    <!-- Shown when the add-on is held but the agreement and the lawful-basis declaration are not both on
+         record yet - both are made in the web console (`AiAddOnPage`), not in this app. -->
+    <string name="automation_ai_draft_setup_incomplete">Прежде чем включить черновики ответов, примите соглашение об ИИ-функциях и сделайте заявление о законном основании - это делается в веб-кабинете.</string>
+    <string name="automation_ai_draft_status_on">Включено</string>
+    <string name="automation_ai_draft_status_off">Выключено</string>
+    <!-- %1$s is the device-zone date-time this screen formats from `effectiveFrom` - never a raw ISO
+         string, the identical choice `automation_modules_expires_at` makes for its own timestamp. -->
+    <string name="automation_ai_draft_effective_from">Передаются только диалоги, созданные с этого момента: %1$s</string>
+    <string name="automation_ai_draft_shared_switch_note">Это тот же переключатель, что и на странице ИИ-функций. Выключив его здесь, вы также останавливаете фоновую категоризацию завершённых диалогов.</string>
+    <string name="automation_ai_draft_enable_action">Включить черновики ответов</string>
+    <string name="automation_ai_draft_disable_action">Выключить черновики ответов</string>
+    <string name="automation_ai_draft_saved">Сохранено</string>
 
     <!-- `26-220` (`docs/design/tenant-canned-tags-android.md` §1): Автоматизация → «Готовые ответы» - the
          canned-response library editor. The screen's own app-bar title reuses
