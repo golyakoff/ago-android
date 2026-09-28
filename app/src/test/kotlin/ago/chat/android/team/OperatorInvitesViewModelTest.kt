@@ -3,6 +3,7 @@ package ago.chat.android.team
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInviteEffectiveStatus
 import ago.chat.android.core.domain.team.OperatorInviteListItem
 import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorInvitesResult
@@ -51,6 +52,7 @@ class OperatorInvitesViewModelTest {
         id: String,
         status: OperatorInviteStatus,
         email: String = "$id@example.com",
+        effectiveStatus: OperatorInviteEffectiveStatus = OperatorInviteEffectiveStatus.Pending,
     ) = OperatorInviteListItem(
         operatorInviteId = id,
         email = email,
@@ -58,6 +60,11 @@ class OperatorInvitesViewModelTest {
         expiresAt = "2026-09-27T10:00:00Z",
         status = status,
         smtpErrorCode = null,
+        roles = listOf("Operator"),
+        effectiveStatus = effectiveStatus,
+        redeemedAt = null,
+        removedAt = null,
+        revokedAt = null,
     )
 
     @Test

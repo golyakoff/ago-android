@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.identity.ActiveSiteSelection
 import ago.chat.android.core.domain.net.NetworkFailure
 import ago.chat.android.core.domain.team.ChangeOperatorRoleResult
 import ago.chat.android.core.domain.team.CreateInviteResult
+import ago.chat.android.core.domain.team.OperatorInviteEffectiveStatus
 import ago.chat.android.core.domain.team.OperatorInviteListItem
 import ago.chat.android.core.domain.team.OperatorInviteStatus
 import ago.chat.android.core.domain.team.OperatorInvitesResult
@@ -351,13 +352,15 @@ private data class OperatorRoleSeatWireDto(
     val holdsSeat: Boolean,
 )
 
-/** `operatorTeamApi.ts`'s own `OperatorTeamMemberDto`. */
+/** `ago-chat`'s own `OperatorTeamMemberDto`. `26-263`: [joinedAt] is the redeemed instant of the invite
+ * this member joined through, nullable and defaulted — `null` for the founder (never invited). */
 @Serializable
 private data class OperatorTeamMemberWireDto(
     val operatorId: String,
     val displayName: String? = null,
     val email: String? = null,
     val roles: List<OperatorRoleSeatWireDto> = emptyList(),
+    val joinedAt: String? = null,
 )
 
 /**
@@ -474,6 +477,7 @@ private fun OperatorTeamMemberWireDto.toDomain() =
         displayName = displayName,
         email = email,
         roles = roles.map { it.toDomain() },
+        joinedAt = joinedAt,
     )
 
 private fun RoleSeatAssignmentSummaryWireDto.toDomain() =
@@ -492,8 +496,26 @@ private enum class OperatorInviteStatusWireDto {
     Expired,
 }
 
-/** `operatorTeamApi.ts`'s own `OperatorInviteListEntryDto`. [smtpErrorCode] is nullable and present only
- * for a [OperatorInviteStatusWireDto.SendFailed] row. */
+/** `26-263`: the effective team-membership status `ago-chat`'s own `OperatorInviteEffectiveStatus` sends
+ * as its enum member name — a **second, distinct** status from [OperatorInviteStatusWireDto] (the
+ * delivery lifecycle). An unrecognised member fails deserialisation, which the read's own `catch` turns
+ * into [OperatorTeamFailure.Unexpected] — the identical shape-mismatch posture [OperatorInviteStatusWireDto]
+ * takes, never a silent fallback that would mis-section a real invite. */
+@Serializable
+private enum class OperatorInviteEffectiveStatusWireDto {
+    Pending,
+    InTeam,
+    Removed,
+    Revoked,
+    Expired,
+}
+
+/** `ago-chat`'s own `OperatorInviteListEntryResponse`. [smtpErrorCode] is nullable and present only for a
+ * [OperatorInviteStatusWireDto.SendFailed] row. `26-258`: [roles] is the invite's granted role set,
+ * always present server-side (`[]` for none) but defaulted here for robustness against an older payload.
+ * `26-263`: [effectiveStatus] is required (a `200` missing it is a shape mismatch, caught like any
+ * other); [redeemedAt]/[removedAt] are nullable ISO instants, present only where the effective status
+ * warrants them. */
 @Serializable
 private data class OperatorInviteListEntryWireDto(
     val operatorInviteId: String,
@@ -502,6 +524,11 @@ private data class OperatorInviteListEntryWireDto(
     val expiresAt: String,
     val status: OperatorInviteStatusWireDto,
     val smtpErrorCode: String? = null,
+    val roles: List<String> = emptyList(),
+    val effectiveStatus: OperatorInviteEffectiveStatusWireDto,
+    val redeemedAt: String? = null,
+    val removedAt: String? = null,
+    val revokedAt: String? = null,
 )
 
 /** `operatorTeamApi.ts`'s own `ListOperatorInvitesResponseDto`. [invites] carries no default, for the
@@ -521,6 +548,15 @@ private fun OperatorInviteStatusWireDto.toDomain(): OperatorInviteStatus =
         OperatorInviteStatusWireDto.Expired -> OperatorInviteStatus.Expired
     }
 
+private fun OperatorInviteEffectiveStatusWireDto.toDomain(): OperatorInviteEffectiveStatus =
+    when (this) {
+        OperatorInviteEffectiveStatusWireDto.Pending -> OperatorInviteEffectiveStatus.Pending
+        OperatorInviteEffectiveStatusWireDto.InTeam -> OperatorInviteEffectiveStatus.InTeam
+        OperatorInviteEffectiveStatusWireDto.Removed -> OperatorInviteEffectiveStatus.Removed
+        OperatorInviteEffectiveStatusWireDto.Revoked -> OperatorInviteEffectiveStatus.Revoked
+        OperatorInviteEffectiveStatusWireDto.Expired -> OperatorInviteEffectiveStatus.Expired
+    }
+
 private fun OperatorInviteListEntryWireDto.toDomain() =
     OperatorInviteListItem(
         operatorInviteId = operatorInviteId,
@@ -529,4 +565,9 @@ private fun OperatorInviteListEntryWireDto.toDomain() =
         expiresAt = expiresAt,
         status = status.toDomain(),
         smtpErrorCode = smtpErrorCode,
+        roles = roles,
+        effectiveStatus = effectiveStatus.toDomain(),
+        redeemedAt = redeemedAt,
+        removedAt = removedAt,
+        revokedAt = revokedAt,
     )

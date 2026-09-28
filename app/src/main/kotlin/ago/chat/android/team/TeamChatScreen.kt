@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.core.network.realtime.TeamMessageDto
 import ago.chat.android.ui.components.AccountAvatarAction
+import ago.chat.android.ui.components.ScrimmedDropdownMenu
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
@@ -24,10 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -40,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,10 +103,17 @@ public fun TeamRoute(
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     chatViewModel: TeamChatViewModel = hiltViewModel(),
-    peopleContent: @Composable () -> Unit = { PeopleRoute() },
+    peopleContent: @Composable (showInviteSheet: Boolean, onDismissInviteSheet: () -> Unit) -> Unit =
+        { showInviteSheet, onDismissInviteSheet ->
+            PeopleRoute(showInviteSheet = showInviteSheet, onDismissInviteSheet = onDismissInviteSheet)
+        },
 ) {
     val chatState by chatViewModel.state.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableStateOf(TeamTab.Communication) }
+    // `26-263`: «Пригласить» moved off an inline button into the app-bar `⋮` overflow ([TeamScreen] owns
+    // the bar), so whether the invite sheet is open is hoisted here — above both the overflow that opens
+    // it and [PeopleRoute] that hosts it (and keeps the one-shot invite link alive across a relaunch).
+    var showInviteSheet by rememberSaveable { mutableStateOf(false) }
 
     TeamScreen(
         canManageOperators = canManageOperators,
@@ -115,7 +126,10 @@ public fun TeamRoute(
         onSend = chatViewModel::sendClicked,
         onRetrySend = chatViewModel::retrySend,
         onDismissSendRefusal = chatViewModel::dismissSendRefusal,
-        peopleContent = peopleContent,
+        // Only offered where «Люди» is reachable at all — an operator without `site:manage_operators`
+        // sees no segmented control and no overflow invite (hide, don't disable).
+        onInvitePeople = if (canManageOperators) ({ showInviteSheet = true }) else null,
+        peopleContent = { peopleContent(showInviteSheet) { showInviteSheet = false } },
         hubConnectionState = hubConnectionState,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
@@ -158,6 +172,7 @@ internal fun TeamScreen(
     onRetrySend: () -> Unit,
     onDismissSendRefusal: () -> Unit,
     peopleContent: @Composable () -> Unit,
+    onInvitePeople: (() -> Unit)? = null,
     hubConnectionState: OperatorHubConnectionState = chatState.hubConnectionState,
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
@@ -172,6 +187,12 @@ internal fun TeamScreen(
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.nav_team)) },
                     actions = {
+                        // `26-263`: the «Пригласить» overflow is drawn only on the «Люди» segment (the one
+                        // it acts on) and only where inviting is possible at all ([onInvitePeople] is
+                        // `null` otherwise) — the same hide-not-disable rule the segmented control follows.
+                        if (!showChat && onInvitePeople != null) {
+                            TeamPeopleOverflowMenu(onInvite = onInvitePeople)
+                        }
                         AccountAvatarAction(
                             displayName = operatorDisplayName,
                             email = operatorEmail,
@@ -248,6 +269,38 @@ private fun TeamTab.labelRes(): Int =
         TeamTab.Communication -> R.string.team_tab_communication
         TeamTab.People -> R.string.team_tab_people
     }
+
+/**
+ * `26-263`: Команда's own `⋮` — one item, «Пригласить», the invite entry point the approved design moved
+ * off an inline button and into the app-bar overflow (`ago-android-design/team.html`). Consumes the app's
+ * own [ScrimmedDropdownMenu] (never a bare `DropdownMenu`, so it dims behind like every other menu) and
+ * the [AnalyticsReportsOverflowMenu]'s own three decisions restated: [AgoIcons.MoreVertical] trigger, a
+ * plain `remember` for `expanded` (a menu left open across process death is not worth restoring), and the
+ * menu closed *before* the callback runs. [AgoIcons.AddPerson] is the row's leading glyph, matching how
+ * every other overflow item in the app draws one.
+ */
+@Composable
+private fun TeamPeopleOverflowMenu(onInvite: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { expanded = true }) {
+        Icon(
+            imageVector = AgoIcons.MoreVertical,
+            contentDescription = stringResource(R.string.people_overflow_menu_action),
+        )
+    }
+
+    ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(text = stringResource(R.string.people_invite_button)) },
+            leadingIcon = { Icon(imageVector = AgoIcons.AddPerson, contentDescription = null) },
+            onClick = {
+                expanded = false
+                onInvite()
+            },
+        )
+    }
+}
 
 /**
  * `26-54`'s own room content — banners, then whichever of loading/error/message-list applies. Lifted

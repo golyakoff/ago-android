@@ -312,19 +312,12 @@
     <string name="people_invite_copied_label">Copied to clipboard.</string>
     <string name="people_invite_done_button">Done</string>
 
-    <!-- `26-242`: sent invites listed beneath the roster on Люди, with revoke. Wording follows
-         `ago-console`'s own `operatorsTeamInvite*` strings; `people_invite_status_send_failed` is a
-         prefix the SMTP error code is appended to. There is no role on an invite row: `26-241` added
-         multi-role to creation only, not the list read - this mirrors the real contract. -->
+    <!-- `26-242`: sent invites on Люди, with revoke. `people_invite_status_send_failed` is a prefix the
+         SMTP error code is appended to. `26-263`: `people_invite_status_revoked`/`_expired` double as the
+         archive pill labels (`InviteArchiveKind`); `people_invites_list_title` heads the «Invites» section. -->
     <string name="people_invites_list_title">Invites</string>
-    <!-- `%1$s` - date and time in the device's zone. -->
-    <string name="people_invite_sent_label">Sent: %1$s</string>
-    <!-- `%1$s` - date and time in the device's zone. -->
-    <string name="people_invite_expires_label">Expires: %1$s</string>
-    <string name="people_invite_status_sent">Sent</string>
     <string name="people_invite_status_send_failed">Delivery failed - SMTP error code:</string>
     <string name="people_invite_status_revoked">Revoked</string>
-    <string name="people_invite_status_redeemed">Redeemed</string>
     <string name="people_invite_status_expired">Expired</string>
     <string name="people_invite_revoke_button">Revoke</string>
     <string name="people_invite_revoke_dialog_title">Revoke this invite?</string>
@@ -352,6 +345,23 @@
     <string name="people_remove_dialog_body">%1$s: any conversation currently assigned to them is released back to the waiting queue right away. Their history stays intact, but the removal itself cannot be undone.</string>
     <string name="people_remove_confirm_button">Remove</string>
     <string name="people_write_last_manager">This site must always have at least one operator who can manage the team. Grant that permission to another colleague first.</string>
+
+    <!-- `26-263`: «Команда → Люди» reworked into three sections (active users, invites, a collapsible
+         archive), driven off `effectiveStatus` (not the delivery status). «Invite» moved into the app-bar
+         `⋮` overflow. `%1$s` in the date hints is a full date in the device's zone (e.g. "28 September
+         2026"). -->
+    <string name="people_active_users_title">Active users</string>
+    <string name="people_archive_title">Archive</string>
+    <string name="people_archive_toggle">Show or hide the archive</string>
+    <string name="people_overflow_menu_action">Team menu</string>
+    <string name="people_status_in_team">In team</string>
+    <string name="people_status_pending">Pending</string>
+    <string name="people_status_removed">Removed</string>
+    <string name="people_accepted_at_label">Joined %1$s</string>
+    <string name="people_invite_valid_until_label">Valid until %1$s</string>
+    <string name="people_removed_at_label">Removed %1$s</string>
+    <string name="people_revoked_at_label">Revoked %1$s</string>
+    <string name="people_expired_at_label">Expired %1$s</string>
 
     <string name="bookings_tab_pending">Waiting</string>
     <string name="bookings_queue_empty">Nothing\'s waiting.</string>

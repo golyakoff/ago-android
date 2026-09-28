@@ -559,18 +559,13 @@
         следуют `ago-console`'s own `operatorsTeamInvite*`/`operatorsTeamInviteStatus*` (`ru.ts`), где тот
         же факт показан на обеих поверхностях. `people_invite_status_send_failed` - это префикс, к которому
         код ошибки SMTP добавляется отдельно, ровно как в `OperatorsTeamPage`'s own `inviteStatusLabel`.
-        Роли в строке приглашения нет: `26-241` добавил мультироль только при создании приглашения, а
-        список их не возвращает - зеркалим реальный контракт.
+        `26-263`: `people_invite_status_send_failed` по-прежнему сопровождает приглашение в статусе
+        доставки `SendFailed`; `people_invite_status_revoked`/`_expired` теперь работают и как подписи
+        пилюль архива (`InviteArchiveKind`). `people_invites_list_title` - заголовок раздела «Приглашения».
     -->
     <string name="people_invites_list_title">Приглашения</string>
-    <!-- `%1$s` - дата и время в часовом поясе устройства. -->
-    <string name="people_invite_sent_label">Отправлено: %1$s</string>
-    <!-- `%1$s` - дата и время в часовом поясе устройства. -->
-    <string name="people_invite_expires_label">Действует до: %1$s</string>
-    <string name="people_invite_status_sent">Отправлено</string>
     <string name="people_invite_status_send_failed">ошибка отправки приглашения, код ошибки smtp-сервера:</string>
     <string name="people_invite_status_revoked">Отозвано</string>
-    <string name="people_invite_status_redeemed">Принято</string>
     <string name="people_invite_status_expired">Истекло</string>
     <string name="people_invite_revoke_button">Отозвать</string>
     <string name="people_invite_revoke_dialog_title">Отозвать приглашение?</string>
@@ -600,6 +595,26 @@
     <string name="people_remove_dialog_body">%1$s: все назначенные на него обращения сразу вернутся в очередь ожидания. История сохранится, но удаление отменить будет нельзя.</string>
     <string name="people_remove_confirm_button">Удалить</string>
     <string name="people_write_last_manager">На сайте всегда должен оставаться хотя бы один оператор, который управляет командой. Сначала дайте это право другому коллеге.</string>
+
+    <!--
+        `26-263`: «Команда → Люди» переработан в три раздела (`ago-android-design/team.html`) - активные
+        пользователи, приглашения и сворачиваемый архив, - и потребляет новый контракт чтения
+        (`effectiveStatus`, `redeemedAt`, `removedAt`, `joinedAt`, `roles`). Пилюли и разделы строятся по
+        `effectiveStatus`, а не по прежнему статусу доставки. «Пригласить» переехало в меню `⋮` в шапке.
+        `%1$s` в подсказках с датой - полная дата в часовом поясе устройства (например «28 сентября 2026»).
+    -->
+    <string name="people_active_users_title">Активные пользователи</string>
+    <string name="people_archive_title">Архив</string>
+    <string name="people_archive_toggle">Показать или скрыть архив</string>
+    <string name="people_overflow_menu_action">Меню команды</string>
+    <string name="people_status_in_team">В команде</string>
+    <string name="people_status_pending">Ожидает</string>
+    <string name="people_status_removed">Удалено</string>
+    <string name="people_accepted_at_label">Принято %1$s</string>
+    <string name="people_invite_valid_until_label">Действует до %1$s</string>
+    <string name="people_removed_at_label">Удалено %1$s</string>
+    <string name="people_revoked_at_label">Отозвано %1$s</string>
+    <string name="people_expired_at_label">Истёк %1$s</string>
 
     <!--
         `26-48`: Записи's own «Ожидают» queue - the mockup's segmented control draws «Клиенты» too, but
