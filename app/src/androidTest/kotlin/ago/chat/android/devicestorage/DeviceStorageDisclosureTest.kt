@@ -60,16 +60,14 @@ class DeviceStorageDisclosureTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that even the
-        // «Администрирование» section header now starts below the initial viewport, and a `LazyColumn`
-        // composes no semantics node for an item it has not laid out — so scroll the header into view
-        // before asserting it exists, rather than looking it up before it is composed.
-        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Администрирование"))
-        composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
-        // Then drive the scroll container on to «Справка» (the last site:configure Администрирование row).
+        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that the deep
+        // Администрирование rows now start below the initial viewport, and a `LazyColumn` composes no
+        // semantics node for an item it has not laid out — so drive the scroll container to «Справка»
+        // itself (the gated reference row this test is about) rather than asserting an off-screen section
+        // header first. `performScrollToNode` matches the row text exactly (case-sensitive), the same way
+        // the passing `openingTheRow_…` case below already scrolls to «Справка». The `withoutSiteConfigure`
+        // case keeps the «Администрирование» header assertion, where the shorter list keeps it on screen.
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
-        // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
-        // `LazyColumn` and pushing «Справка» (the last `site:configure` Администрирование row) further down.
         // On a slow CI emulator a single `waitForIdle()` after the scroll still races the lazy (re)layout —
         // the assert ran while «Справка» was only just being composed. A **bounded poll** waits for the
         // node to actually appear (up to 5s) rather than settling once, the same shape
