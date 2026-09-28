@@ -1233,6 +1233,11 @@
          one unbuilt row in between, ИИ-подсказки, is not part of this item). -->
     <string name="more_automation_tags_row">Метки</string>
     <string name="more_administration_operators_row">Операторы и роли</string>
+    <!-- `26-249`: Администрирование → «Продукты» - the read-only products view (`ago-console`'s own
+         `ProductsPage`), directly before Тариф и оплата per `navigation.md`'s own §"Ад" order (продукты,
+         оплата, документы, …). One resource for both the Ещё row label and the screen's own app-bar title
+         reuse - see `products_title` below, which the screen's own top bar carries instead. -->
+    <string name="more_administration_products_row">Продукты</string>
     <string name="more_administration_billing_row">Тариф и оплата</string>
     <!-- `26-226`: Администрирование's first real row - «Документы согласий»
          (`docs/design/tenant-consent-android.md`), reusing `navigation.md`'s own §"Ад" order (продукты,
@@ -1531,6 +1536,33 @@
     <!-- A status read an operator opens to check, not a live queue - no auto-refresh poll, the identical
          posture `restricted_visitors_refresh_action` already states for its own top bar. -->
     <string name="automation_modules_refresh_action">Обновить</string>
+
+    <!-- `26-249` (`ago-console`'s own `ProductsPage`, ported): Ещё → Администрирование → «Продукты» -
+         every product AGO offers, each marked «Уже есть»/«Пока нет», with a "contact AGO" note under a
+         product this workspace does not hold. Read-only by the platform's own design (`adr/0151`/
+         `decisions.md` §6: enabling a product is owner-only, not self-service). The copy is `ProductsPage`'s
+         own `products*` strings carried over; the descriptions are verbatim, since they describe what the
+         product does for the tenant's customers, not any app-specific screen. -->
+    <string name="products_title">Что предлагает AGO</string>
+    <string name="products_intro">Все продукты платформы и то, что из них уже подключено этому рабочему пространству.</string>
+    <string name="products_status_held">Уже есть</string>
+    <string name="products_status_not_held">Пока нет</string>
+    <!-- `decisions.md` §6: enabling a product is not self-service, so the honest next step for a product
+         the tenant lacks is prose, never a control that looks like it provisions. `ProductsPage`'s own
+         `productsContactNote`. -->
+    <string name="products_contact_note">Чтобы подключить, свяжитесь с AGO.</string>
+    <!-- Reuses the sibling module screen's own «Обновить» wording, restated as its own resource since
+         Продукты is a separate screen from «База знаний». -->
+    <string name="products_refresh_action">Обновить</string>
+    <!-- The friendly product name each card heads with - never the raw module key the wire carries (the
+         console's own "the copy never shows a module key" rule). «База знаний» matches the Ещё row label
+         `more_automation_faq_row` the same product already carries elsewhere. -->
+    <string name="products_chat_name">Чат</string>
+    <string name="products_chat_description">Переписка с вашими клиентами - с сайта и из любого подключённого канала.</string>
+    <string name="products_calendar_name">Календарь</string>
+    <string name="products_calendar_description">Позвольте клиентам записываться к вашим мастерам и ведите расписание прямо здесь.</string>
+    <string name="products_faq_name">База знаний</string>
+    <string name="products_faq_description">Отвечайте на частые вопросы автоматически - по базе знаний, которую вы сами наполняете, - операторы включаются только там, где действительно нужен человек.</string>
 
     <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
          tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -

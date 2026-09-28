@@ -13,6 +13,7 @@ import ago.chat.android.channels.WidgetConfigRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.documents.ConsentDocumentsRoute
 import ago.chat.android.faq.ModulesFaqRoute
+import ago.chat.android.products.ProductsRoute
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
@@ -143,6 +144,11 @@ internal fun MoreScreen(
             // acceptances editor, the first real Администрирование branch this scaffold serves. Back
             // returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
             ADMINISTRATION_DOCUMENTS_ROW_ID -> ConsentDocumentsRoute(onBack = { openRowId = null })
+            // `26-249`: Администрирование → «Продукты» - the read-only products view (`ago-console`'s own
+            // `ProductsPage`; `adr/0151` makes enabling a product owner-only, so this row is a status read,
+            // not a form). Back returns to the Ещё list (clause 2) via the same `openRowId = null` every
+            // drill-in uses.
+            ADMINISTRATION_PRODUCTS_ROW_ID -> ProductsRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -257,6 +263,7 @@ internal const val AUTOMATION_AFTER_HOURS_ROW_ID: String = "automation-after-hou
 internal const val AUTOMATION_FAQ_ROW_ID: String = "automation-faq"
 internal const val AUTOMATION_TAGS_ROW_ID: String = "automation-tags"
 internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-operators"
+internal const val ADMINISTRATION_PRODUCTS_ROW_ID: String = "administration-products"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
 
@@ -386,6 +393,21 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 section = MoreSectionId.Administration,
             ),
         )
+        // `26-249`: Администрирование → «Продукты» - the read-only products view (`ago-console`'s own
+        // `ProductsPage`), gated on `site:configure` like every other real row this screen serves (that is
+        // the same `PRODUCTS_PERMISSION` the console gates `/account/products` on). Sits directly before
+        // Тариф и оплата, `navigation.md`'s own listed Администрирование order (продукты, оплата,
+        // документы, …). Read-only by the platform's own design (`adr/0151`/`decisions.md` §6: enabling a
+        // product is owner-only, not self-service) - the screen has no enable/provision control at all.
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_PRODUCTS_ROW_ID,
+                    labelRes = R.string.more_administration_products_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
         add(
             MoreRow(
                 id = ADMINISTRATION_BILLING_ROW_ID,

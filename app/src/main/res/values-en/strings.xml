@@ -755,6 +755,8 @@
     <string name="more_automation_faq_row">Knowledge base</string>
     <string name="more_automation_tags_row">Tags</string>
     <string name="more_administration_operators_row">Operators &amp; roles</string>
+    <!-- `26-249`: "Products" — the read-only products view; see the ru strings for the full note. -->
+    <string name="more_administration_products_row">Products</string>
     <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
     <string name="more_administration_billing_row">Plan &amp; billing</string>
     <string name="more_administration_documents_row">Consent documents</string>
@@ -944,6 +946,21 @@
     <string name="automation_modules_granted_by_owner_badge">Enabled by owner</string>
     <string name="automation_modules_expires_at">Until %1$s</string>
     <string name="automation_modules_refresh_action">Refresh</string>
+
+    <!-- `26-249`: the read-only products view (`ago-console`'s own `ProductsPage`) — see the ru strings
+         for the full note. -->
+    <string name="products_title">What AGO offers</string>
+    <string name="products_intro">Every product on this platform, and which of them this workspace already has.</string>
+    <string name="products_status_held">You have this</string>
+    <string name="products_status_not_held">Not yet</string>
+    <string name="products_contact_note">Contact AGO to add this to your workspace.</string>
+    <string name="products_refresh_action">Refresh</string>
+    <string name="products_chat_name">Chat</string>
+    <string name="products_chat_description">Conversations with your customers, from your website and every channel you connect.</string>
+    <string name="products_calendar_name">Calendar</string>
+    <string name="products_calendar_description">Let customers book an appointment with one of your staff, and manage the schedule from here.</string>
+    <string name="products_faq_name">Knowledge base</string>
+    <string name="products_faq_description">Answer common questions automatically, from a knowledge base you write - so operators only handle what actually needs a person.</string>
 
     <string name="automation_tags_empty">No tags yet. Add the first one.</string>
     <string name="automation_tags_add_action">Add tag</string>
