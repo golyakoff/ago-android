@@ -522,7 +522,10 @@ private fun ConversationListOverflowMenu(
     ScrimmedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         DropdownMenuItem(
             text = { Text(text = stringResource(R.string.restricted_visitors_menu_item)) },
-            trailingIcon = { Icon(imageVector = AgoIcons.ChevronRight, contentDescription = null) },
+            // `26-265`: a leading glyph and no trailing chevron - the app's menu-item convention (same as
+            // the «Команда» ⋮ and the Записи/Аналитика hubs). Material tints a DropdownMenuItem's leading
+            // Icon with the standard onSurfaceVariant, so no explicit tint here.
+            leadingIcon = { Icon(imageVector = AgoIcons.PersonOff, contentDescription = null) },
             onClick = {
                 // The menu closes *before* the callback runs, never after - the callback navigates, so a
                 // `setExpanded` sequenced after it would land on a composition already being torn down

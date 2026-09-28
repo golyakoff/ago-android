@@ -772,6 +772,32 @@ public object AgoIcons {
                 horizontalLineToRelative(6f)
             },
         )
+
+    /**
+     * `26-265`: «Ограниченные посетители» - the Диалоги `⋮` overflow item's own leading icon. Modelled
+     * on Material Symbols outlined `person_off` - a single head-and-shoulders figure struck through by a
+     * diagonal - redrawn in this family's stroke treatment rather than imported as that glyph's filled
+     * path, the same "redraw in this family, don't import the fill" rule [Masters]/[Readiness] state.
+     * The figure is [Masters]' own centred person; the strike is one NW->SE diagonal over it, the
+     * conventional "off/blocked" mark.
+     */
+    public val PersonOff: ImageVector =
+        strokeIcon(
+            "AgoPersonOff",
+            // <circle cx="12" cy="8" r="3.2"/>
+            { circle(centreX = 12f, centreY = 8f, radius = 3.2f) },
+            // M5 20c0-3.86 3.13-7 7-7s7 3.14 7 7
+            {
+                moveTo(5f, 20f)
+                curveToRelative(0f, -3.86f, 3.13f, -7f, 7f, -7f)
+                reflectiveCurveToRelative(7f, 3.14f, 7f, 7f)
+            },
+            // M4 4 L20 20  (the "off" strike, NW->SE)
+            {
+                moveTo(4f, 4f)
+                lineTo(20f, 20f)
+            },
+        )
 }
 
 /** The mockup's own `viewBox="0 0 24 24"` and `stroke-width:1.8`, stated once rather than per icon. */
