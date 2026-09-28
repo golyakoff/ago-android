@@ -12,6 +12,7 @@ import ago.chat.android.channels.TelegramChannelRoute
 import ago.chat.android.channels.VkChannelRoute
 import ago.chat.android.channels.WidgetConfigRoute
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.devicestorage.DeviceStorageRoute
 import ago.chat.android.documents.ConsentDocumentsRoute
 import ago.chat.android.faq.ModulesFaqRoute
 import ago.chat.android.products.ProductsRoute
@@ -177,6 +178,12 @@ internal fun MoreScreen(
             // own quota bar, sort/filter and destructive bulk-delete (`ago-console`'s own `StoragePage`).
             // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
             ADMINISTRATION_STORAGE_ROW_ID -> StorageRoute(onBack = { openRowId = null })
+            // `26-256`: Администрирование → «Справка» - the device-storage disclosure reference screen
+            // (`ago-console`'s own `DeviceStorageDisclosurePage`), gated on `site:configure` like every other
+            // real row this screen serves. It fetches nothing - static reference content - so it is a bare
+            // `onBack`-only composable, no view model. Back returns to the Ещё list (clause 2) via the same
+            // `openRowId = null` every drill-in uses.
+            ADMINISTRATION_REFERENCE_ROW_ID -> DeviceStorageRoute(onBack = { openRowId = null })
             // `26-251`: Администрирование → «Скачать данные» - the site-data export history + request
             // screen (`ago-console`'s own `SiteExportPage`), gated on `site:export` (not `site:configure`
             // like the rows above). Back returns to the Ещё list (clause 2) via the same `openRowId = null`
@@ -307,6 +314,7 @@ internal const val ADMINISTRATION_PRODUCTS_ROW_ID: String = "administration-prod
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
 internal const val ADMINISTRATION_STORAGE_ROW_ID: String = "administration-storage"
+internal const val ADMINISTRATION_REFERENCE_ROW_ID: String = "administration-reference"
 internal const val ADMINISTRATION_EXPORT_ROW_ID: String = "administration-export"
 internal const val ADMINISTRATION_DELETE_ROW_ID: String = "administration-delete"
 
@@ -484,6 +492,21 @@ internal fun buildMoreRows(
                 MoreRow(
                     id = ADMINISTRATION_STORAGE_ROW_ID,
                     labelRes = R.string.more_administration_storage_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
+        // `26-256`: «Справка» - the device-storage disclosure reference screen (`ago-console`'s own
+        // `DeviceStorageDisclosurePage`), gated on `site:configure` like every other real `site:configure`
+        // row this screen serves. The first (and only) reference item, so a single «Справка» row opening it
+        // is the right shape - `navigation.md`'s own listed Администрирование order keeps reference material
+        // among the `site:configure` rows, ahead of the independently-gated «Скачать данные»/«Удалить
+        // аккаунт» below.
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_REFERENCE_ROW_ID,
+                    labelRes = R.string.more_administration_reference_row,
                     section = MoreSectionId.Administration,
                 ),
             )
