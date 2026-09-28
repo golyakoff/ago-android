@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.core.domain.accountdeletion.AccountDeletionApi
 import ago.chat.android.core.domain.analytics.BookingFunnelReportApi
 import ago.chat.android.core.domain.analytics.ConversionReportApi
 import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
@@ -46,6 +47,7 @@ import ago.chat.android.core.domain.widgetconfig.WidgetConfigApi
 import ago.chat.android.core.domain.workers.WorkersApi
 import ago.chat.android.core.domain.workerschedule.WorkerScheduleApi
 import ago.chat.android.core.domain.workerslots.WorkerSlotsApi
+import ago.chat.android.core.network.accountdeletion.KtorAccountDeletionApi
 import ago.chat.android.core.network.analytics.KtorBookingFunnelReportApi
 import ago.chat.android.core.network.analytics.KtorConversionReportApi
 import ago.chat.android.core.network.analytics.KtorOwnAnalyticsApi
@@ -631,6 +633,19 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteExportApi = KtorSiteExportApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-252`: Администрирование → «Удалить аккаунт»'s own port — the same `config.apiBaseUrl`
+     * [provideSiteExportApi] above reads, since `POST /api/v1/sites/erase` is one more endpoint on that same
+     * `Ago.Chat.Api` origin. **No [ActiveSiteSelection]**, unlike [provideSiteExportApi] above — this route
+     * carries no `{siteId}` in its path; the account it erases is named by the `X-Ago-Active-Site` header the
+     * shared client already attaches to every request ([KtorAccountDeletionApi]'s own doc comment).
+     */
+    @Provides
+    public fun provideAccountDeletionApi(
+        client: HttpClient,
+        config: OidcConfig,
+    ): AccountDeletionApi = KtorAccountDeletionApi(client, config.apiBaseUrl)
 
     /**
      * `26-199`/`M1`: Автоматизация → «База знаний»'s own read-only Модули port — the same

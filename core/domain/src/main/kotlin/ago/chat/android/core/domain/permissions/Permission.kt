@@ -51,6 +51,18 @@ public object Permission {
      * different capabilities. Gates the Ещё → Администрирование → «Скачать данные» row, and nothing else. */
     public const val SITE_EXPORT: String = "site:export"
 
+    /** `26-252`: "may permanently delete this whole account" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.SiteErase`, and the one permission `ago-console`'s own
+     * `AccountDeletionPage` gates `/account/delete` on (its `SITE_ERASE_PERMISSION`). Deliberately **not**
+     * [SITE_CONFIGURE]: bundled into the administrator set by `RegisterSiteHandler`/`MintDemoTenantHandler`
+     * alongside `site:export`/`conversation:erase` and never granted to an operator separately, so in
+     * practice it travels with [SITE_CONFIGURE] — but it is checked on its own here, exactly as the server
+     * checks it on its own, because "may configure the site" and "may destroy the whole account" are two
+     * different capabilities (the console's own `AccountDeletionPage` doc comment: "a single boolean that
+     * destroys a business is a plausible case for its own permission"). Gates the Ещё → Администрирование →
+     * «Удалить аккаунт» row, and nothing else. */
+    public const val SITE_ERASE: String = "site:erase"
+
     /** `26-85`: "has a conversation to be pushed about" — the fact `OperatorPresenceController`
      * (`:app`) gates [ago.chat.android.presence.OperatorPresenceService] on, copied verbatim from
      * `ago-chat`'s own `Ago.Chat.Domain.Permission.ConversationSend` (`docs/backlog/26-85-*.md`).
