@@ -1249,6 +1249,11 @@
          согласий». One resource for both the Ещё row label and the screen's own app-bar title, the same
          "one word, one string" shape the rows above establish. -->
     <string name="more_administration_storage_row">Хранилище</string>
+    <!-- `26-256`: Администрирование → «Справка» - the device-storage disclosure reference screen
+         (`ago-console`'s own `DeviceStorageDisclosurePage`), gated on `site:configure`. One resource for
+         both the Ещё row label and the screen's own app-bar title, the same "one word, one string" shape the
+         rows above establish. -->
+    <string name="more_administration_reference_row">Справка</string>
     <!-- `26-251`: Администрирование → «Скачать данные» (`ago-console`'s own `SiteExportPage`), gated on
          `site:export` rather than `site:configure`. One resource for both the Ещё row label and the
          screen's own app-bar title, the same "one word, one string" shape the rows above establish. -->
@@ -2090,4 +2095,60 @@
          ("Сова · Клубника"), `%2$s` the 8-char short id. The identical literal `restricted_visitors_visitor_label`
          already holds for its own single screen, kept separate rather than shared across features. -->
     <string name="visitor_label_emoji_and_short_id">%1$s (%2$s)</string>
+
+    <!-- `26-256`: Администрирование → «Справка» → the device-storage disclosure reference screen, the app's
+         mirror of `ago-console`'s own `DeviceStorageDisclosurePage`. Reference / legal-info content a tenant
+         reads to write their own privacy notice; the screen fetches nothing. Rows below mirror the console's
+         own `deviceStorage*` strings (see `ago-console/src/i18n/ru.ts`). -->
+    <string name="device_storage_title">Что виджет сохраняет на устройстве посетителя</string>
+    <string name="device_storage_description">Все факты, нужные вам для собственного уведомления о cookie или политики конфиденциальности - не готовое уведомление за вас.</string>
+    <string name="device_storage_not_cookies">Это не cookie-файлы. Виджет вообще не устанавливает cookie - всё ниже хранится в localStorage, и аудит cookie на вашем сайте этого не найдёт. Если вы проверяли только cookie, вы упустили всё, что перечислено на этой странице.</string>
+    <string name="device_storage_intro">Виджет хранит перечисленное ниже под ключами вида ago-chat:&lt;ваш site key&gt;:&lt;ключ ниже&gt;, полностью в браузере посетителя. Ничто из этого не отправляется нам, кроме случаев, когда сам виджет предъявляет это нашему серверу - на другие сайты это не попадает никогда.</string>
+    <!-- The console shows this as a per-row column always reading «Да»; on a phone it is a single note,
+         since it is uniform across every row. -->
+    <string name="device_storage_survives_tab_close_note">Все перечисленные ниже записи сохраняются после закрытия вкладки.</string>
+    <string name="device_storage_erase_note">Это хранилище находится на устройстве посетителя, а не у нас - мы не можем удалить его по запросу. Что именно очищает запись, указано в поле «Срок хранения» для каждой строки; если там ничего не очищает её, удалить запись может только сам посетитель, очистив данные сайта в браузере.</string>
+    <string name="device_storage_rows_label">Что хранится</string>
+    <string name="device_storage_column_holds">Что хранит</string>
+    <string name="device_storage_column_why">Зачем нужен</string>
+    <string name="device_storage_column_lifetime">Срок хранения</string>
+
+    <!-- The ready-made snippet a tenant pastes into their own privacy policy. Legally neutral: describes
+         browser-storage use and states it is not a cookie, so a tenant does not declare cookies AGO never
+         sets. `26-256`, new content (the console has no equivalent snippet). -->
+    <string name="device_storage_snippet_preface">Рекомендуем вставить этот текст в раздел о приватности вашего сайта.</string>
+    <string name="device_storage_snippet_body">На нашем сайте работает встроенный чат поддержки AGO. Для его работы в локальном хранилище (localStorage) вашего браузера сохраняются технические данные: идентификатор сессии и посетителя, настройки отображения виджета и последний открытый диалог. Эти данные хранятся только в вашем браузере, не являются cookie-файлами и не передаются третьим сторонам; они используются исключительно для того, чтобы чат узнавал вас между визитами и продолжал начатый диалог. Вы можете в любой момент удалить эти данные, очистив данные сайта в настройках браузера.</string>
+    <string name="device_storage_snippet_copy">Скопировать текст</string>
+    <string name="device_storage_snippet_copied">Текст скопирован</string>
+
+    <string name="device_storage_visitor_token_holds">Подписанный токен сессии (JWT), подтверждающий, что этот браузер принадлежит конкретному посетителю.</string>
+    <string name="device_storage_visitor_token_why">Передаётся при каждом подключении в реальном времени и при загрузке вложений, чтобы наш сервер узнавал одного и того же посетителя при разных заходах на страницу.</string>
+    <string name="device_storage_visitor_token_lifetime">Выдаётся на 7 дней и автоматически продлевается, пока посетитель возвращается - поэтому у возвращающегося посетителя токен фактически никогда не истекает. Если посетитель не возвращается, ничто не удаляет сохранённое значение.</string>
+    <string name="device_storage_visitor_id_holds">Собственный идентификатор посетителя - постоянный id для этого человека, совпадающий с subject токена.</string>
+    <string name="device_storage_visitor_id_why">Позволяет виджету узнать того же посетителя после перезагрузки страницы, не спрашивая наш сервер заранее, поэтому вернувшийся посетитель продолжает свой диалог, а не начинает новый. Это единственная строка на этой странице, которая идентифицирует человека, - остальные строки это кэш настроек, а не сведения о посетителе.</string>
+    <string name="device_storage_visitor_id_lifetime">Продлевается вместе с токеном выше; заменяется на новый идентификатор, только если наш сервер отказывается продлевать сохранённый (он не продлевался слишком долго). В остальных случаях ничто его не удаляет.</string>
+    <string name="device_storage_widget_color_holds">Акцентный цвет виджета, который вы настроили, если он задан.</string>
+    <string name="device_storage_widget_color_why">Позволяет виджету сразу отрисоваться в выбранном вами цвете при следующей загрузке страницы, до повторного запроса к нашему серверу.</string>
+    <string name="device_storage_widget_color_lifetime">Обновляется не реже раза в сутки для вернувшегося посетителя, и быстрее, если сессия сама подошла к продлению; удаляется, как только вы отменяете цвет в консоли. Это кэш вашей настройки, а не запись о посетителе.</string>
+    <string name="device_storage_widget_position_holds">Угол экрана, который вы настроили для виджета.</string>
+    <string name="device_storage_widget_position_why">То же назначение, что и у акцентного цвета выше - кэш настройки отображения, обновляется вместе с сессией.</string>
+    <string name="device_storage_widget_position_lifetime">Так же, как у акцентного цвета выше.</string>
+    <string name="device_storage_widget_locale_holds">Язык виджета, который вы настроили.</string>
+    <string name="device_storage_widget_locale_why">То же назначение, что и у акцентного цвета выше.</string>
+    <string name="device_storage_widget_locale_lifetime">Так же, как у акцентного цвета выше.</string>
+    <string name="device_storage_widget_notice_text_holds">Текст вашего собственного уведомления об обработке данных - ваши слова, а не текст виджета.</string>
+    <string name="device_storage_widget_notice_text_why">Позволяет виджету показать ваше уведомление без повторного запроса, пока сессия закэширована.</string>
+    <string name="device_storage_widget_notice_text_lifetime">Так же, как у акцентного цвета выше.</string>
+    <string name="device_storage_widget_notice_url_holds">Ссылка на вашу политику конфиденциальности, рядом с текстом уведомления выше.</string>
+    <string name="device_storage_widget_notice_url_why">То же назначение, что и у текста уведомления выше.</string>
+    <string name="device_storage_widget_notice_url_lifetime">Так же, как у акцентного цвета выше.</string>
+    <string name="device_storage_enabled_modules_holds">Какие из ваших платных дополнений (например, онлайн-запись) включены для этого сайта.</string>
+    <string name="device_storage_enabled_modules_why">Позволяет виджету показывать или скрывать точку входа дополнения, не спрашивая сервер при каждой перезагрузке.</string>
+    <string name="device_storage_enabled_modules_lifetime">Обновляется не реже раза в день, а также при обновлении токена личности выше; полностью удаляется, если ни одно дополнение не включено.</string>
+    <string name="device_storage_conversation_id_holds">Id диалога, который этот браузер вёл с вами последним.</string>
+    <string name="device_storage_conversation_id_why">Позволяет при перезагрузке продолжить тот же диалог, а не начинать новый.</string>
+    <string name="device_storage_conversation_id_lifetime">Заменяется, когда начинается более поздний диалог; удаляется, когда заменяется сам идентификатор посетителя выше, потому что новый идентификатор не владеет старым диалогом. В остальных случаях ничто его не удаляет.</string>
+    <string name="device_storage_last_sequence_holds">Наибольший номер сообщения, который этот браузер видел для одного диалога - позиционная метка, никогда не текст сообщения.</string>
+    <string name="device_storage_last_sequence_why">Позволяет при переподключении или перезагрузке запросить только пропущенное, а не весь диалог заново.</string>
+    <string name="device_storage_last_sequence_lifetime">По одной записи на каждый диалог, который этот браузер когда-либо продолжал. Запись для того диалога, который был текущим, удаляется при замене идентификатора посетителя выше; запись для более раннего, уже вытесненного диалога иначе не удаляется.</string>
 </resources>

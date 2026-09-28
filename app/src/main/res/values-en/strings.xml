@@ -762,6 +762,8 @@
     <string name="more_administration_documents_row">Consent documents</string>
     <!-- `26-250`: Administration → "Storage". See the ru strings for the full note. -->
     <string name="more_administration_storage_row">Storage</string>
+    <!-- `26-256`: Администрирование → «Справка» - the device-storage disclosure reference screen. -->
+    <string name="more_administration_reference_row">Reference</string>
     <string name="more_administration_export_row">Export data</string>
     <!-- `26-252`: Administration → "Delete account", gated on `site:erase`. See the ru strings for the full note. -->
     <string name="more_administration_delete_row">Delete account</string>
@@ -1311,4 +1313,53 @@
          ago.chat.android.ui.components.VisitorIdentityText - %1$s is the resolved emoji-pair name
          ("Owl · Strawberry"), %2$s the 8-char short id. -->
     <string name="visitor_label_emoji_and_short_id">%1$s (%2$s)</string>
+
+    <!-- `26-256`: device-storage disclosure reference screen - mirrors ago-console's own deviceStorage*
+         strings (see ago-console/src/i18n/en.ts). Reference / legal-info content; the screen fetches nothing. -->
+    <string name="device_storage_title">What the widget puts on a visitor\'s device</string>
+    <string name="device_storage_description">Every fact you need to write your own cookie or privacy notice about this widget - not a notice we write for you.</string>
+    <string name="device_storage_not_cookies">These are not cookies. The widget sets no cookies at all - everything below is localStorage, which a cookie audit of this site will not find. If you only checked for cookies, you have missed everything on this page.</string>
+    <string name="device_storage_intro">The widget stores the following under keys named ago-chat:&lt;your site key&gt;:&lt;key below&gt;, entirely in the visitor\'s own browser. Nothing here is sent to us except when the widget itself presents it back to our servers - it never reaches any other site.</string>
+    <string name="device_storage_survives_tab_close_note">Every entry below survives closing the tab.</string>
+    <string name="device_storage_erase_note">This storage lives on the visitor\'s own device, not on ours - we cannot reach it to delete it on request. The only things that clear an entry are listed in its own Lifetime field; failing that, only the visitor themselves can remove it, by clearing their browser\'s site data.</string>
+    <string name="device_storage_rows_label">What is stored</string>
+    <string name="device_storage_column_holds">What it holds</string>
+    <string name="device_storage_column_why">Why it exists</string>
+    <string name="device_storage_column_lifetime">Lifetime</string>
+
+    <string name="device_storage_snippet_preface">We recommend pasting this text into the privacy section of your site.</string>
+    <string name="device_storage_snippet_body">Our website uses the embedded AGO support chat. To make it work, technical data is stored in your browser\'s local storage (localStorage): a session and visitor identifier, the widget\'s display settings, and your most recent conversation. This data is kept only in your browser, is not a cookie, and is not shared with third parties; it is used solely so the chat can recognise you between visits and resume an ongoing conversation. You can delete this data at any time by clearing the site\'s data in your browser settings.</string>
+    <string name="device_storage_snippet_copy">Copy text</string>
+    <string name="device_storage_snippet_copied">Text copied</string>
+
+    <string name="device_storage_visitor_token_holds">A signed session token (JWT) proving this browser belongs to a specific visitor.</string>
+    <string name="device_storage_visitor_token_why">Presented on every realtime connection and attachment upload so our server recognises the same visitor across page loads.</string>
+    <string name="device_storage_visitor_token_lifetime">Issued for 7 days and renewed automatically for as long as the visitor keeps returning, so a returning visitor\'s token effectively never expires. If the visitor never returns, nothing clears the stored value.</string>
+    <string name="device_storage_visitor_id_holds">The visitor\'s own identifier - a persistent id for this one person, matching the token\'s own subject.</string>
+    <string name="device_storage_visitor_id_why">Lets the widget recognise the same visitor across a reload without asking our server first, so a returning visitor resumes their own conversation instead of starting a new one. This is the identifying half of this page - the rest of the rows are cached configuration, not identity.</string>
+    <string name="device_storage_visitor_id_lifetime">Renewed alongside the token above; replaced with a freshly minted identifier only if our server refuses to renew the stored one (it has expired, unrenewed, for too long). Otherwise nothing clears it.</string>
+    <string name="device_storage_widget_color_holds">The accent colour you configured for the widget, if you set one.</string>
+    <string name="device_storage_widget_color_why">Lets the widget render in your chosen colour immediately on the next page load, before it asks our server again.</string>
+    <string name="device_storage_widget_color_lifetime">Refreshed at least once a day for a returning visitor, and sooner if the session is itself due for renewal; removed the moment you unset the colour in your console. A cache of your own setting, not a record about the visitor.</string>
+    <string name="device_storage_widget_position_holds">The on-screen corner you configured for the widget.</string>
+    <string name="device_storage_widget_position_why">Same purpose as the accent colour above - a cached rendering preference, refreshed with the session.</string>
+    <string name="device_storage_widget_position_lifetime">Same as the accent colour above.</string>
+    <string name="device_storage_widget_locale_holds">The widget language you configured.</string>
+    <string name="device_storage_widget_locale_why">Same purpose as the accent colour above.</string>
+    <string name="device_storage_widget_locale_lifetime">Same as the accent colour above.</string>
+    <string name="device_storage_widget_notice_text_holds">Your own processing-notice text - the words you wrote, not the widget\'s own.</string>
+    <string name="device_storage_widget_notice_text_why">Lets the widget show your notice without a second round trip once the session is cached.</string>
+    <string name="device_storage_widget_notice_text_lifetime">Same as the accent colour above.</string>
+    <string name="device_storage_widget_notice_url_holds">A link to your own privacy policy, alongside the notice text above.</string>
+    <string name="device_storage_widget_notice_url_why">Same purpose as the notice text above.</string>
+    <string name="device_storage_widget_notice_url_lifetime">Same as the accent colour above.</string>
+    <string name="device_storage_enabled_modules_holds">Which of your paid add-ons (for example, online booking) are switched on for this site.</string>
+    <string name="device_storage_enabled_modules_why">Lets the widget show or hide an add-on\'s entry point without asking the server again on every reload.</string>
+    <string name="device_storage_enabled_modules_lifetime">Refreshed at least once a day, and sooner if the identity token above is itself due for renewal; removed entirely once you have no add-on switched on.</string>
+    <string name="device_storage_conversation_id_holds">The id of the conversation this browser last held with you.</string>
+    <string name="device_storage_conversation_id_why">Lets a reload resume the same conversation instead of starting a new one.</string>
+    <string name="device_storage_conversation_id_lifetime">Replaced when a later conversation starts; cleared when the stored visitor identifier above is itself replaced, because a new identifier does not own the old conversation. Otherwise nothing clears it.</string>
+    <string name="device_storage_last_sequence_holds">The highest message number this browser has seen for one conversation - a position marker, never message text.</string>
+    <string name="device_storage_last_sequence_why">Lets a reconnect or reload ask for only what it missed, instead of the whole conversation again.</string>
+    <string name="device_storage_last_sequence_lifetime">One entry per conversation this browser has ever resumed. The entry for whichever conversation was current is removed when the visitor identifier above is replaced; an entry for an earlier, already-superseded conversation is not otherwise cleared.</string>
 </resources>
