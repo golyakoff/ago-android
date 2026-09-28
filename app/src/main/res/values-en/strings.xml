@@ -762,6 +762,7 @@
     <string name="more_administration_documents_row">Consent documents</string>
     <!-- `26-250`: Administration → "Storage". See the ru strings for the full note. -->
     <string name="more_administration_storage_row">Storage</string>
+    <string name="more_administration_export_row">Export data</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
     <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
@@ -1000,6 +1001,20 @@
     <string name="storage_sender_system">System</string>
     <string name="storage_sender_auto_greeting">Auto-greeting</string>
     <string name="storage_sender_unknown">—</string>
+
+    <!-- `26-251`: Administration → Export data - export-request history and a request-new-export action. -->
+    <string name="site_export_title">Export data</string>
+    <string name="site_export_refresh_action">Refresh</string>
+    <string name="site_export_request_action">Prepare data for download</string>
+    <string name="site_export_empty">No exports yet.</string>
+    <string name="site_export_download_link">Download</string>
+    <string name="site_export_requested_at">Requested: %1$s</string>
+    <string name="site_export_expires_at">Will be removed: %1$s</string>
+    <string name="site_export_status_pending">Pending</string>
+    <string name="site_export_status_processing">Processing</string>
+    <string name="site_export_status_ready">Ready</string>
+    <string name="site_export_status_failed">Failed</string>
+    <string name="site_export_status_expired">Expired</string>
 
     <string name="automation_tags_empty">No tags yet. Add the first one.</string>
     <string name="automation_tags_add_action">Add tag</string>

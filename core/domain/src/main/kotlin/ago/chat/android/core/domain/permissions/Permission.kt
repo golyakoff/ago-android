@@ -41,6 +41,16 @@ public object Permission {
      * items and Ещё's Администрирование section both gate on it once their real screens exist. */
     public const val SITE_CONFIGURE: String = "site:configure"
 
+    /** `26-251`: "may request a full export of this site's data" — copied verbatim from `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission.SiteExport`, and the one permission `ago-console`'s own `SiteExportPage`
+     * gates `/account/export` on (its `SITE_EXPORT_PERMISSION`). Deliberately **not** [SITE_CONFIGURE]:
+     * bundled into the administrator set by `RegisterSiteHandler`/`MintDemoTenantHandler` alongside
+     * `site:erase`/`conversation:erase` and never granted to an operator separately, so in practice it
+     * travels with [SITE_CONFIGURE] — but it is checked on its own here, exactly as the server checks it
+     * on its own, because "may configure the site" and "may take its whole contents away" are two
+     * different capabilities. Gates the Ещё → Администрирование → «Скачать данные» row, and nothing else. */
+    public const val SITE_EXPORT: String = "site:export"
+
     /** `26-85`: "has a conversation to be pushed about" — the fact `OperatorPresenceController`
      * (`:app`) gates [ago.chat.android.presence.OperatorPresenceService] on, copied verbatim from
      * `ago-chat`'s own `Ago.Chat.Domain.Permission.ConversationSend` (`docs/backlog/26-85-*.md`).

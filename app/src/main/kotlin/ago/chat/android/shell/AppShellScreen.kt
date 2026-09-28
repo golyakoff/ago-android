@@ -733,6 +733,10 @@ private fun AppShellContent(
                     // identical shape `conversationsTab`/`teamTab` above compute their own gates - Ещё's
                     // Каналы «Установка виджета» row is drawn only for `site:configure`.
                     canConfigureSite = permissions.holds(Permission.SITE_CONFIGURE),
+                    // `26-251`: computed the same way, from the same `Known` set — but off `site:export`,
+                    // the dedicated permission `ago-console`'s own `SiteExportPage` gates on, not
+                    // `site:configure`. Drives whether Ещё's Администрирование «Скачать данные» row is drawn.
+                    canExportSite = permissions.holds(Permission.SITE_EXPORT),
                 )
             }
             // `26-77`: the one `NavHost` route none of the five bottom-nav destinations owns - pushed by
