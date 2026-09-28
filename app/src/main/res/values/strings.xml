@@ -1245,6 +1245,10 @@
          row label and the screen's own app-bar title, the identical "one word, one string" shape
          `more_automation_quick_replies_row` already establishes for its own screen. -->
     <string name="more_administration_documents_row">Документы согласий</string>
+    <!-- `26-250`: Администрирование → «Хранилище» (`ago-console`'s own `StoragePage`), after «Документы
+         согласий». One resource for both the Ещё row label and the screen's own app-bar title, the same
+         "one word, one string" shape the rows above establish. -->
+    <string name="more_administration_storage_row">Хранилище</string>
     <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
          retired `analytics_placeholder_body`, worded generically now that more than one destination
          needs it. -->
@@ -1563,6 +1567,46 @@
     <string name="products_calendar_description">Позвольте клиентам записываться к вашим мастерам и ведите расписание прямо здесь.</string>
     <string name="products_faq_name">База знаний</string>
     <string name="products_faq_description">Отвечайте на частые вопросы автоматически - по базе знаний, которую вы сами наполняете, - операторы включаются только там, где действительно нужен человек.</string>
+
+    <!-- `26-250` (`ago-console`'s own `StoragePage`): Администрирование → «Хранилище» - квота, вложения
+         с сортировкой/фильтром и безвозвратное массовое удаление. `%d`/`%s` во всех строках позиционные
+         (`%1$…`), а сообщение подтверждения и баннер результата намеренно уходят от склонения по числу
+         (форма с двоеточием), той же причины ради, что `ElapsedText.kt` избегает `<plurals>`: они
+         выбирают форму по локали устройства, а не по языку, включённому в приложении. -->
+    <string name="storage_title">Хранилище вложений</string>
+    <string name="storage_refresh_action">Обновить</string>
+    <string name="storage_quota_used">Использовано %1$s из %2$s</string>
+    <string name="storage_egress_this_month">За %1$s: скачиваний %2$d, отдано %3$s</string>
+    <string name="storage_largest_title">Самые тяжёлые диалоги</string>
+    <string name="storage_largest_row">%1$s — %2$s (вложений: %3$d)</string>
+    <string name="storage_table_title">Вложения</string>
+    <string name="storage_empty">Вложений нет.</string>
+    <string name="storage_load_more">Показать ещё</string>
+    <string name="storage_loading">Загрузка…</string>
+    <string name="storage_delete_selected">Удалить выбранное</string>
+    <string name="storage_delete_selected_count">Удалить выбранное (%1$d)</string>
+    <string name="storage_delete_result">Удалено вложений: %1$d. Освобождено: %2$s.</string>
+    <string name="storage_confirm_delete_title">Удалить вложения?</string>
+    <string name="storage_confirm_delete_message">Будет безвозвратно удалено выбранных вложений: %1$d (%2$s). Это действие необратимо.</string>
+    <string name="storage_confirm_delete_action">Удалить</string>
+    <!-- %1$s - короткий id диалога, %2$s - отправитель, %3$s - дата загрузки. -->
+    <string name="storage_row_meta">Диалог %1$s · %2$s · %3$s</string>
+    <string name="storage_never_downloaded">Ни разу не скачивали</string>
+    <string name="storage_downloads_count">Скачиваний: %1$d</string>
+    <string name="storage_duplicate_badge">Дубликат</string>
+    <string name="storage_sort_size_desc">Сначала крупные</string>
+    <string name="storage_sort_type_asc">По типу</string>
+    <string name="storage_sort_age_asc">Сначала старые</string>
+    <string name="storage_sort_conversation_asc">По диалогу</string>
+    <string name="storage_sort_sender_asc">По отправителю</string>
+    <string name="storage_filter_none">Все</string>
+    <string name="storage_filter_never_downloaded">Не скачивали</string>
+    <string name="storage_filter_duplicates">Дубликаты</string>
+    <string name="storage_sender_visitor">Посетитель</string>
+    <string name="storage_sender_operator">Оператор</string>
+    <string name="storage_sender_system">Система</string>
+    <string name="storage_sender_auto_greeting">Автоприветствие</string>
+    <string name="storage_sender_unknown">—</string>
 
     <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
          tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -

@@ -35,6 +35,7 @@ import ago.chat.android.core.domain.readiness.BookingReadinessApi
 import ago.chat.android.core.domain.recut.RecutApi
 import ago.chat.android.core.domain.restrictions.VisitorRestrictionApi
 import ago.chat.android.core.domain.schedule.WorkingHoursApi
+import ago.chat.android.core.domain.storage.SiteAttachmentStorageApi
 import ago.chat.android.core.domain.tags.ConversationTagsApi
 import ago.chat.android.core.domain.tags.SiteTagsApi
 import ago.chat.android.core.domain.team.OperatorTeamApi
@@ -76,6 +77,7 @@ import ago.chat.android.core.network.realtime.OperatorHubEvents
 import ago.chat.android.core.network.recut.KtorRecutApi
 import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
+import ago.chat.android.core.network.storage.KtorSiteAttachmentStorageApi
 import ago.chat.android.core.network.tags.KtorConversationTagsApi
 import ago.chat.android.core.network.tags.KtorSiteTagsApi
 import ago.chat.android.core.network.team.KtorOperatorTeamApi
@@ -599,6 +601,20 @@ public object AppModule {
         config: OidcConfig,
         activeSite: ActiveSiteSelection,
     ): SiteConsentDocumentsApi = KtorSiteConsentDocumentsApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-250`: Администрирование → «Хранилище»'s own port — the same `config.apiBaseUrl`
+     * [provideSiteConsentDocumentsApi] above reads, since `GET`/`POST /api/v1/sites/{siteId}/attachments…`
+     * is one more family of endpoints on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection],
+     * the identical shape [provideSiteConsentDocumentsApi] above already threads it through for — every
+     * route here carries the site id in the URL itself.
+     */
+    @Provides
+    public fun provideSiteAttachmentStorageApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): SiteAttachmentStorageApi = KtorSiteAttachmentStorageApi(client, config.apiBaseUrl, activeSite)
 
     /**
      * `26-199`/`M1`: Автоматизация → «База знаний»'s own read-only Модули port — the same

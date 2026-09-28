@@ -14,6 +14,7 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.documents.ConsentDocumentsRoute
 import ago.chat.android.faq.ModulesFaqRoute
 import ago.chat.android.products.ProductsRoute
+import ago.chat.android.storage.StorageRoute
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
 import androidx.activity.compose.BackHandler
@@ -149,6 +150,10 @@ internal fun MoreScreen(
             // not a form). Back returns to the Ещё list (clause 2) via the same `openRowId = null` every
             // drill-in uses.
             ADMINISTRATION_PRODUCTS_ROW_ID -> ProductsRoute(onBack = { openRowId = null })
+            // `26-250`: Администрирование → «Хранилище» - the attachments-storage list with the console's
+            // own quota bar, sort/filter and destructive bulk-delete (`ago-console`'s own `StoragePage`).
+            // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            ADMINISTRATION_STORAGE_ROW_ID -> StorageRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -266,6 +271,7 @@ internal const val ADMINISTRATION_OPERATORS_ROW_ID: String = "administration-ope
 internal const val ADMINISTRATION_PRODUCTS_ROW_ID: String = "administration-products"
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
+internal const val ADMINISTRATION_STORAGE_ROW_ID: String = "administration-storage"
 
 /** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
  * opens [PlaceholderDestinationScreen] rather than a finished screen.
@@ -425,6 +431,18 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = ADMINISTRATION_DOCUMENTS_ROW_ID,
                     labelRes = R.string.more_administration_documents_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
+        // `26-250`: «Хранилище» closes out the built Администрирование rows, after «Документы согласий»,
+        // gated on `site:configure` like every other real row this screen serves - the same permission
+        // `ago-console`'s own `StoragePage` gates `/account/storage` on.
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_STORAGE_ROW_ID,
+                    labelRes = R.string.more_administration_storage_row,
                     section = MoreSectionId.Administration,
                 ),
             )

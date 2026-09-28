@@ -760,6 +760,8 @@
     <!-- `26-91`: "Plan &amp; billing" — see the file-level note above. -->
     <string name="more_administration_billing_row">Plan &amp; billing</string>
     <string name="more_administration_documents_row">Consent documents</string>
+    <!-- `26-250`: Administration → "Storage". See the ru strings for the full note. -->
+    <string name="more_administration_storage_row">Storage</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
     <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
@@ -961,6 +963,43 @@
     <string name="products_calendar_description">Let customers book an appointment with one of your staff, and manage the schedule from here.</string>
     <string name="products_faq_name">Knowledge base</string>
     <string name="products_faq_description">Answer common questions automatically, from a knowledge base you write - so operators only handle what actually needs a person.</string>
+
+    <!-- `26-250` (`ago-console`'s own `StoragePage`): Administration → "Storage". See the ru strings for
+         the full note on why the confirm message and result banner avoid count inflection. -->
+    <string name="storage_title">Attachment storage</string>
+    <string name="storage_refresh_action">Refresh</string>
+    <string name="storage_quota_used">%1$s of %2$s used</string>
+    <string name="storage_egress_this_month">%1$s: %2$d downloads, %3$s out</string>
+    <string name="storage_largest_title">Heaviest conversations</string>
+    <string name="storage_largest_row">%1$s — %2$s (attachments: %3$d)</string>
+    <string name="storage_table_title">Attachments</string>
+    <string name="storage_empty">No attachments.</string>
+    <string name="storage_load_more">Show more</string>
+    <string name="storage_loading">Loading…</string>
+    <string name="storage_delete_selected">Delete selected</string>
+    <string name="storage_delete_selected_count">Delete selected (%1$d)</string>
+    <string name="storage_delete_result">Deleted %1$d attachment(s). Freed %2$s.</string>
+    <string name="storage_confirm_delete_title">Delete attachments?</string>
+    <string name="storage_confirm_delete_message">This will permanently delete the selected attachments: %1$d (%2$s). This cannot be undone.</string>
+    <string name="storage_confirm_delete_action">Delete</string>
+    <!-- %1$s - short conversation id, %2$s - sender, %3$s - upload date. -->
+    <string name="storage_row_meta">Conversation %1$s · %2$s · %3$s</string>
+    <string name="storage_never_downloaded">Never downloaded</string>
+    <string name="storage_downloads_count">Downloads: %1$d</string>
+    <string name="storage_duplicate_badge">Duplicate</string>
+    <string name="storage_sort_size_desc">Largest first</string>
+    <string name="storage_sort_type_asc">By type</string>
+    <string name="storage_sort_age_asc">Oldest first</string>
+    <string name="storage_sort_conversation_asc">By conversation</string>
+    <string name="storage_sort_sender_asc">By sender</string>
+    <string name="storage_filter_none">All</string>
+    <string name="storage_filter_never_downloaded">Never downloaded</string>
+    <string name="storage_filter_duplicates">Duplicates</string>
+    <string name="storage_sender_visitor">Visitor</string>
+    <string name="storage_sender_operator">Operator</string>
+    <string name="storage_sender_system">System</string>
+    <string name="storage_sender_auto_greeting">Auto-greeting</string>
+    <string name="storage_sender_unknown">—</string>
 
     <string name="automation_tags_empty">No tags yet. Add the first one.</string>
     <string name="automation_tags_add_action">Add tag</string>
