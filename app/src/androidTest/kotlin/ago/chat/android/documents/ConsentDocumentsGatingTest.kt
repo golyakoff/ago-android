@@ -77,6 +77,11 @@ class ConsentDocumentsGatingTest {
         // shape `androidx.compose.ui.test.performScrollToNode`'s own doc recommends for exactly this
         // "item not yet laid out" case a bare `performScrollTo()` cannot handle.
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Документы согласий"))
+        // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
+        // `LazyColumn` and pushing this already-deep Администрирование row further down: let the scroll and
+        // the lazy (re)composition it triggers settle before asserting, rather than racing the assert
+        // against a node that `performScrollToNode` has only just begun to lay out.
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Документы согласий").assertExists()
     }
 

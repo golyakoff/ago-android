@@ -63,6 +63,11 @@ class DeviceStorageDisclosureTest {
         // A `LazyColumn` never composes a semantics node for an item it has not laid out; drive the scroll
         // container until the row is composed rather than looking it up before it exists.
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
+        // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
+        // `LazyColumn` and pushing «Справка» (the last `site:configure` Администрирование row) further down:
+        // let the scroll and the lazy (re)composition it triggers settle before asserting, rather than
+        // racing the assert against a node `performScrollToNode` has only just begun to lay out.
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Справка").assertExists()
     }
 
@@ -85,6 +90,7 @@ class DeviceStorageDisclosureTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Справка").performClick()
 
         // The disclosure heading and the not-cookies warning are the top of the static screen.
