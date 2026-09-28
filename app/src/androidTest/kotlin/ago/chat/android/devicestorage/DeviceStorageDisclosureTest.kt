@@ -60,9 +60,13 @@ class DeviceStorageDisclosureTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
+        // `26-246` lengthened the site:configure list (a fourth Автоматизация row) enough that even the
+        // «Администрирование» section header now starts below the initial viewport, and a `LazyColumn`
+        // composes no semantics node for an item it has not laid out — so scroll the header into view
+        // before asserting it exists, rather than looking it up before it is composed.
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Администрирование"))
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
-        // A `LazyColumn` never composes a semantics node for an item it has not laid out; drive the scroll
-        // container until the row is composed rather than looking it up before it exists.
+        // Then drive the scroll container on to «Справка» (the last site:configure Администрирование row).
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Справка"))
         // `26-246` added a fourth Автоматизация row («ИИ-подсказки»), lengthening the full-`site:configure`
         // `LazyColumn` and pushing «Справка» (the last `site:configure` Администрирование row) further down.
