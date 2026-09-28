@@ -737,6 +737,10 @@ private fun AppShellContent(
                     // the dedicated permission `ago-console`'s own `SiteExportPage` gates on, not
                     // `site:configure`. Drives whether Ещё's Администрирование «Скачать данные» row is drawn.
                     canExportSite = permissions.holds(Permission.SITE_EXPORT),
+                    // `26-252`: computed the same way, from the same `Known` set — but off `site:erase`, the
+                    // dedicated permission `ago-console`'s own `AccountDeletionPage` gates on, not
+                    // `site:configure`. Drives whether Ещё's Администрирование «Удалить аккаунт» row is drawn.
+                    canEraseSite = permissions.holds(Permission.SITE_ERASE),
                 )
             }
             // `26-77`: the one `NavHost` route none of the five bottom-nav destinations owns - pushed by

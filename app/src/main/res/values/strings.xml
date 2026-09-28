@@ -1253,6 +1253,11 @@
          `site:export` rather than `site:configure`. One resource for both the Ещё row label and the
          screen's own app-bar title, the same "one word, one string" shape the rows above establish. -->
     <string name="more_administration_export_row">Скачать данные</string>
+    <!-- `26-252`: Администрирование → «Удалить аккаунт» (`ago-console`'s own `AccountDeletionPage`), gated on
+         `site:erase` rather than `site:configure`. The most destructive row, placed last. One resource for
+         both the Ещё row label and the screen's own app-bar title, the same "one word, one string" shape the
+         rows above establish. -->
+    <string name="more_administration_delete_row">Удалить аккаунт</string>
     <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
          retired `analytics_placeholder_body`, worded generically now that more than one destination
          needs it. -->
@@ -1628,6 +1633,20 @@
     <string name="site_export_status_ready">Готово</string>
     <string name="site_export_status_failed">Ошибка</string>
     <string name="site_export_status_expired">Срок истёк</string>
+
+    <!-- `26-252` (`ago-console`'s own `AccountDeletionPage`): Ещё → Администрирование → «Удалить аккаунт» -
+         предупреждение и одно необратимое действие удаления всего аккаунта, за явным подтверждением. -->
+    <string name="account_deletion_title">Удалить аккаунт</string>
+    <string name="account_deletion_description">Безвозвратно удалить этот аккаунт и всё, что в нём есть.</string>
+    <string name="account_deletion_warning_body">Будут удалены все диалоги, сообщения и вложения, настройки сайта, операторы и их учётные записи для входа. Это нельзя отменить, и другого подтверждения, кроме этого, не будет.</string>
+    <string name="account_deletion_button">Удалить этот аккаунт</string>
+    <string name="account_deletion_dialog_title">Удалить этот аккаунт?</string>
+    <string name="account_deletion_dialog_body">Аккаунт и всё, что в нём есть, будут удалены безвозвратно. Это нельзя отменить, и другого подтверждения, кроме этого, не будет.</string>
+    <string name="account_deletion_confirm_button">Удалить</string>
+    <string name="account_deletion_in_progress_title">Идёт удаление</string>
+    <!-- Android не опрашивает сервер, как консоль: терминальное состояние предлагает выйти вручную. -->
+    <string name="account_deletion_in_progress_body">Аккаунт удаляется. Это может занять некоторое время. Выйдите из системы — ваша учётная запись для входа удаляется вместе с аккаунтом.</string>
+    <string name="account_deletion_sign_out_action">Выйти</string>
 
     <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
          tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -

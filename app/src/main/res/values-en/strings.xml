@@ -763,6 +763,8 @@
     <!-- `26-250`: Administration → "Storage". See the ru strings for the full note. -->
     <string name="more_administration_storage_row">Storage</string>
     <string name="more_administration_export_row">Export data</string>
+    <!-- `26-252`: Administration → "Delete account", gated on `site:erase`. See the ru strings for the full note. -->
+    <string name="more_administration_delete_row">Delete account</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
     <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
@@ -1015,6 +1017,20 @@
     <string name="site_export_status_ready">Ready</string>
     <string name="site_export_status_failed">Failed</string>
     <string name="site_export_status_expired">Expired</string>
+
+    <!-- `26-252` (`ago-console`'s own `AccountDeletionPage`): Administration → "Delete account" - a warning and
+         one irreversible whole-account deletion behind an explicit confirmation. -->
+    <string name="account_deletion_title">Delete account</string>
+    <string name="account_deletion_description">Permanently delete this account and everything in it.</string>
+    <string name="account_deletion_warning_body">This deletes every conversation, message and attachment, the site\'s own configuration, its operators, and their sign-in accounts. It cannot be undone, and there is no confirmation beyond this one.</string>
+    <string name="account_deletion_button">Delete this account</string>
+    <string name="account_deletion_dialog_title">Delete this account?</string>
+    <string name="account_deletion_dialog_body">This permanently deletes the account and everything in it. It cannot be undone, and there is no confirmation beyond this one.</string>
+    <string name="account_deletion_confirm_button">Delete it</string>
+    <string name="account_deletion_in_progress_title">Deletion in progress</string>
+    <!-- Android does not poll the server like the console does: the terminal state offers a manual sign-out. -->
+    <string name="account_deletion_in_progress_body">The account is being deleted. This can take a while. Sign out - your own sign-in account is being deleted along with it.</string>
+    <string name="account_deletion_sign_out_action">Sign out</string>
 
     <string name="automation_tags_empty">No tags yet. Add the first one.</string>
     <string name="automation_tags_add_action">Add tag</string>

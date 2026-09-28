@@ -1,6 +1,7 @@
 package ago.chat.android.shell
 
 import ago.chat.android.R
+import ago.chat.android.accountdeletion.AccountDeletionRoute
 import ago.chat.android.automation.CannedResponsesRoute
 import ago.chat.android.automation.OfflineAutoReplyRoute
 import ago.chat.android.automation.TagsRoute
@@ -100,9 +101,21 @@ internal fun MoreScreen(
     // Defaults to `false` so the back-contract tests that drive [MoreScreen] with no `site:export` keep
     // rendering exactly the rows they did before this item.
     canExportSite: Boolean = false,
+    // `26-252`: whether the signed-in operator holds `site:erase` — a **separate** gate from
+    // [canConfigureSite] and [canExportSite], because `ago-console`'s own `AccountDeletionPage` gates
+    // `/account/delete` on its own dedicated `site:erase` permission. Computed once by [AppShellContent] from
+    // the [ago.chat.android.core.domain.permissions.OperatorPermissions.Known] it already has, and handed
+    // here as a plain `Boolean`, the identical split [canConfigureSite]/[canExportSite] follow. Decides
+    // whether the Администрирование «Удалить аккаунт» row is drawn at all (hide-not-disable). Defaults to
+    // `false` so the back-contract tests that drive [MoreScreen] with no `site:erase` keep rendering exactly
+    // the rows they did before this item.
+    canEraseSite: Boolean = false,
 ) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
-    val rows = remember(canConfigureSite, canExportSite) { buildMoreRows(canConfigureSite, canExportSite) }
+    val rows =
+        remember(canConfigureSite, canExportSite, canEraseSite) {
+            buildMoreRows(canConfigureSite, canExportSite, canEraseSite)
+        }
     BackHandler(enabled = openRowId != null) { openRowId = null }
 
     val openRow = rows.firstOrNull { it.id == openRowId }
@@ -169,6 +182,13 @@ internal fun MoreScreen(
             // like the rows above). Back returns to the Ещё list (clause 2) via the same `openRowId = null`
             // every drill-in uses.
             ADMINISTRATION_EXPORT_ROW_ID -> SiteExportRoute(onBack = { openRowId = null })
+            // `26-252`: Администрирование → «Удалить аккаунт» - the whole-account deletion screen
+            // (`ago-console`'s own `AccountDeletionPage`), gated on `site:erase` (not `site:configure` or
+            // `site:export`). Threaded `onSignOut` because its terminal "erasing" state ends the session -
+            // the one row here that needs more than `onBack`. Back returns to the Ещё list (clause 2) via the
+            // same `openRowId = null` every drill-in uses.
+            ADMINISTRATION_DELETE_ROW_ID ->
+                AccountDeletionRoute(onBack = { openRowId = null }, onSignOut = onSignOut)
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -288,6 +308,7 @@ internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billi
 internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
 internal const val ADMINISTRATION_STORAGE_ROW_ID: String = "administration-storage"
 internal const val ADMINISTRATION_EXPORT_ROW_ID: String = "administration-export"
+internal const val ADMINISTRATION_DELETE_ROW_ID: String = "administration-delete"
 
 /** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
  * opens [PlaceholderDestinationScreen] rather than a finished screen.
@@ -318,6 +339,7 @@ internal const val ADMINISTRATION_EXPORT_ROW_ID: String = "administration-export
 internal fun buildMoreRows(
     canConfigureSite: Boolean = false,
     canExportSite: Boolean = false,
+    canEraseSite: Boolean = false,
 ): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
@@ -477,6 +499,20 @@ internal fun buildMoreRows(
                 MoreRow(
                     id = ADMINISTRATION_EXPORT_ROW_ID,
                     labelRes = R.string.more_administration_export_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
+        // `26-252`: «Удалить аккаунт» is the last Администрирование row - the most destructive, placed after
+        // every other row deliberately - gated on `site:erase`, the one row here (with «Скачать данные») not
+        // gated on `site:configure`. It therefore appears independently of the `canConfigureSite` rows above:
+        // an operator holding `site:erase` but not `site:configure` sees Администрирование with this row (and
+        // its unconditional siblings) but none of the `site:configure`-gated ones.
+        if (canEraseSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_DELETE_ROW_ID,
+                    labelRes = R.string.more_administration_delete_row,
                     section = MoreSectionId.Administration,
                 ),
             )
