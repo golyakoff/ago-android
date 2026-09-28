@@ -184,8 +184,8 @@ android {
         // a future build variant (`26-17`'s "О приложении" reads the variant's own name) can point a
         // build at a different deployment without a source change, and overridable by a Gradle
         // property the same way `26-09` already overrides the version fields.
-        buildConfigField("String", "AGO_API_BASE_URL", agoProperty("agoApiBaseUrl", "https://chat-api.reserve-me.ru"))
-        buildConfigField("String", "AGO_KEYCLOAK_ISSUER", agoProperty("agoKeycloakIssuer", "https://auth.reserve-me.ru/realms/ago-chat"))
+        buildConfigField("String", "AGO_API_BASE_URL", agoProperty("agoApiBaseUrl", "https://chat-api.agochat.ru"))
+        buildConfigField("String", "AGO_KEYCLOAK_ISSUER", agoProperty("agoKeycloakIssuer", "https://auth.agochat.ru/realms/ago-chat"))
         buildConfigField("String", "AGO_OIDC_CLIENT_ID", agoProperty("agoOidcClientId", "ago-android"))
         buildConfigField("String", "AGO_OIDC_REDIRECT_URI", agoProperty("agoOidcRedirectUri", "ago-android://callback"))
         // `26-93`: a second, distinct redirect under the same `appAuthRedirectScheme` above - RP-
@@ -198,7 +198,7 @@ android {
             "AGO_OIDC_POST_LOGOUT_REDIRECT_URI",
             agoProperty("agoOidcPostLogoutRedirectUri", "ago-android://logout-callback"),
         )
-        buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.reserve-me.ru"))
+        buildConfigField("String", "AGO_CONSOLE_URL", agoProperty("agoConsoleUrl", "https://office.agochat.ru"))
 
         // `26-48`: a *second*, nullable deployment target — see [agoOptionalProperty]'s own doc comment
         // for why this one field breaks the "always a default" pattern every field above it follows.
