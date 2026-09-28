@@ -1249,6 +1249,10 @@
          согласий». One resource for both the Ещё row label and the screen's own app-bar title, the same
          "one word, one string" shape the rows above establish. -->
     <string name="more_administration_storage_row">Хранилище</string>
+    <!-- `26-251`: Администрирование → «Скачать данные» (`ago-console`'s own `SiteExportPage`), gated on
+         `site:export` rather than `site:configure`. One resource for both the Ещё row label and the
+         screen's own app-bar title, the same "one word, one string" shape the rows above establish. -->
+    <string name="more_administration_export_row">Скачать данные</string>
     <!-- The one sentence every row above renders until its own real screen lands - `26-57`'s own
          retired `analytics_placeholder_body`, worded generically now that more than one destination
          needs it. -->
@@ -1607,6 +1611,23 @@
     <string name="storage_sender_system">Система</string>
     <string name="storage_sender_auto_greeting">Автоприветствие</string>
     <string name="storage_sender_unknown">—</string>
+
+    <!-- `26-251` (`ago-console`'s own `SiteExportPage`): Администрирование → «Скачать данные» - история
+         запросов на экспорт и кнопка нового запроса. `%1$s` в строках со временем - позиционный. -->
+    <string name="site_export_title">Скачать данные</string>
+    <string name="site_export_refresh_action">Обновить</string>
+    <string name="site_export_request_action">Подготовить данные для скачивания</string>
+    <string name="site_export_empty">Экспортов пока нет.</string>
+    <string name="site_export_download_link">Скачать</string>
+    <!-- %1$s - дата и время запроса в часовом поясе устройства. -->
+    <string name="site_export_requested_at">Запрошено: %1$s</string>
+    <!-- %1$s - дата и время автоматического удаления архива в часовом поясе устройства. -->
+    <string name="site_export_expires_at">Будет удалено: %1$s</string>
+    <string name="site_export_status_pending">В очереди</string>
+    <string name="site_export_status_processing">Готовится</string>
+    <string name="site_export_status_ready">Готово</string>
+    <string name="site_export_status_failed">Ошибка</string>
+    <string name="site_export_status_expired">Срок истёк</string>
 
     <!-- `26-225` (`docs/design/tenant-canned-tags-android.md` §2): Автоматизация → «Метки» - the
          tag-vocabulary CRUD editor. The screen's own app-bar title reuses `more_automation_tags_row` -

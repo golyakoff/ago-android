@@ -14,6 +14,7 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.documents.ConsentDocumentsRoute
 import ago.chat.android.faq.ModulesFaqRoute
 import ago.chat.android.products.ProductsRoute
+import ago.chat.android.siteexport.SiteExportRoute
 import ago.chat.android.storage.StorageRoute
 import ago.chat.android.ui.components.AccountAvatarAction
 import ago.chat.android.ui.components.SectionLabel
@@ -90,9 +91,18 @@ internal fun MoreScreen(
     // back-contract tests that drive [MoreScreen] with no `site:configure` keep rendering exactly the rows
     // they did before this item.
     canConfigureSite: Boolean = false,
+    // `26-251`: whether the signed-in operator holds `site:export` — a **separate** gate from
+    // [canConfigureSite], because `ago-console`'s own `SiteExportPage` gates `/account/export` on its own
+    // dedicated `site:export` permission, not on `site:configure` like every other Администрирование row.
+    // Computed once by [AppShellContent] from the [ago.chat.android.core.domain.permissions.OperatorPermissions.Known]
+    // it already has, and handed here as a plain `Boolean`, the identical split [canConfigureSite] follows.
+    // Decides whether the Администрирование «Скачать данные» row is drawn at all (hide-not-disable).
+    // Defaults to `false` so the back-contract tests that drive [MoreScreen] with no `site:export` keep
+    // rendering exactly the rows they did before this item.
+    canExportSite: Boolean = false,
 ) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
-    val rows = remember(canConfigureSite) { buildMoreRows(canConfigureSite) }
+    val rows = remember(canConfigureSite, canExportSite) { buildMoreRows(canConfigureSite, canExportSite) }
     BackHandler(enabled = openRowId != null) { openRowId = null }
 
     val openRow = rows.firstOrNull { it.id == openRowId }
@@ -154,6 +164,11 @@ internal fun MoreScreen(
             // own quota bar, sort/filter and destructive bulk-delete (`ago-console`'s own `StoragePage`).
             // Back returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
             ADMINISTRATION_STORAGE_ROW_ID -> StorageRoute(onBack = { openRowId = null })
+            // `26-251`: Администрирование → «Скачать данные» - the site-data export history + request
+            // screen (`ago-console`'s own `SiteExportPage`), gated on `site:export` (not `site:configure`
+            // like the rows above). Back returns to the Ещё list (clause 2) via the same `openRowId = null`
+            // every drill-in uses.
+            ADMINISTRATION_EXPORT_ROW_ID -> SiteExportRoute(onBack = { openRowId = null })
             else ->
                 PlaceholderDestinationScreen(
                     title = stringResource(openRow.labelRes),
@@ -272,6 +287,7 @@ internal const val ADMINISTRATION_PRODUCTS_ROW_ID: String = "administration-prod
 internal const val ADMINISTRATION_BILLING_ROW_ID: String = "administration-billing"
 internal const val ADMINISTRATION_DOCUMENTS_ROW_ID: String = "administration-documents"
 internal const val ADMINISTRATION_STORAGE_ROW_ID: String = "administration-storage"
+internal const val ADMINISTRATION_EXPORT_ROW_ID: String = "administration-export"
 
 /** `26-77`: four rows, real at last — see this file's own top-of-file doc comment for why each still
  * opens [PlaceholderDestinationScreen] rather than a finished screen.
@@ -299,7 +315,10 @@ internal const val ADMINISTRATION_STORAGE_ROW_ID: String = "administration-stora
  * had left unbuilt. Unlike the three token channels, Почта has no per-tenant credential to connect - it
  * is a settings form (company name + logo), so it opens straight into
  * [ago.chat.android.channels.BrandingRoute] with no connect/disconnect state to speak of. */
-internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
+internal fun buildMoreRows(
+    canConfigureSite: Boolean = false,
+    canExportSite: Boolean = false,
+): List<MoreRow> =
     buildList {
         if (canConfigureSite) {
             add(
@@ -443,6 +462,21 @@ internal fun buildMoreRows(canConfigureSite: Boolean = false): List<MoreRow> =
                 MoreRow(
                     id = ADMINISTRATION_STORAGE_ROW_ID,
                     labelRes = R.string.more_administration_storage_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
+        // `26-251`: «Скачать данные» closes out the Администрирование rows, gated on `site:export` - the
+        // one row this screen serves under a permission other than `site:configure`, because
+        // `ago-console`'s own `SiteExportPage` gates `/account/export` on its own dedicated
+        // `site:export`. It therefore appears independently of the `canConfigureSite` rows above: an
+        // operator holding `site:export` but not `site:configure` sees Администрирование with this row
+        // (and its two unconditional siblings) but none of the `site:configure`-gated ones.
+        if (canExportSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_EXPORT_ROW_ID,
+                    labelRes = R.string.more_administration_export_row,
                     section = MoreSectionId.Administration,
                 ),
             )
