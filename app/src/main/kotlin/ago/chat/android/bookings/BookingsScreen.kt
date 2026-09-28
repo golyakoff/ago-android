@@ -220,16 +220,19 @@ public fun BookingsRoute(
     val contactsState: ContactsUiState?
     val onRetryContacts: () -> Unit
     val onRevealContact: (String) -> Unit
+    val onContactsSearchQueryChange: (String) -> Unit
     if (showClientsSegment) {
         val contactsViewModel: ContactsViewModel = hiltViewModel()
         val collectedContactsState by contactsViewModel.state.collectAsStateWithLifecycle()
         contactsState = collectedContactsState
         onRetryContacts = contactsViewModel::refresh
         onRevealContact = contactsViewModel::reveal
+        onContactsSearchQueryChange = contactsViewModel::onSearchQueryChange
     } else {
         contactsState = null
         onRetryContacts = {}
         onRevealContact = {}
+        onContactsSearchQueryChange = {}
     }
 
     // `26-96`: the identical Hilt-avoidance-when-ungated shape the two branches above establish,
@@ -502,6 +505,7 @@ public fun BookingsRoute(
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
         onRevealContact = onRevealContact,
+        onContactsSearchQueryChange = onContactsSearchQueryChange,
         servicesState = servicesState,
         onRetryServices = onRetryServices,
         onEditService = onEditService,
@@ -647,6 +651,7 @@ internal fun BookingsScreen(
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
     onRevealContact: (String) -> Unit,
+    onContactsSearchQueryChange: (String) -> Unit,
     servicesState: ServicesUiState?,
     onRetryServices: () -> Unit,
     onEditService: (ConfiguredService) -> Unit,
@@ -949,7 +954,12 @@ internal fun BookingsScreen(
                     // `BookingsTab.Confirmed`'s own comment above states, for `showClientsSegment`.
                     BookingsTab.Clients ->
                         contactsState?.let {
-                            ContactsBody(state = it, onRetry = onRetryContacts, onReveal = onRevealContact)
+                            ContactsBody(
+                                state = it,
+                                onRetry = onRetryContacts,
+                                onReveal = onRevealContact,
+                                onSearchQueryChange = onContactsSearchQueryChange,
+                            )
                         }
 
                     // `26-157`/`26-164`: the five configuration tabs are never a `selectedTab` - they are

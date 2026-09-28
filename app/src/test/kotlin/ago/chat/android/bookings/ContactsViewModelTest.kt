@@ -393,6 +393,53 @@ class ContactsViewModelTest {
         }
 
     @Test
+    fun `26-269 a search query is folded into the loaded state`() =
+        runTest(dispatcher) {
+            val anna = contact(id = "c1").copy(displayName = "Анна")
+            val boris = contact(id = "c2").copy(displayName = "Борис")
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(anna, boris)))
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.onSearchQueryChange("анн")
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertEquals("анн", loaded.searchQuery)
+            // `contacts` stays the full, untouched list - only `visibleContacts` narrows.
+            assertEquals(listOf(anna, boris), loaded.contacts)
+            assertEquals(listOf(anna), loaded.visibleContacts)
+        }
+
+    @Test
+    fun `26-269 clearing the query restores every contact with no second read`() =
+        runTest(dispatcher) {
+            val anna = contact(id = "c1").copy(displayName = "Анна")
+            val boris = contact(id = "c2").copy(displayName = "Борис")
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(anna, boris)))
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            viewModel.onSearchQueryChange("анн")
+
+            viewModel.onSearchQueryChange("")
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertEquals(listOf(anna, boris), loaded.visibleContacts)
+            assertEquals(1, api.contactsFetchCalls)
+        }
+
+    @Test
+    fun `26-269 a search query is a no-op before the list has loaded`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(hangFetch = true)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            dispatcher.scheduler.runCurrent()
+
+            viewModel.onSearchQueryChange("анн")
+
+            assertEquals(ContactsUiState.Loading, viewModel.state.value)
+        }
+
+    @Test
     fun `26-162 an empty contact list asks the person registry for nothing`() =
         runTest(dispatcher) {
             val api = FakeBookingsApi(result = ContactsResult.Loaded(emptyList()))

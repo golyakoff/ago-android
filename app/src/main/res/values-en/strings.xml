@@ -464,13 +464,17 @@
     <string name="bookings_tab_clients">Clients</string>
     <string name="bookings_contacts_empty">This tenant has no customers yet.</string>
     <string name="bookings_contacts_load_failed_unexpected">Couldn\'t load customers. Try again.</string>
-    <string name="bookings_contacts_noshow_label">No-shows</string>
-    <string name="bookings_contacts_phone_verified_yes">Verified by code</string>
-    <string name="bookings_contacts_phone_verified_no">Not verified by code</string>
-    <string name="bookings_contacts_phone_confirmed_yes">Confirmed by operator</string>
-    <string name="bookings_contacts_phone_confirmed_no">Not confirmed by operator</string>
     <string name="bookings_contacts_reveal_phone">Show</string>
     <string name="bookings_contacts_revealing_phone">Showing…</string>
+    <!-- `26-269`: see the RU file. -->
+    <string name="bookings_contacts_search_placeholder">Name or phone</string>
+    <string name="bookings_contacts_search_empty">No customers match this search.</string>
+    <string name="bookings_contacts_phone_unverified_description">Phone not verified</string>
+    <!-- English has no third plural form - `many` restates `few` verbatim, the identical
+         `russianPluralStringResource`-precedent `past_dialogs_row_count_few`/`_many` already establishes. -->
+    <string name="bookings_contacts_noshow_pill_one">%1$d no-show</string>
+    <string name="bookings_contacts_noshow_pill_few">%1$d no-shows</string>
+    <string name="bookings_contacts_noshow_pill_many">%1$d no-shows</string>
 
     <string name="bookings_tab_services">Services</string>
     <string name="bookings_config_menu_action">Configuration</string>

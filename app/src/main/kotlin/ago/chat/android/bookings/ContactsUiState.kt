@@ -22,12 +22,30 @@ internal sealed interface ContactsUiState {
      * today" section cites `CalendarQueuePage.tsx`'s own `revealingCustomerId`, tracked by customer id
      * so that every row sharing one customer (a customer can have several pending bookings) is disabled
      * together, never independently.
+     *
+     * `26-269`: [searchQuery] is the operator's own live filter text — held here rather than as a
+     * separate view-model field, the same reasoning [revealingCustomerIds] states: it is state about
+     * *this loaded list*, meaningless in every other arm of this `sealed interface`, so it lives beside
+     * [contacts] instead of forcing every other state to carry a field it never uses. [contacts] itself
+     * stays the *full*, unfiltered list the server answered with — never mutated by a search — so
+     * clearing the query always restores every row with no second read; [visibleContacts] is the one
+     * place [searchQuery] is ever applied, computed rather than stored so it can never drift out of sync
+     * with either field changing independently. Defaulted to `""` so every pre-existing call site (none
+     * of which knows about search) keeps compiling unchanged.
      */
     data class Loaded(
         val contacts: List<Contact>,
+        val searchQuery: String = "",
         val revealingCustomerIds: Set<String> = emptySet(),
         val actionError: BookingActionErrorUi? = null,
-    ) : ContactsUiState
+    ) : ContactsUiState {
+        /** `26-269`: [contacts] filtered by [searchQuery] — see [filterContacts] for the match rule.
+         * A `get()`-only property, not a constructor parameter, so it takes no part in this data class's
+         * generated `equals`/`hashCode`/`copy` — every existing test that builds a [Loaded] by hand and
+         * compares it keeps asserting on [contacts] exactly as before. */
+        val visibleContacts: List<Contact>
+            get() = filterContacts(contacts, searchQuery)
+    }
 
     data object NotConfigured : ContactsUiState
 
@@ -35,3 +53,44 @@ internal sealed interface ContactsUiState {
         val reason: BookingsQueueFailure,
     ) : ContactsUiState
 }
+
+/**
+ * `26-269`: the Клиенты search's own match rule — a blank/whitespace-only [query] (the field's own
+ * default) returns [contacts] untouched, otherwise a row survives when [query] is a case-insensitive
+ * substring of either [Contact.displayName] **or** [Contact.phone] (`docs/backlog/26-269-*.md` §1.5.3:
+ * "client-side filtering... by name and by phone"). A `null` [Contact.displayName] (no chat-side name
+ * merged yet, [ContactsViewModel.mergePersonDetails]'s own doc comment) never matches by name — there is
+ * no name to compare against — but the row still matches by phone, so a nameless customer stays findable.
+ * [Contact.phone] is matched exactly as the server/reveal left it — masked or not — never re-derived or
+ * digit-normalised here: this is a filter over what the operator can already read on the row, not a new
+ * fact about the phone number.
+ *
+ * A plain top-level function, not a method on [ContactsUiState.Loaded] itself, so a unit test can assert
+ * the match rule directly against a bare [List] of [Contact] with no [ContactsUiState] wrapper to build
+ * first — the identical "plain function over plain data" reasoning `BookingsTab.kt`'s own
+ * `visibleBookingsSegments` states for its own list-filtering logic.
+ */
+internal fun filterContacts(
+    contacts: List<Contact>,
+    query: String,
+): List<Contact> {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return contacts
+    return contacts.filter { contact ->
+        contact.displayName?.contains(trimmed, ignoreCase = true) == true ||
+            contact.phone.contains(trimmed, ignoreCase = true)
+    }
+}
+
+/**
+ * `26-269`: the row's own warning-glyph rule — `true` iff [Contact.phoneVerifiedAt] **and**
+ * [Contact.phoneConfirmedByOperatorAt] are both `null` (`docs/backlog/26-269-*.md` §3.3: "the single
+ * actionable state... When it is verified *either* way, show no icon"). A plain `Boolean` property on
+ * [Contact] rather than logic inlined in [PhoneStatusAndNoShowRow]'s `@Composable` body, so a plain JVM
+ * unit test can assert the rule directly against a bare [Contact] — the identical "pull the rule out of
+ * the composable so it is testable without Compose" reasoning [filterContacts] states for the search
+ * match rule above. Never renamed to "verified"/"confirmed" singular: it answers "does this row need the
+ * glyph", not "is the phone verified" — that remains two separate facts on [Contact] itself.
+ */
+internal val Contact.phoneNeedsAttention: Boolean
+    get() = phoneVerifiedAt == null && phoneConfirmedByOperatorAt == null

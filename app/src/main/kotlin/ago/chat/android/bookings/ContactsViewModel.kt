@@ -69,6 +69,20 @@ internal class ContactsViewModel
             refresh()
         }
 
+        /**
+         * `26-269`: every keystroke in the Клиенты search field. A no-op outside [ContactsUiState.Loaded]
+         * (there is nothing to filter while the list is still loading, not configured, or failed) — the
+         * identical "only the loaded arm carries this field" guard [reveal] already applies to
+         * [ContactsUiState.Loaded]'s own `revealingCustomerIds`. Never re-fetches: [filterContacts] runs
+         * client-side over the list already in memory (`docs/backlog/26-269-*.md` §1.5.3's own "no backend
+         * change" decision), so this is a plain state update, not a coroutine.
+         */
+        fun onSearchQueryChange(query: String) {
+            mutableState.update { current ->
+                (current as? ContactsUiState.Loaded)?.copy(searchQuery = query) ?: current
+            }
+        }
+
         /** The initial load, and the retry action a [ContactsUiState.Failed] screen offers — the
          * identical "asking again is the whole of retry" shape [BookingsViewModel.refresh]'s own doc
          * comment states. Clears [revealingCustomerIds] the identical reason
