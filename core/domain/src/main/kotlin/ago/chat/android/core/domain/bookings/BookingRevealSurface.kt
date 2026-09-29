@@ -54,4 +54,13 @@ public object BookingRevealSurface {
      * telling them apart.
      */
     public const val ANDROID_RECUT: String = "AndroidRecut"
+
+    /**
+     * `26-269`: the client-detail hub's own reveal — a distinct string from [ANDROID_CONTACTS] even
+     * though both call the identical `revealCustomerPhone` endpoint and both start from Клиенты, for the
+     * identical reason [ANDROID_BOOKINGS]'s own doc comment states for itself: the audit trail's whole
+     * reason to carry `surface` is telling which screen actually revealed a number apart, and the hub is
+     * a sixth, genuinely different caller.
+     */
+    public const val ANDROID_CLIENT_DETAIL: String = "AndroidClientDetail"
 }

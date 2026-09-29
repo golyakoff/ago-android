@@ -4,12 +4,16 @@ import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfiguredService
+import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PersonBooking
+import ago.chat.android.core.domain.bookings.PersonBookingStatus
+import ago.chat.android.core.domain.bookings.PersonBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
@@ -440,6 +444,79 @@ public class KtorBookingsApi(
 
         return detail?.let { BookingActionResult.Refused(it) } ?: BookingActionResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-269`: `GET /api/v1/console/contacts/{personId}/bookings` — the identical check-base-URL-first,
+     * classify-never-invent shape every read above establishes, restated for this eighth endpoint for the
+     * same reason [fetchConfirmedBookings]'s own doc comment gives for not factoring the reads on this
+     * port into one shared helper.
+     */
+    override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult {
+        val baseUrl = calendarApiBaseUrl ?: return PersonBookingsResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/contacts/$personId/bookings")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return PersonBookingsResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return PersonBookingsResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            PersonBookingsResult.Loaded(response.body<List<PersonBookingWireDto>>().map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `200` whose body is not the promised shape is not an empty history - the identical
+            // `fetchPendingQueue`/`shapeGuard.ts` lesson, read onto this endpoint.
+            PersonBookingsResult.Failed(classify(failure))
+        }
+    }
+
+    /**
+     * `23-12`/`26-269`: `POST /api/v1/console/contacts/{personId}/confirm-phone` — the identical
+     * `204`(here, `200`)-or-refusal shape [performBookingAction] establishes, not folded into it because
+     * this write carries no body but does carry a success payload (`performBookingAction` only ever
+     * answers [BookingActionResult.Succeeded], with nothing to return).
+     */
+    override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult {
+        val baseUrl = calendarApiBaseUrl ?: return ConfirmPhoneResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$baseUrl/api/v1/console/contacts/$personId/confirm-phone")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ConfirmPhoneResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return try {
+                ConfirmPhoneResult.Confirmed(response.body<ConfirmOperatorVerifiedPhoneResponseWireDto>().confirmedAt)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                ConfirmPhoneResult.Failed(classify(failure))
+            }
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { ConfirmPhoneResult.Refused(it) } ?: ConfirmPhoneResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
 
 /** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
@@ -707,4 +784,58 @@ private fun ContactPhoneRevealWireDto.toDomain() =
 private data class ContactPhoneRevealPageWireDto(
     val items: List<ContactPhoneRevealWireDto>,
     val nextBefore: String? = null,
+)
+
+/**
+ * `26-269`: `Ago.Calendar.Contracts.PersonBookingResponse`, field for field except `personId` — see
+ * [PersonBooking]'s own doc comment for why that one is left off. [status] is read as the server's own
+ * wire string and mapped through [toPersonBookingStatus] rather than trusted as a `PersonBookingStatus`
+ * name directly, so a status this app's own enum does not yet know about degrades to
+ * [PersonBookingStatus.Unknown] instead of failing the whole list's decode.
+ */
+@Serializable
+private data class PersonBookingWireDto(
+    val bookingId: String,
+    val calendarId: String,
+    val workerId: String,
+    val workerDisplayName: String,
+    val serviceId: String,
+    val serviceName: String? = null,
+    val personId: String,
+    val startsAt: String,
+    val endsAt: String,
+    val localDate: String,
+    val weekday: Int,
+    val phone: String,
+    val masked: Boolean = false,
+    val originConversationId: String? = null,
+    val status: String,
+)
+
+private fun PersonBookingWireDto.toDomain() =
+    PersonBooking(
+        bookingId = bookingId,
+        calendarId = calendarId,
+        workerId = workerId,
+        workerDisplayName = workerDisplayName,
+        serviceId = serviceId,
+        serviceName = serviceName,
+        startsAt = startsAt,
+        endsAt = endsAt,
+        localDate = localDate,
+        weekday = weekday,
+        phone = phone,
+        masked = masked,
+        originConversationId = originConversationId,
+        status = toPersonBookingStatus(status),
+    )
+
+private fun toPersonBookingStatus(wireStatus: String): PersonBookingStatus =
+    PersonBookingStatus.entries.firstOrNull { it.name == wireStatus } ?: PersonBookingStatus.Unknown
+
+/** `Ago.Calendar.Contracts.ConfirmOperatorVerifiedPhoneResponse` - the one field a successful confirm's
+ * own body carries. */
+@Serializable
+private data class ConfirmOperatorVerifiedPhoneResponseWireDto(
+    val confirmedAt: String,
 )

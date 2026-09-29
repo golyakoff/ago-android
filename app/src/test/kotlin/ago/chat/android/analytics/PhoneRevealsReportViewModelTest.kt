@@ -3,14 +3,17 @@ package ago.chat.android.analytics
 import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PersonBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonConversationsResult
 import ago.chat.android.core.domain.persons.PersonProfile
 import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.persons.PersonsResult
@@ -290,6 +293,9 @@ class PhoneRevealsReportViewModelTest {
             requestedIds = personIds
             return result
         }
+
+        override suspend fun fetchPersonConversations(personId: String): PersonConversationsResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 
     private fun reveal(id: String) =
@@ -364,5 +370,11 @@ class PhoneRevealsReportViewModelTest {
             bookingId: String,
             newStartEventId: String,
         ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult =
+            throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 }

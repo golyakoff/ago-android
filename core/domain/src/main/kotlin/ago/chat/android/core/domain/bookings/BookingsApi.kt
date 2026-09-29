@@ -184,6 +184,35 @@ public interface BookingsApi {
         bookingId: String,
         newStartEventId: String,
     ): BookingActionResult
+
+    /**
+     * `26-269`: `GET /api/v1/console/contacts/{personId}/bookings` — the client-detail hub's own
+     * Предстоящие/Прошедшие read, one client's whole booking history across every status the calendar
+     * still holds a row for (`docs/backlog/26-269-*.md` §8#1). Gated inside the handler on
+     * `customer:read` alone, the identical divergence from this group's own `OperatorPolicy` that
+     * [fetchConfirmedBookings]'s own tenant-wide sibling already documents for itself.
+     *
+     * An eighth method on this same port, not a new adapter class — [KtorBookingsApi]'s own class doc
+     * comment already states why a fourth/fifth/.../seventh read or write earned no separate adapter, and
+     * this read shares every one of those properties too.
+     */
+    public suspend fun fetchPersonBookings(personId: String): PersonBookingsResult
+
+    /**
+     * `23-12`/`26-269`: `POST /api/v1/console/contacts/{personId}/confirm-phone` — "I called and it is
+     * them", a distinct fact from [PhoneReveal]/[revealCustomerPhone]'s own SMS-adjacent unmask
+     * (`Contact.phoneConfirmedByOperatorAt`, never merged with `Contact.phoneVerifiedAt` into one
+     * "verified" flag — [Contact]'s own doc comment states why). This endpoint existed in
+     * `Ago.Calendar.Api` since `23-12` with no client anywhere calling it; the client-detail hub's own
+     * warning-glyph action (`docs/backlog/26-269-*.md` §4/§8#6) is this app's first real caller.
+     *
+     * No request body — the route's own `{personId}` and the bearer token's operator identity are the
+     * whole of what the server needs to record. [ConfirmPhoneResult] carries the server's own
+     * `confirmedAt` back on success rather than a bare acknowledgement, the identical "a write with
+     * something worth returning gets its own result type" precedent [RevealPhoneResult] already sets for
+     * [revealCustomerPhone].
+     */
+    public suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult
 }
 
 /**
@@ -363,6 +392,55 @@ public sealed interface PhoneRevealsResult {
     public data class Failed(
         val reason: BookingsQueueFailure,
     ) : PhoneRevealsResult
+}
+
+/**
+ * `26-269`: what asking for one client's whole booking history came back with — the identical three-arm
+ * shape [ContactsResult]/[ConfirmedBookingsResult] already establish, restated rather than shared for the
+ * same reason those two are restated from one another: [Loaded] carries [PersonBooking], a type with no
+ * field in common with either sibling worth generalising over.
+ */
+public sealed interface PersonBookingsResult {
+    public data class Loaded(
+        val bookings: List<PersonBooking>,
+    ) : PersonBookingsResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact [PendingBookingsResult.NotConfigured]'s
+     * own doc comment explains. */
+    public data object NotConfigured : PersonBookingsResult
+
+    /** [BookingsQueueFailure] is reused again here, for the identical reason [ContactsResult.Failed]'s
+     * own doc comment gives: this read reduces to the same "is it me, or is it broken" two-way question
+     * every other read on this port already answers with it. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : PersonBookingsResult
+}
+
+/**
+ * `23-12`/`26-269`: what asking to record "I called and it is them" came back with — the identical
+ * [RevealPhoneResult] three-arm shape restated for a write whose success value is a timestamp rather than
+ * a phone number.
+ */
+public sealed interface ConfirmPhoneResult {
+    /** A `200` (or any `2xx`) carrying the server's own `ConfirmOperatorVerifiedPhoneResponse.ConfirmedAt` —
+     * read and handed back verbatim, never a client-side clock reading (rule 11: time comes from the
+     * server that recorded the fact, never `DateTime.Now`/a device clock standing in for it). */
+    public data class Confirmed(
+        val confirmedAt: String,
+    ) : ConfirmPhoneResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — shown verbatim, the identical
+     * [RevealPhoneResult.Refused] reasoning. */
+    public data class Refused(
+        val detail: String,
+    ) : ConfirmPhoneResult
+
+    /** Everything that is not a genuine server refusal — the identical [RevealPhoneResult.Failed]
+     * classification, reused here for the identical reason. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : ConfirmPhoneResult
 }
 
 /**

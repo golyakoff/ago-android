@@ -4,9 +4,11 @@ import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfiguredService
+import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PersonBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
@@ -332,5 +334,11 @@ class ServicesViewModelTest {
             bookingId: String,
             newStartEventId: String,
         ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult =
+            throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 }

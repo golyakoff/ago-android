@@ -480,6 +480,8 @@ private class FakeRecutPersonsApi(
         requestedIds = personIds
         return result
     }
+
+    override suspend fun fetchPersonConversations(personId: String) = throw UnsupportedOperationException()
 }
 
 /** The identical hand-written fake shape every sibling view model test in this package already uses. */
@@ -579,4 +581,8 @@ private class FakeRecutBookingsApi(
         bookingId: String,
         newStartEventId: String,
     ) = throw UnsupportedOperationException()
+
+    override suspend fun fetchPersonBookings(personId: String) = throw UnsupportedOperationException()
+
+    override suspend fun confirmOperatorVerifiedPhone(personId: String) = throw UnsupportedOperationException()
 }

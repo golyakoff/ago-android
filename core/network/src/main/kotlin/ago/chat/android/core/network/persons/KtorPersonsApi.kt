@@ -1,6 +1,8 @@
 package ago.chat.android.core.network.persons
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonConversation
+import ago.chat.android.core.domain.persons.PersonConversationsResult
 import ago.chat.android.core.domain.persons.PersonProfile
 import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.persons.PersonsResult
@@ -57,6 +59,38 @@ public class KtorPersonsApi(
             PersonsResult.Failed(NetworkFailure.from(failure))
         }
     }
+
+    /**
+     * `26-269`: `GET /api/v1/persons/{personId}/conversations` — the identical classify-never-invent
+     * shape [fetchPersons] above establishes, restated for this second endpoint on the same origin rather
+     * than folded into it: the two reads share no request shape beyond "a `GET` against this same base
+     * URL" ([KtorBookingsApi]'s own doc comment states the identical reasoning for not sharing a helper
+     * across its own several reads).
+     */
+    override suspend fun fetchPersonConversations(personId: String): PersonConversationsResult {
+        val response =
+            try {
+                client.get("$apiBaseUrl/api/v1/persons/$personId/conversations")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return PersonConversationsResult.Failed(NetworkFailure.from(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return PersonConversationsResult.Failed(NetworkFailure.ServerError(response.status.value))
+        }
+
+        return try {
+            PersonConversationsResult.Loaded(response.body<PersonConversationsWireDto>().conversations.map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `200` whose body is not the promised shape is not "no conversations yet" - the identical
+            // `fetchPersons`/`shapeGuard.ts` lesson, read onto this endpoint.
+            PersonConversationsResult.Failed(NetworkFailure.from(failure))
+        }
+    }
 }
 
 /** `Ago.Chat.Api.Persons.PersonEndpoints.PersonsResponse`, reduced to what [PersonsApi] carries. */
@@ -86,4 +120,32 @@ private fun PersonProfileWireDto.toDomain() =
         displayName = displayName,
         emojiCreature = emojiCreature,
         emojiFood = emojiFood,
+    )
+
+/** `Ago.Chat.Api.Persons.PersonEndpoints.PersonConversationsResponse`, verbatim. */
+@Serializable
+private data class PersonConversationsWireDto(
+    val conversations: List<PersonConversationWireDto> = emptyList(),
+)
+
+/** `Ago.Chat.Application.UseCases.GetPersonConversations.PersonConversationDto`, field for field - see
+ * [PersonConversation]'s own doc comment for why nothing here is trimmed off the wire shape. */
+@Serializable
+private data class PersonConversationWireDto(
+    val conversationId: String,
+    val state: String,
+    val isActive: Boolean,
+    val startedAt: String,
+    val closedAt: String? = null,
+    val lastActivityAt: String,
+)
+
+private fun PersonConversationWireDto.toDomain() =
+    PersonConversation(
+        conversationId = conversationId,
+        state = state,
+        isActive = isActive,
+        startedAt = startedAt,
+        closedAt = closedAt,
+        lastActivityAt = lastActivityAt,
     )

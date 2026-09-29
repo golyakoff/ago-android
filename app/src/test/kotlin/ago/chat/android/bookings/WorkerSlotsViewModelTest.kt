@@ -278,6 +278,8 @@ private class FakeWorkerSlotsPersonsApi(
         requestedIds = personIds
         return result
     }
+
+    override suspend fun fetchPersonConversations(personId: String) = throw UnsupportedOperationException()
 }
 
 private class FakeWorkerSlotsApi(
@@ -359,4 +361,8 @@ private class FakeBookingsApi(
         bookingId: String,
         newStartEventId: String,
     ) = throw UnsupportedOperationException()
+
+    override suspend fun fetchPersonBookings(personId: String) = throw UnsupportedOperationException()
+
+    override suspend fun confirmOperatorVerifiedPhone(personId: String) = throw UnsupportedOperationException()
 }
