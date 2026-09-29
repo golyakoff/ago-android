@@ -2,11 +2,16 @@ package ago.chat.android.bookings
 
 import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.Contact
+import ago.chat.android.core.domain.visitorEmojiPair
+import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.VisitorIdentityText
+import ago.chat.android.ui.components.initialsFor
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -25,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -44,10 +50,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -128,8 +136,25 @@ internal fun ContactsBody(
                             ContactsSearchField(query = state.searchQuery, onQueryChange = onSearchQueryChange)
                             val visible = state.visibleContacts
                             if (visible.isEmpty()) {
-                                EmptyBody(stringResource(R.string.bookings_contacts_search_empty))
+                                // `26-269` polish (A6): «Очистить поиск» - the zero-match recovery action,
+                                // clearing `searchQuery` straight back to blank through the identical
+                                // `onSearchQueryChange` the text field itself already calls.
+                                EmptyBody(
+                                    text = stringResource(R.string.bookings_contacts_search_empty),
+                                    action = {
+                                        TextButton(onClick = { onSearchQueryChange("") }) {
+                                            Text(text = stringResource(R.string.bookings_contacts_search_clear_action))
+                                        }
+                                    },
+                                )
                             } else {
+                                // `26-269` polish (A5): «Найдено N» - drawn only while a query is active
+                                // and it actually matched somebody; a blank query shows the full list with
+                                // no count line at all, and a zero-match query draws the empty state above
+                                // instead, never this label over nothing.
+                                if (state.searchQuery.isNotBlank()) {
+                                    SectionLabel(text = stringResource(R.string.bookings_contacts_search_found_count, visible.size))
+                                }
                                 ContactsList(
                                     contacts = visible,
                                     revealingCustomerIds = state.revealingCustomerIds,
@@ -455,6 +480,11 @@ internal const val CLIENT_ERASE_ACTION_TEST_TAG = "contactsListEraseAction"
  * `TextButton` consumes its own click before it reaches the card's `clickable` behind it, the ordinary
  * Compose nested-click-target behaviour), so «Показать» still reveals in place rather than opening the
  * hub.
+ *
+ * `26-269` polish (A1/A2): a leading [ClientAvatar] and a trailing chevron now bracket the identical
+ * name/phone/no-show content above — the mockup's own `.crow` row shape, signalling with both an icon
+ * *and* the whole card's own [onOpenClient] tap that this row opens something, the affordance `26-52`'s
+ * own doc comment above states was deliberately absent at first.
  */
 @Composable
 private fun ContactCard(
@@ -463,63 +493,139 @@ private fun ContactCard(
     onReveal: () -> Unit,
     onOpenClient: () -> Unit,
 ) {
-    Column(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onOpenClient)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val displayName = contact.displayName
-        if (displayName != null) {
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            )
-        } else {
-            VisitorIdentityText(
-                id = contact.customerId,
-                emojiCreature = contact.emojiCreature,
-                emojiFood = contact.emojiFood,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            )
-        }
-        // The phone, exactly as the server sent it, plus Показать when `masked` says a real number is
-        // still hidden behind it - `26-52`'s own "Masked is masked, no control at all" rule is now
-        // `26-53`'s "a control exactly when the server says there is something to reveal".
-        //
-        // `26-268` follow-up (author feedback 2026-09-29): the unconfirmed-phone warning glyph used to sit
-        // on its own row below this one (`NoShowRow`'s own doc comment traces that split); the author asked
-        // for it inline instead, immediately after the phone number on this same line, since the icon *is*
-        // a fact about this number, not a fact about the row as a whole the way the no-show pill is.
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = contact.phone,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (contact.phoneNeedsAttention) {
-                Icon(
-                    imageVector = AgoIcons.ErrorCircle,
-                    contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
-                    tint = agoStatusColors().warning,
-                    modifier = Modifier.padding(start = 6.dp).size(16.dp),
+        ClientAvatar(contact = contact, size = ContactRowAvatarSize, modifier = Modifier.padding(end = ContactRowAvatarGap))
+        Column(modifier = Modifier.weight(1f)) {
+            val displayName = contact.displayName
+            if (displayName != null) {
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                )
+            } else {
+                VisitorIdentityText(
+                    id = contact.customerId,
+                    emojiCreature = contact.emojiCreature,
+                    emojiFood = contact.emojiFood,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
             }
-            if (contact.masked) {
-                TextButton(onClick = onReveal, enabled = !revealing) {
-                    Text(
-                        text =
-                            stringResource(
-                                if (revealing) R.string.bookings_contacts_revealing_phone else R.string.bookings_contacts_reveal_phone,
-                            ),
+            // The phone, exactly as the server sent it, plus Показать when `masked` says a real number is
+            // still hidden behind it - `26-52`'s own "Masked is masked, no control at all" rule is now
+            // `26-53`'s "a control exactly when the server says there is something to reveal".
+            //
+            // `26-268` follow-up (author feedback 2026-09-29): the unconfirmed-phone warning glyph used to sit
+            // on its own row below this one (`NoShowRow`'s own doc comment traces that split); the author asked
+            // for it inline instead, immediately after the phone number on this same line, since the icon *is*
+            // a fact about this number, not a fact about the row as a whole the way the no-show pill is.
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = contact.phone,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (contact.phoneNeedsAttention) {
+                    Icon(
+                        imageVector = AgoIcons.ErrorCircle,
+                        contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
+                        tint = agoStatusColors().warning,
+                        modifier = Modifier.padding(start = 6.dp).size(16.dp),
                     )
                 }
+                if (contact.masked) {
+                    TextButton(onClick = onReveal, enabled = !revealing) {
+                        Text(
+                            text =
+                                stringResource(
+                                    if (revealing) R.string.bookings_contacts_revealing_phone else R.string.bookings_contacts_reveal_phone,
+                                ),
+                        )
+                    }
+                }
             }
+            NoShowRow(contact = contact)
         }
-        NoShowRow(contact = contact)
+        Icon(
+            imageVector = AgoIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
+
+/**
+ * `26-269` polish (A1): the client row's own leading avatar, 42dp — [ClientDetailLoadedBody]'s own 48dp
+ * header copy is the same three-way fallback at a different size, both reusing this one composable rather
+ * than three call sites re-deriving the identical order: [Contact.displayName] initials
+ * ([ago.chat.android.ui.components.initialsFor], the identical algorithm [ago.chat.android.ui.components.AccountAvatarAction]'s
+ * own operator avatar already uses) when a real name is known, else the stored
+ * [ago.chat.android.ui.components.VisitorAvatar] emoji-pair badge when chat has one for this id, else
+ * [AgoIcons.AddPerson] — this app's own redrawn `i-user-plus` (that icon's own doc comment) — for a
+ * manual client (`26-268`) with neither a name nor a chat identity. The identical "encode the fallback
+ * order as data, not a repeated `if`/`else if`/`else` chain" reasoning [BookingIdentity]'s own doc comment
+ * states for its own three-arm identity, restated here for an avatar instead of a text line.
+ */
+@Composable
+internal fun ClientAvatar(
+    contact: Contact,
+    size: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val displayName = contact.displayName?.takeIf { it.isNotBlank() }
+    when {
+        displayName != null -> {
+            val initials = remember(displayName) { initialsFor(displayName, fallback = "") }
+            Box(
+                modifier = modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = initials,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+
+        visitorEmojiPair(contact.emojiCreature, contact.emojiFood) != null ->
+            VisitorAvatar(
+                emojiCreature = contact.emojiCreature,
+                emojiFood = contact.emojiFood,
+                diameter = size,
+                modifier = modifier,
+            )
+
+        else ->
+            Box(
+                modifier = modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AgoIcons.AddPerson,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(size / 2),
+                )
+            }
+    }
+}
+
+// `.row{gap:13px}` - the mockup's own row gap, the identical value `ConversationListScreen`'s own
+// private `RowGap` already carries for its own visitor row, restated here rather than shared across files
+// (that constant's own restraint: two independent rows, each naming its own gap beside its own citation).
+private val ContactRowAvatarGap = 13.dp
+
+// `.av{width:42px; height:42px}` - Клиенты's own list-row avatar size, distinct from
+// [ClientDetailLoadedBody]'s own 48dp header copy (the mockup draws the two at different sizes).
+private val ContactRowAvatarSize = 42.dp
 
 /**
  * `26-269`: the row's own no-show pill — [contact.noShowCount] worded through

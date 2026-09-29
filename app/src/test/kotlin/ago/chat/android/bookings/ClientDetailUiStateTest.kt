@@ -1,8 +1,12 @@
 package ago.chat.android.bookings
 
+import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.PersonBooking
 import ago.chat.android.core.domain.bookings.PersonBookingStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.OffsetDateTime
 
@@ -75,10 +79,131 @@ class ClientDetailUiStateTest {
         assertEquals(listOf(noShow), past)
     }
 
+    // `26-269` polish: [ClientDetailUiState.Loaded]'s own new pill/metadata derivations - plain JVM tests
+    // over a hand-built [ClientDetailUiState.Loaded], the identical "assert the rule directly, no
+    // `ClientDetailViewModel`" restraint every other test in this file already applies.
+    @Test
+    fun `total bookings count is upcoming plus past`() {
+        val loaded =
+            loaded(
+                upcoming = listOf(booking(id = "u1", startsAt = "2026-10-01T10:00:00Z")),
+                past =
+                    listOf(
+                        booking(id = "p1", startsAt = "2026-01-01T10:00:00Z"),
+                        booking(id = "p2", startsAt = "2026-02-01T10:00:00Z"),
+                    ),
+            )
+
+        assertEquals(3, loaded.totalBookingsCount)
+    }
+
+    @Test
+    fun `a client with one booking total is not yet returning`() {
+        val loaded = loaded(upcoming = listOf(booking(id = "u1", startsAt = "2026-10-01T10:00:00Z")), past = emptyList())
+
+        assertFalse(loaded.isReturningClient)
+    }
+
+    @Test
+    fun `a client with more than one booking total is returning`() {
+        val loaded =
+            loaded(
+                upcoming = emptyList(),
+                past = listOf(booking(id = "p1", startsAt = "2026-01-01T10:00:00Z"), booking(id = "p2", startsAt = "2026-02-01T10:00:00Z")),
+            )
+
+        assertTrue(loaded.isReturningClient)
+    }
+
+    @Test
+    fun `a client with no bookings at all is not returning`() {
+        assertFalse(loaded(upcoming = emptyList(), past = emptyList()).isReturningClient)
+    }
+
+    @Test
+    fun `first and last visit are the earliest and latest past bookings, never an upcoming one`() {
+        val earliest = booking(id = "earliest", startsAt = "2026-03-14T10:00:00Z", localDate = "2026-03-14")
+        val latest = booking(id = "latest", startsAt = "2026-09-21T10:00:00Z", localDate = "2026-09-21")
+        val loaded =
+            loaded(
+                upcoming = listOf(booking(id = "u1", startsAt = "2026-10-05T10:00:00Z", localDate = "2026-10-05")),
+                past = listOf(latest, earliest),
+            )
+
+        assertEquals("2026-03-14", loaded.firstVisitLocalDate)
+        assertEquals("2026-09-21", loaded.lastVisitLocalDate)
+    }
+
+    @Test
+    fun `first and last visit are null when no visit has happened yet`() {
+        val loaded = loaded(upcoming = listOf(booking(id = "u1", startsAt = "2026-10-01T10:00:00Z")), past = emptyList())
+
+        assertNull(loaded.firstVisitLocalDate)
+        assertNull(loaded.lastVisitLocalDate)
+    }
+
+    // `26-269` polish (B9): [PersonBooking.asReadOnlyConfirmedBooking] - the past-row read-only card's own
+    // mapping onto [ago.chat.android.core.domain.bookings.ConfirmedBooking], asserted field-for-field so a
+    // future edit cannot silently swap which side (the booking vs. the contact) a field comes from.
+    @Test
+    fun `a past booking maps onto a read-only confirmed booking, with the contact's own live phone`() {
+        val booking =
+            booking(id = "b1", startsAt = "2026-09-01T10:00:00Z", localDate = "2026-09-01").copy(
+                originConversationId = "conv-1",
+            )
+        val client =
+            contact(name = "Анна", phone = "+7 9•• ••• •• 08", masked = true).copy(customerId = "person-1")
+
+        val mapped = booking.asReadOnlyConfirmedBooking(client)
+
+        assertEquals(booking.bookingId, mapped.bookingId)
+        assertEquals(booking.calendarId, mapped.calendarId)
+        assertEquals(booking.workerId, mapped.workerId)
+        assertEquals(booking.workerDisplayName, mapped.workerDisplayName)
+        assertEquals(booking.serviceId, mapped.serviceId)
+        assertEquals(booking.serviceName, mapped.serviceName)
+        assertEquals(booking.startsAt, mapped.startsAt)
+        assertEquals(booking.endsAt, mapped.endsAt)
+        assertEquals(booking.localDate, mapped.localDate)
+        assertEquals(booking.weekday, mapped.weekday)
+        assertEquals(booking.originConversationId, mapped.originConversationId)
+        // The identity/phone side comes from the *contact*, not the booking's own snapshot - see that
+        // function's own doc comment on why a reveal must be reflected here too.
+        assertEquals(client.customerId, mapped.customerId)
+        assertEquals(client.displayName, mapped.customerDisplayName)
+        assertEquals(client.phone, mapped.phone)
+        assertEquals(client.masked, mapped.masked)
+    }
+
+    private fun loaded(
+        upcoming: List<PersonBooking>,
+        past: List<PersonBooking>,
+    ) = ClientDetailUiState.Loaded(
+        contact = contact(),
+        upcoming = upcoming,
+        past = past,
+        dialogConversationId = null,
+    )
+
+    private fun contact(
+        name: String? = "Анна",
+        phone: String = "+7***5678",
+        masked: Boolean = true,
+    ) = Contact(
+        customerId = "c1",
+        phone = phone,
+        masked = masked,
+        displayName = name,
+        noShowCount = 0,
+        phoneVerifiedAt = null,
+        phoneConfirmedByOperatorAt = null,
+    )
+
     private fun booking(
         id: String,
         startsAt: String,
         status: PersonBookingStatus = PersonBookingStatus.Booked,
+        localDate: String = "2026-09-29",
     ) = PersonBooking(
         bookingId = id,
         calendarId = "cal1",
@@ -88,7 +213,7 @@ class ClientDetailUiStateTest {
         serviceName = "Стрижка",
         startsAt = startsAt,
         endsAt = startsAt,
-        localDate = "2026-09-29",
+        localDate = localDate,
         weekday = 2,
         phone = "+7***5678",
         masked = true,

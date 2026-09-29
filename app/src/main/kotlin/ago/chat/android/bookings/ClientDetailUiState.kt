@@ -1,6 +1,7 @@
 package ago.chat.android.bookings
 
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.PersonBooking
 import java.time.OffsetDateTime
@@ -57,6 +58,41 @@ internal sealed interface ClientDetailUiState {
 
         val visibleBookings: List<PersonBooking>
             get() = if (selectedSegment == ClientDetailSegment.Upcoming) upcoming else past
+
+        /** `26-269` polish (B5): the header pill's own count - every booking this hub has ever loaded
+         * for this client, past and upcoming alike, no new read: both lists are already in hand from the
+         * one [PersonBooking] fetch [ClientDetailViewModel.open] already made. */
+        val totalBookingsCount: Int
+            get() = upcoming.size + past.size
+
+        /** `26-269` polish (B5): the «Постоянный клиент» pill's own threshold - the identical
+         * `bookingCount > 1` rule [ago.chat.android.bookings.ManualBookingScreen.kt]'s own
+         * `phoneCandidateHistoryLabel` already draws for a phone-recognition candidate ("Постоянный · N
+         * записей" once a second booking exists), restated here for the hub's own header rather than a
+         * freshly invented cutoff: one booking is a first visit, not yet a pattern - two or more is what
+         * this app's own "returning" wording is already spent on elsewhere. */
+        val isReturningClient: Boolean
+            get() = totalBookingsCount > 1
+
+        /** `26-269` polish (B6): «Первый визит» - the earliest [PersonBooking.localDate] among [past]
+         * bookings only, never [upcoming] (a booking that has not happened yet is not a visit yet) and
+         * never `ago-calendar`'s own `ContactResponse.FirstSeenAt`/`PersonRecord.FirstSeenAt` - verified
+         * against that field's own write path
+         * (`Ago.Calendar.Infrastructure.Postgres.BookingStore.UpsertPersonRecordSql`): it is stamped the
+         * moment this person's `person_records` row is first upserted, at *booking-attempt* time, not at
+         * an actual appointment's own date - a client who booked once, months ago, for a visit still
+         * weeks out would show a "first visit" that has not happened yet. [past] is already exactly the
+         * set of appointments that *did* happen ([splitPersonBookings]'s own doc comment) and is already
+         * loaded for this same hub - the simplest source that is also honestly correct, not a fourth
+         * [Contact] field carrying a different fact than its own name promises. `null` when [past] is
+         * empty - no visit has happened yet, never a fabricated date. */
+        val firstVisitLocalDate: String?
+            get() = past.minByOrNull { it.startsAt }?.localDate
+
+        /** `26-269` polish (B6): «Последний визит» - the identical reasoning [firstVisitLocalDate] states,
+         * the latest date instead of the earliest. */
+        val lastVisitLocalDate: String?
+            get() = past.maxByOrNull { it.startsAt }?.localDate
     }
 
     /** The identical "this deployment does not run AGO Calendar at all" fact
@@ -117,3 +153,34 @@ internal fun splitPersonBookings(
         }
     return upcoming.sortedBy { it.startsAt } to past.sortedByDescending { it.startsAt }
 }
+
+/**
+ * `26-269` polish (B9): a past booking, reduced to the identical shape [ConfirmedBookingDetailSheet]
+ * already knows how to draw, so the client hub's own read-only booking card is that same sheet
+ * (`readOnly = true`) rather than a second, drifting copy of the Услуга/Мастер/Телефон/Источник rows.
+ * Every field [ConfirmedBooking] needs is either already on [this] ([PersonBooking.serviceName]/
+ * [PersonBooking.workerDisplayName]/[PersonBooking.originConversationId] verified present - the gap
+ * analysis's own open question, settled by reading [PersonBooking]'s own declaration) or comes from
+ * [contact] instead of [PersonBooking.phone]/[PersonBooking.masked]: the phone shown here is deliberately
+ * the *contact's* current, reveal-reactive value - the same single «Показать» the hub's header already
+ * offers for this same customer - not the booking row's own snapshot, which [ClientDetailViewModel.reveal]
+ * never touches and would silently stay masked after a reveal the operator just performed one screen up.
+ */
+internal fun PersonBooking.asReadOnlyConfirmedBooking(contact: Contact): ConfirmedBooking =
+    ConfirmedBooking(
+        bookingId = bookingId,
+        calendarId = calendarId,
+        workerId = workerId,
+        workerDisplayName = workerDisplayName,
+        serviceId = serviceId,
+        serviceName = serviceName,
+        customerId = contact.customerId,
+        customerDisplayName = contact.displayName,
+        startsAt = startsAt,
+        endsAt = endsAt,
+        localDate = localDate,
+        weekday = weekday,
+        phone = contact.phone,
+        masked = contact.masked,
+        originConversationId = originConversationId,
+    )

@@ -476,6 +476,9 @@
     <string name="bookings_contacts_noshow_pill_one">%1$d no-show</string>
     <string name="bookings_contacts_noshow_pill_few">%1$d no-shows</string>
     <string name="bookings_contacts_noshow_pill_many">%1$d no-shows</string>
+    <!-- `26-269` polish: see the RU file. -->
+    <string name="bookings_contacts_search_found_count">Found %1$d</string>
+    <string name="bookings_contacts_search_clear_action">Clear search</string>
 
     <string name="bookings_contacts_erase_action_line_one">Delete</string>
     <string name="bookings_contacts_erase_action_line_two">client</string>
@@ -500,6 +503,10 @@
     <string name="bookings_client_detail_status_no_show">No-show</string>
     <string name="bookings_client_detail_cancel_booking_action">Cancel</string>
     <string name="bookings_client_detail_cancelling_booking">Cancelling…</string>
+    <!-- `26-269` polish: see the RU file. -->
+    <string name="bookings_client_detail_sms_confirmed_value">Yes · %1$s</string>
+    <string name="bookings_client_detail_first_visit_label">First visit</string>
+    <string name="bookings_client_detail_last_visit_label">Last visit</string>
 
     <string name="bookings_manual_entry_action">Add manually</string>
     <string name="bookings_manual_title">New booking</string>

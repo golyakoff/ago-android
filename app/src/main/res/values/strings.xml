@@ -833,6 +833,14 @@
     <string name="bookings_contacts_noshow_pill_one">%1$d неявка</string>
     <string name="bookings_contacts_noshow_pill_few">%1$d неявки</string>
     <string name="bookings_contacts_noshow_pill_many">%1$d неявок</string>
+    <!-- `26-269` polish (A5): the search box's own result count, drawn above the filtered list only
+         while a query is active AND it matched somebody - a zero-match query draws
+         `bookings_contacts_search_empty` instead, never this label over an empty list. Sentence case
+         here, uppercased at render time by `SectionLabel` (`WorkerGroupHeader`'s own identical split). -->
+    <string name="bookings_contacts_search_found_count">Найдено %1$d</string>
+    <!-- `26-269` polish (A6): the zero-match empty state's own recovery action - clears `searchQuery`
+         back to blank, the identical write `ContactsSearchField`'s own text field already calls. -->
+    <string name="bookings_contacts_search_clear_action">Очистить поиск</string>
 
     <!--
         `26-275`/`adr/0189`: the Клиенты row's own swipe-to-delete - ported verbatim from
@@ -885,6 +893,13 @@
          existing veto write (`BookingsApi.cancelBooking`, `26-49`); no new endpoint. -->
     <string name="bookings_client_detail_cancel_booking_action">Отменить</string>
     <string name="bookings_client_detail_cancelling_booking">Отмена…</string>
+    <!-- `26-269` polish (B6): the hub's own metadata rows, drawn last and only for the facts that exist.
+         The label reuses `bookings_confirmed_detail_sms_label` verbatim (`26-117`'s own «Подтверждён по
+         SMS» row on Утверждены's detail sheet) - the value format below is this row's own, since here
+         the fact is genuinely answerable (`Contact.phoneVerifiedAt`) rather than always "—". -->
+    <string name="bookings_client_detail_sms_confirmed_value">да · %1$s</string>
+    <string name="bookings_client_detail_first_visit_label">Первый визит</string>
+    <string name="bookings_client_detail_last_visit_label">Последний визит</string>
 
     <!--
         `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight
