@@ -11,6 +11,7 @@ import ago.chat.android.core.domain.bookings.confirmedBookingIdentity
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.bookings.confirmedBookingsMonthLabels
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -42,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -924,11 +926,12 @@ internal fun bookingIdentityText(identity: BookingIdentity): String =
  * drag — the sheet's content is a short fixed card, not a long list, so the Material default
  * half-expanded state would just hide the actions below the fold.
  *
- * `26-269` polish (B9): `internal`, not `private` — the client-detail hub's own past-booking read-only
- * card (`ClientDetailScreen.kt`) reuses this exact sheet for a [PersonBooking][ago.chat.android.core.domain.bookings.PersonBooking]
- * mapped onto [ConfirmedBooking] ([ago.chat.android.bookings.asReadOnlyConfirmedBooking]) rather than a
- * second, drifting copy of the same Услуга/Мастер/Телефон/Источник rows. [readOnly] is the one switch
- * that reuse needs — see its own doc comment below.
+ * `26-269` polish (B9), `26-279` (B8): `internal`, not `private` — the client-detail hub's own
+ * booking-detail cards (`ClientDetailScreen.kt`), past (read-only) and, since `26-279`, upcoming
+ * (reschedule/cancel) alike, reuse this exact sheet for a [PersonBooking][ago.chat.android.core.domain.bookings.PersonBooking]
+ * mapped onto [ConfirmedBooking] ([ago.chat.android.bookings.asConfirmedBooking]) rather than a second,
+ * drifting copy of the same Услуга/Мастер/Телефон/Источник rows. [readOnly] is the one switch that reuse
+ * needs — see its own doc comment below; [onCancel] is `26-279`'s own addition for the upcoming card only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -940,6 +943,12 @@ internal fun ConfirmedBookingDetailSheet(
     onReschedule: () -> Unit,
     onDismiss: () -> Unit,
     readOnly: Boolean = false,
+    // `26-279` (B8): `null` (the default) draws no «Отменить» at all - `ConfirmedBookingsBody`'s own
+    // Утверждены call site passes none and keeps compiling and behaving unchanged. Non-`null` only from
+    // the client-detail hub's own upcoming card, and only once `booking:cancel` is granted - see
+    // [ConfirmedBookingDetailBody]'s own doc comment on this parameter for the "hide, don't disable" gate.
+    onCancel: (() -> Unit)? = null,
+    cancelling: Boolean = false,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -953,6 +962,8 @@ internal fun ConfirmedBookingDetailSheet(
             onReschedule = onReschedule,
             onDismiss = onDismiss,
             readOnly = readOnly,
+            onCancel = onCancel,
+            cancelling = cancelling,
         )
     }
 }
@@ -970,6 +981,18 @@ internal fun ConfirmedBookingDetailBody(
     // this body draws stays exactly as-is. Defaulted `false` so `ConfirmedBookingsBody`'s own call site —
     // a tap on an Утверждены row, always reschedulable — keeps compiling and behaving unchanged.
     readOnly: Boolean = false,
+    // `26-279` (B8): the client-detail hub's own upcoming card passes a real callback exactly when the
+    // operator holds `booking:cancel` — the identical "hide the affordance entirely, never merely disable
+    // it" rule `ContactsBody`'s own swipe-to-delete gesture already states for a missing permission,
+    // restated here for a button instead of a gesture. `null` draws no «Отменить» row at all: every other
+    // call site (`ConfirmedBookingsBody`'s own Утверждены sheet, and this body's own `readOnly = true`
+    // past card) passes none.
+    onCancel: (() -> Unit)? = null,
+    // Which text/enabled state «Отменить» shows while [onCancel]'s own write is on the network - the
+    // identical `cancelling` flag [ClientBookingRow]'s own inline cancel button already threads through,
+    // restated here so the two "cancel this same booking" affordances never word an in-flight write
+    // differently.
+    cancelling: Boolean = false,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
         // Hard requirement 7: the header is the name (the identical fallback the list row uses - this
@@ -1079,9 +1102,40 @@ internal fun ConfirmedBookingDetailBody(
         // card's own "hide, don't grey" rule for an action that makes no sense at all for a visit that
         // already happened, the identical posture [ContactsBody]'s own swipe-to-delete gesture already
         // takes for a missing permission (`SwipeableContactRow`'s own doc comment).
+        //
+        // `26-279` (B8): «Отменить» sits beside «Перенести» in the same row, each taking half the width,
+        // exactly when [onCancel] is non-`null` (the client-detail hub's own upcoming card, permission
+        // already checked by its caller) - `ConfirmedBookingsBody`'s own Утверждены sheet passes `null` and
+        // keeps drawing the single full-width reschedule button unchanged.
         if (!readOnly) {
-            OutlinedButton(onClick = onReschedule, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
+            val cancel = onCancel
+            if (cancel != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onReschedule, modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
+                    }
+                    OutlinedButton(onClick = cancel, enabled = !cancelling, modifier = Modifier.weight(1f)) {
+                        Text(
+                            text =
+                                stringResource(
+                                    if (cancelling) {
+                                        R.string.bookings_client_detail_cancelling_booking
+                                    } else {
+                                        R.string.bookings_client_detail_cancel_booking_action
+                                    },
+                                ),
+                            maxLines = 1,
+                            color = if (cancelling) LocalContentColor.current else agoStatusColors().dangerText,
+                        )
+                    }
+                }
+            } else {
+                OutlinedButton(onClick = onReschedule, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                    Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
+                }
             }
         }
 

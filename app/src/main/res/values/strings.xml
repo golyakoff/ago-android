@@ -879,6 +879,10 @@
          (an icon button's content description elsewhere) because this one is the visible label on a real
          button, worded to match the design mockup's own button text. -->
     <string name="bookings_client_detail_open_dialog_action">Диалог</string>
+    <!-- `26-279` (B3): the header's own «Позвонить» - fires `Intent.ACTION_DIAL` with `Contact.phone`,
+         beside the existing «Показать»/phone row. Dial, not call: this app holds no `CALL_PHONE`
+         permission, and never should for a plain "open the dialer" affordance. -->
+    <string name="bookings_client_detail_call_action">Позвонить</string>
     <!-- `23-12`: the warning-glyph's own action - the existing `ConfirmOperatorVerifiedPhone` endpoint,
          with no client caller anywhere in this app until this item. -->
     <string name="bookings_client_detail_confirm_phone_action">Подтвердить телефон</string>
