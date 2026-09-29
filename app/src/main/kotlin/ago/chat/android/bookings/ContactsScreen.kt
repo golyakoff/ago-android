@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.visitorEmojiPair
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.components.VisitorAvatar
 import ago.chat.android.ui.components.VisitorIdentityText
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.initialsFor
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
@@ -581,7 +582,9 @@ private fun ContactCard(
             // a fact about this number, not a fact about the row as a whole the way the no-show pill is.
             Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = contact.phone + upcomingBookingCountSuffix(contact.upcomingBookingCount),
+                    // `26-307`: [formatRuPhoneForDisplay] formats only a complete Russian number - a masked
+                    // preview (`contact.masked`) never has the full 10 digits, so it passes through unchanged.
+                    text = formatRuPhoneForDisplay(contact.phone) + upcomingBookingCountSuffix(contact.upcomingBookingCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

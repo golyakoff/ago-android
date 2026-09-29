@@ -89,7 +89,11 @@ private fun NamelessClientIdentity(
     titleStyle: TextStyle = LocalTextStyle.current,
 ) {
     Column(modifier = modifier) {
-        Text(text = phone, style = titleStyle)
+        // `26-307`: formatted for display — [phone] is [ago.chat.android.core.domain.bookings.Contact.phone]
+        // verbatim, masked or full depending on the caller's own reveal state; [formatRuPhoneForDisplay]
+        // reformats only a complete Russian number and passes anything else (a masked preview included)
+        // through unchanged.
+        Text(text = formatRuPhoneForDisplay(phone), style = titleStyle)
         Text(
             text = stringResource(R.string.bookings_confirmed_identity_no_name),
             style = MaterialTheme.typography.bodySmall,

@@ -6,6 +6,7 @@ import ago.chat.android.thread.contactpanel.ContactDetailsSectionState
 import ago.chat.android.thread.contactpanel.RowActionError
 import ago.chat.android.ui.components.RuPhoneField
 import ago.chat.android.ui.components.ScrimmedDropdownMenu
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.isRuPhoneComplete
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
@@ -227,7 +228,12 @@ private fun ContactDetailRow(
                 horizontalArrangement = Arrangement.spacedBy(RowSpacing),
             ) {
                 Text(
-                    text = detail.value.ifBlank { VALUE_ABSENT },
+                    // `26-307`: only a `Phone` row's value is ever a phone number at all - `Email`/`Name`
+                    // pass through [formatRuPhoneForDisplay] unformatted regardless, since neither
+                    // normalises to 10 Russian digits, but gating on `kind` is the explicit, readable rule
+                    // rather than leaning on that coincidence. A masked `Phone` value never has the full 10
+                    // digits either, so it comes back unchanged the same way every other masked preview does.
+                    text = (if (detail.kind == "Phone") formatRuPhoneForDisplay(detail.value) else detail.value).ifBlank { VALUE_ABSENT },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

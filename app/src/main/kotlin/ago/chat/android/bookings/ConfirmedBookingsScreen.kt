@@ -10,6 +10,7 @@ import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.confirmedBookingIdentity
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.bookings.confirmedBookingsMonthLabels
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.animation.core.Animatable
@@ -1042,7 +1043,10 @@ internal fun ConfirmedBookingDetailBody(
             labelStyle = detailLabelStyle,
             modifier = Modifier.padding(vertical = 12.dp),
         ) {
-            Text(text = booking.phone.ifBlank { "—" }, style = detailValueStyle)
+            // `26-307`: a masked value (`booking.masked`) never has the full 10 digits, so
+            // [formatRuPhoneForDisplay] passes it through unchanged - only a real, complete number is
+            // reformatted.
+            Text(text = formatRuPhoneForDisplay(booking.phone).ifBlank { "—" }, style = detailValueStyle)
             if (booking.masked && booking.phone.isNotBlank()) {
                 TextButton(onClick = onReveal, enabled = !revealing) {
                     Text(

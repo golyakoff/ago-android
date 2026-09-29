@@ -155,6 +155,55 @@ internal fun digitCountForMaskedOffset(
     return totalDigits
 }
 
+/**
+ * `26-307`: the read-only counterpart to [RuPhoneField]'s own live mask — every full-phone *display* site
+ * (a list row, a detail header, a booking review line) renders through this rather than the raw wire
+ * string, so a customer's number reads `+7 (916) 222-22-22` wherever it is shown, not only while it is
+ * being typed. Reuses [maskRuNational] — the identical grouping [RuPhoneField] itself renders — rather
+ * than a second, drifting notation for the same fact.
+ *
+ * **Anything that is not unambiguously a complete Russian number comes back unchanged** — a foreign
+ * number (a different country code, e.g. `+4758655828`), an incomplete or malformed value, a server's own
+ * masked preview (`+7 ··· 08`, dots included — never [NATIONAL_DIGIT_COUNT] real digits), or a blank
+ * string. [ruNationalDigitsForDisplay] is the one place that judgment is made; this function only asks it
+ * and falls back to [phone] verbatim on `null` — never guesses a `+7` onto a number this app did not
+ * itself establish as Russian.
+ */
+public fun formatRuPhoneForDisplay(phone: String): String {
+    val national = ruNationalDigitsForDisplay(phone) ?: return phone
+    return maskRuNational(national)
+}
+
+/**
+ * [formatRuPhoneForDisplay]'s own recognition step — `null` unless [raw] unambiguously names a complete
+ * Russian number. Unlike [ruNationalDigits] (which [RuPhoneField] uses on a value it already owns, mid-edit,
+ * so *some* digit run is always "the national digits so far"), this function must also reject values it has
+ * no business reinterpreting — a real, different country code above all: `+4758655828` is a Norwegian
+ * number whose digits, stripped of the leading `+`, happen to run exactly [NATIONAL_DIGIT_COUNT] long, the
+ * same length a bare Russian national number would — only an explicit, *different* `+` prefix tells the two
+ * apart, since digit-counting alone cannot.
+ *
+ * A leading `+` therefore has to be exactly [RU_PREFIX] to be considered at all; a value with no `+` at all
+ * is judged on digit count alone, exactly as [ruNationalDigits] already does (`8`/`7` plus
+ * [NATIONAL_DIGIT_COUNT] more digits drops the leading trunk/country digit, a bare [NATIONAL_DIGIT_COUNT]-
+ * digit run is taken as the national number outright) — a caller with no `+` at all is this app's own data
+ * (this field's own canonical output, or a bare domestic number the server sent), never a foreign number
+ * that also chose to omit its own country code.
+ */
+private fun ruNationalDigitsForDisplay(raw: String): String? {
+    val trimmed = raw.trim()
+    if (trimmed.startsWith("+")) {
+        if (!trimmed.startsWith(RU_PREFIX)) return null
+        return trimmed.removePrefix(RU_PREFIX).filter(Char::isDigit).takeIf { it.length == NATIONAL_DIGIT_COUNT }
+    }
+    val digits = trimmed.filter(Char::isDigit)
+    return when {
+        digits.length == NATIONAL_DIGIT_COUNT + 1 && (digits.startsWith("7") || digits.startsWith("8")) -> digits.drop(1)
+        digits.length == NATIONAL_DIGIT_COUNT -> digits
+        else -> null
+    }
+}
+
 /** [RuPhoneField]'s own `VisualTransformation` — a stateless singleton since [filter] is a pure function
  * of its input text, so there is nothing per-instance to recreate across recompositions. */
 internal object RuPhoneVisualTransformation : VisualTransformation {

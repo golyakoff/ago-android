@@ -10,6 +10,7 @@ import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
 import ago.chat.android.ui.components.RuPhoneField
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.isRuPhoneComplete
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.background
@@ -388,7 +389,9 @@ private fun PhoneStepBody(
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = wizard.phone,
+                    // `26-307`: the number was just entered through `RuPhoneField` (always a complete,
+                    // canonical `+7…` value once this step is past the search button) - display it grouped.
+                    text = formatRuPhoneForDisplay(wizard.phone),
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f),
                 )
@@ -454,11 +457,15 @@ private fun PhoneCandidateFoundCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = candidate.displayName ?: candidate.phone,
+            text = candidate.displayName ?: formatRuPhoneForDisplay(candidate.phone),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             modifier = Modifier.padding(top = 8.dp),
         )
-        Text(text = candidate.phone, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = formatRuPhoneForDisplay(candidate.phone),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             text = phoneCandidateHistoryLabel(candidate),
             style = MaterialTheme.typography.bodySmall,
@@ -499,7 +506,7 @@ private fun PhoneCandidateManyList(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = candidate.displayName ?: candidate.phone,
+                        text = candidate.displayName ?: formatRuPhoneForDisplay(candidate.phone),
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                     )
                     Text(
@@ -578,12 +585,12 @@ private fun ClientStepBody(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = client.candidate.displayName ?: client.candidate.phone,
+                    text = client.candidate.displayName ?: formatRuPhoneForDisplay(client.candidate.phone),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(top = 8.dp),
                 )
                 Text(
-                    text = client.candidate.phone,
+                    text = formatRuPhoneForDisplay(client.candidate.phone),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -806,7 +813,7 @@ private fun ReviewStepBody(
         ReviewRow(label = stringResource(R.string.bookings_manual_client_label), value = clientTypeLabel(wizard.client))
         ReviewRow(label = stringResource(R.string.bookings_card_service_label), value = service?.name ?: "—")
         ReviewRow(label = stringResource(R.string.bookings_card_worker_label), value = worker?.displayName ?: "—")
-        ReviewRow(label = stringResource(R.string.bookings_confirmed_detail_phone_label), value = wizard.phone)
+        ReviewRow(label = stringResource(R.string.bookings_confirmed_detail_phone_label), value = formatRuPhoneForDisplay(wizard.phone))
         ReviewRow(label = stringResource(R.string.bookings_manual_email_label), value = emailValue(wizard.client))
         Text(
             text = stringResource(R.string.bookings_manual_no_conversation_note),

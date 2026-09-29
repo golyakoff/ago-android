@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.PhoneCandidate
 import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.ui.components.VisitorIdentityText
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
@@ -391,7 +392,10 @@ private fun ClientDetailLoadedBody(
 
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = contact.phone,
+                        // `26-307`: a masked preview (`contact.masked`) never carries the full 10 digits, so
+                        // [formatRuPhoneForDisplay] passes it through unchanged - only a real, complete number
+                        // is reformatted.
+                        text = formatRuPhoneForDisplay(contact.phone),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
