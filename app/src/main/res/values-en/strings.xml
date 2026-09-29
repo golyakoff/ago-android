@@ -480,6 +480,14 @@
     <string name="bookings_contacts_search_found_count">Found %1$d</string>
     <string name="bookings_contacts_search_clear_action">Clear search</string>
 
+    <!-- `26-282`: see the RU file. -->
+    <string name="bookings_contacts_filter_all">All</string>
+    <string name="bookings_contacts_filter_has_upcoming">Has upcoming booking</string>
+    <string name="bookings_contacts_filter_no_upcoming">No bookings</string>
+    <string name="bookings_contacts_upcoming_count_one">%1$d booking</string>
+    <string name="bookings_contacts_upcoming_count_few">%1$d bookings</string>
+    <string name="bookings_contacts_upcoming_count_many">%1$d bookings</string>
+
     <string name="bookings_contacts_erase_action_line_one">Delete</string>
     <string name="bookings_contacts_erase_action_line_two">client</string>
     <string name="bookings_contacts_erase_action_description">Delete client</string>
@@ -508,6 +516,11 @@
     <string name="bookings_client_detail_sms_confirmed_value">Yes · %1$s</string>
     <string name="bookings_client_detail_first_visit_label">First visit</string>
     <string name="bookings_client_detail_last_visit_label">Last visit</string>
+    <!-- `26-284`: see the RU file. -->
+    <string name="bookings_client_detail_single_visit_label">Only visit</string>
+
+    <!-- `26-283`/`26-284`: see the RU file. -->
+    <string name="bookings_client_detail_record_action">Book</string>
 
     <string name="bookings_manual_entry_action">Add manually</string>
     <string name="bookings_manual_title">New booking</string>

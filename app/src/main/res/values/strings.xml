@@ -842,6 +842,19 @@
          back to blank, the identical write `ContactsSearchField`'s own text field already calls. -->
     <string name="bookings_contacts_search_clear_action">Очистить поиск</string>
 
+    <!-- `26-282` (A8): the filter chip row under the search box - a plain client-side narrowing of the
+         list already in memory, over `Contact.upcomingBookingCount` (`ContactsFilter`'s own doc comment). -->
+    <string name="bookings_contacts_filter_all">Все</string>
+    <string name="bookings_contacts_filter_has_upcoming">С предстоящей записью</string>
+    <string name="bookings_contacts_filter_no_upcoming">Без записей</string>
+    <!-- `26-282` (A7): the row's own « · N записи» suffix - the identical hand-branched Russian plural
+         trio `bookings_contacts_noshow_pill_*` above already establishes, restated for an upcoming-booking
+         count rather than a no-show count. Never rendered when the count is zero
+         (`upcomingBookingCountSuffix`'s own doc comment). -->
+    <string name="bookings_contacts_upcoming_count_one">%1$d запись</string>
+    <string name="bookings_contacts_upcoming_count_few">%1$d записи</string>
+    <string name="bookings_contacts_upcoming_count_many">%1$d записей</string>
+
     <!--
         `26-275`/`adr/0189`: the Клиенты row's own swipe-to-delete - ported verbatim from
         `conversation_list_erase_*` (`ConversationListScreen`'s own `EraseAction`/`EraseConfirmDialog`),
@@ -904,6 +917,17 @@
     <string name="bookings_client_detail_sms_confirmed_value">да · %1$s</string>
     <string name="bookings_client_detail_first_visit_label">Первый визит</string>
     <string name="bookings_client_detail_last_visit_label">Последний визит</string>
+    <!-- `26-284` (item 9): drawn instead of the pair above exactly when they resolve to the same date
+         (`ClientDetailUiState.Loaded.isSingleVisit`'s own doc comment) - one visit is one fact, not a
+         "first" and a "last" that happen to be the same day. -->
+    <string name="bookings_client_detail_single_visit_label">Единственный визит</string>
+
+    <!-- `26-283`/`26-284` (item 4/8): the client-detail hub's own action-button row «+ Записать» - opens
+         the manual-booking wizard pre-bound to this client (`ManualBookingViewModel.open`'s own
+         `prefillClient` doc comment), landing on service selection rather than phone entry. The icon
+         supplies the "+"; this string is the bare verb, the identical split `bookings_manual_entry_action`
+         (icon-only header button, no text at all) has no need to make but this labeled button does. -->
+    <string name="bookings_client_detail_record_action">Записать</string>
 
     <!--
         `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight

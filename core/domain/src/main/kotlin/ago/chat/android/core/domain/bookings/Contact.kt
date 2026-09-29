@@ -53,4 +53,14 @@ public data class Contact(
     /** The other half of [emojiCreature]'s own pair — see its doc comment, which this parameter shares in
      * full. */
     val emojiFood: String? = null,
+    /** `26-282`: how many of this client's bookings are still ahead of them right now —
+     * `Ago.Calendar.Contracts.ContactResponse.UpcomingBookingCount`, additive on the wire. Feeds the
+     * Клиенты row's own « · N записи» suffix and the «С предстоящей записью»/«Без записей» filter chips
+     * ([ContactsFilter]) — both need this per-row, which is exactly what the list read did not carry
+     * before this item (the client-detail hub already had its own count, computed client-side from the
+     * full per-person booking list that hub alone fetches; the list here has no such fetch per row, so the
+     * count has to arrive on this response instead). Defaulted to `0` so no existing call site (including
+     * every fixture in this module's own tests) needs updating for a field it never asked about.
+     */
+    val upcomingBookingCount: Int = 0,
 )

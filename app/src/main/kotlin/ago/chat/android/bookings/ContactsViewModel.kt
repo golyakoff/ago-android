@@ -88,6 +88,16 @@ internal class ContactsViewModel
             }
         }
 
+        /** `26-282` (A8): a tap on one of the three filter chips — the identical "plain state update over
+         * data already in memory" shape [onSearchQueryChange] states above, restated for [ContactsFilter]
+         * instead of a search string. Never re-fetches: [ContactsUiState.Loaded.visibleContacts] applies
+         * this alongside the search query, both over the one list already on hand. */
+        fun onFilterChange(filter: ContactsFilter) {
+            mutableState.update { current ->
+                (current as? ContactsUiState.Loaded)?.copy(filter = filter) ?: current
+            }
+        }
+
         /** The initial load, and the retry action a [ContactsUiState.Failed] screen offers — the
          * identical "asking again is the whole of retry" shape [BookingsViewModel.refresh]'s own doc
          * comment states. Clears [revealingCustomerIds] the identical reason

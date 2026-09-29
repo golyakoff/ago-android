@@ -50,13 +50,20 @@ internal sealed interface ContactsUiState {
          * the Предстоящие segment ([ClientDetailUiState.Loaded.selectedSegment]'s own default) — no new
          * navigation state is needed to land the operator on the right list. */
         val blockedErasureClientId: String? = null,
+        /** `26-282` (A8): the filter chip row's own selection — [ContactsFilter.All] by default, the
+         * identical "the widest view is the default" posture [ContactsFilter]'s own doc comment states.
+         * Held beside [searchQuery] for the identical reason that field is held here rather than in the
+         * view model directly: state about *this loaded list*, meaningless in every other arm of
+         * [ContactsUiState]. */
+        val filter: ContactsFilter = ContactsFilter.All,
     ) : ContactsUiState {
-        /** `26-269`: [contacts] filtered by [searchQuery] — see [filterContacts] for the match rule.
-         * A `get()`-only property, not a constructor parameter, so it takes no part in this data class's
-         * generated `equals`/`hashCode`/`copy` — every existing test that builds a [Loaded] by hand and
-         * compares it keeps asserting on [contacts] exactly as before. */
+        /** `26-269`/`26-282`: [contacts] filtered by [searchQuery] **and** [filter] — see [filterContacts]
+         * for the search match rule and [ContactsFilter.matches] for the chip rule. A `get()`-only
+         * property, not a constructor parameter, so it takes no part in this data class's generated
+         * `equals`/`hashCode`/`copy` — every existing test that builds a [Loaded] by hand and compares it
+         * keeps asserting on [contacts] exactly as before. */
         val visibleContacts: List<Contact>
-            get() = filterContacts(contacts, searchQuery)
+            get() = filterContacts(contacts, searchQuery).filter(filter::matches)
     }
 
     data object NotConfigured : ContactsUiState
@@ -108,3 +115,25 @@ internal fun filterContacts(
  */
 internal val Contact.phoneNeedsAttention: Boolean
     get() = phoneVerifiedAt == null && phoneConfirmedByOperatorAt == null
+
+/**
+ * `26-282` (A8): Клиенты's own three-way filter chip row — «Все» / «С предстоящей записью» / «Без
+ * записей», each a plain predicate over [Contact.upcomingBookingCount] rather than a second server read:
+ * the count already rides on every row ([Contact.upcomingBookingCount]'s own doc comment), so narrowing
+ * the list to it is exactly the same client-side, in-memory operation [filterContacts] already performs
+ * for the search box, one `filter` call further. [All] matches every contact and is the default —
+ * the identical "the widest view first" posture every other list filter in this app opens on.
+ */
+internal enum class ContactsFilter {
+    All,
+    HasUpcoming,
+    NoUpcoming,
+    ;
+
+    fun matches(contact: Contact): Boolean =
+        when (this) {
+            All -> true
+            HasUpcoming -> contact.upcomingBookingCount > 0
+            NoUpcoming -> contact.upcomingBookingCount == 0
+        }
+}

@@ -78,9 +78,21 @@ internal class ManualBookingViewModel
          * auto-search from firing again on every keystroke once the number already looks complete. */
         private var lastAutoSearchedDigits: String? = null
 
-        fun open() {
+        /** `26-283`: non-`null` exactly when this wizard was opened from a client's own detail hub rather
+         * than the plain «Добавить вручную» header action — [load] reads it once, after the prefetch
+         * lands, to skip [ManualBookingStep.Phone] and [ManualBookingStep.Client] outright and land on
+         * [ManualBookingStep.Service] with [ManualBookingClient.Existing] already chosen (`docs/backlog/
+         * 26-283-*.md`'s own "skipping phone entry and recognition"). A field rather than a [load]
+         * parameter because [open] is what the sheet's own `LaunchedEffect(Unit)` calls, and that call site
+         * is the one place that knows which of the two entry points this is. */
+        private var prefillClient: PhoneCandidate? = null
+
+        /** [prefillClient] `null` is the ordinary «Добавить вручную» entry point, unchanged; non-`null` is
+         * `26-283`'s own pre-bound entry from [ClientDetailSheet]'s «+ Записать». */
+        fun open(prefillClient: PhoneCandidate? = null) {
             if (opened) return
             opened = true
+            this.prefillClient = prefillClient
             load()
         }
 
@@ -113,15 +125,29 @@ internal class ManualBookingViewModel
 
                     servicesResult is ServicesResult.Loaded && workersResult is WorkersResult.Loaded ->
                         mutableState.update {
-                            ManualBookingUiState.Wizard(
-                                step = ManualBookingStep.Phone,
-                                // `26-96`'s own archived-services-stay-on-the-wire contract is for a *past*
-                                // booking's own name resolution - a *new* manual booking must only ever
-                                // offer a service still in rotation, the identical filter the visitor
-                                // widget's own booking flow already applies.
-                                services = servicesResult.services.filter { it.isActive },
-                                workers = workersResult.workers,
-                            )
+                            val wizard =
+                                ManualBookingUiState.Wizard(
+                                    step = ManualBookingStep.Phone,
+                                    // `26-96`'s own archived-services-stay-on-the-wire contract is for a
+                                    // *past* booking's own name resolution - a *new* manual booking must
+                                    // only ever offer a service still in rotation, the identical filter the
+                                    // visitor widget's own booking flow already applies.
+                                    services = servicesResult.services.filter { it.isActive },
+                                    workers = workersResult.workers,
+                                )
+                            // `26-283`: the one place [prefillClient] is applied - jump straight past
+                            // Phone and Client to Service, with the client already chosen. A `null`
+                            // `prefillClient` (the ordinary entry point) leaves `wizard` untouched.
+                            val prefill = prefillClient
+                            if (prefill != null) {
+                                wizard.copy(
+                                    step = ManualBookingStep.Service,
+                                    phone = prefill.phone,
+                                    client = ManualBookingClient.Existing(prefill),
+                                )
+                            } else {
+                                wizard
+                            }
                         }
                 }
             }
