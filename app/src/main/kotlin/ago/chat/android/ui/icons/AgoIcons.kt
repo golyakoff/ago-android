@@ -598,6 +598,14 @@ public object AgoIcons {
      * zero-ish-length, round-capped line standing in for a dot — see [Exclamation]'s own comment),
      * repositioned to sit inside this ring rather than filling the full viewport the way [Exclamation]
      * does when drawn bare.
+     *
+     * `26-268` follow-up (author feedback 2026-09-29): also the phone-not-confirmed warning on the Клиенты
+     * list row ([ago.chat.android.bookings.ContactsScreen]'s `ContactCard`, drawn inline on the phone line)
+     * and the client-detail hub's own confirm-phone banner
+     * ([ago.chat.android.bookings.ClientDetailScreen]'s `ConfirmPhoneBanner`) — both switched here from the
+     * bare [Exclamation] for the circled shape the author asked for, reusing this glyph rather than
+     * hand-building a near-duplicate: the identical "reused rather than redrawn a third time" reasoning
+     * [CheckCircle] above states for its own checkmark.
      */
     public val ErrorCircle: ImageVector =
         strokeIcon(

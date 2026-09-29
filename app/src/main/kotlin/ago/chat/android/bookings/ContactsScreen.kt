@@ -443,11 +443,11 @@ internal const val CLIENT_ERASE_ACTION_TEST_TAG = "contactsListEraseAction"
  * its label to say so, the identical `RevealControl`/`revealing` shape `renderPhone` already draws.
  *
  * `26-269`: the two full-sentence phone-status lines (`bookings_contacts_phone_verified_no`/
- * `..._confirmed_no`) this card used to draw unconditionally are gone, replaced by
- * [PhoneStatusAndNoShowRow] — a single row drawn only when it has something to say
- * (`docs/backlog/26-269-*.md` §3.3/§3.4: the warning glyph only when the phone is neither verified nor
- * operator-confirmed, the no-show pill only when the count is positive; "zero/confirmed is the quiet
- * default" for both).
+ * `..._confirmed_no`) this card used to draw unconditionally are gone. The warning glyph for an
+ * unconfirmed phone (`docs/backlog/26-269-*.md` §3.3: "the single actionable state... when it is verified
+ * *either* way, show no icon") now sits inline on the phone line itself — see this card's own phone [Row]
+ * below — and [NoShowRow] draws only the no-show pill, only when the count is positive (§3.4: "zero is the
+ * quiet default").
  *
  * `26-269`: [onOpenClient] makes the whole card a tap target — the client-detail hub's own entry point,
  * the affordance this card's own doc comment above states `26-52` deliberately left out. The reveal
@@ -487,12 +487,25 @@ private fun ContactCard(
         // The phone, exactly as the server sent it, plus Показать when `masked` says a real number is
         // still hidden behind it - `26-52`'s own "Masked is masked, no control at all" rule is now
         // `26-53`'s "a control exactly when the server says there is something to reveal".
+        //
+        // `26-268` follow-up (author feedback 2026-09-29): the unconfirmed-phone warning glyph used to sit
+        // on its own row below this one (`NoShowRow`'s own doc comment traces that split); the author asked
+        // for it inline instead, immediately after the phone number on this same line, since the icon *is*
+        // a fact about this number, not a fact about the row as a whole the way the no-show pill is.
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = contact.phone,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (contact.phoneNeedsAttention) {
+                Icon(
+                    imageVector = AgoIcons.ErrorCircle,
+                    contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
+                    tint = agoStatusColors().warning,
+                    modifier = Modifier.padding(start = 6.dp).size(16.dp),
+                )
+            }
             if (contact.masked) {
                 TextButton(onClick = onReveal, enabled = !revealing) {
                     Text(
@@ -504,53 +517,30 @@ private fun ContactCard(
                 }
             }
         }
-        PhoneStatusAndNoShowRow(contact = contact)
+        NoShowRow(contact = contact)
     }
 }
 
 /**
- * `26-269`: the row's own compact status line — a [AgoIcons.Exclamation] glyph, tinted
- * `agoStatusColors().warning` (the mockup's own `<svg class="i" style="color:var(--warning)">`, never
- * [agoStatusColors().dangerIcon] — that role is reserved for [ago.chat.android.ui.icons.AgoIcons.ErrorCircle]'s
- * "needs attention now" call sites, and an unconfirmed phone is a caution, not an error), drawn **only**
- * when [Contact.phoneVerifiedAt] **and** [Contact.phoneConfirmedByOperatorAt] are both `null`
- * (`docs/backlog/26-269-*.md` §3.3: "the single actionable state... When it is verified *either* way, show
- * no icon"). The two facts stay exactly two facts on the wire and on [Contact] itself — only this row's
- * *presentation* collapses them into one glyph, never the underlying data.
+ * `26-269`: the row's own no-show pill — [contact.noShowCount] worded through
+ * [russianPluralStringResource] (the project's own hand-rolled Russian/English plural split,
+ * [ago.chat.android.ui.components.russianPluralStringResource]'s own doc comment) — drawn only when the
+ * count is positive (`docs/backlog/26-269-*.md` §3.4: "otherwise nothing... zero is the quiet default"), in
+ * the same `warningTint`/`warning` pair the phone line's own warning glyph uses: a client who no-showed is
+ * exactly the same "worth a second look before committing a slot" caution an unconfirmed phone is, not a
+ * harsher one.
  *
- * [contentDescription] carries the actual words ([R.string.bookings_contacts_phone_unverified_description])
- * rather than `null`: unlike [ago.chat.android.bookings.ReadinessBody]'s identical-looking icon (which sits
- * beside its own text label and can stay decorative), this glyph is now the *only* thing on the row saying
- * "unconfirmed" — a screen reader needs the words the two deleted sentences used to carry, even though a
- * sighted operator reads the icon alone.
- *
- * The no-show pill is [contact.noShowCount] worded through [russianPluralStringResource] — the project's
- * own hand-rolled Russian/English plural split ([ago.chat.android.ui.components.russianPluralStringResource]'s
- * own doc comment) — drawn only when the count is positive (`docs/backlog/26-269-*.md` §3.4: "otherwise
- * nothing... zero is the quiet default"), in the same `warningTint`/`warning` pair as the glyph: a client who
- * no-showed is exactly the same "worth a second look before committing a slot" caution the phone glyph is,
- * not a harsher one.
+ * `26-268` follow-up (author feedback 2026-09-29): this composable used to also draw the unconfirmed-phone
+ * warning glyph, sharing this same row with the no-show pill under the name `PhoneStatusAndNoShowRow`. The
+ * author asked for that glyph inline with the phone number instead ([ContactCard]'s own phone [Row] now
+ * draws it, right after the number itself), which left this composable with only the no-show pill — renamed
+ * to say exactly that, nothing more.
  */
 @Composable
-private fun PhoneStatusAndNoShowRow(contact: Contact) {
-    val phoneNeedsAttention = contact.phoneNeedsAttention
-    if (!phoneNeedsAttention && contact.noShowCount <= 0) return
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (phoneNeedsAttention) {
-            Icon(
-                imageVector = AgoIcons.Exclamation,
-                contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
-                tint = agoStatusColors().warning,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        if (contact.noShowCount > 0) {
-            NoShowPill(count = contact.noShowCount)
-        }
+private fun NoShowRow(contact: Contact) {
+    if (contact.noShowCount <= 0) return
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        NoShowPill(count = contact.noShowCount)
     }
 }
 

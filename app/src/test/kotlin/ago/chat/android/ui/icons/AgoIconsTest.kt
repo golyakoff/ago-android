@@ -194,6 +194,34 @@ class AgoIconsTest {
     }
 
     /**
+     * `26-268` follow-up (author feedback 2026-09-29): `ClientDetailScreen`'s `ConfirmPhoneBanner` and
+     * `ContactsScreen`'s inline phone-line warning both switched to this already-existing glyph instead of
+     * the bare-stem-and-dot [AgoIcons.Exclamation], for the circled Material Symbols Outlined `error` shape
+     * the author asked for — reusing [ErrorCircle] rather than hand-building a near-duplicate icon, the
+     * identical "reused rather than redrawn a third time" reasoning [AgoIcons.CheckCircle]'s own doc
+     * comment states for its own checkmark. Held to the same construction-implies-shape-count check
+     * [AgoIcons.Readiness]/[AgoIcons.Hours] above get for their own `circle(...)` primitive, plus
+     * [assertTranscribed] for the stem — the dot is checked structurally instead, the identical reason
+     * [AgoIcons.Tag]'s own punched-hole dot above is never transcribed: [PathParser] reads a literal
+     * `h.01` as a relative-horizontal node, where [PathBuilder.lineToRelative] (the dot's own zero-ish-length,
+     * round-capped-into-a-circle convention [Exclamation]'s doc comment states) produces a relative-line
+     * node instead — the same SVG point reached two different, non-`equals` ways.
+     */
+    @Test
+    fun `AgoIcons_ErrorCircle is the circle-plus-stem-and-dot construction the phone-warning icon reuses`() {
+        // <circle cx="12" cy="12" r="9"/> + the stem path + the dot path = three subpaths.
+        assertEquals(3, paths(AgoIcons.ErrorCircle).size)
+        // The circle, traced as two half-arcs and closed - the same structural check `AgoIcons.More`'s own
+        // dots get above.
+        assertEquals(4, paths(AgoIcons.ErrorCircle)[0].pathData.size)
+        // M12 7v6 (the stem), held to the parser node-for-node.
+        assertTranscribed(AgoIcons.ErrorCircle, 1, "M12 7v6")
+        // M12 16h.01 (the dot) - a move plus one relative line, checked structurally (this class's own doc
+        // comment above on why).
+        assertEquals(2, paths(AgoIcons.ErrorCircle)[2].pathData.size)
+    }
+
+    /**
      * The mockup's whole icon family shares one treatment — `fill:none; stroke:currentColor;
      * stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round` — and an icon that quietly drops
      * one of those reads as a different family rather than as a bug, which is why every glyph is held
@@ -228,6 +256,7 @@ class AgoIconsTest {
                 AgoIcons.Tag,
                 AgoIcons.Trend,
                 AgoIcons.Funnel,
+                AgoIcons.ErrorCircle,
             )
         icons.forEach { icon ->
             assertEquals(icon.name, 24f, icon.viewportWidth, 0f)
