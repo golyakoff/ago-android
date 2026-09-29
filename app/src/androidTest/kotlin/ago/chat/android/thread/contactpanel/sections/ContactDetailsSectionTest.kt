@@ -88,8 +88,12 @@ class ContactDetailsSectionTest {
         composeTestRule.onNodeWithText("Показать").performClick()
         composeTestRule.waitForIdle()
 
-        // The masked value and its control are gone; the unmasked value is on screen.
-        composeTestRule.onNodeWithText("+7 900 111 22 33").assertIsDisplayed()
+        // The masked value and its control are gone; the unmasked value is on screen - `26-307`: formatted
+        // for display (`formatRuPhoneForDisplay`), the identical `+7 (XXX) XXX-XX-XX` grouping
+        // `tappingEditOpensTheEditorPrefilledWithTheCurrentValue` below already expects from `RuPhoneField`'s
+        // own live mask, so the read-only row and the editor never show two different notations for the
+        // same number.
+        composeTestRule.onNodeWithText("+7 (900) 111-22-33").assertIsDisplayed()
         composeTestRule.onNodeWithText("Показать").assertDoesNotExist()
     }
 
