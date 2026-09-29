@@ -376,6 +376,9 @@
     <string name="bookings_pending_confirms_in_hours_short">in %d h</string>
     <string name="bookings_deadline_unknown">deadline unknown</string>
     <string name="bookings_duration_minutes">%d min</string>
+    <string name="bookings_duration_minutes_full_one">%1$d minute</string>
+    <string name="bookings_duration_minutes_full_few">%1$d minutes</string>
+    <string name="bookings_duration_minutes_full_many">%1$d minutes</string>
     <string name="bookings_card_service_label">Service</string>
     <!-- `26-91`: "Master", not "Worker" — see the file-level note above. -->
     <string name="bookings_card_worker_label">Master</string>

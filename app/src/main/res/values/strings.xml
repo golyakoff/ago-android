@@ -651,6 +651,14 @@
     <string name="bookings_pending_confirms_in_hours_short">через %d ч</string>
     <string name="bookings_deadline_unknown">срок неизвестен</string>
     <string name="bookings_duration_minutes">%d мин</string>
+    <!-- `26-306`: the client-detail booking row's own sub-line spells the unit out in full
+         («90 минут»), unlike the abbreviated `bookings_duration_minutes` badge above - this needs real
+         Russian agreement (минута/минуты/минут), read through `russianPluralStringResource`
+         (`ElapsedText.kt`), the identical mod-10/mod-100 helper `conversation_row_elapsed_minutes_*`
+         already uses for the same three-bucket shape. -->
+    <string name="bookings_duration_minutes_full_one">%1$d минута</string>
+    <string name="bookings_duration_minutes_full_few">%1$d минуты</string>
+    <string name="bookings_duration_minutes_full_many">%1$d минут</string>
     <!-- `26-163`: «Когда»/«Календарь» left with the `26-48` card they labelled - the redesigned row carries
          the time and date in its leading column, and the calendar id is an id, never a thing to show. -->
     <string name="bookings_card_service_label">Услуга</string>
