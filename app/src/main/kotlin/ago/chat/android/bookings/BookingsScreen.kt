@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -1343,15 +1344,38 @@ internal fun LoadingBody() {
     }
 }
 
+/**
+ * `26-269` polish (A6): [action] is an optional recovery control drawn below [text] - Клиенты's own
+ * «Очистить поиск» on a zero-match search is the first caller (`ContactsScreen.kt`'s own
+ * `ContactsBody`). Defaulted `null` so every pre-existing call site (a bare empty-state sentence, no
+ * button) keeps rendering exactly as before - `null` skips the extra `Column`/`Spacer` entirely rather
+ * than reserving space for a control that never draws.
+ */
 @Composable
-internal fun EmptyBody(text: String) {
+internal fun EmptyBody(
+    text: String,
+    action: (@Composable () -> Unit)? = null,
+) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        if (action == null) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                action()
+            }
+        }
     }
 }
 

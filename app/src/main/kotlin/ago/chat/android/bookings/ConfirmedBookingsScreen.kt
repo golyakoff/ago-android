@@ -923,16 +923,23 @@ internal fun bookingIdentityText(identity: BookingIdentity): String =
  * `skipPartiallyExpanded = true` opens it at full height so the action buttons are visible without a
  * drag — the sheet's content is a short fixed card, not a long list, so the Material default
  * half-expanded state would just hide the actions below the fold.
+ *
+ * `26-269` polish (B9): `internal`, not `private` — the client-detail hub's own past-booking read-only
+ * card (`ClientDetailScreen.kt`) reuses this exact sheet for a [PersonBooking][ago.chat.android.core.domain.bookings.PersonBooking]
+ * mapped onto [ConfirmedBooking] ([ago.chat.android.bookings.asReadOnlyConfirmedBooking]) rather than a
+ * second, drifting copy of the same Услуга/Мастер/Телефон/Источник rows. [readOnly] is the one switch
+ * that reuse needs — see its own doc comment below.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConfirmedBookingDetailSheet(
+internal fun ConfirmedBookingDetailSheet(
     booking: ConfirmedBooking,
     revealing: Boolean,
     onReveal: () -> Unit,
     onOpenDialog: () -> Unit,
     onReschedule: () -> Unit,
     onDismiss: () -> Unit,
+    readOnly: Boolean = false,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -945,18 +952,24 @@ private fun ConfirmedBookingDetailSheet(
             onOpenDialog = onOpenDialog,
             onReschedule = onReschedule,
             onDismiss = onDismiss,
+            readOnly = readOnly,
         )
     }
 }
 
 @Composable
-private fun ConfirmedBookingDetailBody(
+internal fun ConfirmedBookingDetailBody(
     booking: ConfirmedBooking,
     revealing: Boolean,
     onReveal: () -> Unit,
     onOpenDialog: () -> Unit,
     onReschedule: () -> Unit,
     onDismiss: () -> Unit,
+    // `26-269` polish (B9): `true` for a past booking opened read-only from the client-detail hub — hides
+    // «Перенести» below (a visit that already happened has nothing left to move) while every other row
+    // this body draws stays exactly as-is. Defaulted `false` so `ConfirmedBookingsBody`'s own call site —
+    // a tap on an Утверждены row, always reschedulable — keeps compiling and behaving unchanged.
+    readOnly: Boolean = false,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
         // Hard requirement 7: the header is the name (the identical fallback the list row uses - this
@@ -1061,8 +1074,15 @@ private fun ConfirmedBookingDetailBody(
         // would leave every label cramped. Never disabled: every confirmed booking has a worker
         // (`ConfirmedBooking.workerId` is non-nullable), so there is no "cannot reschedule this one" state
         // for this button to reflect - unlike the dialog action's own `originConversationId`-gated enable.
-        OutlinedButton(onClick = onReschedule, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-            Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
+        //
+        // `26-269` polish (B9): absent entirely, not merely disabled, when [readOnly] - the past-booking
+        // card's own "hide, don't grey" rule for an action that makes no sense at all for a visit that
+        // already happened, the identical posture [ContactsBody]'s own swipe-to-delete gesture already
+        // takes for a missing permission (`SwipeableContactRow`'s own doc comment).
+        if (!readOnly) {
+            OutlinedButton(onClick = onReschedule, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                Text(text = stringResource(R.string.bookings_confirmed_reschedule_action), maxLines = 1)
+            }
         }
 
         // Hard requirement 11 (as revised by `26-135`): «К диалогу» (primary) and «Закрыть» (secondary)
