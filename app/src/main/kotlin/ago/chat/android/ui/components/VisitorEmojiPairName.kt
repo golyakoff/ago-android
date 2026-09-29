@@ -56,6 +56,35 @@ internal fun visitorEmojiPairNameText(
 ): String = "$creatureName · $foodName"
 
 /**
+ * `26-285`: [VisitorAvatar]'s own Initials-mode source — the first character of each localized name,
+ * uppercased, the identical [initialsFor] rule ("`String.uppercase()` with no `Locale` argument... must
+ * never depend on the device's own configured locale") restated for a pair of *resolved names* rather
+ * than one free-typed one. `null` when either glyph has no resource entry ([visitorEmojiNameResource]
+ * returning `null`), never the bare glyph itself — [visitorEmojiPairName]'s own fallback is fine for
+ * *text*, but `String.first()` of an emoji glyph returns a broken UTF-16 surrogate half, not a usable
+ * initial, so [VisitorAvatar] falls back to its emoji badge for that one avatar instead of ever drawing
+ * that. In practice this branch is defensive, not expected: the 40-glyph dictionary is complete and
+ * [VisitorEmojiPairNameTest]'s own completeness check guarantees it stays that way.
+ */
+@Composable
+public fun visitorEmojiInitials(pair: VisitorEmojiPair): String? {
+    val creatureRes = visitorEmojiNameResource(pair.creature) ?: return null
+    val foodRes = visitorEmojiNameResource(pair.food) ?: return null
+    return visitorEmojiInitialsText(stringResource(creatureRes), stringResource(foodRes))
+}
+
+/**
+ * The plain join rule behind [visitorEmojiInitials] — pulled out so a plain JVM `test` can assert the
+ * exact composition with no composition host, the identical split [visitorEmojiPairNameText] above
+ * already is for the name form. Multi-word food («Картошка фри») needs no word-splitting: the first
+ * *character* of the trimmed, already-localized string is already the first letter of its first word.
+ */
+internal fun visitorEmojiInitialsText(
+    creatureName: String,
+    foodName: String,
+): String = "${creatureName.trim().first()}${foodName.trim().first()}".uppercase()
+
+/**
  * The one place [CREATURE_NAME_RESOURCES]/[FOOD_NAME_RESOURCES] are read. `null` for a glyph neither
  * table knows - a future `VisitorEmojiDictionary.cs` member added there before this table catches up,
  * for instance - so [visitorEmojiPairName] can fall back to the bare glyph itself, never a blank string,

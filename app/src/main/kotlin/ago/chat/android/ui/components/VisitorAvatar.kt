@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,6 +63,18 @@ import androidx.compose.ui.unit.sp
  * from the row-level `mergeDescendants = true` in `ConversationRow`, which *folds* descendants into one
  * description rather than silencing them; this avatar wants silence, not folding, because folding it in
  * would still speak the glyph names as part of the merged sentence.
+ *
+ * `26-285`: reads [LocalVisitorAvatarStyle] and, while it is [VisitorAvatarStyle.Initials] *and* the
+ * pair's localized names both resolve ([visitorEmojiInitials]), draws an initials circle instead of the
+ * badge above — the exact circle [ago.chat.android.bookings.ClientAvatar] and
+ * [AccountAvatarAction]'s own `AvatarCircle` already draw for a named person
+ * (`primaryContainer`/`onPrimaryContainer`, `titleSmall` bold, a fixed size rather than one scaled by
+ * [diameter] the way the emoji glyphs above are), so a visitor rendered in Initials mode and a named
+ * client render as one visual family. An unresolved name (`null`) falls back to the emoji badge for
+ * that one avatar rather than risk [visitorEmojiInitials]'s own documented broken-surrogate hazard — see
+ * that function's own doc comment. This toggle governs the anonymous emoji-pair avatar only:
+ * [ago.chat.android.bookings.ClientAvatar]'s named-person arm calls [initialsFor] directly and never
+ * reaches this composable at all, so a real name's own initials are unaffected by either style.
  */
 @Composable
 public fun VisitorAvatar(
@@ -71,6 +84,30 @@ public fun VisitorAvatar(
     diameter: Dp = AvatarDiameter,
 ) {
     val pair = visitorEmojiPair(emojiCreature, emojiFood) ?: return
+    val style = LocalVisitorAvatarStyle.current
+
+    if (style == VisitorAvatarStyle.Initials) {
+        val initials = visitorEmojiInitials(pair)
+        if (initials != null) {
+            Box(
+                modifier =
+                    modifier
+                        .size(diameter)
+                        .clearAndSetSemantics {}
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = initials,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            return
+        }
+    }
+
     val creatureFontSize = (diameter.value * CREATURE_FONT_SIZE_RATIO).sp
     val foodFontSize = (diameter.value * FOOD_FONT_SIZE_RATIO).sp
     val foodBadgeOverhang = diameter * FOOD_BADGE_OVERHANG_RATIO

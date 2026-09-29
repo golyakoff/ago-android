@@ -10,6 +10,9 @@ import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInHost
 import ago.chat.android.signin.SignInUiState
 import ago.chat.android.signin.SignInViewModel
+import ago.chat.android.ui.components.LocalVisitorAvatarStyle
+import ago.chat.android.ui.components.VisitorAvatarStyle
+import ago.chat.android.ui.components.VisitorAvatarStylePreferences
 import ago.chat.android.ui.language.wrapContextForLanguage
 import ago.chat.android.ui.theme.AgoChatTheme
 import ago.chat.android.ui.theme.ThemeMode
@@ -29,6 +32,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
@@ -99,6 +103,13 @@ public class MainActivity : ComponentActivity() {
      * matter of which colour scheme `setContent` below builds, with no business logic in front of it. */
     @Inject
     public lateinit var themePreferences: ThemePreferences
+
+    /** `26-285`: «Аватары посетителей»'s own single source of truth — the identical [themePreferences]
+     * shape immediately above, field-injected for the identical reason: applying it is purely which
+     * [VisitorAvatarStyle] `setContent` below publishes through [LocalVisitorAvatarStyle], with no
+     * business logic in front of it. */
+    @Inject
+    public lateinit var visitorAvatarStylePreferences: VisitorAvatarStylePreferences
 
     /** `26-18`: this `Activity`'s own side of [PendingConversationOpener] - see that interface's own doc
      * comment for the two other places that read the value this class writes. */
@@ -234,26 +245,38 @@ public class MainActivity : ComponentActivity() {
                     ThemeMode.Dark -> true
                 }
 
+            // `26-285`: the identical "read fresh, every recomposition" comment above, restated for a
+            // second, unrelated per-device preference - a `setStyle` call from the Settings screen reaches
+            // this exact `collectAsState` for the same reason `themeMode` above does.
+            val avatarStyle by visitorAvatarStylePreferences.style.collectAsState(initial = VisitorAvatarStyle.Emoji)
+
             AgoChatTheme(darkTheme = darkTheme) {
-                val state by viewModel.state.collectAsState()
-                val hubConnectionState by viewModel.hubConnectionState.collectAsState()
-                SignInHost(
-                    state = state,
-                    hubConnectionState = hubConnectionState,
-                    consoleUrl = oidcConfig.consoleUrl,
-                    onSignIn = viewModel::beginSignIn,
-                    onChooseSite = viewModel::chooseSite,
-                    onRetry = viewModel::retry,
-                    onSignOut = viewModel::signOut,
-                    onCancelSignIn = viewModel::cancelSignIn,
-                    onOpenConsole = ::openInBrowser,
-                )
-                // `26-128`: composed here, over the whole signed-in shell, rather than inside
-                // `AppShellScreen` or any one tab - see `BatteryAwarenessRoute`'s own doc comment for why.
-                // Gated on `SignedIn` so the sheet never appears over the pre-session screens above, where
-                // there is no operator identity yet for a "don't show again" choice to belong to.
-                if (state is SignInUiState.SignedIn) {
-                    BatteryAwarenessRoute()
+                // Provided *inside* `AgoChatTheme` rather than beside `LocalAgoStatusColors` in
+                // `Theme.kt` itself, so it covers `SignInHost` and the whole signed-in shell below -
+                // `docs/backlog/26-285-*.md`'s own §A states why this CompositionLocal is declared next
+                // to its one consumer, `VisitorAvatar`, rather than folded into that theme file's own
+                // provider.
+                CompositionLocalProvider(LocalVisitorAvatarStyle provides avatarStyle) {
+                    val state by viewModel.state.collectAsState()
+                    val hubConnectionState by viewModel.hubConnectionState.collectAsState()
+                    SignInHost(
+                        state = state,
+                        hubConnectionState = hubConnectionState,
+                        consoleUrl = oidcConfig.consoleUrl,
+                        onSignIn = viewModel::beginSignIn,
+                        onChooseSite = viewModel::chooseSite,
+                        onRetry = viewModel::retry,
+                        onSignOut = viewModel::signOut,
+                        onCancelSignIn = viewModel::cancelSignIn,
+                        onOpenConsole = ::openInBrowser,
+                    )
+                    // `26-128`: composed here, over the whole signed-in shell, rather than inside
+                    // `AppShellScreen` or any one tab - see `BatteryAwarenessRoute`'s own doc comment for why.
+                    // Gated on `SignedIn` so the sheet never appears over the pre-session screens above, where
+                    // there is no operator identity yet for a "don't show again" choice to belong to.
+                    if (state is SignInUiState.SignedIn) {
+                        BatteryAwarenessRoute()
+                    }
                 }
             }
         }

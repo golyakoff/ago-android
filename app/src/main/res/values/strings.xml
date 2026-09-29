@@ -1972,6 +1972,13 @@
     <string name="settings_language_system">Системный</string>
     <string name="settings_language_russian">Русский</string>
     <string name="settings_language_english">English</string>
+
+    <!-- `26-285`: аватар анонимного посетителя (эмодзи-пара или круг с инициалами) - per-device
+         настройка, той же природы, что Тема и Язык интерфейса выше. Никак не влияет на аватар
+         именованного клиента/оператора, у которого уже есть инициалы по имени. -->
+    <string name="settings_avatar_style_section">Аватары посетителей</string>
+    <string name="settings_avatar_style_emoji">Эмодзи</string>
+    <string name="settings_avatar_style_initials">Инициалы</string>
     <string name="settings_site_section">Текущий сайт</string>
     <string name="settings_site_switching">Переключаем…</string>
     <string name="settings_about_section">О приложении</string>

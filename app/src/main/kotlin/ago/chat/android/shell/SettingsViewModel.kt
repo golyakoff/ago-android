@@ -16,6 +16,8 @@ import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.resolveAutostartUiState
 import ago.chat.android.di.IoDispatcher
+import ago.chat.android.ui.components.VisitorAvatarStyle
+import ago.chat.android.ui.components.VisitorAvatarStylePreferences
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemeMode
@@ -69,6 +71,7 @@ public class SettingsViewModel
         private val hubConnection: OperatorHubEvents,
         private val themePreferences: ThemePreferences,
         private val languagePreferences: AppLanguagePreferences,
+        private val visitorAvatarStylePreferences: VisitorAvatarStylePreferences,
         private val deviceRegistrar: DeviceRegistrar,
         private val notificationPermissionChecker: NotificationPermissionChecker,
         private val batteryOptimizationChecker: BatteryOptimizationChecker,
@@ -84,6 +87,14 @@ public class SettingsViewModel
          * up, ported for a second, unrelated preference. */
         public val language: StateFlow<AppLanguage> =
             languagePreferences.language.stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.System)
+
+        /** `26-285`: «Аватары посетителей»'s own current selection — the identical [themeMode] shape
+         * above, ported for a third, unrelated per-device preference. Needs no `languageApplied`-style
+         * one-shot event: it is pure Compose state read at the `MainActivity` root, like Тема, with
+         * nothing underneath it to pre-build the way a locale change has (see
+         * [ago.chat.android.ui.components.VisitorAvatarStylePreferences]'s own doc comment). */
+        public val avatarStyle: StateFlow<VisitorAvatarStyle> =
+            visitorAvatarStylePreferences.style.stateIn(viewModelScope, SharingStarted.Eagerly, VisitorAvatarStyle.Emoji)
 
         /**
          * `26-92`: fires once [AppLanguagePreferences.setLanguage] has actually persisted the new
@@ -190,6 +201,13 @@ public class SettingsViewModel
 
         public fun setThemeMode(mode: ThemeMode) {
             viewModelScope.launch { themePreferences.setMode(mode) }
+        }
+
+        /** `26-285`: fire-and-persist, the identical [setThemeMode] shape above — not [setLanguage]'s own
+         * shape below, since an avatar style has no Android-specific "apply" step the way a locale change
+         * does. */
+        public fun setAvatarStyle(style: VisitorAvatarStyle) {
+            viewModelScope.launch { visitorAvatarStylePreferences.setStyle(style) }
         }
 
         /** `26-92`: persists first, then signals [languageApplied] — see that property's own doc comment

@@ -1225,6 +1225,13 @@
     <string name="settings_language_system">System</string>
     <string name="settings_language_russian">Русский</string>
     <string name="settings_language_english">English</string>
+
+    <!-- `26-285`: the anonymous visitor's own avatar (emoji pair or an initials circle) - a per-device
+         setting, the same category Тема and Язык above already are. Never affects a named client's or
+         operator's own name-derived initials avatar. -->
+    <string name="settings_avatar_style_section">Visitor avatars</string>
+    <string name="settings_avatar_style_emoji">Emoji</string>
+    <string name="settings_avatar_style_initials">Initials</string>
     <string name="settings_site_section">Current shop</string>
     <string name="settings_site_switching">Switching…</string>
     <string name="settings_about_section">About</string>
