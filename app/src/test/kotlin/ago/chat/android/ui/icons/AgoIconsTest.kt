@@ -67,6 +67,14 @@ class AgoIconsTest {
     }
 
     @Test
+    fun `i-x is Feather's own x glyph, node for node`() {
+        // `26-268` follow-up: the sheet close control's own glyph - two crossing diagonals, the identical
+        // "borrow a Feather outline" precedent `AgoIcons.Call`/`AgoIcons.Tag` already establish.
+        assertTranscribed(AgoIcons.Close, 0, "M18 6L6 18")
+        assertTranscribed(AgoIcons.Close, 1, "M6 6L18 18")
+    }
+
+    @Test
     fun `i-clip is the mockup's own path data, node for node`() {
         assertTranscribed(
             AgoIcons.Clip,
@@ -206,6 +214,7 @@ class AgoIconsTest {
                 AgoIcons.Analytics,
                 AgoIcons.More,
                 AgoIcons.Back,
+                AgoIcons.Close,
                 AgoIcons.Clip,
                 AgoIcons.Send,
                 AgoIcons.Sliders,

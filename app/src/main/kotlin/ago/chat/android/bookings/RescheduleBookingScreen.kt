@@ -5,6 +5,7 @@ import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
 import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,13 +21,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -34,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * `26-209`/`adr/0187`: «Перенести оператором»'s own sheet — opened *over* the confirmed booking's own
@@ -50,6 +56,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * This composable never calls [ConfirmedBookingsViewModel.refresh] itself — it has no reference to that
  * class, the identical separation [RescheduleBookingViewModel]'s own doc comment states for the view model
  * layer.
+ *
+ * `26-268` follow-up (author bug report 2026-09-29): [RescheduleSlotList] is a scrollable [LazyColumn], so
+ * this sheet carries the identical `confirmValueChange`/[closeSheet] fix [ManualBookingSheet]'s own doc
+ * comment states in full — a downward drag on the slot list no longer settles at [SheetValue.Hidden], and
+ * [closeSheet] (the X button, back, a scrim tap) is what still closes the sheet, via
+ * [androidx.compose.material3.SheetState.hide] rather than a raw [onDismiss] call.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,11 +81,17 @@ internal fun RescheduleBookingSheet(
         if (state is RescheduleBookingUiState.Saved) onRescheduled()
     }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val scope = rememberCoroutineScope()
+    val closeSheet: () -> Unit = {
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
+    }
+
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = closeSheet,
+        sheetState = sheetState,
     ) {
-        RescheduleBookingBody(state = state, onRetry = viewModel::refresh, onPick = viewModel::reschedule)
+        RescheduleBookingBody(state = state, onRetry = viewModel::refresh, onPick = viewModel::reschedule, onClose = closeSheet)
     }
 }
 
@@ -82,13 +100,22 @@ private fun RescheduleBookingBody(
     state: RescheduleBookingUiState,
     onRetry: () -> Unit,
     onPick: (String) -> Unit,
+    onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        Text(
-            text = stringResource(R.string.bookings_confirmed_reschedule_sheet_title),
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.bookings_confirmed_reschedule_sheet_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+            )
+            IconButton(onClick = onClose) {
+                Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
+            }
+        }
         if (state is RescheduleBookingUiState.Loaded) {
             state.actionError?.let { error ->
                 ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))

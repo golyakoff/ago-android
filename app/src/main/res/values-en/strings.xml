@@ -84,6 +84,7 @@
     <string name="action_sign_out">Sign out</string>
     <string name="action_dismiss">Dismiss</string>
     <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
 
     <string name="conversation_list_title">Conversations</string>
     <string name="conversation_list_tab_mine">Mine</string>
