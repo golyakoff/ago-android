@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
@@ -216,5 +217,8 @@ class PendingBookingsPollerTest {
             reusePersonId: String?,
             email: String?,
         ): ManualBookingResult = throw UnsupportedOperationException("PendingBookingsPoller never calls this")
+
+        override suspend fun deleteClient(personId: String): DeleteClientResult =
+            throw UnsupportedOperationException("PendingBookingsPoller never calls this")
     }
 }

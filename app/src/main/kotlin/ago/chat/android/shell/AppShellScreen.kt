@@ -304,6 +304,8 @@ internal fun AppShellScreen(
             showServicesSegment = gates.showServicesSegment,
             showHoursSegment = gates.showHoursSegment,
             showManualBookingEntry = gates.showManualBookingEntry,
+            canEraseClient = gates.canEraseClient,
+            canCancelBooking = gates.canCancelBooking,
             hubConnectionState = hubConnectionState,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
@@ -693,6 +695,16 @@ private fun AppShellContent(
                         // checks server-side (`docs/backlog/26-268-*.md` §2), an eighth independent gate
                         // for «Добавить вручную» rather than one more `⋮` hub entry.
                         showManualBookingEntry = permissions.holds(Permission.BOOKING_CREATE),
+                        // `26-275`/`adr/0189`: `customer:erase` alone - a ninth independent gate for the
+                        // Клиенты row's own swipe-to-delete (`docs/backlog/26-275-*.md` §3), Admin-only in
+                        // practice since that permission is seeded into the Admin role alone.
+                        canEraseClient = permissions.holds(Permission.CUSTOMER_ERASE),
+                        // `26-275`: `booking:cancel` alone - the client-detail hub's own new per-booking
+                        // «Отменить», the identical permission the pending queue's own cancel veto already
+                        // checks server-side - never [Permission.CUSTOMER_ERASE] reused, since an operator
+                        // holding only `booking:cancel` may clear a future booking without being allowed to
+                        // erase the client at all (§1.7 of that document).
+                        canCancelBooking = permissions.holds(Permission.BOOKING_CANCEL),
                     ),
                     // `26-157`: `onConfigScreenChanged` (positional - named arguments are not allowed when
                     // invoking a function-typed value) - whether a `⋮` configuration screen is open, so the
@@ -787,6 +799,12 @@ internal data class BookingsGates(
     // threaded the identical "its own field" way every gate above already is, for «Добавить вручную»
     // rather than one more `⋮` hub entry.
     val showManualBookingEntry: Boolean,
+    // `26-275`/`adr/0189`: `customer:erase` alone - a ninth independent gate, for the Клиенты row's own
+    // swipe-to-delete rather than a tenth positional `Boolean` [BookingsTabSlot] could not lower either.
+    val canEraseClient: Boolean,
+    // `26-275`: `booking:cancel` alone - the client-detail hub's own new per-booking «Отменить», its own
+    // field for the same reason every gate above is one.
+    val canCancelBooking: Boolean,
 )
 
 /**

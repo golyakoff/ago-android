@@ -101,6 +101,16 @@ public fun BookingsRoute(
     // header, threaded through unchanged to [BookingsScreen], the identical "the caller who already has
     // the permission set computes the Boolean" split every gate above already draws.
     showManualBookingEntry: Boolean,
+    // `26-275`/`adr/0189`: `customer:erase` alone - gates Клиенты's own swipe-to-delete
+    // (`docs/backlog/26-275-*.md` §3/§6.1). Defaulted `false` so every existing call site keeps compiling
+    // unchanged.
+    canEraseClient: Boolean = false,
+    // `26-275`: `booking:cancel` alone - gates the client-detail hub's own new per-booking «Отменить»
+    // (`docs/backlog/26-275-*.md` §5), the identical permission the pending queue's own cancel already
+    // checks server-side. Independent of [canEraseClient]: an operator-admin holds both roles in practice
+    // (§1.7 of that document), but a pure Operator with only `booking:cancel` sees the cancel action
+    // without the delete swipe, and a pure Admin with only `customer:erase` sees the swipe without cancel.
+    canCancelBooking: Boolean = false,
     hubConnectionState: OperatorHubConnectionState,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
@@ -225,6 +235,8 @@ public fun BookingsRoute(
     val onRetryContacts: () -> Unit
     val onRevealContact: (String) -> Unit
     val onContactsSearchQueryChange: (String) -> Unit
+    val onDeleteClient: (String) -> Unit
+    val onDismissBlockedErasure: () -> Unit
     if (showClientsSegment) {
         val contactsViewModel: ContactsViewModel = hiltViewModel()
         val collectedContactsState by contactsViewModel.state.collectAsStateWithLifecycle()
@@ -232,11 +244,18 @@ public fun BookingsRoute(
         onRetryContacts = contactsViewModel::refresh
         onRevealContact = contactsViewModel::reveal
         onContactsSearchQueryChange = contactsViewModel::onSearchQueryChange
+        // `26-275`: the swipe-to-delete write and its blocked-erasure dismiss - the identical
+        // "the caller who already has the view model wires its own methods straight through" shape
+        // every other Клиенты callback above already establishes.
+        onDeleteClient = contactsViewModel::deleteClient
+        onDismissBlockedErasure = contactsViewModel::dismissBlockedErasure
     } else {
         contactsState = null
         onRetryContacts = {}
         onRevealContact = {}
         onContactsSearchQueryChange = {}
+        onDeleteClient = {}
+        onDismissBlockedErasure = {}
     }
 
     // `26-96`: the identical Hilt-avoidance-when-ungated shape the two branches above establish,
@@ -479,6 +498,8 @@ public fun BookingsRoute(
         showServicesSegment = showServicesSegment,
         showHoursSegment = showHoursSegment,
         showManualBookingEntry = showManualBookingEntry,
+        canEraseClient = canEraseClient,
+        canCancelBooking = canCancelBooking,
         selectedTab = selectedTab,
         onSegmentSelected = { selectedTab = it },
         activeConfigTab = activeConfigTab,
@@ -511,6 +532,8 @@ public fun BookingsRoute(
         onRetryContacts = onRetryContacts,
         onRevealContact = onRevealContact,
         onContactsSearchQueryChange = onContactsSearchQueryChange,
+        onDeleteClient = onDeleteClient,
+        onDismissBlockedErasure = onDismissBlockedErasure,
         servicesState = servicesState,
         onRetryServices = onRetryServices,
         onEditService = onEditService,
@@ -636,6 +659,10 @@ internal fun BookingsScreen(
     // header action alone, an eighth independent gate rather than a reuse of any segment/`⋮` boolean above
     // (an operator may hold this without holding `customer:read`/`calendar:configure` at all).
     showManualBookingEntry: Boolean,
+    // `26-275`/`adr/0189`: threaded straight through to [ContactsBody] - see [BookingsRoute]'s own doc
+    // comment on both new gates.
+    canEraseClient: Boolean,
+    canCancelBooking: Boolean,
     selectedTab: BookingsTab,
     onSegmentSelected: (BookingsTab) -> Unit,
     // `26-157`: `null` = the operational Записи view; non-null = the modal configuration page for that
@@ -661,6 +688,8 @@ internal fun BookingsScreen(
     onRetryContacts: () -> Unit,
     onRevealContact: (String) -> Unit,
     onContactsSearchQueryChange: (String) -> Unit,
+    onDeleteClient: (String) -> Unit,
+    onDismissBlockedErasure: () -> Unit,
     servicesState: ServicesUiState?,
     onRetryServices: () -> Unit,
     onEditService: (ConfiguredService) -> Unit,
@@ -992,6 +1021,10 @@ internal fun BookingsScreen(
                                 // `ConfirmedBookingsBody` above, reused rather than a second callback wired
                                 // up from `BookingsRoute` for the same `PendingConversationOpener` call.
                                 onOpenDialog = onOpenDialog,
+                                canEraseClient = canEraseClient,
+                                onDeleteClient = onDeleteClient,
+                                onDismissBlockedErasure = onDismissBlockedErasure,
+                                canCancelBooking = canCancelBooking,
                             )
                         }
 

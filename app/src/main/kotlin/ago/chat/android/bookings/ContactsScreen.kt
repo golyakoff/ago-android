@@ -6,19 +6,27 @@ import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,15 +35,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * `26-52`: Клиенты's own body — a flat card list, no row that opens anything
@@ -75,6 +90,15 @@ internal fun ContactsBody(
     onReveal: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onOpenDialog: (String) -> Unit,
+    // `26-275`: `customer:erase` alone - gates the row's own swipe-to-delete
+    // (`docs/backlog/26-275-*.md` §3/§6.1), mirrored from `ConversationListScreen`'s own
+    // `AllRow`/`canErase`. Defaulted `false` so every existing call site keeps compiling unchanged.
+    canEraseClient: Boolean = false,
+    onDeleteClient: (String) -> Unit = {},
+    onDismissBlockedErasure: () -> Unit = {},
+    // `26-275`: threaded straight through to [ClientDetailSheet] - see that composable's own doc comment
+    // on why the Предстоящие row's new «Отменить» needs its own, separate permission.
+    canCancelBooking: Boolean = false,
 ) {
     var selectedClientId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -109,14 +133,34 @@ internal fun ContactsBody(
                                 ContactsList(
                                     contacts = visible,
                                     revealingCustomerIds = state.revealingCustomerIds,
+                                    deletingClientIds = state.deletingClientIds,
+                                    canEraseClient = canEraseClient,
                                     onReveal = onReveal,
                                     onOpenClient = { customerId -> selectedClientId = customerId },
+                                    onDeleteClient = onDeleteClient,
                                 )
                             }
                         }
                     }
             }
         }
+    }
+
+    // `26-275`: the blocked-delete explanation (§6.1) - a client-side branch off the server's own typed
+    // `person_erase.future_bookings` refusal (`ContactsViewModel.deleteClient`'s own doc comment), never a
+    // pre-check this screen performs itself (rule 8: the server is the one and only gate). «Перейти к
+    // записям» opens the same [ClientDetailSheet] an ordinary row tap already would, for the same id -
+    // that sheet already defaults to Предстоящие ([ClientDetailUiState.Loaded.selectedSegment]'s own
+    // default), so no extra navigation state is needed to land the operator on the right segment.
+    val blockedClientId = (state as? ContactsUiState.Loaded)?.blockedErasureClientId
+    if (blockedClientId != null) {
+        ClientEraseBlockedDialog(
+            onDismiss = onDismissBlockedErasure,
+            onNavigateToUpcoming = {
+                selectedClientId = blockedClientId
+                onDismissBlockedErasure()
+            },
+        )
     }
 
     val selectedContact =
@@ -126,6 +170,7 @@ internal fun ContactsBody(
             contact = selectedContact,
             onDismiss = { selectedClientId = null },
             onOpenDialog = onOpenDialog,
+            canCancelBooking = canCancelBooking,
         )
     }
 }
@@ -157,21 +202,229 @@ private fun ContactsSearchField(
 private fun ContactsList(
     contacts: List<Contact>,
     revealingCustomerIds: Set<String>,
+    deletingClientIds: Set<String>,
+    canEraseClient: Boolean,
     onReveal: (String) -> Unit,
     onOpenClient: (String) -> Unit,
+    onDeleteClient: (String) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(contacts, key = { it.customerId }) { contact ->
-            ContactCard(
+            SwipeableContactRow(
                 contact = contact,
                 revealing = contact.customerId in revealingCustomerIds,
+                deleting = contact.customerId in deletingClientIds,
+                canErase = canEraseClient,
                 onReveal = { onReveal(contact.customerId) },
                 onOpenClient = { onOpenClient(contact.customerId) },
+                onConfirmDelete = { onDeleteClient(contact.customerId) },
             )
             HorizontalDivider()
         }
     }
 }
+
+/**
+ * `26-275`/`adr/0189`: the Клиенты row's own swipe-to-delete — ported verbatim from
+ * `ago.chat.android.conversations.ConversationListScreen`'s own `AllRow`/`EraseAction`/
+ * `EraseConfirmDialog` (`docs/backlog/26-275-*.md` §1.2/§6.1: "this whole shape ports one-for-one to the
+ * Клиенты row"). The hand-rolled 80dp partial reveal via `Modifier.draggable`, the halfway settle, the
+ * danger `Surface` panel with the `TrashForever` glyph and a two-line caption, and the confirm dialog are
+ * all taken from that file unchanged — only the caption text (`ContactEraseAction`'s own strings), the
+ * capability ([canErase] is `customer:erase` rather than `conversation:erase`) and what a confirm does
+ * (branches on the server's own typed refusal rather than an optimistic remove-with-retry, since this
+ * write answers synchronously with one of three outcomes rather than an async erasure job the caller
+ * would have to poll for) differ.
+ *
+ * **The gesture is not attached at all without `customer:erase`** — the identical "hide, don't disable"
+ * rule [canErase]'s own doc comment on [Permission.CUSTOMER_ERASE][ago.chat.android.core.domain.permissions.Permission.CUSTOMER_ERASE]
+ * states, restated here for this row: `.then(if (swipeable) … else Modifier)`, and
+ * `LaunchedEffect(swipeable)` closes any open reveal the moment the capability is revoked.
+ *
+ * [deleting] disables the row's own reveal control (no unmasking mid-delete) and keeps the swipe closed
+ * while this customer's own delete is on the network — there is no optimistic removal to undo here (the
+ * write answers synchronously, so the row simply waits for [onConfirmDelete]'s own caller to fold the
+ * result into state, the same "the caller already knows what it asked for" posture
+ * [ago.chat.android.core.domain.bookings.BookingsApi.deleteClient]'s own doc comment states).
+ */
+@Composable
+private fun SwipeableContactRow(
+    contact: Contact,
+    revealing: Boolean,
+    deleting: Boolean,
+    canErase: Boolean,
+    onReveal: () -> Unit,
+    onOpenClient: () -> Unit,
+    onConfirmDelete: () -> Unit,
+) {
+    val swipeable = canErase && !deleting
+    val revealWidthPx = with(LocalDensity.current) { ClientEraseActionWidth.toPx() }
+    var offsetX by remember(contact.customerId) { mutableFloatStateOf(0f) }
+    var confirming by rememberSaveable(contact.customerId) { mutableStateOf(false) }
+    val animatedOffset by animateFloatAsState(targetValue = offsetX, label = "clientEraseReveal")
+
+    // Closes the reveal again whenever the gesture stops being available - the identical
+    // `AllRow`/`LaunchedEffect(swipeable)` reasoning, restated here for a capability revoke or a delete
+    // going in flight alike.
+    LaunchedEffect(swipeable) { if (!swipeable) offsetX = 0f }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (swipeable && offsetX < 0f) {
+            Row(modifier = Modifier.matchParentSize(), horizontalArrangement = Arrangement.End) {
+                ClientEraseAction(onClick = { confirming = true })
+            }
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            modifier =
+                Modifier
+                    .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                    .then(
+                        if (swipeable) {
+                            Modifier.draggable(
+                                orientation = Orientation.Horizontal,
+                                state =
+                                    rememberDraggableState { delta ->
+                                        offsetX = (offsetX + delta).coerceIn(-revealWidthPx, 0f)
+                                    },
+                                onDragStopped = {
+                                    offsetX = if (offsetX < -revealWidthPx / 2f) -revealWidthPx else 0f
+                                },
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
+        ) {
+            ContactCard(
+                contact = contact,
+                revealing = revealing || deleting,
+                onReveal = onReveal,
+                onOpenClient = onOpenClient,
+            )
+        }
+    }
+
+    if (confirming) {
+        ClientEraseConfirmDialog(
+            onDismiss = { confirming = false },
+            onConfirm = {
+                confirming = false
+                offsetX = 0f
+                onConfirmDelete()
+            },
+        )
+    }
+}
+
+/** The mockup's `.swipe-del` panel, restated from `ConversationListScreen`'s own `EraseAction` for the
+ * Клиенты caption («Удалить» / «клиента»). See that composable's own doc comment for the metrics this
+ * one shares verbatim. */
+@Composable
+private fun ClientEraseAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.error,
+        contentColor = MaterialTheme.colorScheme.onError,
+        modifier = Modifier.width(ClientEraseActionWidth).fillMaxHeight(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .clickable(
+                        onClickLabel = stringResource(R.string.bookings_contacts_erase_action_description),
+                        onClick = onClick,
+                    ).testTag(CLIENT_ERASE_ACTION_TEST_TAG)
+                    .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+        ) {
+            Icon(
+                imageVector = AgoIcons.TrashForever,
+                contentDescription = null,
+                modifier = Modifier.size(26.dp),
+            )
+            Text(
+                text = stringResource(R.string.bookings_contacts_erase_action_line_one),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+            Text(
+                text = stringResource(R.string.bookings_contacts_erase_action_line_two),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * `26-275`/`adr/0189`: the confirmation between the swipe and the request — the identical
+ * `ConversationListScreen.EraseConfirmDialog` shape, its body naming the blast radius (adr/0189's own
+ * Option A: erasing a client erases the calendar record **and** the chat person, conversations and
+ * messages alike) so an operator swiping a row is never surprised by what "delete" actually reaches.
+ */
+@Composable
+private fun ClientEraseConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.bookings_contacts_erase_confirm_title)) },
+        text = { Text(text = stringResource(R.string.bookings_contacts_erase_confirm_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.bookings_contacts_erase_confirm_action),
+                    color = agoStatusColors().dangerText,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+/**
+ * `26-275`/`adr/0189`: the blocked-delete state (§6.1) — drawn instead of [ClientEraseConfirmDialog] once
+ * the server has refused with `person_erase.future_bookings` (`ContactsViewModel.deleteClient`'s own
+ * doc comment). [onNavigateToUpcoming] is the «Перейти к записям» primary action §5 asks for; the plain
+ * dismiss is the identical `onDismiss`/cancel pairing [ClientEraseConfirmDialog] already uses.
+ */
+@Composable
+private fun ClientEraseBlockedDialog(
+    onDismiss: () -> Unit,
+    onNavigateToUpcoming: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.bookings_contacts_erase_blocked_title)) },
+        text = { Text(text = stringResource(R.string.bookings_contacts_erase_blocked_body)) },
+        confirmButton = {
+            TextButton(onClick = onNavigateToUpcoming) {
+                Text(text = stringResource(R.string.bookings_contacts_erase_blocked_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+/** `.swipe-del{width:80px}` - the identical value `ConversationListScreen`'s own `EraseActionWidth`
+ * carries, restated here rather than shared across files for the same reason that file's own row metrics
+ * are not shared with this one (two independent screens, each naming its own constants beside its own
+ * CSS citation). */
+private val ClientEraseActionWidth = 80.dp
+
+/** `ClientEraseAction`'s own test hook — the identical `ERASE_ACTION_TEST_TAG` idiom
+ * `ConversationListScreen` already establishes, restated for this row's own tag. */
+internal const val CLIENT_ERASE_ACTION_TEST_TAG = "contactsListEraseAction"
 
 /**
  * The mockup's own `ClientCard`, minus the affordance that card's graph draws with nothing behind it

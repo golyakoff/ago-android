@@ -47,6 +47,11 @@ internal sealed interface ClientDetailUiState {
         val revealing: Boolean = false,
         val confirmingPhone: Boolean = false,
         val actionError: BookingActionErrorUi? = null,
+        /** `26-275`: which upcoming booking's own «Отменить» is on the network right now — a *set*, the
+         * identical [ContactsUiState.Loaded.revealingCustomerIds] reasoning restated for a per-row veto
+         * write instead of a per-customer reveal: a second row's own cancel must stay tappable while a
+         * first is still in flight. Defaulted so every existing call site keeps compiling unchanged. */
+        val cancellingBookingIds: Set<String> = emptySet(),
     ) : ClientDetailUiState {
         val hasDialog: Boolean get() = dialogConversationId != null
 

@@ -38,6 +38,18 @@ internal sealed interface ContactsUiState {
         val searchQuery: String = "",
         val revealingCustomerIds: Set<String> = emptySet(),
         val actionError: BookingActionErrorUi? = null,
+        /** `26-275`: which client's own swipe-to-delete is on the network right now — a *set*, the
+         * identical [revealingCustomerIds] reasoning restated for the erase write instead of the phone
+         * reveal: a second row's own delete must stay tappable while a first is still in flight.
+         * Defaulted so every existing call site keeps compiling unchanged. */
+        val deletingClientIds: Set<String> = emptySet(),
+        /** `26-275`: non-null exactly while the blocked-delete explanation is on screen for this customer
+         * id — the server refused with `person_erase.future_bookings` (§4/§6.1's own two-branch guard,
+         * server-authoritative). `ContactsBody` reads this to draw the explain-and-navigate dialog; its
+         * own «Перейти к записям» reopens [ClientDetailSheet] for the same id, which already defaults to
+         * the Предстоящие segment ([ClientDetailUiState.Loaded.selectedSegment]'s own default) — no new
+         * navigation state is needed to land the operator on the right list. */
+        val blockedErasureClientId: String? = null,
     ) : ContactsUiState {
         /** `26-269`: [contacts] filtered by [searchQuery] — see [filterContacts] for the match rule.
          * A `get()`-only property, not a constructor parameter, so it takes no part in this data class's

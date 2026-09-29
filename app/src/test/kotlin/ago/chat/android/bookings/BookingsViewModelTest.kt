@@ -6,6 +6,7 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
@@ -456,6 +457,9 @@ class BookingsViewModelTest {
             reusePersonId: String?,
             email: String?,
         ): ManualBookingResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun deleteClient(personId: String): DeleteClientResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 
     /** `26-163`: the identical fake `ConfirmedBookingsViewModelTest`/`ContactsViewModelTest` already

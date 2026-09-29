@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfiguredService
 import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBookingsResult
@@ -542,6 +543,8 @@ class ManualBookingViewModelTest {
         ): ConfirmedBookingsResult = throw UnsupportedOperationException()
 
         override suspend fun fetchContacts(): ContactsResult = throw UnsupportedOperationException()
+
+        override suspend fun deleteClient(personId: String): DeleteClientResult = throw UnsupportedOperationException()
 
         override suspend fun rejectBooking(bookingId: String): BookingActionResult = throw UnsupportedOperationException()
 

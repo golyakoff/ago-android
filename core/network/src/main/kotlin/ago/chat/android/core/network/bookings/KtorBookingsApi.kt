@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
@@ -23,6 +24,7 @@ import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -620,6 +622,43 @@ public class KtorBookingsApi(
 
         return detail?.let { ManualBookingResult.Refused(it) } ?: ManualBookingResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-275`/`adr/0189`: `DELETE /api/v1/console/contacts/{personId}` — the identical check-base-URL-
+     * first, classify-never-invent shape every write above establishes, restated for a `204`-or-refusal
+     * write whose refusal is read for both `detail` **and** `type` (the identical two-field read
+     * [ago.chat.android.core.network.recut.KtorRecutApi]'s own `refusal` helper already performs, ported
+     * here rather than shared across adapters for the same reason [ProblemDetailsWireDto]'s own doc
+     * comment gives for not sharing it).
+     */
+    override suspend fun deleteClient(personId: String): DeleteClientResult {
+        val baseUrl = calendarApiBaseUrl ?: return DeleteClientResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.delete("$baseUrl/api/v1/console/contacts/$personId")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return DeleteClientResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return DeleteClientResult.Deleted
+        }
+
+        val problem =
+            try {
+                response.body<ProblemDetailsWireDto>()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        val detail = problem?.detail ?: return DeleteClientResult.Failed(BookingsQueueFailure.Unexpected)
+        return DeleteClientResult.Refused(detail, problem.type ?: "")
+    }
 }
 
 /** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
@@ -690,13 +729,17 @@ private data class RevealPhoneResponseWireDto(
     val phone: String,
 )
 
-/** RFC 7807, read for exactly the one field a booking-action refusal needs — the identical, deliberately
- * un-shared copy [ago.chat.android.core.network.conversations.KtorConversationsApi]'s own private
- * `ProblemDetailsWireDto` already establishes for the conversation queue's own claim refusal, restated
- * here rather than imported across adapters for the same reason that copy is not shared with this one. */
+/** RFC 7807, read for the two fields this adapter's writes need — `detail` for every refusal, and `type`
+ * for [deleteClient]'s own [DeleteClientResult.Refused.code] (every other write on this port ignores
+ * `type` and shows `detail` verbatim, so the field simply goes unread for them — `agoJson`'s own
+ * `ignoreUnknownKeys` is what makes that safe). The identical, deliberately un-shared copy
+ * [ago.chat.android.core.network.conversations.KtorConversationsApi]'s own private `ProblemDetailsWireDto`
+ * already establishes for the conversation queue's own claim refusal, restated here rather than imported
+ * across adapters for the same reason that copy is not shared with this one. */
 @Serializable
 private data class ProblemDetailsWireDto(
     val detail: String? = null,
+    val type: String? = null,
 )
 
 /** See this file's own class-level doc comment for why this exists instead of a `describe()` copy. An

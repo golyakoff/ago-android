@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBookingsResult
@@ -30,6 +31,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -456,6 +458,137 @@ class ContactsViewModelTest {
             assertEquals(0, persons.fetchCalls)
         }
 
+    @Test
+    fun `deleting a client removes it from the list on 204`() =
+        runTest(dispatcher) {
+            val first = contact(id = "c1")
+            val second = contact(id = "c2")
+            val api =
+                FakeBookingsApi(result = ContactsResult.Loaded(listOf(first, second))).apply {
+                    deleteResult = DeleteClientResult.Deleted
+                }
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("c1"), api.deleteCalls)
+            assertEquals(ContactsUiState.Loaded(listOf(second)), viewModel.state.value)
+        }
+
+    @Test
+    fun `a future-bookings refusal blocks the delete and never removes the row`() =
+        runTest(dispatcher) {
+            val contact = contact(id = "c1")
+            val api =
+                FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
+                    deleteResult = DeleteClientResult.Refused("У клиента есть предстоящие записи.", "person_erase.future_bookings")
+                }
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertEquals(listOf(contact), loaded.contacts)
+            assertEquals("c1", loaded.blockedErasureClientId)
+            assertNull(loaded.actionError)
+        }
+
+    @Test
+    fun `dismissing the blocked-erasure explanation clears it`() =
+        runTest(dispatcher) {
+            val contact = contact(id = "c1")
+            val api =
+                FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
+                    deleteResult = DeleteClientResult.Refused("detail", "person_erase.future_bookings")
+                }
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+            viewModel.deleteClient("c1")
+            advanceUntilIdle()
+
+            viewModel.dismissBlockedErasure()
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertNull(loaded.blockedErasureClientId)
+        }
+
+    @Test
+    fun `a non-future-bookings refusal shows the server's own detail and keeps the row`() =
+        runTest(dispatcher) {
+            val contact = contact(id = "c1")
+            val api =
+                FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
+                    deleteResult = DeleteClientResult.Refused("Недостаточно прав.", "person_erase.forbidden")
+                }
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertEquals(listOf(contact), loaded.contacts)
+            assertNull(loaded.blockedErasureClientId)
+            assertEquals(BookingActionErrorUi.ServerRefusal("Недостаточно прав."), loaded.actionError)
+        }
+
+    @Test
+    fun `a transport failure on delete shows Unavailable and keeps the row`() =
+        runTest(dispatcher) {
+            val contact = contact(id = "c1")
+            val api =
+                FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact))).apply {
+                    deleteResult = DeleteClientResult.Failed(BookingsQueueFailure.Transport)
+                }
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as ContactsUiState.Loaded
+            assertEquals(listOf(contact), loaded.contacts)
+            assertEquals(BookingActionErrorUi.Unavailable(BookingsQueueFailure.Transport), loaded.actionError)
+        }
+
+    @Test
+    fun `deleting the same client twice sends exactly one server call`() =
+        runTest(dispatcher) {
+            val contact = contact(id = "c1")
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(contact)), hangDelete = true)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            dispatcher.scheduler.runCurrent()
+            viewModel.deleteClient("c1")
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(listOf("c1"), api.deleteCalls)
+        }
+
+    @Test
+    fun `deleting a different client proceeds independently while the first is still in flight`() =
+        runTest(dispatcher) {
+            val first = contact(id = "c1")
+            val second = contact(id = "c2")
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(first, second)), hangDelete = true)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.deleteClient("c1")
+            viewModel.deleteClient("c2")
+
+            assertEquals(
+                ContactsUiState.Loaded(listOf(first, second), deletingClientIds = setOf("c1", "c2")),
+                viewModel.state.value,
+            )
+        }
+
     private fun contact(id: String) =
         Contact(
             customerId = id,
@@ -495,10 +628,13 @@ class ContactsViewModelTest {
         private val hangFetch: Boolean = false,
         var revealResult: RevealPhoneResult = RevealPhoneResult.Revealed("+79991234567"),
         private val hangReveal: Boolean = false,
+        var deleteResult: DeleteClientResult = DeleteClientResult.Deleted,
+        private val hangDelete: Boolean = false,
     ) : BookingsApi {
         var contactsFetchCalls: Int = 0
             private set
         val revealCalls: MutableList<Pair<String, String>> = mutableListOf()
+        val deleteCalls: MutableList<String> = mutableListOf()
 
         // `26-52`'s own [ContactsViewModel] never calls either sibling read.
         override suspend fun fetchPendingQueue(): PendingBookingsResult = throw UnsupportedOperationException("not used by this class")
@@ -581,5 +717,11 @@ class ContactsViewModelTest {
             reusePersonId: String?,
             email: String?,
         ): ManualBookingResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun deleteClient(personId: String): DeleteClientResult {
+            deleteCalls.add(personId)
+            if (hangDelete) awaitCancellation()
+            return deleteResult
+        }
     }
 }

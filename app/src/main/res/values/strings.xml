@@ -828,6 +828,26 @@
     <string name="bookings_contacts_noshow_pill_many">%1$d неявок</string>
 
     <!--
+        `26-275`/`adr/0189`: the Клиенты row's own swipe-to-delete - ported verbatim from
+        `conversation_list_erase_*` (`ConversationListScreen`'s own `EraseAction`/`EraseConfirmDialog`),
+        gated `customer:erase`, Admin-only. The confirm body names the blast radius (adr/0189 Option A:
+        the calendar record AND the chat person/conversations/messages alike) so a swipe never surprises
+        an operator with what "delete" actually reaches.
+    -->
+    <string name="bookings_contacts_erase_action_line_one">Удалить</string>
+    <string name="bookings_contacts_erase_action_line_two">клиента</string>
+    <string name="bookings_contacts_erase_action_description">Удалить клиента</string>
+    <string name="bookings_contacts_erase_confirm_title">Удалить клиента?</string>
+    <string name="bookings_contacts_erase_confirm_body">Удалит клиента, историю записей и всю переписку с ним. Отменить это действие нельзя.</string>
+    <string name="bookings_contacts_erase_confirm_action">Удалить</string>
+    <!-- `docs/backlog/26-275-*.md` §4/§6.1: the server refused with `person_erase.future_bookings` - the
+         client is not deleted, and the operator is offered a path to clear the blocker rather than a bare
+         refusal. -->
+    <string name="bookings_contacts_erase_blocked_title">Нельзя удалить клиента</string>
+    <string name="bookings_contacts_erase_blocked_body">У клиента есть предстоящие записи. Сначала отмените их, затем повторите удаление.</string>
+    <string name="bookings_contacts_erase_blocked_action">Перейти к записям</string>
+
+    <!--
         `26-269`: the client-detail hub - a tap on a Клиенты row's own destination
         (`docs/backlog/26-269-clients-redesign.md` §4). A pure read + navigation surface: header, the
         Предстоящие/Прошедшие bookings split, «Открыть диалог» (active else last, read-only), and a
@@ -853,6 +873,11 @@
          above (that trio counts *how many* times a client no-showed; this one marks *this one row* as a
          no-show). -->
     <string name="bookings_client_detail_status_no_show">Неявка</string>
+    <!-- `26-275`/`adr/0189`: the Предстоящие row's own «Отменить» - `docs/backlog/26-275-*.md` §5's
+         "navigate to the future bookings to cancel them" affordance, gated `booking:cancel`. Reuses the
+         existing veto write (`BookingsApi.cancelBooking`, `26-49`); no new endpoint. -->
+    <string name="bookings_client_detail_cancel_booking_action">Отменить</string>
+    <string name="bookings_client_detail_cancelling_booking">Отмена…</string>
 
     <!--
         `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight
