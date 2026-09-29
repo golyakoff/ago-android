@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBooking
@@ -959,6 +960,91 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(ConfirmPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.confirmOperatorVerifiedPhone("p1"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `26-275 a 204 deletes the client, against the right path`() =
+        runTest {
+            var requestedUrl: String? = null
+            var requestedMethod: HttpMethod? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    requestedMethod = request.method
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            assertEquals(DeleteClientResult.Deleted, api.deleteClient("p1"))
+            assertEquals("$baseUrl/api/v1/console/contacts/p1", requestedUrl)
+            assertEquals(HttpMethod.Delete, requestedMethod)
+        }
+
+    @Test
+    fun `26-275 a 409 future-bookings refusal carries both the detail and the type as code`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"person_erase.future_bookings","detail":"У клиента есть предстоящие записи."}""",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            val result = api.deleteClient("p1")
+
+            assertEquals(
+                DeleteClientResult.Refused("У клиента есть предстоящие записи.", "person_erase.future_bookings"),
+                result,
+            )
+        }
+
+    @Test
+    fun `26-275 a 403 forbidden refusal carries its own type, distinct from the future-bookings code`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"person_erase.forbidden","detail":"Недостаточно прав."}""",
+                        HttpStatusCode.Forbidden,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            assertEquals(
+                DeleteClientResult.Refused("Недостаточно прав.", "person_erase.forbidden"),
+                api.deleteClient("p1"),
+            )
+        }
+
+    @Test
+    fun `26-275 a refusal with no problem-details body classifies as Unexpected, never a fabricated detail`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.Forbidden) }
+
+            assertEquals(DeleteClientResult.Failed(BookingsQueueFailure.Unexpected), api.deleteClient("p1"))
+        }
+
+    @Test
+    fun `26-275 a dropped connection on delete is Transport, not a silently retried erasure`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(DeleteClientResult.Failed(BookingsQueueFailure.Transport), api.deleteClient("p1"))
+        }
+
+    @Test
+    fun `26-275 no calendar base URL configured fails a delete, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(DeleteClientResult.Failed(BookingsQueueFailure.Unexpected), api.deleteClient("p1"))
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 

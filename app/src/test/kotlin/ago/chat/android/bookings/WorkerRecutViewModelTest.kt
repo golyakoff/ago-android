@@ -598,4 +598,6 @@ private class FakeRecutBookingsApi(
         reusePersonId: String?,
         email: String?,
     ) = throw UnsupportedOperationException()
+
+    override suspend fun deleteClient(personId: String) = throw UnsupportedOperationException()
 }

@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBooking
@@ -264,6 +265,88 @@ class ClientDetailViewModelTest {
             assertEquals(BookingActionErrorUi.ServerRefusal("Недостаточно прав."), loaded.actionError)
         }
 
+    @Test
+    fun `cancelling an upcoming booking removes it from the hub on success`() =
+        runTest(dispatcher) {
+            val upcoming = booking(id = "b1", startsAt = "2026-12-01T10:00:00Z")
+            val bookingsApi =
+                FakeBookingsApi(
+                    result = PersonBookingsResult.Loaded(listOf(upcoming)),
+                    cancelResult = BookingActionResult.Succeeded,
+                )
+            val viewModel = ClientDetailViewModel(bookingsApi, FakePersonsApi(), dispatcher)
+            viewModel.open(contact())
+            advanceUntilIdle()
+
+            viewModel.cancelBooking("b1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("b1"), bookingsApi.cancelCalls)
+            val loaded = viewModel.state.value as ClientDetailUiState.Loaded
+            assertEquals(emptyList<PersonBooking>(), loaded.upcoming)
+            assertNull(loaded.actionError)
+        }
+
+    @Test
+    fun `cancelling the same booking twice sends exactly one server call`() =
+        runTest(dispatcher) {
+            val upcoming = booking(id = "b1", startsAt = "2026-12-01T10:00:00Z")
+            val bookingsApi =
+                FakeBookingsApi(result = PersonBookingsResult.Loaded(listOf(upcoming)), hangCancel = true)
+            val viewModel = ClientDetailViewModel(bookingsApi, FakePersonsApi(), dispatcher)
+            viewModel.open(contact())
+            advanceUntilIdle()
+
+            viewModel.cancelBooking("b1")
+            dispatcher.scheduler.runCurrent()
+            viewModel.cancelBooking("b1")
+            dispatcher.scheduler.runCurrent()
+
+            assertEquals(listOf("b1"), bookingsApi.cancelCalls)
+        }
+
+    @Test
+    fun `a cancel refusal is shown and the booking stays in upcoming`() =
+        runTest(dispatcher) {
+            val upcoming = booking(id = "b1", startsAt = "2026-12-01T10:00:00Z")
+            val bookingsApi =
+                FakeBookingsApi(
+                    result = PersonBookingsResult.Loaded(listOf(upcoming)),
+                    cancelResult = BookingActionResult.Refused("Слишком поздно для отмены."),
+                )
+            val viewModel = ClientDetailViewModel(bookingsApi, FakePersonsApi(), dispatcher)
+            viewModel.open(contact())
+            advanceUntilIdle()
+
+            viewModel.cancelBooking("b1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as ClientDetailUiState.Loaded
+            assertEquals(listOf(upcoming), loaded.upcoming)
+            assertEquals(BookingActionErrorUi.ServerRefusal("Слишком поздно для отмены."), loaded.actionError)
+        }
+
+    @Test
+    fun `a cancel transport failure is shown and the booking stays in upcoming`() =
+        runTest(dispatcher) {
+            val upcoming = booking(id = "b1", startsAt = "2026-12-01T10:00:00Z")
+            val bookingsApi =
+                FakeBookingsApi(
+                    result = PersonBookingsResult.Loaded(listOf(upcoming)),
+                    cancelResult = BookingActionResult.Failed(BookingsQueueFailure.Transport),
+                )
+            val viewModel = ClientDetailViewModel(bookingsApi, FakePersonsApi(), dispatcher)
+            viewModel.open(contact())
+            advanceUntilIdle()
+
+            viewModel.cancelBooking("b1")
+            advanceUntilIdle()
+
+            val loaded = viewModel.state.value as ClientDetailUiState.Loaded
+            assertEquals(listOf(upcoming), loaded.upcoming)
+            assertEquals(BookingActionErrorUi.Unavailable(BookingsQueueFailure.Transport), loaded.actionError)
+        }
+
     private fun contact(
         id: String = "c1",
         phoneConfirmedByOperatorAt: String? = "2026-09-01T10:00:00Z",
@@ -313,9 +396,12 @@ class ClientDetailViewModelTest {
         private val hangFetch: Boolean = false,
         var revealResult: RevealPhoneResult = RevealPhoneResult.Revealed("+79991234567"),
         var confirmResult: ConfirmPhoneResult = ConfirmPhoneResult.Confirmed("2026-09-29T10:00:00Z"),
+        var cancelResult: BookingActionResult = BookingActionResult.Succeeded,
+        private val hangCancel: Boolean = false,
     ) : BookingsApi {
         val requestedIds: MutableList<String> = mutableListOf()
         var lastRevealSurface: String? = null
+        val cancelCalls: MutableList<String> = mutableListOf()
 
         override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult {
             requestedIds.add(personId)
@@ -362,8 +448,11 @@ class ClientDetailViewModelTest {
         override suspend fun rejectBooking(bookingId: String): BookingActionResult =
             throw UnsupportedOperationException("not used by this class")
 
-        override suspend fun cancelBooking(bookingId: String): BookingActionResult =
-            throw UnsupportedOperationException("not used by this class")
+        override suspend fun cancelBooking(bookingId: String): BookingActionResult {
+            cancelCalls.add(bookingId)
+            if (hangCancel) awaitCancellation()
+            return cancelResult
+        }
 
         override suspend fun markNoShow(bookingId: String): BookingActionResult =
             throw UnsupportedOperationException("not used by this class")
@@ -389,6 +478,9 @@ class ClientDetailViewModelTest {
             bookingId: String,
             newStartEventId: String,
         ): BookingActionResult = throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun deleteClient(personId: String): DeleteClientResult =
+            throw UnsupportedOperationException("not used by this class")
     }
 
     private class FakePersonsApi(

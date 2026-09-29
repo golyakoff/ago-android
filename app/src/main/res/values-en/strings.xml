@@ -476,6 +476,16 @@
     <string name="bookings_contacts_noshow_pill_few">%1$d no-shows</string>
     <string name="bookings_contacts_noshow_pill_many">%1$d no-shows</string>
 
+    <string name="bookings_contacts_erase_action_line_one">Delete</string>
+    <string name="bookings_contacts_erase_action_line_two">client</string>
+    <string name="bookings_contacts_erase_action_description">Delete client</string>
+    <string name="bookings_contacts_erase_confirm_title">Delete client?</string>
+    <string name="bookings_contacts_erase_confirm_body">This deletes the client, their booking history, and their whole chat history. This cannot be undone.</string>
+    <string name="bookings_contacts_erase_confirm_action">Delete</string>
+    <string name="bookings_contacts_erase_blocked_title">Can\'t delete this client</string>
+    <string name="bookings_contacts_erase_blocked_body">This client has upcoming bookings. Cancel them first, then try deleting again.</string>
+    <string name="bookings_contacts_erase_blocked_action">Go to bookings</string>
+
     <string name="bookings_client_detail_title">Client</string>
     <string name="bookings_client_detail_upcoming_segment">Upcoming</string>
     <string name="bookings_client_detail_past_segment">Past</string>
@@ -487,6 +497,8 @@
     <string name="bookings_client_detail_confirm_phone_banner">Phone not confirmed — not by SMS, not by an operator. Called and it\'s really them?</string>
     <string name="bookings_client_detail_confirming_phone">Confirming…</string>
     <string name="bookings_client_detail_status_no_show">No-show</string>
+    <string name="bookings_client_detail_cancel_booking_action">Cancel</string>
+    <string name="bookings_client_detail_cancelling_booking">Cancelling…</string>
 
     <string name="bookings_manual_entry_action">Add manually</string>
     <string name="bookings_manual_title">New booking</string>

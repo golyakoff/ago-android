@@ -263,6 +263,53 @@ public interface BookingsApi {
         reusePersonId: String?,
         email: String?,
     ): ManualBookingResult
+
+    /**
+     * `26-275`/`adr/0189`: `DELETE /api/v1/console/contacts/{personId}`, gated `customer:erase` — a hard,
+     * irreversible person erasure, calendar-initiated (`docs/backlog/26-275-*.md` §2.1: the future-bookings
+     * guard is a calendar-owned fact, so the calendar decides, never a client-supplied count). `204` is
+     * [DeleteClientResult.Deleted]; the guard's own refusal ("this client has an upcoming booking") is a
+     * `409` whose `type` is `person_erase.future_bookings` — read into [DeleteClientResult.Refused.code]
+     * the identical way [KtorRecutApi]'s own writes already read a stable `type` for branching, never off
+     * the `detail` sentence itself (`api-design.md`: "clients branch on type, never on message").
+     *
+     * A tenth method on this same port, not a new adapter class — [KtorBookingsApi]'s own class doc comment
+     * already states why a fourth/.../ninth read or write earned no separate adapter, and this write shares
+     * every one of those properties too.
+     */
+    public suspend fun deleteClient(personId: String): DeleteClientResult
+}
+
+/**
+ * `26-275`/`adr/0189`: what asking to erase one client came back with — the identical
+ * [RecutPreviewResult]/[RecutConfirmResult]-shaped `detail`+`code` refusal (this port's own writes never had
+ * a code worth branching on before this one; every prior [BookingActionResult.Refused] is shown verbatim and
+ * never inspected programmatically). [Refused.code] is the server's own stable `type`
+ * (`person_erase.future_bookings`, `person_erase.forbidden`, `person_erase.not_found`) — empty when a
+ * `detail` arrived with no `type` at all, which never happens against this server but is not treated as a
+ * parse failure either, the identical defensive default that sibling type's own doc comment states.
+ */
+public sealed interface DeleteClientResult {
+    /** A `204 No Content` — the client is gone. The caller removes the row from its own list; there is no
+     * fresh read to re-fetch it from (a `GET` for one already-deleted contact has nothing to answer with). */
+    public data object Deleted : DeleteClientResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail`. [code] `person_erase.future_bookings` is
+     * the one outcome this app branches on — the client is not deleted, and the operator is shown the
+     * blocked-with-navigate state (`docs/backlog/26-275-*.md` §6.1) rather than [detail] verbatim; every
+     * other code (`person_erase.forbidden`/`person_erase.not_found`, neither reachable in practice once the
+     * swipe is itself gated on `customer:erase` and the row came from this tenant's own list) falls back to
+     * showing [detail] verbatim, the same as every other write on this port. */
+    public data class Refused(
+        val detail: String,
+        val code: String,
+    ) : DeleteClientResult
+
+    /** Everything that is not a genuine server refusal — the identical [BookingActionResult.Failed]
+     * classification, reused here for the identical reason. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : DeleteClientResult
 }
 
 /**

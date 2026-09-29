@@ -138,6 +138,16 @@ public object Permission {
      * `ago-chat`'s own `Ago.Chat.Domain.Permission.ConversationAttachmentUploadGrant`. Gates the panel's
      * «Приём файлов от посетителя» toggle (`26-111`'s design, F1). */
     public const val CONVERSATION_ATTACHMENT_UPLOAD_GRANT: String = "conversation:attachment_upload_grant"
+
+    /** `26-275`/`adr/0189`: "may permanently erase one client" — copied verbatim from `Ago.Calendar.Domain.Permission`
+     * (this is a calendar-module permission, unlike every other member above, which mirror `ago-chat`'s own
+     * `Ago.Chat.Domain.Permission`; `ago-calendar`'s `Permission.cs` carries the byte-for-byte twin,
+     * `docs/backlog/26-275-*.md` §3). Admin-only — seeded into `AdminRolePermissions` alone, never
+     * `OperatorRolePermissions` (that document's own §1.7: an operator-admin holds both roles in practice,
+     * but this string is never granted to a pure Operator). Gates the Клиенты list's own swipe-to-delete
+     * (`ContactsScreen.kt`'s own `canEraseClient`) — hidden, not disabled, the identical "the gesture is not
+     * attached at all" rule [CONVERSATION_ERASE]'s own doc comment states for its own erase swipe. */
+    public const val CUSTOMER_ERASE: String = "customer:erase"
 }
 
 /** Every permission [Permission.CALENDAR_CONFIGURE]'s own destination can be earned through, per

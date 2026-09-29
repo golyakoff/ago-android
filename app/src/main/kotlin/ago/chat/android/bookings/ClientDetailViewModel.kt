@@ -1,5 +1,6 @@
 package ago.chat.android.bookings
 
+import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
@@ -175,6 +176,60 @@ internal class ClientDetailViewModel
 
                         is ConfirmPhoneResult.Failed ->
                             currentLoaded.copy(confirmingPhone = false, actionError = BookingActionErrorUi.Unavailable(result.reason))
+                    }
+                }
+            }
+        }
+
+        /**
+         * `26-275`/`adr/0189`: the hub's own «Отменить» on an upcoming row — §5's "navigate to the future
+         * bookings to cancel them" affordance, composed entirely from the existing `booking:cancel`
+         * write ([BookingsApi.cancelBooking], `26-49`) rather than a new endpoint. The identical
+         * one-in-flight-per-row guard [ContactsViewModel.reveal]'s own doc comment states for its own
+         * per-customer set, restated here per booking id since a client can have several upcoming
+         * bookings and cancelling one must not block another.
+         *
+         * **No auto-cancel-then-delete.** This method only ever cancels the one booking it was asked to —
+         * the erase flow that sent the operator here (`ContactsViewModel.deleteClient`'s own blocked state)
+         * is a *separate*, deliberate second action once every upcoming booking is cleared, never a side
+         * effect of this call (`docs/backlog/26-275-*.md` §5's own "deliberately do not build an
+         * auto-cancel shortcut").
+         *
+         * On success the cancelled booking is simply dropped from [ClientDetailUiState.Loaded.upcoming] -
+         * the identical "the caller already knows what it asked for" posture [BookingsApi.cancelBooking]'s
+         * own doc comment states for the pending queue's veto writes, restated here as a local removal
+         * rather than a second network read (there is no "refetch one booking" call on this port).
+         */
+        fun cancelBooking(bookingId: String) {
+            val loaded = mutableState.value as? ClientDetailUiState.Loaded ?: return
+            if (bookingId in loaded.cancellingBookingIds) return
+            val cancelling = loaded.cancellingBookingIds + bookingId
+            mutableState.update { loaded.copy(cancellingBookingIds = cancelling, actionError = null) }
+
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { api.cancelBooking(bookingId) }
+                mutableState.update { current ->
+                    val currentLoaded = current as? ClientDetailUiState.Loaded ?: return@update current
+                    val stillCancelling = currentLoaded.cancellingBookingIds - bookingId
+                    when (result) {
+                        BookingActionResult.Succeeded ->
+                            currentLoaded.copy(
+                                upcoming = currentLoaded.upcoming.filterNot { it.bookingId == bookingId },
+                                cancellingBookingIds = stillCancelling,
+                                actionError = null,
+                            )
+
+                        is BookingActionResult.Refused ->
+                            currentLoaded.copy(
+                                cancellingBookingIds = stillCancelling,
+                                actionError = BookingActionErrorUi.ServerRefusal(result.detail),
+                            )
+
+                        is BookingActionResult.Failed ->
+                            currentLoaded.copy(
+                                cancellingBookingIds = stillCancelling,
+                                actionError = BookingActionErrorUi.Unavailable(result.reason),
+                            )
                     }
                 }
             }

@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -73,6 +74,11 @@ internal fun ClientDetailSheet(
     contact: Contact,
     onDismiss: () -> Unit,
     onOpenDialog: (String) -> Unit,
+    // `26-275`: `booking:cancel` alone - gates the Предстоящие row's own new «Отменить» action
+    // (`docs/backlog/26-275-*.md` §5), the identical permission the pending queue's own cancel veto
+    // already checks server-side. Defaulted to `false` so every existing call site keeps compiling
+    // unchanged.
+    canCancelBooking: Boolean = false,
 ) {
     val viewModel: ClientDetailViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -94,6 +100,8 @@ internal fun ClientDetailSheet(
             onConfirmPhone = viewModel::confirmPhone,
             onSegmentSelected = viewModel::onSegmentSelected,
             onOpenDialog = onOpenDialog,
+            canCancelBooking = canCancelBooking,
+            onCancelBooking = viewModel::cancelBooking,
         )
     }
 }
@@ -106,6 +114,8 @@ private fun ClientDetailBody(
     onConfirmPhone: () -> Unit,
     onSegmentSelected: (ClientDetailSegment) -> Unit,
     onOpenDialog: (String) -> Unit,
+    canCancelBooking: Boolean,
+    onCancelBooking: (String) -> Unit,
 ) {
     when (state) {
         ClientDetailUiState.Loading ->
@@ -134,6 +144,8 @@ private fun ClientDetailBody(
                 onConfirmPhone = onConfirmPhone,
                 onSegmentSelected = onSegmentSelected,
                 onOpenDialog = onOpenDialog,
+                canCancelBooking = canCancelBooking,
+                onCancelBooking = onCancelBooking,
             )
     }
 }
@@ -151,6 +163,8 @@ private fun ClientDetailLoadedBody(
     onConfirmPhone: () -> Unit,
     onSegmentSelected: (ClientDetailSegment) -> Unit,
     onOpenDialog: (String) -> Unit,
+    canCancelBooking: Boolean,
+    onCancelBooking: (String) -> Unit,
 ) {
     // `26-209`/`adr/0187`: a booking row's own reschedule - the identical `RescheduleBookingSheet` this
     // item reuses verbatim, stacked over this sheet the same way `ConfirmedBookingsBody`'s own detail sheet
@@ -258,6 +272,12 @@ private fun ClientDetailLoadedBody(
                             reschedulingBookingId = booking.bookingId
                             reschedulingWorkerId = booking.workerId
                         },
+                        // `26-275`: «Отменить» only makes sense for an upcoming, still-live booking -
+                        // the identical [canReschedule] gate this row already uses for the reschedule
+                        // tap, restated for the cancel action rather than a second, independent flag.
+                        canCancel = canCancelBooking && canReschedule,
+                        cancelling = booking.bookingId in state.cancellingBookingIds,
+                        onCancel = { onCancelBooking(booking.bookingId) },
                     )
                     HorizontalDivider()
                 }
@@ -362,12 +382,24 @@ private fun BookingSegmentedControl(
  * design mockup's own examples: a no-show is marked on the row itself, not folded into the date line).
  * [clickable] gates whether a tap opens the reschedule flow — see [ClientDetailLoadedBody]'s own doc
  * comment on why only Предстоящие rows are reschedule targets.
+ *
+ * `26-275`/`adr/0189`: [canCancel] draws a «Отменить» [TextButton] beside the chevron — the guard-plus-
+ * navigate affordance `docs/backlog/26-275-*.md` §5 asks for: an operator blocked from deleting a client
+ * by a future booking lands here to clear it. The button consumes its own tap before the row's outer
+ * `.clickable(onClick = onClick)` ever sees it — the identical nested-click-target behaviour
+ * `ContactCard`'s own reveal `TextButton` already relies on (that composable's own doc comment) — so
+ * tapping «Отменить» never also opens the reschedule sheet underneath it. [cancelling] disables the
+ * button and relabels it while the write is in flight, the identical `enabled = !revealing` shape
+ * [ContactCard]'s own reveal control already uses for the identical reason.
  */
 @Composable
 private fun ClientBookingRow(
     booking: PersonBooking,
     clickable: Boolean,
     onClick: () -> Unit,
+    canCancel: Boolean = false,
+    cancelling: Boolean = false,
+    onCancel: () -> Unit = {},
 ) {
     Row(
         modifier =
@@ -402,6 +434,21 @@ private fun ClientBookingRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (canCancel) {
+            TextButton(onClick = onCancel, enabled = !cancelling) {
+                Text(
+                    text =
+                        stringResource(
+                            if (cancelling) {
+                                R.string.bookings_client_detail_cancelling_booking
+                            } else {
+                                R.string.bookings_client_detail_cancel_booking_action
+                            },
+                        ),
+                    color = if (cancelling) LocalContentColor.current else agoStatusColors().dangerText,
+                )
+            }
         }
         if (clickable) {
             Icon(

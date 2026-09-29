@@ -4,6 +4,7 @@ import ago.chat.android.core.domain.bookings.BookingRevealSurface
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.DeleteClientResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.persons.PersonsApi
 import ago.chat.android.core.domain.persons.PersonsResult
@@ -65,6 +66,10 @@ internal class ContactsViewModel
          * ([ContactsUiState.Loaded]'s own doc comment on [ContactsUiState.Loaded.revealingCustomerIds]). */
         private var revealingCustomerIds: Set<String> = emptySet()
 
+        /** `26-275`: the identical [revealingCustomerIds] shape, for the swipe-to-delete write instead of
+         * the phone reveal — see [ContactsUiState.Loaded.deletingClientIds]'s own doc comment. */
+        private var deletingClientIds: Set<String> = emptySet()
+
         init {
             refresh()
         }
@@ -90,6 +95,7 @@ internal class ContactsViewModel
         fun refresh() {
             mutableState.update { ContactsUiState.Loading }
             revealingCustomerIds = emptySet()
+            deletingClientIds = emptySet()
             viewModelScope.launch {
                 val result = withContext(ioDispatcher) { api.fetchContacts() }
                 val merged =
@@ -223,4 +229,86 @@ internal class ContactsViewModel
                 }
             }
         }
+
+        /**
+         * `26-275`/`adr/0189`: the Клиенты row's own swipe-to-delete, confirmed. `docs/backlog/26-275-*.md`
+         * §6.1's own two branches:
+         *
+         * 1. **`204`** ([DeleteClientResult.Deleted]) — the row is simply dropped from [ContactsUiState.Loaded.contacts];
+         *    there is nothing left on the server to re-fetch it from.
+         * 2. **`409 person_erase.future_bookings`** ([DeleteClientResult.Refused] whose [DeleteClientResult.Refused.code]
+         *    matches) — the client is **not** deleted; [ContactsUiState.Loaded.blockedErasureClientId] is set
+         *    so [ContactsBody] draws the explain-and-navigate dialog rather than [BookingActionErrorUi] (§4:
+         *    the server is the one and only gate, so this branch is read off its own typed `code`, never
+         *    guessed from [DeleteClientResult.Refused.detail]'s own sentence). Every other refusal code
+         *    (`person_erase.forbidden`/`person_erase.not_found`, neither reachable in practice once the
+         *    swipe is itself gated on `customer:erase` and the row came from this tenant's own list) falls
+         *    back to the ordinary [BookingActionErrorUi.ServerRefusal] banner every other write on this
+         *    screen already shows.
+         *
+         * The identical one-in-flight-per-customer guard [reveal] already applies, over [deletingClientIds]
+         * rather than [revealingCustomerIds] — the two writes are independent, so a client mid-delete does
+         * not block a *different* client's own reveal, or vice versa.
+         */
+        fun deleteClient(customerId: String) {
+            if (customerId in deletingClientIds) return
+            val loaded = mutableState.value as? ContactsUiState.Loaded ?: return
+            deletingClientIds = deletingClientIds + customerId
+            mutableState.update { loaded.copy(deletingClientIds = deletingClientIds, actionError = null) }
+
+            viewModelScope.launch {
+                val result = withContext(ioDispatcher) { api.deleteClient(customerId) }
+                deletingClientIds = deletingClientIds - customerId
+
+                mutableState.update { current ->
+                    val currentLoaded = current as? ContactsUiState.Loaded ?: return@update current
+                    when (result) {
+                        DeleteClientResult.Deleted ->
+                            currentLoaded.copy(
+                                contacts = currentLoaded.contacts.filterNot { it.customerId == customerId },
+                                deletingClientIds = deletingClientIds,
+                                actionError = null,
+                            )
+
+                        is DeleteClientResult.Refused ->
+                            if (result.code == PERSON_ERASE_FUTURE_BOOKINGS_CODE) {
+                                currentLoaded.copy(
+                                    deletingClientIds = deletingClientIds,
+                                    blockedErasureClientId = customerId,
+                                    actionError = null,
+                                )
+                            } else {
+                                currentLoaded.copy(
+                                    deletingClientIds = deletingClientIds,
+                                    actionError = BookingActionErrorUi.ServerRefusal(result.detail),
+                                )
+                            }
+
+                        is DeleteClientResult.Failed ->
+                            currentLoaded.copy(
+                                deletingClientIds = deletingClientIds,
+                                actionError = BookingActionErrorUi.Unavailable(result.reason),
+                            )
+                    }
+                }
+            }
+        }
+
+        /** Dismisses the blocked-delete explanation [ContactsBody] drew for
+         * [ContactsUiState.Loaded.blockedErasureClientId] — both the plain "never mind" close and the
+         * «Перейти к записям» navigation itself dismiss it (the navigation's own doc comment on
+         * [ContactsUiState.Loaded.blockedErasureClientId] states why no separate id needs to survive the
+         * dialog closing: [ContactsBody] captures the id into its own `selectedClientId` before calling
+         * this). A no-op outside [ContactsUiState.Loaded] or when nothing is blocked. */
+        fun dismissBlockedErasure() {
+            mutableState.update { current ->
+                (current as? ContactsUiState.Loaded)?.copy(blockedErasureClientId = null) ?: current
+            }
+        }
     }
+
+/** `26-275`/`adr/0189`: `ErasePersonErrors.FutureBookingsExist`'s own stable `type`
+ * (`Ago.Calendar.Application/UseCases/ErasePerson/ErasePersonErrors.cs`) — the one
+ * [DeleteClientResult.Refused.code] this screen branches on; every other code shows [DeleteClientResult.Refused.detail]
+ * verbatim instead (`ContactsViewModel.deleteClient`'s own doc comment). */
+private const val PERSON_ERASE_FUTURE_BOOKINGS_CODE = "person_erase.future_bookings"
