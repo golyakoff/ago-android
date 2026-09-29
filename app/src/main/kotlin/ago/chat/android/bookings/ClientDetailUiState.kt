@@ -121,6 +121,26 @@ internal enum class ClientDetailSegment {
 }
 
 /**
+ * `26-279` (B8): which of the hub's two navigation-state slots a booking row's own tap should write to,
+ * and whether the booking-detail card it then opens is [readOnly] — pulled out of [ClientBookingRow]'s own
+ * `onClick` lambda into a plain function so a JVM `test` can assert the routing directly, the identical
+ * "assert the wiring without a composition host" reason [splitPersonBookings] below is already a plain
+ * function. Past is [readOnly] — nothing left to move or cancel about a visit that already happened
+ * (`26-269` B9's own rule, unchanged); upcoming is not — `26-279`'s own «Перенести»/«Отменить» card, the
+ * behaviour this item adds in place of the row jumping straight into [RescheduleBookingSheet].
+ */
+internal enum class ClientDetailCardTarget(
+    val readOnly: Boolean,
+) {
+    Upcoming(readOnly = false),
+    Past(readOnly = true),
+}
+
+/** [ClientDetailCardTarget]'s own resolution from the segment a tapped row belongs to. */
+internal fun clientDetailCardTarget(segment: ClientDetailSegment): ClientDetailCardTarget =
+    if (segment == ClientDetailSegment.Upcoming) ClientDetailCardTarget.Upcoming else ClientDetailCardTarget.Past
+
+/**
  * `26-269`: the hub's own Предстоящие/Прошедшие split — a booking's [PersonBooking.startsAt] before
  * [now] is Прошедшие, otherwise Предстоящие. [now] is a parameter, not read from inside this function, so
  * a unit test can assert the boundary with a fixed instant rather than depending on the wall clock — the
@@ -155,9 +175,14 @@ internal fun splitPersonBookings(
 }
 
 /**
- * `26-269` polish (B9): a past booking, reduced to the identical shape [ConfirmedBookingDetailSheet]
- * already knows how to draw, so the client hub's own read-only booking card is that same sheet
- * (`readOnly = true`) rather than a second, drifting copy of the Услуга/Мастер/Телефон/Источник rows.
+ * `26-269` polish (B9), generalised `26-279` (B8): a booking, reduced to the identical shape
+ * [ConfirmedBookingDetailSheet] already knows how to draw, so the client hub's own booking-detail card -
+ * past (`readOnly = true`) and, since `26-279`, upcoming (`readOnly = false`) alike - is that same sheet
+ * rather than a second, drifting copy of the Услуга/Мастер/Телефон/Источник rows. Named for the shape it
+ * produces, not the segment it started on: `26-269` only ever called this for a past row (hence the
+ * original `asReadOnlyConfirmedBooking` name), and `26-279`'s own upcoming card reuses it verbatim -
+ * `readOnly` on the *sheet*, not a fork of this mapping, is what tells the two segments apart.
+ *
  * Every field [ConfirmedBooking] needs is either already on [this] ([PersonBooking.serviceName]/
  * [PersonBooking.workerDisplayName]/[PersonBooking.originConversationId] verified present - the gap
  * analysis's own open question, settled by reading [PersonBooking]'s own declaration) or comes from
@@ -166,7 +191,7 @@ internal fun splitPersonBookings(
  * offers for this same customer - not the booking row's own snapshot, which [ClientDetailViewModel.reveal]
  * never touches and would silently stay masked after a reveal the operator just performed one screen up.
  */
-internal fun PersonBooking.asReadOnlyConfirmedBooking(contact: Contact): ConfirmedBooking =
+internal fun PersonBooking.asConfirmedBooking(contact: Contact): ConfirmedBooking =
     ConfirmedBooking(
         bookingId = bookingId,
         calendarId = calendarId,

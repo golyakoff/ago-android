@@ -142,11 +142,12 @@ class ClientDetailUiStateTest {
         assertNull(loaded.lastVisitLocalDate)
     }
 
-    // `26-269` polish (B9): [PersonBooking.asReadOnlyConfirmedBooking] - the past-row read-only card's own
-    // mapping onto [ago.chat.android.core.domain.bookings.ConfirmedBooking], asserted field-for-field so a
-    // future edit cannot silently swap which side (the booking vs. the contact) a field comes from.
+    // `26-269` polish (B9), renamed `26-279` (B8): [PersonBooking.asConfirmedBooking] - the booking-detail
+    // card's own mapping onto [ago.chat.android.core.domain.bookings.ConfirmedBooking] (past and, since
+    // `26-279`, upcoming alike), asserted field-for-field so a future edit cannot silently swap which side
+    // (the booking vs. the contact) a field comes from.
     @Test
-    fun `a past booking maps onto a read-only confirmed booking, with the contact's own live phone`() {
+    fun `a booking maps onto a confirmed booking, with the contact's own live phone`() {
         val booking =
             booking(id = "b1", startsAt = "2026-09-01T10:00:00Z", localDate = "2026-09-01").copy(
                 originConversationId = "conv-1",
@@ -154,7 +155,7 @@ class ClientDetailUiStateTest {
         val client =
             contact(name = "Анна", phone = "+7 9•• ••• •• 08", masked = true).copy(customerId = "person-1")
 
-        val mapped = booking.asReadOnlyConfirmedBooking(client)
+        val mapped = booking.asConfirmedBooking(client)
 
         assertEquals(booking.bookingId, mapped.bookingId)
         assertEquals(booking.calendarId, mapped.calendarId)
@@ -173,6 +174,26 @@ class ClientDetailUiStateTest {
         assertEquals(client.displayName, mapped.customerDisplayName)
         assertEquals(client.phone, mapped.phone)
         assertEquals(client.masked, mapped.masked)
+    }
+
+    // `26-279` (B8): [clientDetailCardTarget] - which navigation slot a booking row's own tap writes to,
+    // and whether the card it then opens is `readOnly`. Past keeps `26-269` (B9)'s own read-only card
+    // unchanged; upcoming is the new behaviour this item adds in place of the row jumping straight into
+    // `RescheduleBookingSheet`.
+    @Test
+    fun `an upcoming segment targets the upcoming card, not read-only`() {
+        val target = clientDetailCardTarget(ClientDetailSegment.Upcoming)
+
+        assertEquals(ClientDetailCardTarget.Upcoming, target)
+        assertFalse(target.readOnly)
+    }
+
+    @Test
+    fun `a past segment targets the past card, read-only`() {
+        val target = clientDetailCardTarget(ClientDetailSegment.Past)
+
+        assertEquals(ClientDetailCardTarget.Past, target)
+        assertTrue(target.readOnly)
     }
 
     private fun loaded(

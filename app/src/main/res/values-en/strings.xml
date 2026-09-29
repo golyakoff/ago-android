@@ -497,6 +497,7 @@
     <string name="bookings_client_detail_past_empty">No past bookings.</string>
     <string name="bookings_client_detail_load_failed_unexpected">Couldn\'t load the client card. Please try again.</string>
     <string name="bookings_client_detail_open_dialog_action">Dialog</string>
+    <string name="bookings_client_detail_call_action">Call</string>
     <string name="bookings_client_detail_confirm_phone_action">Confirm phone</string>
     <string name="bookings_client_detail_confirm_phone_banner">Phone not confirmed — not by SMS, not by an operator. Called and it\'s really them?</string>
     <string name="bookings_client_detail_confirming_phone">Confirming…</string>

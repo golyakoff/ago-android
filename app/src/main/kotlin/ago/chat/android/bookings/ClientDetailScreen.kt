@@ -9,6 +9,9 @@ import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -235,7 +239,13 @@ private fun ClientDetailLoadedBody(
     // uses, so a reveal landing while this card is open is picked up rather than frozen at tap time.
     var selectedPastBookingId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // `26-279` (B8): the identical "hold the id, derive the object" shape [selectedPastBookingId] already
+    // uses, one segment over - which *upcoming* booking's own detail card is open, now that a tap on such
+    // a row opens that card first rather than jumping straight into [RescheduleBookingSheet].
+    var selectedUpcomingBookingId by rememberSaveable { mutableStateOf<String?>(null) }
+
     val contact = state.contact
+    val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,6 +264,10 @@ private fun ClientDetailLoadedBody(
                             id = contact.customerId,
                             emojiCreature = contact.emojiCreature,
                             emojiFood = contact.emojiFood,
+                            // `26-279` (A9): the identical further fallback `ContactsScreen.kt`'s own row
+                            // now passes - `Contact.phone` as the title plus «Без имени», never the raw
+                            // `customerId` this header used to leak through.
+                            phone = contact.phone,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         )
                     }
@@ -290,6 +304,24 @@ private fun ClientDetailLoadedBody(
                                     ),
                             )
                         }
+                    }
+                    // `26-279` (B3): «Позвонить» - `ACTION_DIAL`, never `ACTION_CALL`, so this needs no
+                    // `CALL_PHONE` permission at all: the dialer opens pre-filled with `contact.phone` and
+                    // the operator's own tap places the call, the identical "open the target app, don't
+                    // place the call ourselves" posture `MainActivity.openInBrowser`'s own `ACTION_VIEW`
+                    // already takes for a link. Reveals nothing new - it dials exactly the digits already
+                    // on screen, masked or real alike.
+                    TextButton(onClick = {
+                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + contact.phone))
+                        try {
+                            context.startActivity(dialIntent)
+                        } catch (missing: ActivityNotFoundException) {
+                            // No dialer app on this device - the number stays on screen either way, the
+                            // identical posture `InviteResultBody`'s own share-intent catch already takes
+                            // for a missing target app.
+                        }
+                    }) {
+                        Text(text = stringResource(R.string.bookings_client_detail_call_action))
                     }
                 }
             }
@@ -359,11 +391,15 @@ private fun ClientDetailLoadedBody(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
             )
         } else {
-            // `26-269` polish (B9): every row is now a tap target, upcoming and past alike - an upcoming
-            // one still opens the reschedule sheet (`docs/backlog/26-269-*.md` §2 case 1/2, unchanged),
-            // while a past one now opens a read-only booking-detail card
-            // ([ConfirmedBookingDetailSheet] `readOnly = true`) rather than nothing at all. Both draw the
-            // chevron unconditionally, signalling either destination alike.
+            // `26-269` polish (B9), `26-279` (B8): every row is now a tap target, upcoming and past alike,
+            // and both now open a booking-detail card rather than either jumping straight into
+            // [RescheduleBookingSheet] (the pre-`26-279` upcoming behaviour) or opening nothing at all (the
+            // pre-`26-269` past behaviour). [clientDetailCardTarget] is the one place that routing and its
+            // `readOnly` value are decided: past opens [ConfirmedBookingDetailBody] `readOnly = true` (B9,
+            // unchanged); upcoming opens the identical body `readOnly = false` (B8), the same body
+            // `ConfirmedBookingsBody`'s own Утверждены row already opens for a live booking - «Перенести»
+            // and, now, «Отменить» are reached from that card rather than the reschedule sheet directly.
+            // Both draw the chevron unconditionally, signalling either destination alike.
             val isUpcomingSegment = state.selectedSegment == ClientDetailSegment.Upcoming
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().height(280.dp),
@@ -373,16 +409,15 @@ private fun ClientDetailLoadedBody(
                     ClientBookingRow(
                         booking = booking,
                         onClick = {
-                            if (isUpcomingSegment) {
-                                reschedulingBookingId = booking.bookingId
-                                reschedulingWorkerId = booking.workerId
-                            } else {
-                                selectedPastBookingId = booking.bookingId
+                            when (clientDetailCardTarget(state.selectedSegment)) {
+                                ClientDetailCardTarget.Upcoming -> selectedUpcomingBookingId = booking.bookingId
+                                ClientDetailCardTarget.Past -> selectedPastBookingId = booking.bookingId
                             }
                         },
-                        // `26-275`: «Отменить» only makes sense for an upcoming, still-live booking -
-                        // the identical [isUpcomingSegment] gate this row already uses for its own click
-                        // routing, restated for the cancel action rather than a second, independent flag.
+                        // `26-275`: «Отменить» only makes sense for an upcoming, still-live booking - the
+                        // identical [isUpcomingSegment] flag [clientDetailCardTarget]'s own click routing
+                        // above is built from, restated here for the row's own inline cancel button rather
+                        // than a second, independent flag.
                         canCancel = canCancelBooking && isUpcomingSegment,
                         cancelling = booking.bookingId in state.cancellingBookingIds,
                         onCancel = { onCancelBooking(booking.bookingId) },
@@ -407,12 +442,15 @@ private fun ClientDetailLoadedBody(
                 reschedulingWorkerId = null
             },
             onRescheduled = {
-                // The booking moved - close only the reschedule sheet, and re-read this client's own
-                // bookings so the hub reflects the new time on the next frame; the hub itself stays open,
-                // unlike `ConfirmedBookingsBody`'s own reschedule-from-detail flow, which closes both -
-                // here the operator's own next likely action is still on this same client.
+                // The booking moved - close the reschedule sheet AND the upcoming detail card it was
+                // opened from (`26-279` B8: the identical `ConfirmedBookingsBody`'s own
+                // reschedule-from-detail flow this hub's own doc comment above used to contrast itself
+                // with - a moved booking's own card would otherwise sit open showing a time that is no
+                // longer the one the operator is looking at). The hub itself (this whole sheet) stays open
+                // either way - here the operator's own next likely action is still on this same client.
                 reschedulingBookingId = null
                 reschedulingWorkerId = null
+                selectedUpcomingBookingId = null
             },
         )
     }
@@ -421,18 +459,50 @@ private fun ClientDetailLoadedBody(
     // recomposition, the identical "hold the id, derive the object" shape `ConfirmedBookingsBody`'s own
     // `selectedBooking` already uses, so a reveal that lands while this card is open is reflected in place.
     // «Показать» reuses this same hub's single [onReveal]/[ClientDetailUiState.Loaded.revealing] - see
-    // [asReadOnlyConfirmedBooking]'s own doc comment for why the *contact's* phone, not the booking row's
-    // own snapshot, is what this card renders.
+    // [asConfirmedBooking]'s own doc comment for why the *contact's* phone, not the booking row's own
+    // snapshot, is what this card renders.
     val selectedPastBooking = state.past.firstOrNull { it.bookingId == selectedPastBookingId }
     if (selectedPastBooking != null) {
         ConfirmedBookingDetailSheet(
-            booking = selectedPastBooking.asReadOnlyConfirmedBooking(contact),
+            booking = selectedPastBooking.asConfirmedBooking(contact),
             revealing = state.revealing,
             onReveal = onReveal,
             onOpenDialog = { selectedPastBooking.originConversationId?.let(onOpenDialog) },
             onReschedule = {},
             onDismiss = { selectedPastBookingId = null },
-            readOnly = true,
+            readOnly = ClientDetailCardTarget.Past.readOnly,
+        )
+    }
+
+    // `26-279` (B8): the identical read-derived card [selectedPastBooking] above already draws, one
+    // segment over - an *upcoming* booking's own detail card, `readOnly = false` so [ConfirmedBookingDetailBody]
+    // draws both «Перенести» (stacks [RescheduleBookingSheet] over this card, unchanged from the flow this
+    // row used to open directly) and, now, «Отменить» ([onCancel] below - gated on [canCancelBooking], the
+    // identical permission [ClientBookingRow]'s own inline cancel button already checks). A successful
+    // cancel removes this booking from `state.upcoming` ([ClientDetailViewModel.cancelBooking]), which
+    // makes [selectedUpcomingBooking] resolve to `null` on the very next recomposition and closes this
+    // card on its own - no separate "cancel succeeded, now dismiss" wiring needed, the identical
+    // self-closing behaviour a swipe-erased row already gets elsewhere in this app.
+    val selectedUpcomingBooking = state.upcoming.firstOrNull { it.bookingId == selectedUpcomingBookingId }
+    if (selectedUpcomingBooking != null) {
+        ConfirmedBookingDetailSheet(
+            booking = selectedUpcomingBooking.asConfirmedBooking(contact),
+            revealing = state.revealing,
+            onReveal = onReveal,
+            onOpenDialog = { selectedUpcomingBooking.originConversationId?.let(onOpenDialog) },
+            onReschedule = {
+                reschedulingBookingId = selectedUpcomingBooking.bookingId
+                reschedulingWorkerId = selectedUpcomingBooking.workerId
+            },
+            onCancel =
+                if (canCancelBooking) {
+                    { onCancelBooking(selectedUpcomingBooking.bookingId) }
+                } else {
+                    null
+                },
+            cancelling = selectedUpcomingBooking.bookingId in state.cancellingBookingIds,
+            onDismiss = { selectedUpcomingBookingId = null },
+            readOnly = ClientDetailCardTarget.Upcoming.readOnly,
         )
     }
 }

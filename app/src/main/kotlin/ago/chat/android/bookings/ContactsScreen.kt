@@ -459,8 +459,10 @@ internal const val CLIENT_ERASE_ACTION_TEST_TAG = "contactsListEraseAction"
  * A customer with no [Contact.displayName] renders through
  * [ago.chat.android.ui.components.VisitorIdentityText] — the stored emoji pair
  * ([ContactsViewModel.mergePersonDetails]'s own client-side merge, `26-203`) when chat's person registry
- * has one for [Contact.customerId], or the bare id, but never a raw GUID and never an invented label
- * (`ui/components/IdentifierText.kt`'s own doc comment, `docs/backlog/26-52-*.md`'s own Done-when).
+ * has one for [Contact.customerId], else `26-279` (A9)'s own further fallback — [Contact.phone] as the
+ * title plus a stated «Без имени» label, since that field is never null for a customer — but never a raw
+ * GUID and never an invented label (`ui/components/IdentifierText.kt`'s own doc comment,
+ * `docs/backlog/26-52-*.md`'s own Done-when, `docs/backlog/26-279-*.md`'s own A9).
  *
  * `26-53`: the phone row now draws Показать exactly when [Contact.masked] says so — never inferred from
  * the string's own shape (`ago-console`'s own `renderPhone` doc comment states the identical rule this
@@ -514,6 +516,10 @@ private fun ContactCard(
                     id = contact.customerId,
                     emojiCreature = contact.emojiCreature,
                     emojiFood = contact.emojiFood,
+                    // `26-279` (A9): the row's own further fallback below the emoji pair - `Contact.phone`
+                    // is never null, so a nameless, pair-less client shows that real fact plus «Без имени»
+                    // rather than the raw `customerId` this row used to leak through as a title.
+                    phone = contact.phone,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
             }
