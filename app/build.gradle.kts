@@ -95,6 +95,23 @@ if (agoLocalPropertiesFile.exists()) {
 fun agoSigningProperty(name: String): String? = agoLocalProperties.getProperty(name) ?: (project.findProperty(name) as String?)
 
 /**
+ * `26-293`: the native YooKassa SDK's own two client-side identifiers - [agoSigningProperty]'s own
+ * local.properties-first lookup, not [agoProperty]'s always-a-default one, and deliberately with **no**
+ * committed default (`docs/backlog/26-301-*.md`'s own instruction: "Do NOT hardcode the key literal in
+ * committed source"). Unlike [agoFcmProperty]'s already-public Firebase identifiers, this repository is
+ * public (CLAUDE.md: "Never write … a real endpoint … into any of these repositories"), and even a
+ * test-mode value reads as exactly the kind of thing a reviewer would flag on sight if committed as a
+ * literal default here. A fresh checkout with neither `local.properties` nor a `-P` override still builds
+ * a debug APK that simply cannot take a payment (`AGO_YOOKASSA_CLIENT_APPLICATION_KEY`/`_SHOP_ID` are
+ * `null`) - the same honest "absent, not guessed" posture [agoOptionalProperty] already established for
+ * `AGO_CALENDAR_API_BASE_URL`.
+ */
+fun agoYooKassaOptionalProperty(name: String): String {
+    val value = agoSigningProperty(name)
+    return if (value != null) "\"$value\"" else "null"
+}
+
+/**
  * `26-100`/`adr/0181`: the four public-by-construction Firebase identifiers `FirebaseOptions.Builder`
  * needs (`AgoChatApplication`'s own doc comment) — `agoProperty`'s two-source lookup (`-P`/
  * `gradle.properties`) is not the right one for these: [agoSigningProperty]'s local.properties-first
@@ -232,6 +249,15 @@ android {
         buildConfigField("String", "AGO_FCM_PROJECT_NUMBER", fcmProjectNumber)
         buildConfigField("String", "AGO_FCM_APPLICATION_ID", fcmApplicationId)
         buildConfigField("String", "AGO_FCM_API_KEY", fcmApiKey)
+
+        // `26-293`: the native YooKassa SDK's own client key + shop id - see [agoYooKassaOptionalProperty]
+        // above for why these two have no committed default, unlike every field above them.
+        buildConfigField(
+            "String",
+            "AGO_YOOKASSA_CLIENT_APPLICATION_KEY",
+            agoYooKassaOptionalProperty("agoYooKassaClientApplicationKey"),
+        )
+        buildConfigField("String", "AGO_YOOKASSA_SHOP_ID", agoYooKassaOptionalProperty("agoYooKassaShopId"))
     }
 
     // `25-215`: one persistent keystore signs both build types, rather than `debug`'s per-run AGP
@@ -338,6 +364,22 @@ kotlin {
     }
 }
 
+// `26-301`: the YooKassa SDK's own dependency graph (biometric, lottie, coil, and - the one that matters
+// here - `androidx.security:security-crypto:1.1.0`) is large, and Gradle's default "highest version wins"
+// conflict resolution would otherwise silently bump this whole app off the `securityCrypto` catalog row's
+// own deliberately-pinned `1.1.0-alpha06` (that row's own remarks: 1.1.0-alpha06 was chosen specifically
+// for `MasterKey.Builder`, the non-deprecated replacement for 1.0.0's `MasterKeys`). Stable `1.1.0` itself
+// deprecates `EncryptedSharedPreferences`/`MasterKey` in favour of a newer, unrelated API this app has not
+// migrated to - a real signal, but a separate migration from this item, and this project's own
+// `allWarningsAsErrors` turns that deprecation into a hard build failure the moment the version silently
+// moves. Forcing the catalog's own version here keeps that a decision made on purpose, in its own item,
+// rather than a side effect of adding an unrelated payment SDK.
+configurations.all {
+    resolutionStrategy {
+        force(libs.androidx.security.crypto)
+    }
+}
+
 dependencies {
     // The only module allowed to see :core:network directly — :app wires the two library
     // modules together and is the only place DI is wired (`26-12`, `docs/architecture.md`).
@@ -409,6 +451,10 @@ dependencies {
     // `26-192`/`C5`: the offline-auto-reply rule list's own drag-to-reorder - see
     // `gradle/libs.versions.toml`'s own `reorderable` row for the no-package-rule justification.
     implementation(libs.reorderable)
+
+    // `26-289`/`26-301`: the native YooKassa payment SDK for «Тариф и оплата» - see
+    // `gradle/libs.versions.toml`'s own `yookassa` row for why a ready-made SDK, not a hand-rolled form.
+    implementation(libs.yookassa.android.sdk)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

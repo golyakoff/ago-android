@@ -1,6 +1,7 @@
 package ago.chat.android.di
 
 import ago.chat.android.BuildConfig
+import ago.chat.android.billing.YooKassaConfig
 import ago.chat.android.core.domain.accountdeletion.AccountDeletionApi
 import ago.chat.android.core.domain.ai.AiReplyDraftApi
 import ago.chat.android.core.domain.analytics.BookingFunnelReportApi
@@ -9,6 +10,7 @@ import ago.chat.android.core.domain.analytics.OwnAnalyticsApi
 import ago.chat.android.core.domain.analytics.SiteAnalyticsApi
 import ago.chat.android.core.domain.analytics.TagBreakdownReportApi
 import ago.chat.android.core.domain.autoreply.OfflineAutoReplyApi
+import ago.chat.android.core.domain.billing.BillingApi
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.branding.SiteBrandingApi
 import ago.chat.android.core.domain.calendarsetup.CalendarSetupApi
@@ -57,6 +59,7 @@ import ago.chat.android.core.network.analytics.KtorSiteAnalyticsApi
 import ago.chat.android.core.network.analytics.KtorTagBreakdownReportApi
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.autoreply.KtorOfflineAutoReplyApi
+import ago.chat.android.core.network.billing.KtorBillingApi
 import ago.chat.android.core.network.bookings.KtorBookingsApi
 import ago.chat.android.core.network.branding.KtorSiteBrandingApi
 import ago.chat.android.core.network.calendarsetup.KtorCalendarSetupApi
@@ -1170,4 +1173,34 @@ public object AppModule {
     @Provides
     @Singleton
     public fun providePendingConversationOpener(opener: DefaultPendingConversationOpener): PendingConversationOpener = opener
+
+    /**
+     * `26-301`: Администрирование → «Тариф и оплата»'s own port - the same `config.apiBaseUrl`
+     * [provideChannelConnectionApi] above reads, since `GET`/`POST /api/v1/sites/{siteId}/billing/…` is
+     * one more family of endpoints on that same `Ago.Chat.Api` origin. Needs [ActiveSiteSelection], the
+     * identical shape [provideChannelConnectionApi] above already threads it through for - every route
+     * here carries the site id in the URL itself.
+     */
+    @Provides
+    public fun provideBillingApi(
+        client: HttpClient,
+        config: OidcConfig,
+        activeSite: ActiveSiteSelection,
+    ): BillingApi = KtorBillingApi(client, config.apiBaseUrl, activeSite)
+
+    /**
+     * `26-293`: the native YooKassa SDK's own two client-side identifiers, read from `BuildConfig` -
+     * the identical shape [provideOidcConfig] above already establishes for [OidcConfig]. Both fields are
+     * `String?`: neither is a hardcoded literal in this committed file (`docs/backlog/26-289-*.md` §3 -
+     * this repository is public), so `app/build.gradle.kts` fills them from `local.properties`/a `-P`
+     * Gradle property with no committed default, the identical `String?`-when-absent shape
+     * [OidcConfig.calendarApiBaseUrl] already establishes for a deployment with nothing configured.
+     */
+    @Provides
+    @Singleton
+    public fun provideYooKassaConfig(): YooKassaConfig =
+        YooKassaConfig(
+            clientApplicationKey = BuildConfig.AGO_YOOKASSA_CLIENT_APPLICATION_KEY,
+            shopId = BuildConfig.AGO_YOOKASSA_SHOP_ID,
+        )
 }

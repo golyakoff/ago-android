@@ -877,6 +877,67 @@
     <string name="more_administration_delete_row">Delete account</string>
     <string name="more_placeholder_body">Coming in a future version.</string>
 
+    <!-- `26-301`: Administration → "Plan &amp; billing" - the billing v2 screen. See the ru strings for
+         the full note. -->
+    <string name="billing_section_current_plan">Current plan</string>
+    <string name="billing_section_buy_now">Buy now</string>
+    <string name="billing_section_next_period">Next period</string>
+    <string name="billing_status_active">Active</string>
+    <string name="billing_status_free">Free</string>
+    <string name="billing_field_operators">Operators</string>
+    <string name="billing_field_administrators">Administrators</string>
+    <string name="billing_field_channels">Channels</string>
+    <string name="billing_field_current_charge">Current charge</string>
+    <string name="billing_field_paid_until">Paid until</string>
+    <string name="billing_field_payment_method">Payment method</string>
+    <string name="billing_value_free">Free</string>
+    <string name="billing_value_per_month">/ mo</string>
+    <string name="billing_seats_value">%1$d of %2$d · %3$d included</string>
+    <string name="billing_payment_method_saved">Card on file</string>
+    <string name="billing_payment_method_not_saved">not saved · YooKassa</string>
+    <string name="billing_payment_method_none">not linked</string>
+    <string name="billing_savecard_label">Save payment method for auto-renewal</string>
+    <string name="billing_savecard_hint_on">On: an instant top-up is charged to the saved card, and the subscription auto-renews.</string>
+    <string name="billing_savecard_hint_off">Off: every payment goes through YooKassa, auto-renewal is disabled, and no payment method is stored.</string>
+    <string name="billing_savecard_on_warning">The saved card is charged immediately — no YooKassa hand-off.</string>
+    <string name="billing_savecard_off_warning">No payment method is stored: each purchase is its own payment in YooKassa. An instant top-up from a saved card and auto-renewal are unavailable.</string>
+    <string name="billing_buy_hint">%1$d included, then %2$s per seat</string>
+    <string name="billing_buy_action">Buy for %1$s</string>
+    <string name="billing_buy_action_yookassa">Buy for %1$s · YooKassa</string>
+    <string name="billing_connect_action">Connect for %1$s</string>
+    <string name="billing_channel_included">✓ included in the plan</string>
+    <string name="billing_channel_connected">✓ Connected</string>
+    <string name="billing_channel_website">Website</string>
+    <string name="billing_channels_group_label">Channels · %1$s / mo each</string>
+    <string name="billing_proration_note">Charged in proportion to the remaining period; the current, incomplete day is charged in full.</string>
+    <string name="billing_free_tier_note">A one-off top-up is unavailable on the free plan. Expand the composition in the \"Next period\" section — exceeding Solo\'s limits switches on the Business plan.</string>
+    <string name="billing_next_period_intro">The composition that renews on %1$s. Change it — the total recalculates below.</string>
+    <string name="billing_next_period_channels_label">Which channels to renew</string>
+    <string name="billing_breakdown_base">%1$s plan (base)</string>
+    <string name="billing_breakdown_extra_operators">Extra operators ×%1$d</string>
+    <string name="billing_breakdown_extra_admins">Extra administrators ×%1$d</string>
+    <string name="billing_breakdown_channel">Channel: %1$s</string>
+    <string name="billing_next_charge_label">Next charge total</string>
+    <string name="billing_next_charge_delta_up">+%1$s vs. now</string>
+    <string name="billing_next_charge_delta_down">−%1$s vs. now</string>
+    <string name="billing_next_period_note">Changes take effect next period. Nothing is charged now, and a decrease is not refunded.</string>
+    <string name="billing_save_composition_action">Save composition</string>
+    <string name="billing_cancel_row_title">Don\'t renew subscription</string>
+    <string name="billing_cancel_row_subtitle">Access lasts until %1$s, then the free Solo plan.</string>
+    <string name="billing_cancel_action">Don\'t renew</string>
+    <string name="billing_cancel_dialog_title">Don\'t renew the subscription?</string>
+    <string name="billing_cancel_dialog_body">Access stays until %1$s, then the account switches to the free Solo plan. You can undo this any time before then.</string>
+    <string name="billing_cancel_dialog_keep">Keep it</string>
+    <string name="billing_cancel_scheduled_note">The subscription will not renew after %1$s.</string>
+    <string name="billing_payment_processing_title">Payment processing</string>
+    <string name="billing_payment_processing_body">Waiting for confirmation from YooKassa…</string>
+    <string name="billing_payment_timed_out">Payment is still processing — check back later.</string>
+    <string name="billing_no_stored_payment_method">No payment method is saved. To buy without going through YooKassa, save a card on your next payment first.</string>
+    <string name="billing_payment_title">AGO Chat</string>
+    <string name="billing_payment_subtitle">Subscription payment</string>
+    <string name="billing_transition_title">Switching to the Business plan</string>
+    <string name="billing_transition_body">The amount appears once you save the composition.</string>
+
     <!-- `26-159`: Channels → "Widget install". See the ru strings for the full note. -->
     <string name="channels_install_title">Widget install</string>
     <string name="channels_install_embed_caption">This embed snippet is filled in for you. Paste it into your site\'s page to show the widget.</string>

@@ -213,6 +213,12 @@ coil = "3.6.3"
 # `repo1.maven.org/maven2/sh/calvin/reorderable/reorderable/maven-metadata.xml`, read 2026-09-26.
 reorderable = "3.1.0"
 
+# `26-289`/`26-301`: the native in-app payment UI (card/SBP/SberPay) for «Тариф и оплата» - a ready-made
+# tokenize/confirm SDK, not a hand-rolled payment form (`docs/backlog/26-289-*.md`'s own recommendation:
+# the native SDK over a web-redirect hand-off, since card entry never leaves the app). 8.4.0 is the
+# current release on Maven Central per that item's own Sources section, read 2026-09-29.
+yookassa = "8.4.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
@@ -313,6 +319,9 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 # `26-192`/`C5`: drag-to-reorder for the offline-auto-reply rule list - see the `reorderable` version row
 # above.
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
+
+# `26-289`/`26-301`: the native YooKassa payment SDK - see the `yookassa` version row above.
+yookassa-android-sdk = { group = "ru.yoomoney.sdk.kassa.payments", name = "yookassa-android-sdk", version.ref = "yookassa" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

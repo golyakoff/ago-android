@@ -6,6 +6,7 @@ import ago.chat.android.automation.AiReplyDraftRoute
 import ago.chat.android.automation.CannedResponsesRoute
 import ago.chat.android.automation.OfflineAutoReplyRoute
 import ago.chat.android.automation.TagsRoute
+import ago.chat.android.billing.BillingRoute
 import ago.chat.android.channels.BrandingRoute
 import ago.chat.android.channels.InstallWidgetRoute
 import ago.chat.android.channels.MaxChannelRoute
@@ -59,14 +60,15 @@ import androidx.compose.ui.unit.dp
  * [AppShellScreen]'s own `NavHost` owns that now, one level up.
  *
  * **Every row without its own branch below is honest about not existing yet.** Администрирование's
- * «Операторы и роли»/«Тариф и оплата» still open [PlaceholderDestinationScreen], because neither real
- * screen is built in this app yet. `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real
- * branch ([OfflineAutoReplyRoute]); `26-220` does the same for «Готовые ответы»
+ * «Операторы и роли» still opens [PlaceholderDestinationScreen], because no real screen is built for it in
+ * this app yet. `26-192`/`C5` gave Автоматизация's «Автоответ вне смены» its own real branch
+ * ([OfflineAutoReplyRoute]); `26-220` does the same for «Готовые ответы»
  * ([CannedResponsesRoute]), `26-225` for «Метки» ([TagsRoute]), and `26-199`/`M1` for «База знаний»
  * ([ModulesFaqRoute] - read-only for now, `adr/0151`; `M2`, a separate item, adds a knowledge-base panel
- * to the same screen), so none of Автоматизация's four built rows is one of them any more. `26-226` gives
- * Администрирование its own first real row - «Документы согласий» ([ConsentDocumentsRoute]) - leaving
- * «Операторы и роли»/«Тариф и оплата» the only two placeholders left in this screen.
+ * to the same screen), so none of Автоматизация's four built rows is one of them any more. `26-226` gave
+ * Администрирование its first real row - «Документы согласий» ([ConsentDocumentsRoute]) - and `26-301`
+ * gives it its second, «Тариф и оплата» ([ago.chat.android.billing.BillingRoute], the v2 billing screen) -
+ * leaving «Операторы и роли» the only placeholder left in this screen.
  *
  * ## Back-button contract clause 2
  *
@@ -171,6 +173,10 @@ internal fun MoreScreen(
             // Автоматизация branch this scaffold serves. Back returns to the Ещё list (clause 2) via the
             // same `openRowId = null` every drill-in uses.
             AUTOMATION_TAGS_ROW_ID -> TagsRoute(onBack = { openRowId = null })
+            // `26-301`: Администрирование → «Тариф и оплата» - the billing v2 screen, replacing this
+            // row's own `PlaceholderDestinationScreen` branch (`26-77`'s own stopgap). Back returns to the
+            // Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
+            ADMINISTRATION_BILLING_ROW_ID -> BillingRoute(onBack = { openRowId = null })
             // `26-226`: Администрирование → «Документы согласий» - the consent-document read/publish/
             // acceptances editor, the first real Администрирование branch this scaffold serves. Back
             // returns to the Ещё list (clause 2) via the same `openRowId = null` every drill-in uses.
@@ -483,13 +489,19 @@ internal fun buildMoreRows(
                 ),
             )
         }
-        add(
-            MoreRow(
-                id = ADMINISTRATION_BILLING_ROW_ID,
-                labelRes = R.string.more_administration_billing_row,
-                section = MoreSectionId.Administration,
-            ),
-        )
+        // `26-301`: «Тариф и оплата» - the v2 billing screen, gated on `site:configure` like every other
+        // real Администрирование row this screen serves (the same permission `ago-console`'s own billing
+        // page gates on). Was unconditional while it opened a `PlaceholderDestinationScreen`; now that a
+        // real screen backs it, it follows the same hide-not-disable rule every other row here does.
+        if (canConfigureSite) {
+            add(
+                MoreRow(
+                    id = ADMINISTRATION_BILLING_ROW_ID,
+                    labelRes = R.string.more_administration_billing_row,
+                    section = MoreSectionId.Administration,
+                ),
+            )
+        }
         // `26-226`: Администрирование's first real row - «Документы согласий»
         // (`docs/design/tenant-consent-android.md`), gated on `site:configure` like every other real
         // row this screen serves (`site:configure` is consent's *only* gate, rail and server alike -
