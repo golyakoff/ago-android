@@ -522,8 +522,8 @@
     <!-- `26-284`: see the RU file. -->
     <string name="bookings_client_detail_single_visit_label">Only visit</string>
 
-    <!-- `26-283`/`26-284`: see the RU file. -->
-    <string name="bookings_client_detail_record_action">Book</string>
+    <!-- `26-283`/`26-284`, relabelled `26-308`: see the RU file. -->
+    <string name="bookings_client_detail_add_booking_action">Add booking</string>
 
     <string name="bookings_manual_entry_action">Add manually</string>
     <string name="bookings_manual_title">New booking</string>
