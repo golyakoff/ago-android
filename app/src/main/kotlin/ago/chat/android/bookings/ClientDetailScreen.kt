@@ -8,6 +8,7 @@ import ago.chat.android.core.domain.bookings.PhoneCandidate
 import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.ui.components.VisitorIdentityText
+import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import android.content.ActivityNotFoundException
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,8 +57,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -213,8 +218,20 @@ private fun ClientDetailBody(
     // `26-298` (live-testing screenshot): this row's own top padding is gone too - the drag handle
     // [ModalBottomSheet] already draws above this row supplies its own clearance, so a further explicit
     // gap here just widened the space between the drag handle and the header below for no visual gain.
+    //
+    // `26-306` (author screenshot, «поднять выше»): trimming this row's own top padding to zero (above)
+    // still left the X sitting a full drag-handle's height below the sheet's top edge, because
+    // [ModalBottomSheet]'s default `dragHandle` reserves that space *above* this content, not inside it -
+    // `BottomSheetDefaults.DragHandle`'s own 22dp top/bottom padding around its 4dp pill
+    // (`ClientDetailCloseButtonRaise`'s own doc comment). Pulling this row up by exactly that reserved
+    // height puts the close button flush with the drag-handle line instead of a further row below it,
+    // without touching the drag handle itself (still drawn, still centered) or this row's own layout.
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.End) {
+        Row(
+            modifier =
+                Modifier.fillMaxWidth().padding(end = 8.dp).offset(y = -ClientDetailCloseButtonRaise),
+            horizontalArrangement = Arrangement.End,
+        ) {
             IconButton(onClick = onClose) {
                 Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
             }
@@ -685,6 +702,13 @@ private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
     }
 }
 
+// `26-306`: `BottomSheetDefaults.DragHandle`'s own reserved height - 22dp padding, a 4dp pill, 22dp
+// padding - the space [ModalBottomSheet]'s default `dragHandle` draws above this sheet's own content,
+// restated here rather than imported from Material3 (that composable exposes no public dimension
+// constants of its own to read this back from). `ClientDetailBody`'s own close-row doc comment above is
+// where this gets used, and why.
+private val ClientDetailCloseButtonRaise = 48.dp
+
 // `.av{width:48px; height:48px}` - the client-detail header's own avatar size, distinct from
 // [ContactsScreen.kt]'s own 42dp list-row copy (the mockup draws the two at different sizes).
 private val ClientDetailAvatarSize = 48.dp
@@ -795,9 +819,15 @@ private fun BookingSegmentedControl(
 
 /**
  * One row of the visible segment — time leads (the identical leading-time-column reasoning
- * [ConfirmedBookingRow]'s own doc comment states for its own appointment row), then service name and a
- * "date · master · duration" sub-line, with a «Неявка» badge for [PersonBookingStatus.NoShow] rows (the
- * design mockup's own examples: a no-show is marked on the row itself, not folded into the date line).
+ * [ConfirmedBookingRow]'s own doc comment states for its own appointment row), then service name plus the
+ * master's own name in bold on that same first line, and a "date · duration" sub-line below, with a
+ * «Неявка» badge for [PersonBookingStatus.NoShow] rows (the design mockup's own examples: a no-show is
+ * marked on the row itself, not folded into the date line).
+ *
+ * `26-306` (author screenshot): the master's name used to sit in the sub-line, third of three pieces after
+ * the date and before the duration — exactly the position a long name plus a long duration would crowd out
+ * under the row's single-line ellipsis, truncating the duration itself. [clientBookingServiceAndMasterText]
+ * and [clientBookingSubtitle]'s own doc comments state where each fact moved.
  *
  * `26-269` polish (B9): every row is now a tap target and draws the trailing chevron unconditionally —
  * [ClientDetailLoadedBody]'s own [onClick] routes an upcoming tap to the reschedule sheet and a past one
@@ -828,10 +858,16 @@ private fun ClientBookingRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = booking.serviceName ?: "—",
+                    text = clientBookingServiceAndMasterText(booking),
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    // `26-306`: `weight(1f, fill = false)` - the identical `ConfirmedBookingRow` fix
+                    // (`26-125` bug 3's own doc comment there) for the identical failure mode: without it,
+                    // this `Text` claims the whole remaining row width even when its own content is short,
+                    // which would push [NoShowBadge] hard against the trailing edge with a dead gap before
+                    // it rather than sitting right after the text.
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 if (booking.status == PersonBookingStatus.NoShow) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -854,18 +890,53 @@ private fun ClientBookingRow(
     }
 }
 
-/** "5 октября 2026 · Ирина Соколова · 60 мин" - the mockup's own row sub-line, three plain pieces joined
- * by " · " the identical way [WorkerGroupHeader]/`VisitorEmojiPairName` already join their own two, rather
- * than one localized format string: the middot is punctuation, not a phrase, so it needs no resource of
- * its own. A piece that fails to render (an unparsable date, no duration) is simply omitted along with its
- * own leading separator, never a stray " · " left dangling. */
+/**
+ * `26-306` (author screenshot, СЕЙЧАС vs НАДО СДЕЛАТЬ): the master's name moves up from the sub-line
+ * into the row's own first line, bold, beside the service - e.g. "Примерка **Алёна Матерн**" - because the
+ * old placement (folded into [clientBookingSubtitle] below, three pieces deep) is exactly what truncated it
+ * to "6 октября 2026 · Алёна Матерн · 9…" on a real name/duration combination. [clientBookingServiceAndMaster]
+ * is the plain-Kotlin half of this mapping — which field goes on which line — pulled out so a JVM test can
+ * pin it without a Compose UI test; this composable's only remaining job is joining the pair with a space
+ * and bolding the second half through [buildAnnotatedString].
+ */
+@Composable
+private fun clientBookingServiceAndMasterText(booking: PersonBooking) =
+    buildAnnotatedString {
+        val (service, master) = clientBookingServiceAndMaster(booking)
+        append(service)
+        append(" ")
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(master) }
+    }
+
+/** `26-306`: the row's own line-1 facts - service name (or "—" when absent, the identical fallback this
+ * row already used) paired with the master's display name, Compose-free so [ClientBookingRowTest] can
+ * assert the mapping directly rather than through a rendered `AnnotatedString`. */
+internal fun clientBookingServiceAndMaster(booking: PersonBooking): Pair<String, String> =
+    (booking.serviceName ?: "—") to booking.workerDisplayName
+
+/** "5 октября 2026 · 90 минут" - the mockup's own row sub-line (`26-306`), now two pieces rather than
+ * three: the master's name moved up to the row's first line ([clientBookingServiceAndMasterText]'s own doc
+ * comment states why), and the duration is spelled out in full through [russianPluralStringResource]
+ * (`bookings_duration_minutes_full_*`) rather than the abbreviated «мин» badge
+ * [ConfirmedBookingRow] uses - the mockup's own example spells "минут" out, and unlike that compact badge
+ * this line has the width to say the whole word without wrapping or truncating it. Still joined by " · "
+ * the identical way [WorkerGroupHeader]/`VisitorEmojiPairName` already join their own two: the middot is
+ * punctuation, not a phrase, so it needs no resource of its own. A piece that fails to render (an
+ * unparsable date, no duration) is simply omitted along with its own leading separator, never a stray
+ * " · " left dangling. */
 @Composable
 private fun clientBookingSubtitle(booking: PersonBooking): String {
     val pieces = mutableListOf<String>()
     businessLocalFullDateOrNull(booking.localDate)?.let(pieces::add)
-    pieces.add(booking.workerDisplayName)
     durationMinutesOrNull(booking.startsAt, booking.endsAt)?.let { minutes ->
-        pieces.add(stringResource(R.string.bookings_duration_minutes, minutes.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()))
+        pieces.add(
+            russianPluralStringResource(
+                count = minutes,
+                one = R.string.bookings_duration_minutes_full_one,
+                few = R.string.bookings_duration_minutes_full_few,
+                many = R.string.bookings_duration_minutes_full_many,
+            ),
+        )
     }
     return pieces.joinToString(" · ")
 }
