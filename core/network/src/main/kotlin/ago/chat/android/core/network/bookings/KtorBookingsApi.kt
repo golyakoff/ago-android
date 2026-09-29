@@ -874,8 +874,8 @@ private fun ConfirmedBookingWireDto.toDomain() =
  * this response instead. [toDomain] still fills [Contact.customerId] from it and always maps
  * [Contact.displayName] `null`; [ago.chat.android.bookings.ContactsViewModel] display-merges a real name
  * back in from [ago.chat.android.core.domain.persons.PersonsApi].
- */
-/** `26-282`: [upcomingBookingCount] is `Ago.Calendar.Contracts.ContactResponse.UpcomingBookingCount` -
+ *
+ * `26-282`: [upcomingBookingCount] is `Ago.Calendar.Contracts.ContactResponse.UpcomingBookingCount` -
  * additive on the wire, so this field is simply new rather than replacing anything. Defaulted to `0`
  * here too (not just on [Contact]) so `ignoreUnknownKeys`'s own mirror image - a server that has not yet
  * rolled this field out - deserializes cleanly instead of failing the whole list on a missing key. */
