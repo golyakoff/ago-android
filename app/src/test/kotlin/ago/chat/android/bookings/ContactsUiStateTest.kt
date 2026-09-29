@@ -85,11 +85,46 @@ class ContactsUiStateTest {
         )
     }
 
+    // `26-282` (A8): [ContactsFilter]'s own three-way predicate - a plain function over a bare [Contact],
+    // the identical "pull the rule out so it is testable without Compose" reasoning this file's own class
+    // doc comment already states for [filterContacts]/[Contact.phoneNeedsAttention].
+    @Test
+    fun `All matches every contact regardless of upcoming count`() {
+        assertTrue(ContactsFilter.All.matches(contact(upcomingBookingCount = 0)))
+        assertTrue(ContactsFilter.All.matches(contact(upcomingBookingCount = 3)))
+    }
+
+    @Test
+    fun `HasUpcoming matches only a positive count`() {
+        assertTrue(ContactsFilter.HasUpcoming.matches(contact(upcomingBookingCount = 1)))
+        assertFalse(ContactsFilter.HasUpcoming.matches(contact(upcomingBookingCount = 0)))
+    }
+
+    @Test
+    fun `NoUpcoming matches only a zero count`() {
+        assertTrue(ContactsFilter.NoUpcoming.matches(contact(upcomingBookingCount = 0)))
+        assertFalse(ContactsFilter.NoUpcoming.matches(contact(upcomingBookingCount = 1)))
+    }
+
+    @Test
+    fun `visibleContacts applies the filter chip on top of the search query`() {
+        val withBooking = contact(name = "Анна", upcomingBookingCount = 2)
+        val withoutBooking = contact(name = "Борис", upcomingBookingCount = 0)
+        val state =
+            ContactsUiState.Loaded(
+                contacts = listOf(withBooking, withoutBooking),
+                filter = ContactsFilter.HasUpcoming,
+            )
+
+        assertEquals(listOf(withBooking), state.visibleContacts)
+    }
+
     private fun contact(
         name: String? = "Анна",
         phone: String = "+7***5678",
         phoneVerifiedAt: String? = null,
         phoneConfirmedByOperatorAt: String? = null,
+        upcomingBookingCount: Int = 0,
     ) = Contact(
         customerId = "c1",
         phone = phone,
@@ -98,5 +133,6 @@ class ContactsUiStateTest {
         noShowCount = 0,
         phoneVerifiedAt = phoneVerifiedAt,
         phoneConfirmedByOperatorAt = phoneConfirmedByOperatorAt,
+        upcomingBookingCount = upcomingBookingCount,
     )
 }

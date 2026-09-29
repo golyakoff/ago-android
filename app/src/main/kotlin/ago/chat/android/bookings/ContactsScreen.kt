@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +31,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -97,6 +100,11 @@ internal fun ContactsBody(
     onRetry: () -> Unit,
     onReveal: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    // `26-282` (A8): defaulted to a no-op / `ContactsFilter.All` so every existing call site (this
+    // screen's own previews and androidTest hosts included) keeps compiling unchanged, the identical
+    // "new parameter, old call sites untouched" discipline `canEraseClient`/`onDeleteClient` already
+    // establish below for the erase gesture.
+    onFilterChange: (ContactsFilter) -> Unit = {},
     onOpenDialog: (String) -> Unit,
     // `26-275`: `customer:erase` alone - gates the row's own swipe-to-delete
     // (`docs/backlog/26-275-*.md` §3/§6.1), mirrored from `ConversationListScreen`'s own
@@ -134,6 +142,7 @@ internal fun ContactsBody(
                     } else {
                         Column(modifier = Modifier.fillMaxSize()) {
                             ContactsSearchField(query = state.searchQuery, onQueryChange = onSearchQueryChange)
+                            ContactsFilterRow(selected = state.filter, onSelected = onFilterChange)
                             val visible = state.visibleContacts
                             if (visible.isEmpty()) {
                                 // `26-269` polish (A6): «Очистить поиск» - the zero-match recovery action,
@@ -222,6 +231,45 @@ private fun ContactsSearchField(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
+
+/**
+ * `26-282` (A8): the filter chip row under the search box — «Все» / «С предстоящей записью» / «Без
+ * записей», the identical `Row(horizontalScroll) { FilterChip(...) }` idiom [MastersBody]'s own calendar
+ * picker already establishes for a small, single-select chip set, restated here for [ContactsFilter]
+ * instead of a calendar id. Drawn once, above both the zero-match empty state and the list itself
+ * ([ContactsBody]'s own call site), so a filter that currently matches nobody still leaves the chips
+ * reachable to switch back — the identical reasoning `onSearchQueryChange("")`'s own «Очистить поиск»
+ * action states for the search box.
+ */
+@Composable
+private fun ContactsFilterRow(
+    selected: ContactsFilter,
+    onSelected: (ContactsFilter) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ContactsFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selected == filter,
+                onClick = { onSelected(filter) },
+                label = { Text(text = stringResource(filter.labelRes())) },
+            )
+        }
+    }
+}
+
+private fun ContactsFilter.labelRes(): Int =
+    when (this) {
+        ContactsFilter.All -> R.string.bookings_contacts_filter_all
+        ContactsFilter.HasUpcoming -> R.string.bookings_contacts_filter_has_upcoming
+        ContactsFilter.NoUpcoming -> R.string.bookings_contacts_filter_no_upcoming
+    }
 
 @Composable
 private fun ContactsList(
@@ -533,7 +581,7 @@ private fun ContactCard(
             // a fact about this number, not a fact about the row as a whole the way the no-show pill is.
             Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = contact.phone,
+                    text = contact.phone + upcomingBookingCountSuffix(contact.upcomingBookingCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -565,6 +613,27 @@ private fun ContactCard(
             modifier = Modifier.padding(start = 8.dp),
         )
     }
+}
+
+/**
+ * `26-282` (A7): the row's own « · N записи» suffix, appended straight onto the phone [Text] rather than
+ * a separate composable — `docs/backlog/26-282-*.md`'s own "same text style as the phone" instruction is
+ * automatically true this way, with no second `Text` to keep in sync with the first one's style/colour if
+ * either ever changes. Empty string, never rendered, when [count] is zero — the identical "zero is the
+ * quiet default" rule [NoShowRow]'s own doc comment states for the no-show pill, restated here for a plain
+ * inline suffix rather than a pill: a client with nothing booked ahead gets a bare phone number, exactly
+ * as before this item.
+ */
+@Composable
+private fun upcomingBookingCountSuffix(count: Int): String {
+    if (count <= 0) return ""
+    return " · " +
+        russianPluralStringResource(
+            count = count.toLong(),
+            one = R.string.bookings_contacts_upcoming_count_one,
+            few = R.string.bookings_contacts_upcoming_count_few,
+            many = R.string.bookings_contacts_upcoming_count_many,
+        )
 }
 
 /**

@@ -4,6 +4,7 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.PersonBooking
 import ago.chat.android.core.domain.bookings.PersonBookingStatus
+import ago.chat.android.core.domain.bookings.PhoneCandidate
 import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.ui.components.VisitorIdentityText
@@ -26,12 +27,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -113,6 +114,12 @@ internal fun ClientDetailSheet(
         scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
     }
 
+    // `26-283`/`26-284` (item 8): «+ Записать» stacks the manual-booking wizard over this hub - the
+    // identical "hold the id/flag, derive the rest" pattern [ClientDetailLoadedBody]'s own
+    // `reschedulingBookingId`/`selectedPastBookingId` already establish for a sheet stacked over this same
+    // one, restated here for a plain boolean since there is only ever one such wizard open at a time.
+    var showManualBookingSheet by rememberSaveable { mutableStateOf(false) }
+
     ModalBottomSheet(
         onDismissRequest = closeSheet,
         sheetState = sheetState,
@@ -127,9 +134,55 @@ internal fun ClientDetailSheet(
             onOpenDialog = onOpenDialog,
             canCancelBooking = canCancelBooking,
             onCancelBooking = viewModel::cancelBooking,
+            onOpenManualBooking = { showManualBookingSheet = true },
             onClose = closeSheet,
         )
     }
+
+    val loaded = state as? ClientDetailUiState.Loaded
+    if (showManualBookingSheet && loaded != null) {
+        ManualBookingSheet(
+            prefillClient = manualBookingPrefillCandidate(loaded),
+            onDismiss = { showManualBookingSheet = false },
+            onCreated = {
+                showManualBookingSheet = false
+                // `26-283`: the new booking just landed on the server - re-read so the hub's own
+                // Предстоящие segment picks it up, the identical "the caller re-reads, the write result
+                // carries no fresh reading back" discipline every other write on this port already
+                // follows ([ManualBookingUiState.Created]'s own doc comment states it for this exact
+                // write). `retry()` re-opens for the same contact [viewModel.open] is already keyed on.
+                viewModel.retry()
+            },
+        )
+    }
+}
+
+/**
+ * `26-283`: builds the manual-booking wizard's own [PhoneCandidate] shape for the reuse path, from data
+ * this hub already has in memory — no second read. [PhoneCandidate.firstSeenAt]/`.lastSeenAt` take an
+ * empty-string placeholder rather than [Contact]'s own (non-existent) first/last-*seen* facts: verified
+ * against every render site of a [ManualBookingClient.Existing] candidate
+ * ([ManualBookingScreen.kt]'s own `PhoneCandidateFoundCard`/Client-step body), neither field is ever drawn
+ * there — only [PhoneCandidate.displayName]/`.phone`/`.bookingCount` are — and this prefill skips straight
+ * to [ManualBookingStep.Service] besides, so even the Client-step render those two dead fields feed is
+ * never reached in the first place. [PhoneCandidate.bookingCount] is the one field that *is* rendered
+ * (`phoneCandidateHistoryLabel`) and gets [ClientDetailUiState.Loaded.totalBookingsCount] — this hub's own
+ * accurate count, not a placeholder — for exactly that reason.
+ */
+private fun manualBookingPrefillCandidate(state: ClientDetailUiState.Loaded): PhoneCandidate {
+    val contact = state.contact
+    return PhoneCandidate(
+        personId = contact.customerId,
+        phone = contact.phone,
+        masked = contact.masked,
+        noShowCount = contact.noShowCount,
+        bookingCount = state.totalBookingsCount,
+        phoneVerifiedAt = contact.phoneVerifiedAt,
+        phoneConfirmedByOperatorAt = contact.phoneConfirmedByOperatorAt,
+        firstSeenAt = "",
+        lastSeenAt = "",
+        displayName = contact.displayName,
+    )
 }
 
 @Composable
@@ -142,12 +195,20 @@ private fun ClientDetailBody(
     onOpenDialog: (String) -> Unit,
     canCancelBooking: Boolean,
     onCancelBooking: (String) -> Unit,
+    onOpenManualBooking: () -> Unit,
     onClose: () -> Unit,
 ) {
     // `26-268` follow-up: one explicit close control above every state arm - unlike `ManualBookingSheet`'s
     // own title row, this sheet has no single title rendered across every arm (`Loading`/`NotConfigured`
     // draw no heading at all), so the X gets a bare header row of its own rather than riding a title that
     // does not exist in every state.
+    //
+    // `26-284` (item 2): the close row's own bottom padding is gone - it used to be implicit, coming
+    // entirely from [ClientDetailLoadedBody]'s own `padding(24.dp)` on every side of its content `Column`,
+    // which put a full 24dp gap *below* this row *in addition to* whatever height the icon button itself
+    // takes, before the avatar header even starts. [ClientDetailLoadedBody] now opens with a much smaller
+    // top inset instead (see that composable's own doc comment) so the header sits near this row rather
+    // than a full close-button's-height-plus-24dp below it.
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp), horizontalArrangement = Arrangement.End) {
             IconButton(onClick = onClose) {
@@ -163,6 +224,7 @@ private fun ClientDetailBody(
             onOpenDialog = onOpenDialog,
             canCancelBooking = canCancelBooking,
             onCancelBooking = onCancelBooking,
+            onOpenManualBooking = onOpenManualBooking,
         )
     }
 }
@@ -177,6 +239,7 @@ private fun ClientDetailStateBody(
     onOpenDialog: (String) -> Unit,
     canCancelBooking: Boolean,
     onCancelBooking: (String) -> Unit,
+    onOpenManualBooking: () -> Unit,
 ) {
     when (state) {
         ClientDetailUiState.Loading ->
@@ -207,16 +270,19 @@ private fun ClientDetailStateBody(
                 onOpenDialog = onOpenDialog,
                 canCancelBooking = canCancelBooking,
                 onCancelBooking = onCancelBooking,
+                onOpenManualBooking = onOpenManualBooking,
             )
     }
 }
 
 /**
- * `26-269`: `docs/backlog/26-269-clients-redesign.md` §4's own hub layout, in order — header (avatar,
- * name + inline warning glyph, phone + reveal, «Подтвердить телефон» banner, pills, no-show pill),
- * «Диалог» when the client has one, Предстоящие/Прошедшие segmented control, that segment's own booking
- * list, and (`26-269` polish) the SMS-confirmed/first-visit/last-visit metadata rows at the bottom.
- * «Записать» (`26-268`) is a later slice and is not drawn here, per this item's own scope.
+ * `26-269`/`26-284`: `docs/backlog/26-269-clients-redesign.md` §4's own hub layout, in the order the
+ * `26-284` polish pass settled on — header (avatar, name + inline warning glyph, phone + reveal), pills
+ * (returning/count, no-show) directly under the phone, then «Подтвердить телефон» when it applies, then
+ * the action-button row (`Позвонить`/`Диалог`/`+ Записать`), the Прошедшие/Предстоящие segmented control,
+ * that segment's own booking list, and the SMS-confirmed/visit metadata rows at the bottom. `26-284`
+ * (item 7/10) moved the pills above the banner and the button row (they used to sit *below* the banner,
+ * `Позвонить` used to live on the phone line itself, and there was no `Диалог`/`+ Записать` row at all).
  */
 @Composable
 private fun ClientDetailLoadedBody(
@@ -227,6 +293,7 @@ private fun ClientDetailLoadedBody(
     onOpenDialog: (String) -> Unit,
     canCancelBooking: Boolean,
     onCancelBooking: (String) -> Unit,
+    onOpenManualBooking: () -> Unit,
 ) {
     // `26-209`/`adr/0187`: a booking row's own reschedule - the identical `RescheduleBookingSheet` this
     // item reuses verbatim, stacked over this sheet the same way `ConfirmedBookingsBody`'s own detail sheet
@@ -246,8 +313,21 @@ private fun ClientDetailLoadedBody(
 
     val contact = state.contact
     val context = LocalContext.current
+    val callAction: () -> Unit = {
+        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + contact.phone))
+        try {
+            context.startActivity(dialIntent)
+        } catch (missing: ActivityNotFoundException) {
+            // No dialer app on this device - the number stays on screen either way, the identical posture
+            // `InviteResultBody`'s own share-intent catch already takes for a missing target app.
+        }
+    }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+    // `26-284` (item 2/3): a much smaller top inset than the header used to open with, and a smaller
+    // bottom one too - `ClientDetailBody`'s own doc comment on its close row explains the top half; the
+    // bottom half is the identical "the last visible content should not float in its own extra 24dp"
+    // observation, restated for the sheet's own end rather than its start.
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // `26-269` polish (B2): the header's own 48dp avatar - the identical three-way fallback
             // [ContactsScreen.kt]'s own 42dp list-row copy already draws, through the one shared
@@ -305,36 +385,17 @@ private fun ClientDetailLoadedBody(
                             )
                         }
                     }
-                    // `26-279` (B3): «Позвонить» - `ACTION_DIAL`, never `ACTION_CALL`, so this needs no
-                    // `CALL_PHONE` permission at all: the dialer opens pre-filled with `contact.phone` and
-                    // the operator's own tap places the call, the identical "open the target app, don't
-                    // place the call ourselves" posture `MainActivity.openInBrowser`'s own `ACTION_VIEW`
-                    // already takes for a link. Reveals nothing new - it dials exactly the digits already
-                    // on screen, masked or real alike.
-                    TextButton(onClick = {
-                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + contact.phone))
-                        try {
-                            context.startActivity(dialIntent)
-                        } catch (missing: ActivityNotFoundException) {
-                            // No dialer app on this device - the number stays on screen either way, the
-                            // identical posture `InviteResultBody`'s own share-intent catch already takes
-                            // for a missing target app.
-                        }
-                    }) {
-                        Text(text = stringResource(R.string.bookings_client_detail_call_action))
-                    }
                 }
             }
         }
 
-        if (contact.phoneNeedsAttention) {
-            ConfirmPhoneBanner(confirming = state.confirmingPhone, onConfirmPhone = onConfirmPhone)
-        }
-
-        // `26-269` polish (B5): the header's own pill row - «Постоянный клиент» exactly when
+        // `26-284` (item 7/10): the pills now sit directly under the phone line - above the
+        // «Подтвердить телефон» banner and above the action-button row below, moved up from their old
+        // position (after the banner). «Постоянный клиент» exactly when
         // [ClientDetailUiState.Loaded.isReturningClient], then the plain booking-count pill every client
-        // gets regardless. [NoShowPill] stays a separate row below: a no-show count is a caution, worded
-        // and toned differently from these two plain status pills.
+        // gets regardless, then [NoShowPill] when there is one to show - a no-show count is a caution,
+        // worded and toned differently from the two plain status pills, but the design now groups all
+        // three into one badge zone rather than a separate row further down.
         Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (state.isReturningClient) {
                 ClientDetailPill(
@@ -348,23 +409,46 @@ private fun ClientDetailLoadedBody(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (contact.noShowCount > 0) {
+                NoShowPill(count = contact.noShowCount)
+            }
         }
-        if (contact.noShowCount > 0) {
-            Row(modifier = Modifier.padding(top = 12.dp)) { NoShowPill(count = contact.noShowCount) }
+
+        if (contact.phoneNeedsAttention) {
+            ConfirmPhoneBanner(confirming = state.confirmingPhone, onConfirmPhone = onConfirmPhone)
         }
 
         state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) }
 
-        // `docs/backlog/26-269-*.md` §4: "hidden, not greyed, when the person has no conversation at all" -
-        // the identical rule the confirmed-bookings screen's own dialog icon already applies to a null
-        // `originConversationId`, restated here for a whole button rather than an `enabled` flag.
+        // `26-284` (item 4/7): the action-button row - `Позвонить` moved here from the phone line itself
+        // (`26-279` B3's own `ACTION_DIAL` intent, unchanged, just relocated into [callAction] above so
+        // both branches below can share it). Two shapes, chosen by [ClientDetailUiState.Loaded.hasDialog]:
+        // a client with a dialog gets `Позвонить`/`Диалог` side by side and `+ Записать` full width below;
+        // one without gets a single row of `Позвонить`/`+ Записать`. `Позвонить` stays the filled/primary
+        // button in both - it is the one action every client detail card offers, dialog or not.
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = callAction, modifier = Modifier.weight(1f)) {
+                Text(text = stringResource(R.string.bookings_client_detail_call_action))
+            }
+            if (state.hasDialog) {
+                OutlinedButton(
+                    onClick = { state.dialogConversationId?.let(onOpenDialog) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(imageVector = AgoIcons.Chat, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                    Text(text = stringResource(R.string.bookings_client_detail_open_dialog_action))
+                }
+            } else {
+                OutlinedButton(onClick = onOpenManualBooking, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = AgoIcons.Plus, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                    Text(text = stringResource(R.string.bookings_client_detail_record_action))
+                }
+            }
+        }
         if (state.hasDialog) {
-            OutlinedButton(
-                onClick = { state.dialogConversationId?.let(onOpenDialog) },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            ) {
-                Icon(imageVector = AgoIcons.Chat, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                Text(text = stringResource(R.string.bookings_client_detail_open_dialog_action))
+            OutlinedButton(onClick = onOpenManualBooking, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                Icon(imageVector = AgoIcons.Plus, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                Text(text = stringResource(R.string.bookings_client_detail_record_action))
             }
         }
 
@@ -398,9 +482,10 @@ private fun ClientDetailLoadedBody(
             // `readOnly` value are decided: past opens [ConfirmedBookingDetailBody] `readOnly = true` (B9,
             // unchanged); upcoming opens the identical body `readOnly = false` (B8), the same body
             // `ConfirmedBookingsBody`'s own Утверждены row already opens for a live booking - «Перенести»
-            // and, now, «Отменить» are reached from that card rather than the reschedule sheet directly.
-            // Both draw the chevron unconditionally, signalling either destination alike.
-            val isUpcomingSegment = state.selectedSegment == ClientDetailSegment.Upcoming
+            // and «Отменить» are reached from that card rather than the reschedule sheet directly or a
+            // row-level button (`26-284` item 11: the row's own inline «Отменить», added in `26-275`, is
+            // gone - the card path below already offers it). Both draw the chevron unconditionally,
+            // signalling either destination alike.
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().height(280.dp),
                 contentPadding = PaddingValues(top = 8.dp),
@@ -414,13 +499,6 @@ private fun ClientDetailLoadedBody(
                                 ClientDetailCardTarget.Past -> selectedPastBookingId = booking.bookingId
                             }
                         },
-                        // `26-275`: «Отменить» only makes sense for an upcoming, still-live booking - the
-                        // identical [isUpcomingSegment] flag [clientDetailCardTarget]'s own click routing
-                        // above is built from, restated here for the row's own inline cancel button rather
-                        // than a second, independent flag.
-                        canCancel = canCancelBooking && isUpcomingSegment,
-                        cancelling = booking.bookingId in state.cancellingBookingIds,
-                        onCancel = { onCancelBooking(booking.bookingId) },
                     )
                     HorizontalDivider()
                 }
@@ -538,12 +616,18 @@ private fun ClientDetailPill(
  * Drawn through [BookingDetailRow] — the identical label-then-value shape
  * [ConfirmedBookingDetailBody]'s own Услуга/Мастер/Телефон rows already use — so a third such row here
  * never invents a fourth visual language for the same fact shape.
+ *
+ * `26-284` (item 9): when [ClientDetailUiState.Loaded.isSingleVisit] is `true`, the separate «Первый
+ * визит»/«Последний визит» pair collapses into one «Единственный визит» row instead — showing the same
+ * date twice under two different labels reads as a glitch, not two facts, once first and last are the
+ * same visit.
  */
 @Composable
 private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
     val smsConfirmedAt = state.contact.phoneVerifiedAt?.let { businessLocalShortDateOrNull(it) ?: "—" }
     val firstVisit = state.firstVisitLocalDate?.let(::businessLocalFullDateOrNull)
     val lastVisit = state.lastVisitLocalDate?.let(::businessLocalFullDateOrNull)
+    val singleVisit = state.isSingleVisit
     if (smsConfirmedAt == null && firstVisit == null && lastVisit == null) return
 
     val labelStyle = MaterialTheme.typography.bodyMedium
@@ -560,24 +644,35 @@ private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
                 Text(text = stringResource(R.string.bookings_client_detail_sms_confirmed_value, smsConfirmedAt), style = valueStyle)
             }
         }
-        if (firstVisit != null) {
+        if (singleVisit && firstVisit != null) {
             HorizontalDivider()
             BookingDetailRow(
-                label = stringResource(R.string.bookings_client_detail_first_visit_label),
+                label = stringResource(R.string.bookings_client_detail_single_visit_label),
                 labelStyle = labelStyle,
                 modifier = Modifier.padding(vertical = 12.dp),
             ) {
                 Text(text = firstVisit, style = valueStyle)
             }
-        }
-        if (lastVisit != null) {
-            HorizontalDivider()
-            BookingDetailRow(
-                label = stringResource(R.string.bookings_client_detail_last_visit_label),
-                labelStyle = labelStyle,
-                modifier = Modifier.padding(vertical = 12.dp),
-            ) {
-                Text(text = lastVisit, style = valueStyle)
+        } else {
+            if (firstVisit != null) {
+                HorizontalDivider()
+                BookingDetailRow(
+                    label = stringResource(R.string.bookings_client_detail_first_visit_label),
+                    labelStyle = labelStyle,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                ) {
+                    Text(text = firstVisit, style = valueStyle)
+                }
+            }
+            if (lastVisit != null) {
+                HorizontalDivider()
+                BookingDetailRow(
+                    label = stringResource(R.string.bookings_client_detail_last_visit_label),
+                    labelStyle = labelStyle,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                ) {
+                    Text(text = lastVisit, style = valueStyle)
+                }
             }
         }
     }
@@ -636,9 +731,15 @@ private fun ConfirmPhoneBanner(
     }
 }
 
-/** `docs/backlog/26-269-*.md` §3.5: Предстоящие/Прошедшие, each carrying its own count — the identical
+/** `docs/backlog/26-269-*.md` §3.5: Прошедшие/Предстоящие, each carrying its own count — the identical
  * `SegmentedButton`/`SingleChoiceSegmentedButtonRow` shape the top-level Записи tab bar already uses
- * ([BookingsScreen]'s own segment row), restated here for two entries rather than three. */
+ * ([BookingsScreen]'s own segment row), restated here for two entries rather than three.
+ *
+ * `26-284` (item 1): Прошедшие is now index 0 (left), Предстоящие index 1 (right) — the mockup's own
+ * order, swapped from this control's original Предстоящие-left layout. [selected]'s own default
+ * ([ClientDetailUiState.Loaded.selectedSegment]) is untouched by this reorder: which segment opens first
+ * and which side of the control it is drawn on are independent questions, and only the second one changed
+ * here. */
 @Composable
 private fun BookingSegmentedControl(
     selected: ClientDetailSegment,
@@ -649,18 +750,18 @@ private fun BookingSegmentedControl(
 ) {
     SingleChoiceSegmentedButtonRow(modifier = modifier) {
         SegmentedButton(
-            selected = selected == ClientDetailSegment.Upcoming,
-            onClick = { onSelected(ClientDetailSegment.Upcoming) },
-            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-        ) {
-            Text(text = "${stringResource(R.string.bookings_client_detail_upcoming_segment)} $upcomingCount")
-        }
-        SegmentedButton(
             selected = selected == ClientDetailSegment.Past,
             onClick = { onSelected(ClientDetailSegment.Past) },
-            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
         ) {
             Text(text = "${stringResource(R.string.bookings_client_detail_past_segment)} $pastCount")
+        }
+        SegmentedButton(
+            selected = selected == ClientDetailSegment.Upcoming,
+            onClick = { onSelected(ClientDetailSegment.Upcoming) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+        ) {
+            Text(text = "${stringResource(R.string.bookings_client_detail_upcoming_segment)} $upcomingCount")
         }
     }
 }
@@ -678,22 +779,15 @@ private fun BookingSegmentedControl(
  * on "is this Предстоящие", is gone along with that distinction — both destinations are equally "this row
  * opens something").
  *
- * `26-275`/`adr/0189`: [canCancel] draws a «Отменить» [TextButton] beside the chevron — the guard-plus-
- * navigate affordance `docs/backlog/26-275-*.md` §5 asks for: an operator blocked from deleting a client
- * by a future booking lands here to clear it. The button consumes its own tap before the row's outer
- * `.clickable(onClick = onClick)` ever sees it — the identical nested-click-target behaviour
- * `ContactCard`'s own reveal `TextButton` already relies on (that composable's own doc comment) — so
- * tapping «Отменить» never also opens the sheet underneath it. [cancelling] disables the button and
- * relabels it while the write is in flight, the identical `enabled = !revealing` shape [ContactCard]'s
- * own reveal control already uses for the identical reason.
+ * `26-275`/`adr/0189` added a row-level «Отменить» [TextButton] here, beside the chevron; `26-284`
+ * (item 11) removes it again — cancelling an upcoming booking is reached by tapping the row into the
+ * booking-detail card (`26-279` B8, [ClientDetailLoadedBody]'s own `selectedUpcomingBooking` block below),
+ * which already offers «Отменить» there, so this row needs no cancel affordance of its own any more.
  */
 @Composable
 private fun ClientBookingRow(
     booking: PersonBooking,
     onClick: () -> Unit,
-    canCancel: Boolean = false,
-    cancelling: Boolean = false,
-    onCancel: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
@@ -724,21 +818,6 @@ private fun ClientBookingRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        if (canCancel) {
-            TextButton(onClick = onCancel, enabled = !cancelling) {
-                Text(
-                    text =
-                        stringResource(
-                            if (cancelling) {
-                                R.string.bookings_client_detail_cancelling_booking
-                            } else {
-                                R.string.bookings_client_detail_cancel_booking_action
-                            },
-                        ),
-                    color = if (cancelling) LocalContentColor.current else agoStatusColors().dangerText,
-                )
-            }
         }
         Icon(
             imageVector = AgoIcons.ChevronRight,

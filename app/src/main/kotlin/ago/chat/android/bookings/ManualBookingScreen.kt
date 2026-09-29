@@ -92,11 +92,15 @@ import kotlinx.coroutines.launch
 internal fun ManualBookingSheet(
     onDismiss: () -> Unit,
     onCreated: () -> Unit,
+    // `26-283`: non-`null` when this sheet was opened from a client's own detail hub «+ Записать» rather
+    // than the plain header entry point — see [ManualBookingViewModel.open]'s own doc comment. Defaulted
+    // to `null` so the header entry point's own call site keeps compiling unchanged.
+    prefillClient: PhoneCandidate? = null,
 ) {
     val viewModel: ManualBookingViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.open() }
+    LaunchedEffect(Unit) { viewModel.open(prefillClient) }
     LaunchedEffect(state) {
         if (state is ManualBookingUiState.Created) onCreated()
     }

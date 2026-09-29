@@ -90,6 +90,36 @@ class ManualBookingViewModelTest {
             assertEquals(listOf(WORKER), wizard.workers)
         }
 
+    // `26-283`: «+ Записать» from a client's own detail hub - `open(prefillClient)` skips Phone and
+    // Client outright and lands on Service with the client already chosen, unlike the plain
+    // `open()` above which stops on Phone.
+    @Test
+    fun `open with a prefillClient skips Phone and Client and lands on Service, already chosen`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.open(CANDIDATE)
+            advanceUntilIdle()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Service, wizard.step)
+            assertEquals(ManualBookingClient.Existing(CANDIDATE), wizard.client)
+            assertEquals(CANDIDATE.phone, wizard.phone)
+        }
+
+    @Test
+    fun `open with no prefillClient behaves exactly like the plain header entry point`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.open(null)
+            advanceUntilIdle()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Phone, wizard.step)
+            assertEquals(null, wizard.client)
+        }
+
     @Test
     fun `a deployment with no calendar backend is NotConfigured, not a failure`() =
         runTest(dispatcher) {

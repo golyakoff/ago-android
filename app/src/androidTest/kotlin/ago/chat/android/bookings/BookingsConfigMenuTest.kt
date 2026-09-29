@@ -64,6 +64,7 @@ class BookingsConfigMenuTest {
                 onRetryContacts = {},
                 onRevealContact = {},
                 onContactsSearchQueryChange = {},
+                onContactsFilterChange = {},
                 onDeleteClient = {},
                 onDismissBlockedErasure = {},
                 servicesState = null,

@@ -337,6 +337,58 @@ class KtorBookingsApiTest {
         }
 
     @Test
+    fun `26-282 - upcomingBookingCount maps onto Contact verbatim`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """
+                        [
+                          {
+                            "personId":"c1","phone":"+7***5678","masked":true,
+                            "noShowCount":0,"phoneVerifiedAt":null,"phoneConfirmedByOperatorAt":null,
+                            "upcomingBookingCount":3
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchContacts() as ContactsResult.Loaded
+
+            assertEquals(3, result.contacts.single().upcomingBookingCount)
+        }
+
+    @Test
+    fun `26-282 - a contact with no upcomingBookingCount on the wire defaults to zero`() =
+        runTest {
+            // `26-282`'s own additive-contract discipline in the other direction - a server that has not
+            // yet rolled out this field (or a fixture predating it) must still deserialize cleanly, with
+            // `upcomingBookingCount` reading as "nothing upcoming" rather than failing the whole list.
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """
+                        [
+                          {
+                            "personId":"c1","phone":"+7***5678","masked":true,
+                            "noShowCount":0,"phoneVerifiedAt":null,"phoneConfirmedByOperatorAt":null
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchContacts() as ContactsResult.Loaded
+
+            assertEquals(0, result.contacts.single().upcomingBookingCount)
+        }
+
+    @Test
     fun `an unknown field on the contacts wire does not break the read`() =
         runTest {
             val api =

@@ -236,6 +236,9 @@ public fun BookingsRoute(
     val onRetryContacts: () -> Unit
     val onRevealContact: (String) -> Unit
     val onContactsSearchQueryChange: (String) -> Unit
+    // `26-282` (A8): the filter chip row's own callback - the identical "the caller who already has the
+    // view model wires its own methods straight through" shape every other Клиенты callback here follows.
+    val onContactsFilterChange: (ContactsFilter) -> Unit
     val onDeleteClient: (String) -> Unit
     val onDismissBlockedErasure: () -> Unit
     if (showClientsSegment) {
@@ -245,6 +248,7 @@ public fun BookingsRoute(
         onRetryContacts = contactsViewModel::refresh
         onRevealContact = contactsViewModel::reveal
         onContactsSearchQueryChange = contactsViewModel::onSearchQueryChange
+        onContactsFilterChange = contactsViewModel::onFilterChange
         // `26-275`: the swipe-to-delete write and its blocked-erasure dismiss - the identical
         // "the caller who already has the view model wires its own methods straight through" shape
         // every other Клиенты callback above already establishes.
@@ -255,6 +259,7 @@ public fun BookingsRoute(
         onRetryContacts = {}
         onRevealContact = {}
         onContactsSearchQueryChange = {}
+        onContactsFilterChange = {}
         onDeleteClient = {}
         onDismissBlockedErasure = {}
     }
@@ -533,6 +538,7 @@ public fun BookingsRoute(
         onRetryContacts = onRetryContacts,
         onRevealContact = onRevealContact,
         onContactsSearchQueryChange = onContactsSearchQueryChange,
+        onContactsFilterChange = onContactsFilterChange,
         onDeleteClient = onDeleteClient,
         onDismissBlockedErasure = onDismissBlockedErasure,
         servicesState = servicesState,
@@ -689,6 +695,7 @@ internal fun BookingsScreen(
     onRetryContacts: () -> Unit,
     onRevealContact: (String) -> Unit,
     onContactsSearchQueryChange: (String) -> Unit,
+    onContactsFilterChange: (ContactsFilter) -> Unit,
     onDeleteClient: (String) -> Unit,
     onDismissBlockedErasure: () -> Unit,
     servicesState: ServicesUiState?,
@@ -1017,6 +1024,7 @@ internal fun BookingsScreen(
                                 onRetry = onRetryContacts,
                                 onReveal = onRevealContact,
                                 onSearchQueryChange = onContactsSearchQueryChange,
+                                onFilterChange = onContactsFilterChange,
                                 // `26-269`: the client-detail hub's own «Открыть диалог» - the identical
                                 // `onOpenDialog` this same function already threads into
                                 // `ConfirmedBookingsBody` above, reused rather than a second callback wired

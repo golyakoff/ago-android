@@ -93,6 +93,15 @@ internal sealed interface ClientDetailUiState {
          * the latest date instead of the earliest. */
         val lastVisitLocalDate: String?
             get() = past.maxByOrNull { it.startsAt }?.localDate
+
+        /** `26-284` (item 9): `true` exactly when [firstVisitLocalDate] and [lastVisitLocalDate] resolve
+         * to the same date — one visit, not a range of one day repeated twice. [ClientDetailMetadataRows]
+         * reads this to draw a single «Единственный визит» row instead of the separate «Первый визит»/
+         * «Последний визит» pair, which would otherwise show the identical date twice with no second fact
+         * between them. `false` (never collapsed) while [past] is empty — [firstVisitLocalDate] is `null`
+         * then, and this property requires a real date on both sides before it calls two rows redundant. */
+        val isSingleVisit: Boolean
+            get() = firstVisitLocalDate != null && firstVisitLocalDate == lastVisitLocalDate
     }
 
     /** The identical "this deployment does not run AGO Calendar at all" fact

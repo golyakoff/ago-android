@@ -142,6 +142,43 @@ class ClientDetailUiStateTest {
         assertNull(loaded.lastVisitLocalDate)
     }
 
+    // `26-284` (item 9): [ClientDetailUiState.Loaded.isSingleVisit] - the flag [ClientDetailMetadataRows]
+    // reads to collapse «Первый визит»/«Последний визит» into one «Единственный визит» row.
+    @Test
+    fun `a client with exactly one past visit is a single visit`() {
+        val only = booking(id = "only", startsAt = "2026-03-14T10:00:00Z", localDate = "2026-03-14")
+        val loaded = loaded(upcoming = emptyList(), past = listOf(only))
+
+        assertTrue(loaded.isSingleVisit)
+    }
+
+    @Test
+    fun `a client with two past visits on different dates is not a single visit`() {
+        val earliest = booking(id = "earliest", startsAt = "2026-03-14T10:00:00Z", localDate = "2026-03-14")
+        val latest = booking(id = "latest", startsAt = "2026-09-21T10:00:00Z", localDate = "2026-09-21")
+        val loaded = loaded(upcoming = emptyList(), past = listOf(earliest, latest))
+
+        assertFalse(loaded.isSingleVisit)
+    }
+
+    @Test
+    fun `a client with no past visits at all is not a single visit`() {
+        val loaded = loaded(upcoming = listOf(booking(id = "u1", startsAt = "2026-10-01T10:00:00Z")), past = emptyList())
+
+        assertFalse(loaded.isSingleVisit)
+    }
+
+    // `26-284` (item 4/7): [ClientDetailUiState.Loaded.hasDialog] - the flag the action-button row branches
+    // on (`Позвонить`/`Диалог`/two rows when `true`, `Позвонить`/`+ Записать`/one row when `false`).
+    @Test
+    fun `hasDialog is true exactly when a dialog conversation id is present`() {
+        val withDialog = loaded(upcoming = emptyList(), past = emptyList()).copy(dialogConversationId = "conv-1")
+        val withoutDialog = loaded(upcoming = emptyList(), past = emptyList()).copy(dialogConversationId = null)
+
+        assertTrue(withDialog.hasDialog)
+        assertFalse(withoutDialog.hasDialog)
+    }
+
     // `26-269` polish (B9), renamed `26-279` (B8): [PersonBooking.asConfirmedBooking] - the booking-detail
     // card's own mapping onto [ago.chat.android.core.domain.bookings.ConfirmedBooking] (past and, since
     // `26-279`, upcoming alike), asserted field-for-field so a future edit cannot silently swap which side
