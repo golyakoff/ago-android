@@ -94,7 +94,7 @@ navigationCompose = "2.8.3"
 # is multiplatform and so keeps `adr/0178`'s KMP door open at no cost). 2.3.12 is the last 2.3.x and
 # the generation built against Kotlin 2.0.x; Ktor 3.x exists but changes API this repository has no
 # reason to chase on its first HTTP call.
-ktor = "2.3.12"
+ktor = "3.6.0"
 kotlinxSerializationJson = "1.7.3"
 kotlinxCoroutines = "1.8.1"
 
