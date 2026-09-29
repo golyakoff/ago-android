@@ -959,6 +959,11 @@ internal fun BookingsScreen(
                                 onRetry = onRetryContacts,
                                 onReveal = onRevealContact,
                                 onSearchQueryChange = onContactsSearchQueryChange,
+                                // `26-269`: the client-detail hub's own «Открыть диалог» - the identical
+                                // `onOpenDialog` this same function already threads into
+                                // `ConfirmedBookingsBody` above, reused rather than a second callback wired
+                                // up from `BookingsRoute` for the same `PendingConversationOpener` call.
+                                onOpenDialog = onOpenDialog,
                             )
                         }
 

@@ -1,6 +1,8 @@
 package ago.chat.android.core.network.persons
 
 import ago.chat.android.core.domain.net.NetworkFailure
+import ago.chat.android.core.domain.persons.PersonConversation
+import ago.chat.android.core.domain.persons.PersonConversationsResult
 import ago.chat.android.core.domain.persons.PersonProfile
 import ago.chat.android.core.domain.persons.PersonsResult
 import ago.chat.android.core.network.InMemoryActiveSite
@@ -186,6 +188,79 @@ class KtorPersonsApiTest {
             val api = apiFor { respond("""{"somethingElseEntirely":true}""", HttpStatusCode.OK, jsonHeaders()) }
 
             assertEquals(PersonsResult.Loaded(emptyList()), api.fetchPersons(listOf("p1")))
+        }
+
+    @Test
+    fun `26-269 fetchPersonConversations hits the right path and maps every field`() =
+        runTest {
+            var requestedPath: String? = null
+            val api =
+                apiFor { request ->
+                    requestedPath = request.url.toString()
+                    respond(
+                        """
+                        {"conversations":[
+                          {"conversationId":"c1","state":"Assigned","isActive":true,
+                           "startedAt":"2026-09-01T10:00:00Z","closedAt":null,"lastActivityAt":"2026-09-01T10:05:00Z"},
+                          {"conversationId":"c2","state":"Closed","isActive":false,
+                           "startedAt":"2026-03-14T12:00:00Z","closedAt":"2026-03-14T12:20:00Z","lastActivityAt":"2026-03-14T12:20:00Z"}
+                        ]}
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                }
+
+            val result = api.fetchPersonConversations("p1")
+
+            assertEquals("$baseUrl/api/v1/persons/p1/conversations", requestedPath)
+            assertEquals(
+                PersonConversationsResult.Loaded(
+                    listOf(
+                        PersonConversation(
+                            conversationId = "c1",
+                            state = "Assigned",
+                            isActive = true,
+                            startedAt = "2026-09-01T10:00:00Z",
+                            closedAt = null,
+                            lastActivityAt = "2026-09-01T10:05:00Z",
+                        ),
+                        PersonConversation(
+                            conversationId = "c2",
+                            state = "Closed",
+                            isActive = false,
+                            startedAt = "2026-03-14T12:00:00Z",
+                            closedAt = "2026-03-14T12:20:00Z",
+                            lastActivityAt = "2026-03-14T12:20:00Z",
+                        ),
+                    ),
+                ),
+                result,
+            )
+        }
+
+    @Test
+    fun `26-269 a person with no conversations at all is Loaded with an empty list, never a failure`() =
+        runTest {
+            val api = apiFor { respond("""{"conversations":[]}""", HttpStatusCode.OK, jsonHeaders()) }
+
+            assertEquals(PersonConversationsResult.Loaded(emptyList()), api.fetchPersonConversations("p1"))
+        }
+
+    @Test
+    fun `26-269 a 5xx on the conversations read is a server error, not a fabricated list`() =
+        runTest {
+            val api = apiFor { respondError(HttpStatusCode.ServiceUnavailable) }
+
+            assertEquals(PersonConversationsResult.Failed(NetworkFailure.ServerError(503)), api.fetchPersonConversations("p1"))
+        }
+
+    @Test
+    fun `26-269 a dropped connection on the conversations read is NoConnection`() =
+        runTest {
+            val api = apiFor { throw IOException("unexpected end of stream") }
+
+            assertEquals(PersonConversationsResult.Failed(NetworkFailure.NoConnection), api.fetchPersonConversations("p1"))
         }
 
     private fun jsonHeaders() = headersOf("Content-Type", ContentType.Application.Json.toString())

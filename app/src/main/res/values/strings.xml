@@ -828,6 +828,33 @@
     <string name="bookings_contacts_noshow_pill_many">%1$d неявок</string>
 
     <!--
+        `26-269`: the client-detail hub - a tap on a Клиенты row's own destination
+        (`docs/backlog/26-269-clients-redesign.md` §4). A pure read + navigation surface: header, the
+        Предстоящие/Прошедшие bookings split, «Открыть диалог» (active else last, read-only), and a
+        booking row's own reschedule flow (`RescheduleBookingSheet`, already built for `26-209`).
+        «Записать» (manual booking, `26-268`) is a later slice and is not drawn here.
+    -->
+    <string name="bookings_client_detail_title">Клиент</string>
+    <string name="bookings_client_detail_upcoming_segment">Предстоящие</string>
+    <string name="bookings_client_detail_past_segment">Прошедшие</string>
+    <string name="bookings_client_detail_upcoming_empty">Нет предстоящих записей.</string>
+    <string name="bookings_client_detail_past_empty">Нет прошедших записей.</string>
+    <string name="bookings_client_detail_load_failed_unexpected">Не удалось загрузить карточку клиента. Попробуйте ещё раз.</string>
+    <!-- The hub's own «Открыть диалог» action - a distinct string from `bookings_confirmed_open_dialog_action`
+         (an icon button's content description elsewhere) because this one is the visible label on a real
+         button, worded to match the design mockup's own button text. -->
+    <string name="bookings_client_detail_open_dialog_action">Диалог</string>
+    <!-- `23-12`: the warning-glyph's own action - the existing `ConfirmOperatorVerifiedPhone` endpoint,
+         with no client caller anywhere in this app until this item. -->
+    <string name="bookings_client_detail_confirm_phone_action">Подтвердить телефон</string>
+    <string name="bookings_client_detail_confirm_phone_banner">Телефон не подтверждён — ни по SMS, ни оператором. Позвонили и это точно он?</string>
+    <string name="bookings_client_detail_confirming_phone">Подтверждение…</string>
+    <!-- A booking row's own no-show marker - a bare label, distinct from `bookings_contacts_noshow_pill_*`
+         above (that trio counts *how many* times a client no-showed; this one marks *this one row* as a
+         no-show). -->
+    <string name="bookings_client_detail_status_no_show">Неявка</string>
+
+    <!--
         `26-96`: Записи's own «Услуги» segment - the tenant's service dictionary, with the edit and the
         withdrawal this product had no endpoint for at all until that item (a typo in a duration or a
         visitor-facing price was permanent). Gated on `calendar:configure` alone - a fourth, distinct

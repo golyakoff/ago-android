@@ -2,12 +2,16 @@ package ago.chat.android.core.network.bookings
 
 import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PersonBooking
+import ago.chat.android.core.domain.bookings.PersonBookingStatus
+import ago.chat.android.core.domain.bookings.PersonBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
@@ -20,6 +24,7 @@ import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
@@ -785,6 +790,175 @@ class KtorBookingsApiTest {
                 }
 
             assertEquals(BookingActionResult.Failed(BookingsQueueFailure.Unexpected), api.rescheduleBooking("b1", "event-2"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `26-269 a client's own bookings are read against the right path, and a status the enum knows about maps`() =
+        runTest {
+            var requestedUrl: String? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    respond(
+                        """
+                        [
+                          {
+                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина",
+                            "serviceId":"s1","serviceName":"Стрижка","personId":"p1",
+                            "startsAt":"2026-10-05T14:00:00Z","endsAt":"2026-10-05T15:00:00Z",
+                            "localDate":"2026-10-05","weekday":1,"phone":"+7***5678","masked":true,
+                            "originConversationId":null,"status":"Booked"
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchPersonBookings("p1")
+
+            assertEquals(
+                PersonBookingsResult.Loaded(
+                    listOf(
+                        PersonBooking(
+                            bookingId = "b1",
+                            calendarId = "cal1",
+                            workerId = "w1",
+                            workerDisplayName = "Ирина",
+                            serviceId = "s1",
+                            serviceName = "Стрижка",
+                            startsAt = "2026-10-05T14:00:00Z",
+                            endsAt = "2026-10-05T15:00:00Z",
+                            localDate = "2026-10-05",
+                            weekday = 1,
+                            phone = "+7***5678",
+                            masked = true,
+                            originConversationId = null,
+                            status = PersonBookingStatus.Booked,
+                        ),
+                    ),
+                ),
+                result,
+            )
+            assertEquals("$baseUrl/api/v1/console/contacts/p1/bookings", requestedUrl)
+        }
+
+    @Test
+    fun `26-269 a status the enum does not know about degrades to Unknown, never a failed read`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """
+                        [
+                          {
+                            "bookingId":"b1","calendarId":"cal1","workerId":"w1","workerDisplayName":"Ирина",
+                            "serviceId":"s1","serviceName":"Стрижка","personId":"p1",
+                            "startsAt":"2026-10-05T14:00:00Z","endsAt":"2026-10-05T15:00:00Z",
+                            "localDate":"2026-10-05","weekday":1,"phone":"+7***5678","masked":true,
+                            "status":"SomeFutureStatus"
+                          }
+                        ]
+                        """.trimIndent(),
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.fetchPersonBookings("p1") as PersonBookingsResult.Loaded
+
+            assertEquals(PersonBookingStatus.Unknown, result.bookings.single().status)
+        }
+
+    @Test
+    fun `26-269 person bookings - a 5xx is Unexpected, not an empty history`() =
+        runTest {
+            val api = apiFor(baseUrl) { respondError(HttpStatusCode.ServiceUnavailable) }
+
+            assertEquals(PersonBookingsResult.Failed(BookingsQueueFailure.Unexpected), api.fetchPersonBookings("p1"))
+        }
+
+    @Test
+    fun `26-269 person bookings - a dropped connection is Transport, not an empty history`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(PersonBookingsResult.Failed(BookingsQueueFailure.Transport), api.fetchPersonBookings("p1"))
+        }
+
+    @Test
+    fun `26-269 person bookings - no calendar base URL configured is NotConfigured, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(PersonBookingsResult.NotConfigured, api.fetchPersonBookings("p1"))
+            assertEquals("a null base URL must never reach the network", 0, calls)
+        }
+
+    @Test
+    fun `26-269 confirming a phone posts to the right path with no body, and returns the server's own confirmedAt`() =
+        runTest {
+            var requestedUrl: String? = null
+            var requestedMethod: HttpMethod? = null
+            val api =
+                apiFor(baseUrl) { request ->
+                    requestedUrl = request.url.toString()
+                    requestedMethod = request.method
+                    respond(
+                        """{"confirmedAt":"2026-09-29T10:00:00Z"}""",
+                        HttpStatusCode.OK,
+                        headersOf("Content-Type", ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val result = api.confirmOperatorVerifiedPhone("p1")
+
+            assertEquals(ConfirmPhoneResult.Confirmed("2026-09-29T10:00:00Z"), result)
+            assertEquals("$baseUrl/api/v1/console/contacts/p1/confirm-phone", requestedUrl)
+            assertEquals(HttpMethod.Post, requestedMethod)
+        }
+
+    @Test
+    fun `26-269 a 403 with a problem-details body on confirm-phone is rendered as that exact refusal`() =
+        runTest {
+            val api =
+                apiFor(baseUrl) {
+                    respond(
+                        """{"type":"Customer.NotEntitled","detail":"Недостаточно прав."}""",
+                        HttpStatusCode.Forbidden,
+                        headersOf("Content-Type", "application/problem+json"),
+                    )
+                }
+
+            assertEquals(ConfirmPhoneResult.Refused("Недостаточно прав."), api.confirmOperatorVerifiedPhone("p1"))
+        }
+
+    @Test
+    fun `26-269 a dropped connection on confirm-phone is Transport`() =
+        runTest {
+            val api = apiFor(baseUrl) { throw IOException("unexpected end of stream") }
+
+            assertEquals(ConfirmPhoneResult.Failed(BookingsQueueFailure.Transport), api.confirmOperatorVerifiedPhone("p1"))
+        }
+
+    @Test
+    fun `26-269 no calendar base URL configured fails confirm-phone, and never makes a request`() =
+        runTest {
+            var calls = 0
+            val api =
+                apiFor(null) {
+                    calls++
+                    respondError(HttpStatusCode.InternalServerError)
+                }
+
+            assertEquals(ConfirmPhoneResult.Failed(BookingsQueueFailure.Unexpected), api.confirmOperatorVerifiedPhone("p1"))
             assertEquals("a null base URL must never reach the network", 0, calls)
         }
 

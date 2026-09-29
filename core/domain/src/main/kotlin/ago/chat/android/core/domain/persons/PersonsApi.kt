@@ -32,6 +32,24 @@ public interface PersonsApi {
      * pair or the identifier, never to a fabricated name).
      */
     public suspend fun fetchPersons(personIds: List<String>): PersonsResult
+
+    /**
+     * `26-269`: `GET /api/v1/persons/{personId}/conversations` — the client-detail hub's own "which
+     * dialog do I open for this person" read (`docs/backlog/26-269-clients-redesign.md` §5/§8#2). The
+     * calendar's own reads only ever hand this app a bare `personId`, never a `conversationId` — the
+     * existing visitor-history read
+     * ([ago.chat.android.core.domain.conversations.ConversationsApi], conceptually — this app has no
+     * direct caller of it today) starts from a conversation already in hand, so it cannot serve "given a
+     * client, which conversation is theirs" the way this call does.
+     *
+     * [PersonConversationsResult.Loaded.conversations] arrives **already ordered** — the active
+     * conversation first if one exists, otherwise the most recently active — server-side
+     * (`GetPersonConversationsHandler`'s own doc comment, `ago-chat`), so `conversations.firstOrNull()` is
+     * always the one to open; this port does no re-sorting of its own. An empty list is a real, honest
+     * fact (a `26-268` manual client has no conversation at all), not a failure — the caller hides its own
+     * «Открыть диалог» action rather than greying it, never treating this as [PersonConversationsResult.Failed].
+     */
+    public suspend fun fetchPersonConversations(personId: String): PersonConversationsResult
 }
 
 /**
@@ -72,4 +90,45 @@ public sealed interface PersonsResult {
     public data class Failed(
         val reason: NetworkFailure,
     ) : PersonsResult
+}
+
+/**
+ * `26-269`: one of a client's own conversations — `Ago.Chat.Api.Persons.PersonEndpoints.PersonConversationDto`
+ * verbatim, field for field, since the client-detail hub has a slot for every one of them (unlike
+ * [PersonProfile], nothing here is trimmed off the wire shape).
+ */
+public data class PersonConversation(
+    val conversationId: String,
+    /** The raw `ConversationState` wire name — carried alongside [isActive] rather than discarded, the
+     * identical "collapse only the presentation, never the fact" rule
+     * [ago.chat.android.core.domain.bookings.Contact]'s own warning-glyph doc comment states for its own
+     * pair of phone facts. Unused by this app's own hub today (it reads [isActive] alone), kept because a
+     * caller that ever needs to tell `Waiting` from `Assigned` must not find only the collapsed view. */
+    val state: String,
+    /** `state != "Closed"`, computed server-side — the one boolean the hub actually branches on ("open
+     * normally, or read-only"), the identical reasoning `PersonConversationDto`'s own doc comment states
+     * for why this rides the wire pre-computed rather than every client re-deriving the same one-line
+     * predicate. */
+    val isActive: Boolean,
+    val startedAt: String,
+    val closedAt: String?,
+    val lastActivityAt: String,
+)
+
+/**
+ * `26-269`: what asking for one client's own conversations came back with — the identical two-arm shape
+ * [PersonsResult] already establishes for the same `Ago.Chat.Api` origin, for the identical reason: this
+ * app is never deployed without that origin reachable, so there is no third "not configured" arm here
+ * either.
+ */
+public sealed interface PersonConversationsResult {
+    /** Ordered server-side, active-first-else-most-recent — see [PersonsApi.fetchPersonConversations]'s
+     * own doc comment. Empty is a real fact (no conversation at all yet), never folded into [Failed]. */
+    public data class Loaded(
+        val conversations: List<PersonConversation>,
+    ) : PersonConversationsResult
+
+    public data class Failed(
+        val reason: NetworkFailure,
+    ) : PersonConversationsResult
 }

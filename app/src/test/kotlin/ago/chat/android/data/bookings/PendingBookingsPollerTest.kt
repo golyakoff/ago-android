@@ -3,10 +3,12 @@ package ago.chat.android.data.bookings
 import ago.chat.android.core.domain.bookings.BookingActionResult
 import ago.chat.android.core.domain.bookings.BookingsApi
 import ago.chat.android.core.domain.bookings.BookingsQueueFailure
+import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
+import ago.chat.android.core.domain.bookings.PersonBookingsResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
@@ -192,5 +194,11 @@ class PendingBookingsPollerTest {
             bookingId: String,
             newStartEventId: String,
         ): BookingActionResult = throw UnsupportedOperationException("PendingBookingsPoller never calls this")
+
+        override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult =
+            throw UnsupportedOperationException("PendingBookingsPoller never calls this")
+
+        override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult =
+            throw UnsupportedOperationException("PendingBookingsPoller never calls this")
     }
 }

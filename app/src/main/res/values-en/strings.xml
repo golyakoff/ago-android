@@ -476,6 +476,18 @@
     <string name="bookings_contacts_noshow_pill_few">%1$d no-shows</string>
     <string name="bookings_contacts_noshow_pill_many">%1$d no-shows</string>
 
+    <string name="bookings_client_detail_title">Client</string>
+    <string name="bookings_client_detail_upcoming_segment">Upcoming</string>
+    <string name="bookings_client_detail_past_segment">Past</string>
+    <string name="bookings_client_detail_upcoming_empty">No upcoming bookings.</string>
+    <string name="bookings_client_detail_past_empty">No past bookings.</string>
+    <string name="bookings_client_detail_load_failed_unexpected">Couldn\'t load the client card. Please try again.</string>
+    <string name="bookings_client_detail_open_dialog_action">Dialog</string>
+    <string name="bookings_client_detail_confirm_phone_action">Confirm phone</string>
+    <string name="bookings_client_detail_confirm_phone_banner">Phone not confirmed — not by SMS, not by an operator. Called and it\'s really them?</string>
+    <string name="bookings_client_detail_confirming_phone">Confirming…</string>
+    <string name="bookings_client_detail_status_no_show">No-show</string>
+
     <string name="bookings_tab_services">Services</string>
     <string name="bookings_config_menu_action">Configuration</string>
     <string name="services_empty">This tenant has no services yet.</string>

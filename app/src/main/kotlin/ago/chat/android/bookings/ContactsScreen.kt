@@ -6,6 +6,7 @@ import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -52,6 +57,16 @@ import androidx.compose.ui.unit.dp
  * ([R.string.bookings_contacts_search_empty]) rather than [R.string.bookings_contacts_empty] — the two are
  * different facts ("no customers exist" vs. "no customer matches this search") and must not share a
  * sentence.
+ *
+ * `26-269`: a tap on a row now opens the client-detail hub ([ClientDetailSheet]) — the affordance
+ * `26-52`'s own doc comment explicitly deferred ("a row that opens nothing is fine, the list itself is
+ * the answer"). [selectedClientId] is local navigation state, not view-model state — the identical
+ * "which sheet is open is UI, not network" split [ConfirmedBookingsBody]'s own `selectedBookingId` already
+ * draws — and holds only the tapped [Contact.customerId], re-resolved against [state]'s own current list on
+ * every recomposition (the identical "hold the id, derive the object" shape that same sheet uses), so a
+ * reveal that lands while the hub is open is picked up rather than frozen at the moment it was tapped.
+ * [onOpenDialog] is threaded straight through to the hub with no handling here — this body owns no
+ * conversation-navigation decision of its own.
  */
 @Composable
 internal fun ContactsBody(
@@ -59,7 +74,10 @@ internal fun ContactsBody(
     onRetry: () -> Unit,
     onReveal: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onOpenDialog: (String) -> Unit,
 ) {
+    var selectedClientId by rememberSaveable { mutableStateOf<String?>(null) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         if (state is ContactsUiState.Loaded) {
             state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth()) }
@@ -88,12 +106,27 @@ internal fun ContactsBody(
                             if (visible.isEmpty()) {
                                 EmptyBody(stringResource(R.string.bookings_contacts_search_empty))
                             } else {
-                                ContactsList(contacts = visible, revealingCustomerIds = state.revealingCustomerIds, onReveal = onReveal)
+                                ContactsList(
+                                    contacts = visible,
+                                    revealingCustomerIds = state.revealingCustomerIds,
+                                    onReveal = onReveal,
+                                    onOpenClient = { customerId -> selectedClientId = customerId },
+                                )
                             }
                         }
                     }
             }
         }
+    }
+
+    val selectedContact =
+        (state as? ContactsUiState.Loaded)?.contacts?.firstOrNull { it.customerId == selectedClientId }
+    if (selectedContact != null) {
+        ClientDetailSheet(
+            contact = selectedContact,
+            onDismiss = { selectedClientId = null },
+            onOpenDialog = onOpenDialog,
+        )
     }
 }
 
@@ -125,6 +158,7 @@ private fun ContactsList(
     contacts: List<Contact>,
     revealingCustomerIds: Set<String>,
     onReveal: (String) -> Unit,
+    onOpenClient: (String) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(contacts, key = { it.customerId }) { contact ->
@@ -132,6 +166,7 @@ private fun ContactsList(
                 contact = contact,
                 revealing = contact.customerId in revealingCustomerIds,
                 onReveal = { onReveal(contact.customerId) },
+                onOpenClient = { onOpenClient(contact.customerId) },
             )
             HorizontalDivider()
         }
@@ -160,14 +195,28 @@ private fun ContactsList(
  * (`docs/backlog/26-269-*.md` §3.3/§3.4: the warning glyph only when the phone is neither verified nor
  * operator-confirmed, the no-show pill only when the count is positive; "zero/confirmed is the quiet
  * default" for both).
+ *
+ * `26-269`: [onOpenClient] makes the whole card a tap target — the client-detail hub's own entry point,
+ * the affordance this card's own doc comment above states `26-52` deliberately left out. The reveal
+ * control keeps its own, narrower [TextButton] tap target *inside* this same clickable card (a
+ * `TextButton` consumes its own click before it reaches the card's `clickable` behind it, the ordinary
+ * Compose nested-click-target behaviour), so «Показать» still reveals in place rather than opening the
+ * hub.
  */
 @Composable
 private fun ContactCard(
     contact: Contact,
     revealing: Boolean,
     onReveal: () -> Unit,
+    onOpenClient: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenClient)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
         val displayName = contact.displayName
         if (displayName != null) {
             Text(
@@ -256,9 +305,16 @@ private fun PhoneStatusAndNoShowRow(contact: Contact) {
  * restated here rather than shared with [ago.chat.android.conversations.ConversationListScreen]'s own
  * private `StatusPill`, which lives in a different file for a different row shape (the same restraint
  * that file's own doc comment states: a second, near-identical composable is fine, extract only once a
- * third caller needs the identical thing). */
+ * third caller needs the identical thing).
+ *
+ * `26-269`: `internal`, not `private` — [ClientDetailScreen.kt][ClientDetailBody] draws the identical
+ * no-show fact on the client-detail hub's own header, and a second, independently-drifting copy of the
+ * same warning-toned pill for the same count is exactly the drift this promotion avoids, not a case of
+ * the "extract only once a third caller needs it" restraint above (that restraint is about *not* sharing
+ * with a *different* pill shape elsewhere, e.g. `StatusPill` — reusing this exact composable for its own
+ * exact fact, a second time, is the opposite situation). */
 @Composable
-private fun NoShowPill(count: Int) {
+internal fun NoShowPill(count: Int) {
     Surface(
         color = agoStatusColors().warningTint,
         contentColor = agoStatusColors().warning,
