@@ -6,9 +6,13 @@ import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.shell.AppShellScreen
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -23,6 +27,16 @@ import org.junit.runner.RunWith
  * identical Hilt-free shape [ago.chat.android.automation.OfflineAutoReplyGatingTest] establishes, since
  * the property under test is entirely inside [ago.chat.android.shell.buildMoreRows]'s own gate and never
  * opens the row, so [BillingRoute]'s own `hiltViewModel()` is never reached.
+ *
+ * **The positive case scrolls before asserting** - the identical CI-observed lesson
+ * [ago.chat.android.documents.ConsentDocumentsGatingTest]'s own doc comment states in full: with
+ * `site:configure` granted, Автоматизация draws all five of its own rows above Администрирование, and
+ * «Тариф и оплата» sits third inside that section (after «Операторы и роли», «Продукты»), pushed below the
+ * initial viewport of `MoreScreen`'s `LazyColumn` - a lazy item never laid out has no semantics node yet
+ * for a bare `onNodeWithText` to find (this file's own first version hit exactly that in CI:
+ * `AssertionError: Failed: assertExists. … could not find any node … 'Администрирование'`,
+ * `ago-android#216` run `36619232761`). `performScrollToNode` drives the scroll container itself, and the
+ * bounded `waitUntil` absorbs the lazy (re)layout race a single `waitForIdle()` cannot.
  *
  * `26-91`/`26-94`: the assertions are plain Russian literals - safe because `LocaleForcingTestRunner`
  * pins every instrumented test's own locale to `ru` (`docs/architecture.md`).
@@ -49,7 +63,13 @@ class BillingGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
+        // Scroll to the row itself rather than asserting the (possibly still off-screen) «Администрирование»
+        // header first - this file's own doc comment states why a plain `onNodeWithText` raced the lazy
+        // layout here.
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Тариф и оплата"))
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Тариф и оплата").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Тариф и оплата").assertExists()
     }
 
@@ -70,8 +90,11 @@ class BillingGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // No `site:configure` - the row is gone, exactly as `BackContractMoreScreenTest` proves alongside
-        // it (that suite's own `theMoreListShowsTheNewAutomationAndAdministrationRowsAndNoSettingsRow`).
+        // No `site:configure` - Автоматизация draws nothing and Администрирование keeps only its
+        // unconditional «Операторы и роли», so the whole list is short enough that «Тариф и оплата» being
+        // absent from the semantics tree really does mean absent, not merely unlaid - no scroll needed,
+        // exactly as `BackContractMoreScreenTest` proves alongside it (that suite's own
+        // `theMoreListShowsTheNewAutomationAndAdministrationRowsAndNoSettingsRow`).
         composeTestRule.onNodeWithText("Тариф и оплата").assertDoesNotExist()
     }
 

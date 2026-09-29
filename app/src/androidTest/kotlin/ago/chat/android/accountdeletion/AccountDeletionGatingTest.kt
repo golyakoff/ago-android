@@ -79,8 +79,9 @@ class AccountDeletionGatingTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // No `site:erase` - «Удалить аккаунт» is gone, but Администрирование itself stays: its two
-        // unconditional rows (Операторы и роли, Тариф и оплата) keep the section header on screen, the
+        // No `site:erase` - «Удалить аккаунт» is gone, but Администрирование itself stays: its
+        // unconditional «Операторы и роли» row keeps the section header on screen (`26-301` moved «Тариф и
+        // оплата» behind `site:configure`, so it is gone here too, not a second reason to stay) - the
         // identical distinction `SiteExportGatingTest`'s own negative case draws.
         composeTestRule.onNodeWithText("Удалить аккаунт").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
