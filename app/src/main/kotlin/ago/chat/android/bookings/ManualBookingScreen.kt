@@ -9,8 +9,9 @@ import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
-import ago.chat.android.ui.components.SectionLabel
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -90,8 +93,10 @@ internal fun ManualBookingSheet(
             onConfirmClientStep = viewModel::confirmClientStep,
             onSelectService = viewModel::selectService,
             onSelectWorker = viewModel::selectWorker,
+            onSelectDate = viewModel::selectDate,
             onSelectSlot = viewModel::selectSlot,
             onSubmit = viewModel::submit,
+            onBack = viewModel::back,
         )
     }
 }
@@ -110,8 +115,10 @@ private fun ManualBookingBody(
     onConfirmClientStep: () -> Unit,
     onSelectService: (ConfiguredService) -> Unit,
     onSelectWorker: (Worker) -> Unit,
+    onSelectDate: (String) -> Unit,
     onSelectSlot: (WorkerSlot) -> Unit,
     onSubmit: () -> Unit,
+    onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Text(
@@ -129,6 +136,10 @@ private fun ManualBookingBody(
                     ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+            )
+            WizardStepper(
+                currentStep = state.step,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
             )
         }
@@ -161,17 +172,76 @@ private fun ManualBookingBody(
                                 onNameChanged = onNewClientNameChanged,
                                 onEmailChanged = onNewClientEmailChanged,
                                 onConfirm = onConfirmClientStep,
+                                onBack = onBack,
                             )
 
                         ManualBookingStep.Service -> ServiceStepBody(services = state.services, onSelect = onSelectService)
 
                         ManualBookingStep.Worker -> WorkerStepBody(workers = workersOffering(state), onSelect = onSelectWorker)
 
+                        ManualBookingStep.Date -> DateStepBody(wizard = state, onSelect = onSelectDate)
+
                         ManualBookingStep.Slot -> SlotStepBody(wizard = state, onSelect = onSelectSlot)
 
-                        ManualBookingStep.Review -> ReviewStepBody(wizard = state, onSubmit = onSubmit)
+                        ManualBookingStep.Review -> ReviewStepBody(wizard = state, onSubmit = onSubmit, onBack = onBack)
                     }
             }
+        }
+        // `Client`/`Review` embed «Назад» next to their own «Далее»/«Создать запись» button
+        // ([ClientStepBody]/[ReviewStepBody]'s own Row) - every other non-[ManualBookingStep.Phone] step
+        // advances by tapping a row (one-motion select-and-advance, [ServiceStepBody]'s own doc comment),
+        // so it has no forward button of its own for «Назад» to sit beside; this bare row is where it lives
+        // instead (author feedback 2026-09-29: the wizard had no way back at all before this).
+        if (state is ManualBookingUiState.Wizard &&
+            state.step !in setOf(ManualBookingStep.Phone, ManualBookingStep.Client, ManualBookingStep.Review)
+        ) {
+            BackOnlyRow(onBack = onBack, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+/**
+ * `26-268` follow-up (author feedback 2026-09-29): the mockup's own `.steps` bar — a segmented progress
+ * track, one segment per [ManualBookingStep], filled from [ManualBookingStep.Phone] up to and including
+ * [currentStep] (`android-design.agochat.ru/manual-booking.html`'s own `.steps div.on { background:
+ * var(--brand) }`, confirmed live: every earlier screen's own `.steps` carries one more filled segment than
+ * the last). `MaterialTheme.colorScheme.primary`/`.outlineVariant` stand in for `--brand`/`--line` — the
+ * identical token mapping `Theme.kt`'s own header states (`primary` *is* `AgoBrandLight`/`AgoBrandDark`),
+ * so this reads the app's existing brand colour rather than a literal hex invented for this one call site.
+ */
+@Composable
+private fun WizardStepper(
+    currentStep: ManualBookingStep,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ManualBookingStep.entries.forEach { step ->
+            val filled = step.ordinal <= currentStep.ordinal
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .background(
+                            color = if (filled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(2.dp),
+                        ),
+            )
+        }
+    }
+}
+
+/** «Назад» alone, no neighbouring «Далее» — the step bodies whose own row-tap already advances the wizard
+ * ([ServiceStepBody]/[WorkerStepBody]/[DateStepBody]/[SlotStepBody]) render this below their own content
+ * rather than a [Row] pairing it with a forward button, since none of the four has one of its own. */
+@Composable
+private fun BackOnlyRow(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        OutlinedButton(onClick = onBack) {
+            Text(text = stringResource(R.string.bookings_manual_back_action))
         }
     }
 }
@@ -189,8 +259,9 @@ private fun stepNumber(step: ManualBookingStep): Int =
         ManualBookingStep.Client -> 2
         ManualBookingStep.Service -> 3
         ManualBookingStep.Worker -> 4
-        ManualBookingStep.Slot -> 5
-        ManualBookingStep.Review -> 6
+        ManualBookingStep.Date -> 5
+        ManualBookingStep.Slot -> 6
+        ManualBookingStep.Review -> 7
     }
 
 private fun stepNameRes(step: ManualBookingStep): Int =
@@ -199,6 +270,7 @@ private fun stepNameRes(step: ManualBookingStep): Int =
         ManualBookingStep.Client -> R.string.bookings_manual_step_client
         ManualBookingStep.Service -> R.string.bookings_manual_step_service
         ManualBookingStep.Worker -> R.string.bookings_manual_step_worker
+        ManualBookingStep.Date -> R.string.bookings_manual_step_date
         ManualBookingStep.Slot -> R.string.bookings_manual_step_slot
         ManualBookingStep.Review -> R.string.bookings_manual_step_review
     }
@@ -435,6 +507,7 @@ private fun ClientStepBody(
     onNameChanged: (String) -> Unit,
     onEmailChanged: (String) -> Unit,
     onConfirm: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val client = wizard.client
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
@@ -497,12 +570,17 @@ private fun ClientStepBody(
                 )
             }
         }
-        Button(
-            onClick = onConfirm,
-            enabled = client != null && !(client is ManualBookingClient.New && client.name.isBlank()),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = stringResource(R.string.bookings_manual_next_action))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+                Text(text = stringResource(R.string.bookings_manual_back_action))
+            }
+            Button(
+                onClick = onConfirm,
+                enabled = client != null && !(client is ManualBookingClient.New && client.name.isBlank()),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(text = stringResource(R.string.bookings_manual_next_action))
+            }
         }
     }
 }
@@ -553,14 +631,19 @@ private fun WorkerStepBody(
     }
 }
 
-/** The identical [groupSlotsByDay] grouping and one-tap-per-slot shape [RescheduleBookingScreen.kt]'s own
- * `RescheduleSlotList` already uses (`docs/backlog/26-268-*.md` §3.6: "reuse the slot-picker the reschedule
- * flow uses") — tapping a slot both selects it and advances straight to Проверьте, the identical
- * one-motion shape [ServiceStepBody]/[WorkerStepBody] above already use. */
+/**
+ * `26-268` follow-up (author feedback 2026-09-29): [ManualBookingStep.Date]'s own screen — one row per
+ * business-local day [groupSlotsByDay] finds in [ManualBookingUiState.Wizard.slots] (the whole default
+ * range [ManualBookingViewModel.selectWorker] already fetched, per [ManualBookingStep]'s own doc comment),
+ * tapping a day both selects it and advances straight to [ManualBookingStep.Slot] — the identical
+ * one-motion shape [ServiceStepBody]/[WorkerStepBody] above already use. The `${localDate} · ${weekday}`
+ * label and [R.array.bookings_weekday_full] lookup are the identical pair [WorkerSlotsScreen.kt]'s own day
+ * header already renders, restated here as a tappable row rather than a plain section heading.
+ */
 @Composable
-private fun SlotStepBody(
+private fun DateStepBody(
     wizard: ManualBookingUiState.Wizard,
-    onSelect: (WorkerSlot) -> Unit,
+    onSelect: (String) -> Unit,
 ) {
     if (wizard.loadingSlots) {
         StepLoadingBody()
@@ -576,21 +659,66 @@ private fun SlotStepBody(
         EmptyBody(stringResource(R.string.bookings_manual_no_slots))
         return
     }
+    val weekdayLabels = stringArrayResource(R.array.bookings_weekday_full)
     val days = groupSlotsByDay(wizard.slots)
     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = StepListHeight), contentPadding = PaddingValues(vertical = 8.dp)) {
-        days.forEach { day ->
-            item(key = "header-${day.localDate}") { SectionLabel(text = day.localDate) }
-            items(day.slots, key = { it.eventId }) { slot ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onSelect(slot) }.padding(horizontal = 24.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        text = "${businessLocalTimeOrNull(slot.startsAt) ?: "—"}–${businessLocalTimeOrNull(slot.endsAt) ?: "—"}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
-                HorizontalDivider()
+        items(days, key = { it.localDate }) { day ->
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onSelect(day.localDate) }.padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${day.localDate} · ${weekdayLabels.getOrElse(day.weekday) { "" }}",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = stringResource(R.string.bookings_manual_date_slot_count_format, day.slots.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            HorizontalDivider()
+        }
+    }
+}
+
+/** [ManualBookingStep.Slot]'s own screen — [ManualBookingUiState.Wizard.slots] filtered down to
+ * [ManualBookingUiState.Wizard.selectedDate] alone, no grouping and no day header needed since
+ * [ManualBookingStep.Date] already settled which day this is (`ManualBookingStep`'s own doc comment: one
+ * read, split into two screens, not two reads). Tapping a slot both selects it and advances straight to
+ * Проверьте, the identical one-motion shape [DateStepBody] above already uses for the day it reads. */
+@Composable
+private fun SlotStepBody(
+    wizard: ManualBookingUiState.Wizard,
+    onSelect: (WorkerSlot) -> Unit,
+) {
+    if (wizard.loadingSlots) {
+        StepLoadingBody()
+        return
+    }
+    wizard.actionError?.let {
+        ActionErrorBanner(
+            error = it,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        )
+    }
+    val daySlots = wizard.slots.filter { it.localDate == wizard.selectedDate }
+    if (daySlots.isEmpty()) {
+        EmptyBody(stringResource(R.string.bookings_manual_no_slots))
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = StepListHeight), contentPadding = PaddingValues(vertical = 8.dp)) {
+        items(daySlots, key = { it.eventId }) { slot ->
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onSelect(slot) }.padding(horizontal = 24.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    text = "${businessLocalTimeOrNull(slot.startsAt) ?: "—"}–${businessLocalTimeOrNull(slot.endsAt) ?: "—"}",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+            HorizontalDivider()
         }
     }
 }
@@ -599,6 +727,7 @@ private fun SlotStepBody(
 private fun ReviewStepBody(
     wizard: ManualBookingUiState.Wizard,
     onSubmit: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val service = wizard.selectedService
     val worker = wizard.selectedWorker
@@ -626,11 +755,16 @@ private fun ReviewStepBody(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 16.dp),
         )
-        Button(onClick = onSubmit, enabled = !wizard.submitting, modifier = Modifier.fillMaxWidth()) {
-            if (wizard.submitting) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-            } else {
-                Text(text = stringResource(R.string.bookings_manual_submit_action))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onBack, enabled = !wizard.submitting, modifier = Modifier.weight(1f)) {
+                Text(text = stringResource(R.string.bookings_manual_back_action))
+            }
+            Button(onClick = onSubmit, enabled = !wizard.submitting, modifier = Modifier.weight(1f)) {
+                if (wizard.submitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                } else {
+                    Text(text = stringResource(R.string.bookings_manual_submit_action))
+                }
             }
         }
     }

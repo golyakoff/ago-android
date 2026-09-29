@@ -7,12 +7,18 @@ import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 
 /**
- * `26-268`/`adr/0188`: the six-step guided ladder the mockup draws (phone → client → service → master →
- * date/slot → review, `docs/backlog/26-268-*.md` §3.4/§5.2) — a plain UI-layer enum, the identical
+ * `26-268`/`adr/0188`: the seven-step guided ladder the mockup draws (phone → client → service → master →
+ * date → slot → review, `docs/backlog/26-268-*.md` §3.4/§5.2) — a plain UI-layer enum, the identical
  * "nothing outside this screen's own composables and view model needs to know these names exist" reason
  * [BookingsTab]/[MastersDrillDownKind] already state for their own enums.
+ *
+ * `Date`/`Slot` used to be one combined step (author feedback 2026-09-29: "километровая простыня" — a day
+ * picker and a time grid in one unbroken scroll). Split in two: [Date] picks the business-local day out of
+ * the same slot read [Worker]'s own transition already fetches, [Slot] then filters that same read down to
+ * the chosen day — no second network call, the identical "no second read per step" discipline this file's
+ * own [ManualBookingUiState.Wizard.services]/`.workers` doc comment already states for the earlier steps.
  */
-internal enum class ManualBookingStep { Phone, Client, Service, Worker, Slot, Review }
+internal enum class ManualBookingStep { Phone, Client, Service, Worker, Date, Slot, Review }
 
 /**
  * `26-268`: the phone-first recognition sub-state (`docs/backlog/26-268-*.md` §3.4's own four frames) —
@@ -104,6 +110,10 @@ internal sealed interface ManualBookingUiState {
         val selectedWorker: Worker? = null,
         val slots: List<WorkerSlot> = emptyList(),
         val loadingSlots: Boolean = false,
+        /** [ManualBookingStep.Date]'s own pick — a business-local `YYYY-MM-DD`, one of [WorkerSlot.localDate]
+         * already present in [slots]. `null` until chosen; [ManualBookingStep.Slot] filters [slots] down to
+         * this value rather than re-fetching, per [ManualBookingStep]'s own doc comment. */
+        val selectedDate: String? = null,
         val selectedSlot: WorkerSlot? = null,
         val submitting: Boolean = false,
         // `26-268`: [BookingActionErrorUi] reused rather than a fourth near-identical two-arm type - a

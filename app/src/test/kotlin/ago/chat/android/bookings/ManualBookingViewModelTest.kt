@@ -230,6 +230,7 @@ class ManualBookingViewModelTest {
             viewModel.selectService(SERVICE)
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
             viewModel.selectSlot(SLOT)
             assertEquals(ManualBookingStep.Review, (viewModel.state.value as ManualBookingUiState.Wizard).step)
 
@@ -266,6 +267,7 @@ class ManualBookingViewModelTest {
             viewModel.selectService(SERVICE)
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
             viewModel.selectSlot(SLOT)
 
             viewModel.submit()
@@ -289,6 +291,7 @@ class ManualBookingViewModelTest {
             viewModel.selectService(SERVICE)
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
             viewModel.selectSlot(SLOT)
 
             viewModel.submit()
@@ -319,6 +322,7 @@ class ManualBookingViewModelTest {
             viewModel.selectService(SERVICE)
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
             viewModel.selectSlot(SLOT)
 
             viewModel.submit()
@@ -349,6 +353,7 @@ class ManualBookingViewModelTest {
             viewModel.selectService(SERVICE)
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
             viewModel.selectSlot(SLOT)
 
             viewModel.submit()
@@ -360,7 +365,7 @@ class ManualBookingViewModelTest {
         }
 
     @Test
-    fun `selecting a worker fetches only Available slots for it`() =
+    fun `selecting a worker fetches only Available slots for it and lands on Date`() =
         runTest(dispatcher) {
             val slots = listOf(SLOT, SLOT.copy(eventId = "e2", status = WorkerSlotStatus.Booked, rawStatus = "Booked"))
             val viewModel = viewModel(workerSlotsApi = FakeWorkerSlotsApi(WorkerSlotsResult.Loaded(slots)))
@@ -376,9 +381,118 @@ class ManualBookingViewModelTest {
             viewModel.selectWorker(WORKER)
             advanceUntilIdle()
 
+            // `26-268` follow-up: the whole default range is fetched once, at the Worker->Date transition
+            // ([ManualBookingStep]'s own doc comment) - [ManualBookingStep.Date] is where it first lands,
+            // not [ManualBookingStep.Slot], which only reads a day out of it once one is chosen.
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Date, wizard.step)
+            assertEquals(listOf(SLOT), wizard.slots)
+        }
+
+    @Test
+    fun `selectDate advances to Slot without a second fetch`() =
+        runTest(dispatcher) {
+            val otherDaySlot = SLOT.copy(eventId = "e2", localDate = "2026-10-03")
+            val viewModel = viewModel(workerSlotsApi = FakeWorkerSlotsApi(WorkerSlotsResult.Loaded(listOf(SLOT, otherDaySlot))))
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+            viewModel.selectService(SERVICE)
+            viewModel.selectWorker(WORKER)
+            advanceUntilIdle()
+
+            viewModel.selectDate(SLOT.localDate)
+
             val wizard = viewModel.state.value as ManualBookingUiState.Wizard
             assertEquals(ManualBookingStep.Slot, wizard.step)
-            assertEquals(listOf(SLOT), wizard.slots)
+            assertEquals(SLOT.localDate, wizard.selectedDate)
+            // Both days' slots stay on the state - `SlotStepBody`'s own job is to filter by `selectedDate`,
+            // not the view model's.
+            assertEquals(listOf(SLOT, otherDaySlot), wizard.slots)
+        }
+
+    @Test
+    fun `back moves to the previous step without losing any already-entered state`() =
+        runTest(dispatcher) {
+            val bookingsApi = FakeBookingsApi(phoneCandidatesResult = PhoneCandidatesResult.Loaded(listOf(CANDIDATE)))
+            val viewModel = viewModel(bookingsApi = bookingsApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseCandidate(CANDIDATE)
+            viewModel.confirmClientStep()
+            // `selectService` is itself a one-motion select-and-advance ([selectService]'s own doc
+            // comment) - this already lands on `Worker`, one step further than the tap that chose it.
+            viewModel.selectService(SERVICE)
+            assertEquals(ManualBookingStep.Worker, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.back()
+
+            val afterFirstBack = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Service, afterFirstBack.step)
+            // The chosen service, the recognised client and the searched phone are all still exactly what
+            // they were - `back` never resets a field, it only moves `step`.
+            assertEquals(SERVICE, afterFirstBack.selectedService)
+            assertEquals(ManualBookingClient.Existing(CANDIDATE), afterFirstBack.client)
+            assertEquals(PHONE, afterFirstBack.phone)
+
+            viewModel.back()
+
+            val afterSecondBack = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Client, afterSecondBack.step)
+            assertEquals(ManualBookingClient.Existing(CANDIDATE), afterSecondBack.client)
+
+            viewModel.back()
+
+            val afterThirdBack = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Phone, afterThirdBack.step)
+            // Still on hand even back on the Phone step - `chooseCandidate` set it, `back` never clears it.
+            assertEquals(ManualBookingClient.Existing(CANDIDATE), afterThirdBack.client)
+        }
+
+    @Test
+    fun `back preserves the fetched slots and the chosen date across Slot and Date`() =
+        runTest(dispatcher) {
+            val otherDaySlot = SLOT.copy(eventId = "e2", localDate = "2026-10-03")
+            val viewModel = viewModel(workerSlotsApi = FakeWorkerSlotsApi(WorkerSlotsResult.Loaded(listOf(SLOT, otherDaySlot))))
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+            viewModel.selectService(SERVICE)
+            viewModel.selectWorker(WORKER)
+            advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
+            assertEquals(ManualBookingStep.Slot, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.back()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Date, wizard.step)
+            // No re-fetch on the way back - both days' slots, and the worker that was chosen, are untouched.
+            assertEquals(listOf(SLOT, otherDaySlot), wizard.slots)
+            assertEquals(WORKER, wizard.selectedWorker)
+        }
+
+    @Test
+    fun `back is a no-op on the first step`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.open()
+            advanceUntilIdle()
+
+            viewModel.back()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Phone, wizard.step)
         }
 
     private class FakeBookingsApi(

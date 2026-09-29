@@ -35,8 +35,9 @@ import javax.inject.Inject
 
 /**
  * `26-268`/`adr/0188`: «Добавить вручную»'s own guided flow — phone-first recognition
- * ([searchPhone]/[chooseCandidate]/[chooseNewClient]), then client → service → master → date/slot →
- * review, ending in [submit]'s own `POST /api/v1/console/bookings/manual`
+ * ([searchPhone]/[chooseCandidate]/[chooseNewClient]), then client → service → master → date → slot →
+ * review ([back] moves either direction one step at a time, state untouched), ending in [submit]'s own
+ * `POST /api/v1/console/bookings/manual`
  * (`docs/backlog/26-268-*.md` §3.4/§3.6). Obtained by [ManualBookingSheet] via `hiltViewModel()` **only
  * while that sheet is open** — the identical Hilt-avoidance-when-ungated shape
  * [RescheduleBookingViewModel]'s own doc comment states, restated here for a sheet reached from every
@@ -300,17 +301,21 @@ internal class ManualBookingViewModel
         /** A tap on a master row - the identical one-motion select-and-advance [selectService] already
          * uses, then triggers the same-worker slot read [RescheduleBookingViewModel.load] already
          * establishes (filtered to [WorkerSlotStatus.Available], the identical reason that class's own doc
-         * comment states: every other status is not a legal target to book into). */
+         * comment states: every other status is not a legal target to book into). Advances straight to
+         * [ManualBookingStep.Date] — the read this kicks off covers every day in the default range at once
+         * ([ManualBookingStep]'s own doc comment), so [ManualBookingStep.Date] and [ManualBookingStep.Slot]
+         * both read from it rather than either one fetching its own slice. */
         fun selectWorker(worker: Worker) {
             val current = mutableState.value as? ManualBookingUiState.Wizard ?: return
             if (current.step != ManualBookingStep.Worker) return
 
             mutableState.update {
                 (it as? ManualBookingUiState.Wizard)?.copy(
-                    step = ManualBookingStep.Slot,
+                    step = ManualBookingStep.Date,
                     selectedWorker = worker,
                     loadingSlots = true,
                     slots = emptyList(),
+                    selectedDate = null,
                     selectedSlot = null,
                     actionError = null,
                 ) ?: it
@@ -349,6 +354,18 @@ internal class ManualBookingViewModel
             }
         }
 
+        /** A tap on a day row - selects and advances to [ManualBookingStep.Slot], the identical one-motion
+         * shape [selectService]/[selectWorker] already use. No fetch here: [localDate] is one of
+         * [ManualBookingUiState.Wizard.slots]'s own [WorkerSlot.localDate] values, already on hand from
+         * [selectWorker]'s own read ([ManualBookingStep]'s own doc comment). */
+        fun selectDate(localDate: String) {
+            mutableState.update { current ->
+                val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
+                if (wizard.step != ManualBookingStep.Date) return@update current
+                wizard.copy(step = ManualBookingStep.Slot, selectedDate = localDate)
+            }
+        }
+
         /** A tap on an available slot - selects and advances straight to Проверьте, the identical
          * one-motion shape [selectService]/[selectWorker] already use; the run's real length is computed
          * server-side at [submit] time, never re-derived here (`docs/backlog/26-268-*.md` §3.4's own
@@ -358,6 +375,25 @@ internal class ManualBookingViewModel
                 val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
                 if (wizard.step != ManualBookingStep.Slot) return@update current
                 wizard.copy(step = ManualBookingStep.Review, selectedSlot = slot)
+            }
+        }
+
+        /**
+         * «Назад» — one step back from wherever the operator is now, every already-entered field left
+         * exactly as it was (author feedback 2026-09-29: the wizard used to have no way back at all, so a
+         * changed mind on an earlier step meant dismissing the whole sheet and starting over). A plain
+         * `copy(step = ...)` is enough because every field this flow accumulates already lives on the one
+         * [ManualBookingUiState.Wizard] record ([ManualBookingUiState]'s own doc comment) — nothing to
+         * reconstruct, nothing to re-fetch; the phone lookup, the client, the chosen service/master/day all
+         * simply stay put and render again exactly as the operator left them. A no-op on
+         * [ManualBookingStep.Phone] (nothing before it to go back to) and on any non-[ManualBookingUiState.Wizard]
+         * state.
+         */
+        fun back() {
+            mutableState.update { current ->
+                val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
+                val previous = ManualBookingStep.entries.getOrNull(wizard.step.ordinal - 1) ?: return@update current
+                wizard.copy(step = previous)
             }
         }
 
