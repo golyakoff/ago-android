@@ -9,6 +9,7 @@ import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
+import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,16 +31,20 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
@@ -49,6 +54,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * `26-268`/`adr/0188`: «Добавить вручную»'s own sheet — obtains [ManualBookingViewModel] here, inside this
@@ -61,6 +67,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * per [BookingsScreen]'s own wiring, is to close this sheet and switch to Утверждены so the new booking is
  * what renders next (`docs/backlog/26-268-*.md` §5.2's own last frame). This composable never touches
  * [ConfirmedBookingsViewModel] itself, the identical separation [RescheduleBookingSheet] already draws.
+ *
+ * `26-268` follow-up (author bug report 2026-09-29): the Date/Time steps are each a scrollable
+ * [LazyColumn], and a bare [ModalBottomSheet] treats any downward drag — including one that starts on that
+ * inner list, since Compose's nested-scroll connection hands the unconsumed part of every scroll gesture up
+ * to the sheet — as a swipe-to-dismiss. That closed the whole wizard on the very gesture a step's own list
+ * needs, forcing a reopen from scratch. `confirmValueChange = { it != SheetValue.Hidden }` on the
+ * [androidx.compose.material3.SheetState] blocks exactly that one settle target (a drag can still reach
+ * [SheetValue.Expanded], which is what lets the list keep scrolling) while leaving every *programmatic*
+ * transition alone — [androidx.compose.material3.SheetState.hide] animates straight to `Hidden` without
+ * asking `confirmValueChange` at all, which is what [closeSheet] below relies on. [onDismissRequest] is
+ * wired to that same [closeSheet] rather than bare [onDismiss], so the system back button and a scrim tap —
+ * the two dismissal paths a `ModalBottomSheet` still drives on its own even with dragging disabled — animate
+ * the sheet away first instead of yanking it out of composition mid-frame.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,9 +95,17 @@ internal fun ManualBookingSheet(
         if (state is ManualBookingUiState.Created) onCreated()
     }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val scope = rememberCoroutineScope()
+    // `26-268` follow-up doc comment above: the one path every dismissal - the X button, back, the scrim -
+    // now shares, so the sheet always animates to `Hidden` before `onDismiss` tears down the view model.
+    val closeSheet: () -> Unit = {
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
+    }
+
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = closeSheet,
+        sheetState = sheetState,
     ) {
         ManualBookingBody(
             state = state,
@@ -97,6 +124,7 @@ internal fun ManualBookingSheet(
             onSelectSlot = viewModel::selectSlot,
             onSubmit = viewModel::submit,
             onBack = viewModel::back,
+            onClose = closeSheet,
         )
     }
 }
@@ -119,13 +147,26 @@ private fun ManualBookingBody(
     onSelectSlot: (WorkerSlot) -> Unit,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
+    onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        Text(
-            text = stringResource(R.string.bookings_manual_title),
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
+        // `26-268` follow-up: the title shares its row with the sheet's own explicit close control now
+        // that a downward drag on the Date/Time steps' own list no longer dismisses it (`ManualBookingSheet`'s
+        // own doc comment) - `weight(1f)` on the title keeps the [IconButton] pinned to the trailing edge
+        // regardless of how long a given title runs.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.bookings_manual_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+            )
+            IconButton(onClick = onClose) {
+                Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
+            }
+        }
         if (state is ManualBookingUiState.Wizard) {
             Text(
                 text =

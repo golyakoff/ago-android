@@ -177,6 +177,29 @@ public object AgoIcons {
             },
         )
 
+    /**
+     * `26-268` follow-up (author bug report 2026-09-29): a sheet's own explicit close control, drawn once
+     * this app has swipe-dismiss-disabled `ModalBottomSheet`s that need a control of their own — see
+     * [ago.chat.android.bookings.ManualBookingSheet]'s own doc comment. Feather's own `x` glyph — two
+     * crossing diagonals, NW→SE then NE→SW — transcribed verbatim, the same "borrow a Feather outline that
+     * already matches this family's stroke treatment" precedent [Call]/[Tag] above already state, rather
+     * than inventing a new cross shape.
+     */
+    public val Close: ImageVector =
+        strokeIcon(
+            "AgoClose",
+            // M18 6L6 18
+            {
+                moveTo(18f, 6f)
+                lineTo(6f, 18f)
+            },
+            // M6 6l12 12
+            {
+                moveTo(6f, 6f)
+                lineTo(18f, 18f)
+            },
+        )
+
     /** `i-clip` — the composer's attach control, replacing its literal `"📎"`. */
     public val Clip: ImageVector =
         strokeIcon(

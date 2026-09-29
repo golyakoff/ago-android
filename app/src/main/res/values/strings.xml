@@ -100,6 +100,13 @@
     <string name="action_back">Назад</string>
 
     <!--
+        `26-268` follow-up (author bug report 2026-09-29): a bottom sheet's own explicit close control -
+        the accessible name for the `AgoIcons.Close` icon button every scrollable sheet now carries once
+        swipe-to-dismiss is disabled on it (see `ManualBookingSheet`'s own doc comment).
+    -->
+    <string name="action_close">Закрыть</string>
+
+    <!--
         `26-14`: the conversation list - the first real screen. "Мои"/"Ожидают" are the segmented
         control's own labels, verbatim from `docs/backlog/26-14-*.md`'s own Scope - shorter than the
         console's full rail headings ("Назначено мне"/"Ожидание") because a phone's segmented control

@@ -25,12 +25,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -67,6 +71,12 @@ import java.util.Locale
  * [onOpenDialog] is passed straight through with no handling here — the identical
  * [ago.chat.android.shell.PendingConversationOpener] call [ConfirmedBookingsBody] already makes, reused
  * rather than a second navigation mechanism grown just for this hub.
+ *
+ * `26-268` follow-up (author bug report 2026-09-29): the Предстоящие/Прошедшие segment renders its bookings
+ * as a scrollable [LazyColumn] ([ClientDetailLoadedBody]), so this sheet carries the identical
+ * `confirmValueChange`/[closeSheet] fix [ManualBookingSheet]'s own doc comment states in full — see that
+ * comment for why a drag can no longer settle at [SheetValue.Hidden] while [closeSheet] (the X button, back,
+ * a scrim tap) still closes it cleanly via [androidx.compose.material3.SheetState.hide].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,9 +99,15 @@ internal fun ClientDetailSheet(
     // whole read the moment its own write finished.
     LaunchedEffect(contact.customerId) { viewModel.open(contact) }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val scope = rememberCoroutineScope()
+    val closeSheet: () -> Unit = {
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
+    }
+
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = closeSheet,
+        sheetState = sheetState,
     ) {
         ClientDetailBody(
             state = state,
@@ -102,12 +118,48 @@ internal fun ClientDetailSheet(
             onOpenDialog = onOpenDialog,
             canCancelBooking = canCancelBooking,
             onCancelBooking = viewModel::cancelBooking,
+            onClose = closeSheet,
         )
     }
 }
 
 @Composable
 private fun ClientDetailBody(
+    state: ClientDetailUiState,
+    onRetry: () -> Unit,
+    onReveal: () -> Unit,
+    onConfirmPhone: () -> Unit,
+    onSegmentSelected: (ClientDetailSegment) -> Unit,
+    onOpenDialog: (String) -> Unit,
+    canCancelBooking: Boolean,
+    onCancelBooking: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    // `26-268` follow-up: one explicit close control above every state arm - unlike `ManualBookingSheet`'s
+    // own title row, this sheet has no single title rendered across every arm (`Loading`/`NotConfigured`
+    // draw no heading at all), so the X gets a bare header row of its own rather than riding a title that
+    // does not exist in every state.
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp), horizontalArrangement = Arrangement.End) {
+            IconButton(onClick = onClose) {
+                Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
+            }
+        }
+        ClientDetailStateBody(
+            state = state,
+            onRetry = onRetry,
+            onReveal = onReveal,
+            onConfirmPhone = onConfirmPhone,
+            onSegmentSelected = onSegmentSelected,
+            onOpenDialog = onOpenDialog,
+            canCancelBooking = canCancelBooking,
+            onCancelBooking = onCancelBooking,
+        )
+    }
+}
+
+@Composable
+private fun ClientDetailStateBody(
     state: ClientDetailUiState,
     onRetry: () -> Unit,
     onReveal: () -> Unit,
