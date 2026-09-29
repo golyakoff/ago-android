@@ -84,8 +84,9 @@ class DeviceStorageDisclosureTest {
 
         composeTestRule.onNodeWithText("Ещё").performClick()
 
-        // No `site:configure` - «Справка» is gone, but Администрирование itself stays: its unconditional
-        // rows (Операторы и роли, Тариф и оплата) keep the section header on screen.
+        // No `site:configure` - «Справка» is gone, and so is «Тариф и оплата» (`26-301`, the same gate),
+        // but Администрирование itself stays: its unconditional «Операторы и роли» row keeps the section
+        // header on screen.
         composeTestRule.onNodeWithText("Справка").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()

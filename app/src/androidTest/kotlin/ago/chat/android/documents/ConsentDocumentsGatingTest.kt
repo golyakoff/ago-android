@@ -29,10 +29,12 @@ import org.junit.runner.RunWith
  * `hiltViewModel()` is never reached.
  *
  * **Unlike its two siblings, Администрирование itself never disappears without `site:configure`** —
- * `ADMINISTRATION_OPERATORS_ROW_ID`/`ADMINISTRATION_BILLING_ROW_ID` are unconditional rows in that same
- * section (`MoreScreen.kt`'s own `buildMoreRows`), so only «Документы согласий» itself is hidden, never
- * the section header. The negative case below asserts the header (and one of its unconditional siblings)
- * survives specifically to keep that distinct from `CannedResponsesGatingTest`'s/`TagsGatingTest`'s own
+ * `ADMINISTRATION_OPERATORS_ROW_ID` is an unconditional row in that same section (`MoreScreen.kt`'s own
+ * `buildMoreRows`), so only «Документы согласий» itself is hidden, never the section header. (`26-301`
+ * moved «Тариф и оплата» — `ADMINISTRATION_BILLING_ROW_ID` — behind the same `site:configure` gate; it no
+ * longer keeps the section alive on its own, but «Операторы и роли» still does, so this claim still holds.)
+ * The negative case below asserts the header (and its one remaining unconditional row) survives
+ * specifically to keep that distinct from `CannedResponsesGatingTest`'s/`TagsGatingTest`'s own
  * "the whole section disappears" assertion — Автоматизация has no unconditional row of its own, so it
  * disappears entirely once its last gated row does; Администрирование does not.
  *
@@ -113,9 +115,10 @@ class ConsentDocumentsGatingTest {
         composeTestRule.onNodeWithText("Ещё").performClick()
 
         // No `site:configure` - «Документы согласий» is gone, but Администрирование itself stays: its
-        // other two rows (Операторы и роли, Тариф и оплата) are unconditional, this file's own doc
-        // comment states why this case cannot mirror `CannedResponsesGatingTest`'s/`TagsGatingTest`'s own
-        // "the whole section disappears" assertion.
+        // «Операторы и роли» row is unconditional (this file's own doc comment states why this case cannot
+        // mirror `CannedResponsesGatingTest`'s/`TagsGatingTest`'s own "the whole section disappears"
+        // assertion). «Тариф и оплата» is gone too now (`26-301`) - `BillingGatingTest` proves that row's
+        // own with/without-permission cases.
         composeTestRule.onNodeWithText("Документы согласий").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()
