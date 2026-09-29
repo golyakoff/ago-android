@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -209,8 +209,12 @@ private fun ClientDetailBody(
     // takes, before the avatar header even starts. [ClientDetailLoadedBody] now opens with a much smaller
     // top inset instead (see that composable's own doc comment) so the header sits near this row rather
     // than a full close-button's-height-plus-24dp below it.
+    //
+    // `26-298` (live-testing screenshot): this row's own top padding is gone too - the drag handle
+    // [ModalBottomSheet] already draws above this row supplies its own clearance, so a further explicit
+    // gap here just widened the space between the drag handle and the header below for no visual gain.
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp), horizontalArrangement = Arrangement.End) {
+        Row(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.End) {
             IconButton(onClick = onClose) {
                 Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
             }
@@ -327,7 +331,10 @@ private fun ClientDetailLoadedBody(
     // bottom one too - `ClientDetailBody`'s own doc comment on its close row explains the top half; the
     // bottom half is the identical "the last visible content should not float in its own extra 24dp"
     // observation, restated for the sheet's own end rather than its start.
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp)) {
+    //
+    // `26-298` (live-testing screenshot): the top inset is trimmed again, from 4dp to 0dp - the close
+    // row above already supplies the only clearance this header needs (see that row's own doc comment).
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // `26-269` polish (B2): the header's own 48dp avatar - the identical three-way fallback
             // [ContactsScreen.kt]'s own 42dp list-row copy already draws, through the one shared
@@ -487,7 +494,7 @@ private fun ClientDetailLoadedBody(
             // gone - the card path below already offers it). Both draw the chevron unconditionally,
             // signalling either destination alike.
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().height(280.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = ClientDetailBookingListMaxHeight),
                 contentPadding = PaddingValues(top = 8.dp),
             ) {
                 items(visible, key = { it.bookingId }) { booking ->
@@ -687,6 +694,21 @@ private val ClientDetailAvatarSize = 48.dp
 // naming its own gap beside its own citation, the same restraint that constant's own doc comment states).
 private val ClientDetailAvatarGap = 13.dp
 
+// `26-298` (live-testing screenshot): the bookings list used to carry a hard `.height(280.dp)` — a fixed
+// box the sheet reserved regardless of how many rows `visible` actually held, which is exactly why a
+// client with one booking still opened a sheet with a large empty tail below it. `heightIn(max = ...)`
+// keeps the same 280dp ceiling (so a client with many bookings still gets a scrolling list rather than an
+// ever-growing sheet) while letting a short list wrap to its own content height instead of padding out to
+// the ceiling every time.
+private val ClientDetailBookingListMaxHeight = 280.dp
+
+/**
+ * `26-298` (live-testing screenshot): «Подтвердить телефон» used to sit as a [TextButton] inline beside
+ * the warning text, indented past the icon by [Column.weight] — a small, left-aligned pill that read as
+ * crooked rather than as the banner's own call to action. It is now an [OutlinedButton] of its own, drawn
+ * full width in a second row *under* the icon+text row, sized to the banner's own content width (the
+ * identical width every other action in this sheet — the call/dialog/record row below — already spans).
+ */
 @Composable
 private fun ConfirmPhoneBanner(
     confirming: Boolean,
@@ -697,35 +719,40 @@ private fun ConfirmPhoneBanner(
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-            // `26-268` follow-up (author feedback 2026-09-29): the circled Material Symbols outlined
-            // `error` glyph [AgoIcons.ErrorCircle] already draws for exactly this "needs attention" case
-            // — see that icon's own doc comment — not the bare-stem-and-dot [AgoIcons.Exclamation], so
-            // this banner's own icon reads the same shape as the identical warning on the Клиенты list row
-            // ([ContactCard]'s own phone line in `ContactsScreen.kt`).
-            Icon(
-                imageVector = AgoIcons.ErrorCircle,
-                contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
-                tint = agoStatusColors().warning,
-                modifier = Modifier.padding(end = 8.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                // `26-268` follow-up (author feedback 2026-09-29): the circled Material Symbols outlined
+                // `error` glyph [AgoIcons.ErrorCircle] already draws for exactly this "needs attention" case
+                // — see that icon's own doc comment — not the bare-stem-and-dot [AgoIcons.Exclamation], so
+                // this banner's own icon reads the same shape as the identical warning on the Клиенты list row
+                // ([ContactCard]'s own phone line in `ContactsScreen.kt`).
+                Icon(
+                    imageVector = AgoIcons.ErrorCircle,
+                    contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
+                    tint = agoStatusColors().warning,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
                 Text(
                     text = stringResource(R.string.bookings_client_detail_confirm_phone_banner),
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onConfirmPhone, enabled = !confirming, modifier = Modifier.padding(top = 4.dp)) {
-                    Text(
-                        text =
-                            stringResource(
-                                if (confirming) {
-                                    R.string.bookings_client_detail_confirming_phone
-                                } else {
-                                    R.string.bookings_client_detail_confirm_phone_action
-                                },
-                            ),
-                    )
-                }
+            }
+            OutlinedButton(
+                onClick = onConfirmPhone,
+                enabled = !confirming,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            if (confirming) {
+                                R.string.bookings_client_detail_confirming_phone
+                            } else {
+                                R.string.bookings_client_detail_confirm_phone_action
+                            },
+                        ),
+                )
             }
         }
     }
