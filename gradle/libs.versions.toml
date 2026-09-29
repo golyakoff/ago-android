@@ -108,7 +108,7 @@ appauth = "0.11.1"
 # builds with `allWarningsAsErrors` — a deprecated API is a build failure here, not a warning.
 # 1.1.0-alpha06 is the release that introduced the replacement (`MasterKey.Builder`) and is the one
 # Google's own current documentation samples.
-securityCrypto = "1.1.0-alpha06"
+securityCrypto = "1.1.0"
 
 
 # `26-08`: the format gate. This is a build-time Gradle plugin wrapping the `ktlint` CLI, not a
