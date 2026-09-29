@@ -39,7 +39,7 @@ composeBom = "2026.09.00"
 
 # Same wall as the Compose BOM: `core-ktx` 1.19.0 is compiled against `compileSdk` 37 and refuses
 # to link under AGP 8.x. It is in this bump for that reason, not because it was due.
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 lifecycleRuntimeKtx = "2.8.6"
 activityCompose = "1.9.2"
 
