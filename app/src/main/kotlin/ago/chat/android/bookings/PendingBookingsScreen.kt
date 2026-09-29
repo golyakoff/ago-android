@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.businessLocalWeekdayOrNull
 import ago.chat.android.core.domain.bookings.confirmationCountdown
 import ago.chat.android.core.domain.bookings.pendingBookingIdentity
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -297,7 +298,10 @@ private fun PendingBookingDetailBody(
                 labelStyle = detailLabelStyle,
                 modifier = Modifier.padding(vertical = 12.dp),
             ) {
-                Text(text = phone, style = detailValueStyle)
+                // `26-307`: a masked value (`booking.masked`) never has the full 10 digits, so
+                // [formatRuPhoneForDisplay] passes it through unchanged - only a real, complete number is
+                // reformatted.
+                Text(text = formatRuPhoneForDisplay(phone), style = detailValueStyle)
             }
         }
 

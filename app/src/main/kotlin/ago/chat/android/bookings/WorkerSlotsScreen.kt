@@ -7,6 +7,7 @@ import ago.chat.android.core.domain.workerslots.WorkerSlotStatus
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
 import ago.chat.android.ui.components.SectionLabel
 import ago.chat.android.ui.components.VisitorIdentityText
+import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -214,7 +215,9 @@ private fun WorkerSlotRow(
                     )
                     slot.phone?.let { phone ->
                         Text(
-                            text = phone,
+                            // `26-307`: a masked value (`slot.masked`) never has the full 10 digits, so
+                            // [formatRuPhoneForDisplay] passes it through unchanged.
+                            text = formatRuPhoneForDisplay(phone),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 8.dp),
                         )

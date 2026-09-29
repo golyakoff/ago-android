@@ -188,4 +188,69 @@ class RuPhoneFieldTest {
         assertEquals("+7 ".length, transformed.offsetMapping.originalToTransformed(0))
         assertEquals(0, transformed.offsetMapping.transformedToOriginal(0))
     }
+
+    // ─── formatRuPhoneForDisplay: 26-307's own read-only counterpart to the mask above ─────────────────
+
+    @Test
+    fun `a canonical plus-7 number formats into the grouped display shape`() {
+        assertEquals("+7 (916) 222-22-22", formatRuPhoneForDisplay("+79162222222"))
+    }
+
+    @Test
+    fun `a bare 10 national digits with no plus also formats`() {
+        assertEquals("+7 (921) 123-45-67", formatRuPhoneForDisplay("9211234567"))
+    }
+
+    @Test
+    fun `domestic dialing spellings without a plus normalise the same as the mask's own input path`() {
+        assertEquals("+7 (921) 123-45-67", formatRuPhoneForDisplay("89211234567"))
+        assertEquals("+7 (921) 123-45-67", formatRuPhoneForDisplay("79211234567"))
+    }
+
+    @Test
+    fun `a plus-7 number with existing punctuation or spaces still formats`() {
+        assertEquals("+7 (921) 123-45-67", formatRuPhoneForDisplay("+7 921 123-45-67"))
+    }
+
+    @Test
+    fun `a foreign number is never mangled into a fake plus-7, even at the same digit count`() {
+        // The author's own real sample: Norway's +47 country code plus an 8-digit subscriber number runs
+        // exactly 10 digits once the "+" is stripped - the identical length a bare Russian national number
+        // would have. Only the explicit, different "+47" prefix (not "+7") tells the two apart; formatting
+        // must never fall back to digit-counting once a real, differing country code is present.
+        assertEquals("+4758655828", formatRuPhoneForDisplay("+4758655828"))
+    }
+
+    @Test
+    fun `other foreign numbers pass through unchanged regardless of shape`() {
+        assertEquals("+12025550123", formatRuPhoneForDisplay("+12025550123"))
+        assertEquals("+442071234567", formatRuPhoneForDisplay("+442071234567"))
+    }
+
+    @Test
+    fun `formatting an already-formatted number is idempotent`() {
+        val formatted = formatRuPhoneForDisplay("+79162222222")
+        assertEquals(formatted, formatRuPhoneForDisplay(formatted))
+    }
+
+    @Test
+    fun `an incomplete or malformed value passes through unchanged`() {
+        assertEquals("+7", formatRuPhoneForDisplay("+7"))
+        assertEquals("+79211234", formatRuPhoneForDisplay("+79211234"))
+        assertEquals("921", formatRuPhoneForDisplay("921"))
+    }
+
+    @Test
+    fun `a masked server preview is never reformatted into a fake full number`() {
+        // The dotted partial preview a reveal control still gates ("+7 ··· 08") - far fewer than 10 real
+        // digits once the bullets are discarded, so it is exactly as unrecognisable as any other malformed
+        // value, never coaxed into looking like a complete number.
+        assertEquals("+7 ··· 08", formatRuPhoneForDisplay("+7 ··· 08"))
+    }
+
+    @Test
+    fun `blank and empty values pass through unchanged`() {
+        assertEquals("", formatRuPhoneForDisplay(""))
+        assertEquals("   ", formatRuPhoneForDisplay("   "))
+    }
 }
