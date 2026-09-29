@@ -490,13 +490,16 @@
 
     <string name="bookings_manual_entry_action">Add manually</string>
     <string name="bookings_manual_title">New booking</string>
-    <string name="bookings_manual_step_format">Step %1$d of 6 · %2$s</string>
+    <string name="bookings_manual_step_format">Step %1$d of 7 · %2$s</string>
     <string name="bookings_manual_step_phone">Phone</string>
     <string name="bookings_manual_step_client">Client</string>
     <string name="bookings_manual_step_service">Service</string>
     <string name="bookings_manual_step_worker">Master</string>
-    <string name="bookings_manual_step_slot">Date and time</string>
+    <string name="bookings_manual_step_date">Date</string>
+    <string name="bookings_manual_step_slot">Time</string>
     <string name="bookings_manual_step_review">Review</string>
+    <string name="bookings_manual_back_action">Back</string>
+    <string name="bookings_manual_date_slot_count_format">%1$d available</string>
     <string name="bookings_manual_phone_label">Client phone</string>
     <string name="bookings_manual_phone_placeholder">+1 555 000-0000</string>
     <string name="bookings_manual_phone_hint">Phone first — we\'ll show whether this client already exists. The search fires on its own once the number is complete.</string>

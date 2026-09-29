@@ -857,18 +857,22 @@
     <!--
         `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight
         into `Booked`, no conversation (`docs/backlog/26-268-*.md` §3.4/§5.2). A header action on Записи,
-        gated on `booking:create` alone, opening a six-step guided sheet: phone (recognises an existing
-        client) → client → service → master → date/slot → review.
+        gated on `booking:create` alone, opening a seven-step guided sheet: phone (recognises an existing
+        client) → client → service → master → date → slot → review. Date/slot used to be one combined step
+        until author feedback 2026-09-29 split it in two - see `ManualBookingStep`'s own doc comment.
     -->
     <string name="bookings_manual_entry_action">Добавить вручную</string>
     <string name="bookings_manual_title">Новая запись</string>
-    <string name="bookings_manual_step_format">Шаг %1$d из 6 · %2$s</string>
+    <string name="bookings_manual_step_format">Шаг %1$d из 7 · %2$s</string>
     <string name="bookings_manual_step_phone">Телефон</string>
     <string name="bookings_manual_step_client">Клиент</string>
     <string name="bookings_manual_step_service">Услуга</string>
     <string name="bookings_manual_step_worker">Мастер</string>
-    <string name="bookings_manual_step_slot">Дата и время</string>
+    <string name="bookings_manual_step_date">Дата</string>
+    <string name="bookings_manual_step_slot">Время</string>
     <string name="bookings_manual_step_review">Проверьте</string>
+    <string name="bookings_manual_back_action">Назад</string>
+    <string name="bookings_manual_date_slot_count_format">Свободно: %1$d</string>
     <string name="bookings_manual_phone_label">Телефон клиента</string>
     <string name="bookings_manual_phone_placeholder">+7 921 000-00-00</string>
     <string name="bookings_manual_phone_hint">Сначала номер — по нему покажем, есть ли уже такой клиент. Поиск срабатывает сам, как только номер введён полностью.</string>
