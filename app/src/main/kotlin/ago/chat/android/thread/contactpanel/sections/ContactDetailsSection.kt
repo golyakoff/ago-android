@@ -4,7 +4,9 @@ import ago.chat.android.R
 import ago.chat.android.core.domain.contactdetails.ContactDetail
 import ago.chat.android.thread.contactpanel.ContactDetailsSectionState
 import ago.chat.android.thread.contactpanel.RowActionError
+import ago.chat.android.ui.components.RuPhoneField
 import ago.chat.android.ui.components.ScrimmedDropdownMenu
+import ago.chat.android.ui.components.isRuPhoneComplete
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.layout.Arrangement
@@ -83,9 +85,10 @@ import androidx.compose.ui.unit.em
  * [TagsSection]'s own `AddTagControl` already takes for its «+ метка» control. A `Name` row is never
  * assessable (console parity, `assessable` below) — its menu, when drawn, only ever offers «Изменить».
  *
- * Tapping «Изменить» replaces the value line with [ContactDetailEditor] — a plain [OutlinedTextField] (the
- * phone keyboard for a `Phone` row, the email keyboard for `Email` — design Q3: **not** the console's own
- * `+7 PhoneInput`, a separate item if ever wanted) plus «Сохранить»/«Отмена», driven entirely by
+ * Tapping «Изменить» replaces the value line with [ContactDetailEditor] — [RuPhoneField] for a `Phone` row
+ * (`26-305`: the shared masked `+7 (XXX) XXX-XX-XX` control design Q3 originally deferred as "a separate
+ * item if ever wanted" — this item is that item), a plain [OutlinedTextField] with the email keyboard for
+ * `Email`, plain text otherwise, plus «Сохранить»/«Отмена», driven entirely by
  * [ContactDetailsSectionState.Loaded.editingId]/[ContactDetailsSectionState.Loaded.editDraft] so only one
  * row can ever be mid-edit. The assessment word — «Подтверждено» (with [AgoIcons.Check], never a colour
  * alone) / «Недействительно» (`error`-coloured word, the identical "a word, never a colour alone" rule
@@ -268,11 +271,22 @@ private fun ContactDetailRow(
     }
 }
 
-/** The row's own «Изменить» editor - a plain [OutlinedTextField] (design Q3: the phone keyboard for a
- * `Phone` row, the email keyboard for `Email`, never the console's own `+7 PhoneInput`) plus «Сохранить»
- * (disabled while blank or [saving]) and «Отмена». Form-over-row: this composable *replaces* the row's
- * value line rather than opening a dialog, the app's own one-card-two-modes idiom
- * (`MastersBody`'s/`ServicesScreen`'s own `WorkerEditForm`/`ServiceEditForm` doc comments). */
+/**
+ * The row's own «Изменить» editor - [RuPhoneField] for a `Phone` row, otherwise a plain
+ * [OutlinedTextField] (design Q3: the email keyboard for `Email`, plain text for `Name`) - plus
+ * «Сохранить» (disabled while [saving] or the draft fails [isEditDraftComplete]) and «Отмена».
+ * Form-over-row: this composable *replaces* the row's value line rather than opening a dialog, the app's
+ * own one-card-two-modes idiom (`MastersBody`'s/`ServicesScreen`'s own `WorkerEditForm`/`ServiceEditForm`
+ * doc comments).
+ *
+ * `26-305` reverses this file's own former stance here: a `Phone` row used to read "never a client-side
+ * format mask, since neither this port nor the server enforces one beyond non-empty" - the shared
+ * [RuPhoneField] this item introduces is exactly that mask, adopted here for the identical reason
+ * [ago.chat.android.bookings.ManualBookingScreen]'s own phone step adopts it (one control, both sites,
+ * `docs/backlog/26-303-phone-input-research.md` §6). The server-side contract this comment used to cite
+ * is unchanged - [ContactPanelViewModel.saveEditContactDetail] still forwards whatever the draft holds
+ * verbatim - only now that draft is always a clean `+7XXXXXXXXXX`, not the user's own punctuation.
+ */
 @Composable
 private fun ContactDetailEditor(
     kind: String,
@@ -283,19 +297,28 @@ private fun ContactDetailEditor(
     onCancel: () -> Unit,
 ) {
     Column {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = onDraftChanged,
-            singleLine = true,
-            enabled = !saving,
-            keyboardOptions = KeyboardOptions(keyboardType = editorKeyboardType(kind)),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (kind == "Phone") {
+            RuPhoneField(
+                value = draft,
+                onValueChange = onDraftChanged,
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChanged,
+                singleLine = true,
+                enabled = !saving,
+                keyboardOptions = KeyboardOptions(keyboardType = editorKeyboardType(kind)),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Row(
             modifier = Modifier.padding(top = RowSpacing),
             horizontalArrangement = Arrangement.spacedBy(RowSpacing),
         ) {
-            TextButton(onClick = onSave, enabled = !saving && draft.isNotBlank()) {
+            TextButton(onClick = onSave, enabled = !saving && isEditDraftComplete(kind, draft)) {
                 Text(
                     text =
                         stringResource(
@@ -310,16 +333,25 @@ private fun ContactDetailEditor(
     }
 }
 
-/** Design §3: `Phone` → the phone keyboard, `Email` → the email keyboard, every other kind (`Name`) →
- * the plain keyboard - never a client-side format mask, since neither this port nor the server enforces
- * one beyond non-empty ([ago.chat.android.core.domain.contactdetails.ContactDetailsApi.editContactDetail]'s
- * own doc comment). */
+/** Design §3: `Email` → the email keyboard, every other non-`Phone` kind (`Name`) → the plain keyboard.
+ * `Phone` is handled by [RuPhoneField] instead, which sets `KeyboardType.Phone` itself - this function is
+ * never called with `"Phone"` (`26-305`; see [ContactDetailEditor]'s own doc comment for why a client-side
+ * mask is no longer "never" here). */
 private fun editorKeyboardType(kind: String): KeyboardType =
     when (kind) {
-        "Phone" -> KeyboardType.Phone
         "Email" -> KeyboardType.Email
         else -> KeyboardType.Text
     }
+
+/** «Сохранить»'s own gate: a `Phone` row needs [isRuPhoneComplete] - all 10 national digits, not merely
+ * *some* text (`26-305`, the identical "gate on completeness, not `isNotBlank()`" rule
+ * [ago.chat.android.bookings.ManualBookingScreen]'s own «Найти клиента» now follows) - every other kind
+ * keeps the original non-blank gate, since neither `Name` nor `Email` has a format this section
+ * validates. */
+private fun isEditDraftComplete(
+    kind: String,
+    draft: String,
+): Boolean = if (kind == "Phone") isRuPhoneComplete(draft) else draft.isNotBlank()
 
 /** The row `⋮` - drawn only when at least one of [showEdit]/[showConfirm]/[showMarkInvalid] applies (an
  * empty menu is never drawn, the identical rule

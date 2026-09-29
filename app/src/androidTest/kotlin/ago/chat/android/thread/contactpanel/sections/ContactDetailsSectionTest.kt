@@ -150,7 +150,11 @@ class ContactDetailsSectionTest {
             )
         }
 
-        composeTestRule.onNodeWithText("+7 900 111 22 33").assertIsDisplayed()
+        // `26-305`: the row editor is now `RuPhoneField` for a `Phone` row, which renders its own
+        // `+7 (XXX) XXX-XX-XX` mask rather than echoing the draft's own spacing verbatim - the 10 digits
+        // `editDraft` carries ("9001112233") come back out through that mask, not through the plain
+        // `OutlinedTextField` this test used to see.
+        composeTestRule.onNodeWithText("+7 (900) 111-22-33").assertIsDisplayed()
         composeTestRule.onNodeWithText("Сохранить").assertIsDisplayed()
         composeTestRule.onNodeWithText("Отмена").assertIsDisplayed()
     }
