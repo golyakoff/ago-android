@@ -930,12 +930,14 @@
          "first" and a "last" that happen to be the same day. -->
     <string name="bookings_client_detail_single_visit_label">Единственный визит</string>
 
-    <!-- `26-283`/`26-284` (item 4/8): the client-detail hub's own action-button row «+ Записать» - opens
-         the manual-booking wizard pre-bound to this client (`ManualBookingViewModel.open`'s own
-         `prefillClient` doc comment), landing on service selection rather than phone entry. The icon
-         supplies the "+"; this string is the bare verb, the identical split `bookings_manual_entry_action`
-         (icon-only header button, no text at all) has no need to make but this labeled button does. -->
-    <string name="bookings_client_detail_record_action">Записать</string>
+    <!-- `26-283`/`26-284` (item 4/8), relabelled `26-308` (item 3): the client-detail hub's own manual-
+         booking action - opens the manual-booking wizard pre-bound to this client
+         (`ManualBookingViewModel.open`'s own `prefillClient` doc comment), landing on service selection
+         rather than phone entry. The icon supplies the "+"; this string is the verb phrase. `26-308` widens
+         it from the bare «Записать» to «Добавить запись» now that this button is the sheet's one remaining
+         action (`Позвонить`/`Диалог` moved to icon buttons on the phone row) and needs to read as a
+         complete call to action on its own, not a fragment beside a sibling button. -->
+    <string name="bookings_client_detail_add_booking_action">Добавить запись</string>
 
     <!--
         `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight

@@ -17,6 +17,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -227,16 +227,18 @@ private fun ClientDetailBody(
     // (`ClientDetailCloseButtonRaise`'s own doc comment). Pulling this row up by exactly that reserved
     // height puts the close button flush with the drag-handle line instead of a further row below it,
     // without touching the drag handle itself (still drawn, still centered) or this row's own layout.
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier.fillMaxWidth().padding(end = 8.dp).offset(y = -ClientDetailCloseButtonRaise),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            IconButton(onClick = onClose) {
-                Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
-            }
-        }
+    //
+    // `26-308` (author screenshot): a `Column` still left a large *dead* gap between the (now-raised)
+    // close row and the header below it, because [Modifier.offset] only shifts where a child is *drawn* -
+    // it never changes the space a `Column` reserves for that child among its siblings
+    // (https://developer.android.com/reference/kotlin/androidx/compose/foundation/layout/package-summary#(androidx.compose.ui.Modifier).offset(androidx.compose.ui.unit.Dp,androidx.compose.ui.unit.Dp)).
+    // So the close row's own un-offset height (a full `IconButton` touch target) stayed reserved at the
+    // top of the `Column` exactly where it used to sit, and the header started right after *that*, below
+    // both the reserved slot and the row's now-higher drawn position - the visible gap this item reports.
+    // A `Box` has no such per-child reserved flow: the close row is drawn wherever [Modifier.offset] and
+    // [Alignment.TopEnd] put it (spilling upward over the drag handle exactly as before), while the header
+    // - the other, unshifted child - starts flush at the sheet's own content top with no slot left behind.
+    Box(modifier = Modifier.fillMaxWidth()) {
         ClientDetailStateBody(
             state = state,
             onRetry = onRetry,
@@ -248,6 +250,19 @@ private fun ClientDetailBody(
             onCancelBooking = onCancelBooking,
             onOpenManualBooking = onOpenManualBooking,
         )
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopEnd)
+                    .padding(end = 8.dp)
+                    .offset(y = -ClientDetailCloseButtonRaise),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(imageVector = AgoIcons.Close, contentDescription = stringResource(R.string.action_close))
+            }
+        }
     }
 }
 
@@ -299,12 +314,15 @@ private fun ClientDetailStateBody(
 
 /**
  * `26-269`/`26-284`: `docs/backlog/26-269-clients-redesign.md` §4's own hub layout, in the order the
- * `26-284` polish pass settled on — header (avatar, name + inline warning glyph, phone + reveal), pills
- * (returning/count, no-show) directly under the phone, then «Подтвердить телефон» when it applies, then
- * the action-button row (`Позвонить`/`Диалог`/`+ Записать`), the Прошедшие/Предстоящие segmented control,
- * that segment's own booking list, and the SMS-confirmed/visit metadata rows at the bottom. `26-284`
- * (item 7/10) moved the pills above the banner and the button row (they used to sit *below* the banner,
- * `Позвонить` used to live on the phone line itself, and there was no `Диалог`/`+ Записать` row at all).
+ * `26-284` polish pass settled on — header (avatar, name, phone + reveal), pills (returning/count,
+ * no-show) directly under the phone, then «Подтвердить телефон» when it applies, then the
+ * «+ Добавить запись» button, the Прошедшие/Предстоящие segmented control, that segment's own booking
+ * list, and the SMS-confirmed/visit metadata rows at the bottom. `26-284` (item 7/10) moved the pills
+ * above the banner and the button row (they used to sit *below* the banner). `26-308` moved
+ * `Позвонить`/`Диалог` off that row and onto the phone line itself as trailing icon buttons, dropped the
+ * inline warning glyph beside the name, and left «+ Добавить запись» (renamed from «+ Записать») as the
+ * row's one remaining, now accent-styled, action — see that item's own doc comments on the phone row, the
+ * name row and the button below for the reasoning behind each.
  */
 @Composable
 private fun ClientDetailLoadedBody(
@@ -361,35 +379,35 @@ private fun ClientDetailLoadedBody(
             Spacer(modifier = Modifier.width(ClientDetailAvatarGap))
             Column(modifier = Modifier.weight(1f)) {
                 val displayName = contact.displayName
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (displayName != null) {
-                        Text(text = displayName, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                    } else {
-                        VisitorIdentityText(
-                            id = contact.customerId,
-                            emojiCreature = contact.emojiCreature,
-                            emojiFood = contact.emojiFood,
-                            // `26-279` (A9): the identical further fallback `ContactsScreen.kt`'s own row
-                            // now passes - `Contact.phone` as the title plus «Без имени», never the raw
-                            // `customerId` this header used to leak through.
-                            phone = contact.phone,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        )
-                    }
-                    // `26-269` polish (B7): the identical warning glyph the phone line and
-                    // [ConfirmPhoneBanner] already draw, restated inline beside the name itself - the
-                    // mockup's own header treats an unconfirmed phone as worth this second, harder-to-miss
-                    // signal *in addition to* the banner below, not instead of it.
-                    if (contact.phoneNeedsAttention) {
-                        Icon(
-                            imageVector = AgoIcons.ErrorCircle,
-                            contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
-                            tint = agoStatusColors().warning,
-                            modifier = Modifier.padding(start = 8.dp).size(20.dp),
-                        )
-                    }
+                // `26-308` (item 4, author screenshot): the inline warning glyph this header used to draw
+                // beside the name - [ConfirmPhoneBanner]'s own doc comment used to justify it as a "second,
+                // harder-to-miss signal *in addition to* the banner below" - is gone. The banner is now the
+                // header's only unconfirmed-phone signal, so a phone that needs attention is never flagged
+                // twice in the same glance.
+                if (displayName != null) {
+                    Text(text = displayName, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                } else {
+                    VisitorIdentityText(
+                        id = contact.customerId,
+                        emojiCreature = contact.emojiCreature,
+                        emojiFood = contact.emojiFood,
+                        // `26-279` (A9): the identical further fallback `ContactsScreen.kt`'s own row
+                        // now passes - `Contact.phone` as the title plus «Без имени», never the raw
+                        // `customerId` this header used to leak through.
+                        phone = contact.phone,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    )
                 }
 
+                // `26-308` (item 2, author screenshot): `Позвонить`/`Диалог` move off the two big pill
+                // buttons below and onto this same phone row, as trailing icon buttons - the identical
+                // "always render both, chat then call, right-aligned" treatment [ConfirmedBookingRow] (the
+                // Записи ▸ Утверждены row style this item's own brief names) already draws, reused
+                // ([AgoIcons.Chat]/[AgoIcons.Call], plain [IconButton]s with no fill or outline) rather than
+                // inventing a second icon-button language on this same screen. The dialog icon stays
+                // `enabled` only when [ClientDetailUiState.Loaded.hasDialog] is true - the identical no-op
+                // posture [ConfirmedBookingRow]'s own doc comment states for a booking with no chat origin -
+                // while the call icon is always live, since [callAction] never depended on a dialog existing.
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         // `26-307`: a masked preview (`contact.masked`) never carries the full 10 digits, so
@@ -412,6 +430,19 @@ private fun ClientDetailLoadedBody(
                                     ),
                             )
                         }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { state.dialogConversationId?.let(onOpenDialog) }, enabled = state.hasDialog) {
+                        Icon(
+                            imageVector = AgoIcons.Chat,
+                            contentDescription = stringResource(R.string.bookings_client_detail_open_dialog_action),
+                        )
+                    }
+                    IconButton(onClick = callAction) {
+                        Icon(
+                            imageVector = AgoIcons.Call,
+                            contentDescription = stringResource(R.string.bookings_client_detail_call_action),
+                        )
                     }
                 }
             }
@@ -448,36 +479,21 @@ private fun ClientDetailLoadedBody(
 
         state.actionError?.let { error -> ActionErrorBanner(error = error, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) }
 
-        // `26-284` (item 4/7): the action-button row - `Позвонить` moved here from the phone line itself
-        // (`26-279` B3's own `ACTION_DIAL` intent, unchanged, just relocated into [callAction] above so
-        // both branches below can share it). Two shapes, chosen by [ClientDetailUiState.Loaded.hasDialog]:
-        // a client with a dialog gets `Позвонить`/`Диалог` side by side and `+ Записать` full width below;
-        // one without gets a single row of `Позвонить`/`+ Записать`. `Позвонить` stays the filled/primary
-        // button in both - it is the one action every client detail card offers, dialog or not.
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = callAction, modifier = Modifier.weight(1f)) {
-                Text(text = stringResource(R.string.bookings_client_detail_call_action))
-            }
-            if (state.hasDialog) {
-                OutlinedButton(
-                    onClick = { state.dialogConversationId?.let(onOpenDialog) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(imageVector = AgoIcons.Chat, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text(text = stringResource(R.string.bookings_client_detail_open_dialog_action))
-                }
-            } else {
-                OutlinedButton(onClick = onOpenManualBooking, modifier = Modifier.weight(1f)) {
-                    Icon(imageVector = AgoIcons.Plus, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text(text = stringResource(R.string.bookings_client_detail_record_action))
-                }
-            }
-        }
-        if (state.hasDialog) {
-            OutlinedButton(onClick = onOpenManualBooking, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                Icon(imageVector = AgoIcons.Plus, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                Text(text = stringResource(R.string.bookings_client_detail_record_action))
-            }
+        // `26-308` (item 3, author screenshot): `Позвонить`/`Диалог` moved onto the phone row above as
+        // icon buttons (that row's own doc comment), so this used-to-be-two-shapes action row collapses to
+        // the one action left - «+ Добавить запись» - and it is no longer a secondary [OutlinedButton]
+        // riding alongside a primary `Позвонить`: with `Позвонить` gone from here, manual booking is this
+        // sheet's own main call to action, so it becomes a filled/accent [Button] (Material3's default
+        // `primary`-container fill - the identical brand-blue accent [callAction]'s own removed `Button`
+        // used to carry), full width, relabelled from «Записать» to «Добавить запись»
+        // ([R.string.bookings_client_detail_add_booking_action], both languages - the old
+        // `bookings_client_detail_record_action` key is gone since this was its only call site). Unlike the
+        // old two-shapes-by-[ClientDetailUiState.Loaded.hasDialog] row, this single button now renders
+        // identically whether or not the client has a dialog - the manual-booking action itself
+        // ([onOpenManualBooking]) never depended on that fact either.
+        Button(onClick = onOpenManualBooking, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Icon(imageVector = AgoIcons.Plus, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+            Text(text = stringResource(R.string.bookings_client_detail_add_booking_action))
         }
 
         BookingSegmentedControl(
