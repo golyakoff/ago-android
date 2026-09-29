@@ -9,6 +9,8 @@ import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
 import ago.chat.android.core.domain.workers.Worker
 import ago.chat.android.core.domain.workerslots.WorkerSlot
 import ago.chat.android.core.domain.workerslots.groupSlotsByDay
+import ago.chat.android.ui.components.RuPhoneField
+import ago.chat.android.ui.components.isRuPhoneComplete
 import ago.chat.android.ui.icons.AgoIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -347,14 +349,17 @@ private fun PhoneStepBody(
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
         val lookup = wizard.phoneLookup
         if (lookup is PhoneLookupState.Idle || lookup is PhoneLookupState.Searching) {
-            OutlinedTextField(
+            // `26-305`: the shared masked `+7 (XXX) XXX-XX-XX` control replaces the plain, unmasked field
+            // this used to be — see `RuPhoneField`'s own doc comment for why `wizard.phone`/`onPhoneChanged`
+            // need no change at all to start carrying/sending the canonical value. `autoFocus` is new too
+            // (`docs/backlog/26-303-phone-input-research.md` §1/§7: the reference control is focused, numeric
+            // keyboard up, the moment this step is reached).
+            RuPhoneField(
                 value = wizard.phone,
                 onValueChange = onPhoneChanged,
-                label = { Text(text = stringResource(R.string.bookings_manual_phone_label)) },
-                placeholder = { Text(text = stringResource(R.string.bookings_manual_phone_placeholder)) },
-                singleLine = true,
+                label = stringResource(R.string.bookings_manual_phone_label),
                 enabled = lookup !is PhoneLookupState.Searching,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                autoFocus = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
@@ -374,7 +379,9 @@ private fun PhoneStepBody(
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 }
             } else {
-                Button(onClick = onSearchPhone, enabled = wizard.phone.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                // `26-305`: gated on completeness (all 10 national digits), not `isNotBlank()` — a fixed
+                // `+7` with one digit typed used to already read as "non-blank" and enable this button.
+                Button(onClick = onSearchPhone, enabled = isRuPhoneComplete(wizard.phone), modifier = Modifier.fillMaxWidth()) {
                     Text(text = stringResource(R.string.bookings_manual_search_action))
                 }
             }

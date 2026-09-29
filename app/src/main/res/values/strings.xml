@@ -957,7 +957,6 @@
     <string name="bookings_manual_back_action">Назад</string>
     <string name="bookings_manual_date_slot_count_format">Свободно: %1$d</string>
     <string name="bookings_manual_phone_label">Телефон клиента</string>
-    <string name="bookings_manual_phone_placeholder">+7 921 000-00-00</string>
     <string name="bookings_manual_phone_hint">Сначала номер — по нему покажем, есть ли уже такой клиент. Поиск срабатывает сам, как только номер введён полностью.</string>
     <string name="bookings_manual_phone_required_note">Телефон обязателен всегда — это ключ и к слоту, и к узнаванию клиента.</string>
     <string name="bookings_manual_search_action">Найти клиента</string>

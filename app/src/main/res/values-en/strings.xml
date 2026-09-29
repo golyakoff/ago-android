@@ -538,7 +538,6 @@
     <string name="bookings_manual_back_action">Back</string>
     <string name="bookings_manual_date_slot_count_format">%1$d available</string>
     <string name="bookings_manual_phone_label">Client phone</string>
-    <string name="bookings_manual_phone_placeholder">+1 555 000-0000</string>
     <string name="bookings_manual_phone_hint">Phone first — we\'ll show whether this client already exists. The search fires on its own once the number is complete.</string>
     <string name="bookings_manual_phone_required_note">The phone is always required — it is the key to both the slot and the client match.</string>
     <string name="bookings_manual_search_action">Find client</string>
