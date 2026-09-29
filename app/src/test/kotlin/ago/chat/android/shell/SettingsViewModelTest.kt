@@ -26,6 +26,8 @@ import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.NotificationPermissionChecker
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.devices.PushUnavailableReason
+import ago.chat.android.ui.components.VisitorAvatarStyle
+import ago.chat.android.ui.components.VisitorAvatarStylePreferences
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemeMode
@@ -96,6 +98,31 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ThemeMode.Light, preferences.current.value)
+        }
+
+    // ---------------------------------------------------------------------------------- avatar style
+
+    @Test
+    fun `avatarStyle starts at whatever VisitorAvatarStylePreferences already holds`() =
+        runTest(dispatcher) {
+            val preferences = FakeVisitorAvatarStylePreferences(VisitorAvatarStyle.Initials)
+            val viewModel = viewModelWith(avatarStylePreferences = preferences)
+            advanceUntilIdle()
+
+            assertEquals(VisitorAvatarStyle.Initials, viewModel.avatarStyle.value)
+        }
+
+    @Test
+    fun `setAvatarStyle writes through to VisitorAvatarStylePreferences`() =
+        runTest(dispatcher) {
+            val preferences = FakeVisitorAvatarStylePreferences(VisitorAvatarStyle.Emoji)
+            val viewModel = viewModelWith(avatarStylePreferences = preferences)
+            advanceUntilIdle()
+
+            viewModel.setAvatarStyle(VisitorAvatarStyle.Initials)
+            advanceUntilIdle()
+
+            assertEquals(VisitorAvatarStyle.Initials, preferences.current.value)
         }
 
     // ---------------------------------------------------------------------------------- language
@@ -443,6 +470,7 @@ class SettingsViewModelTest {
         hubEvents: OperatorHubEvents = FakeHubEvents(),
         themePreferences: ThemePreferences = FakeThemePreferences(),
         languagePreferences: AppLanguagePreferences = FakeAppLanguagePreferences(),
+        avatarStylePreferences: VisitorAvatarStylePreferences = FakeVisitorAvatarStylePreferences(),
         deviceRegistrar: DeviceRegistrar = FakeSettingsDeviceRegistrar(),
         notificationPermissionChecker: NotificationPermissionChecker = FakeNotificationPermissionChecker(),
         batteryOptimizationChecker: BatteryOptimizationChecker = FakeBatteryOptimizationChecker(),
@@ -456,6 +484,7 @@ class SettingsViewModelTest {
             hubConnection = hubEvents,
             themePreferences = themePreferences,
             languagePreferences = languagePreferences,
+            visitorAvatarStylePreferences = avatarStylePreferences,
             deviceRegistrar = deviceRegistrar,
             notificationPermissionChecker = notificationPermissionChecker,
             batteryOptimizationChecker = batteryOptimizationChecker,
@@ -570,6 +599,18 @@ class SettingsViewModelTest {
 
         override suspend fun setMode(mode: ThemeMode) {
             current.value = mode
+        }
+    }
+
+    /** `26-285`: [FakeThemePreferences]'s own shape, restated for [VisitorAvatarStylePreferences]. */
+    private class FakeVisitorAvatarStylePreferences(
+        initial: VisitorAvatarStyle = VisitorAvatarStyle.Emoji,
+    ) : VisitorAvatarStylePreferences {
+        val current = MutableStateFlow(initial)
+        override val style: Flow<VisitorAvatarStyle> = current
+
+        override suspend fun setStyle(style: VisitorAvatarStyle) {
+            current.value = style
         }
     }
 

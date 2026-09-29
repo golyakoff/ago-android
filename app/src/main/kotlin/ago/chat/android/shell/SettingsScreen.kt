@@ -16,6 +16,7 @@ import ago.chat.android.devices.openAutostartSettings
 import ago.chat.android.devices.openBatteryOptimizationSettings
 import ago.chat.android.ui.components.IdentifierText
 import ago.chat.android.ui.components.SectionLabel
+import ago.chat.android.ui.components.VisitorAvatarStyle
 import ago.chat.android.ui.icons.AgoIcons
 import ago.chat.android.ui.language.AppLanguage
 import ago.chat.android.ui.language.applyAppLanguage
@@ -102,6 +103,7 @@ public fun SettingsRoute(
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
+    val avatarStyle by viewModel.avatarStyle.collectAsStateWithLifecycle()
     val tenancies by viewModel.tenancies.collectAsStateWithLifecycle()
     val currentSiteId by viewModel.currentSiteId.collectAsStateWithLifecycle()
     val switching by viewModel.switching.collectAsStateWithLifecycle()
@@ -157,6 +159,8 @@ public fun SettingsRoute(
         onThemeModeSelected = viewModel::setThemeMode,
         language = language,
         onLanguageSelected = viewModel::setLanguage,
+        avatarStyle = avatarStyle,
+        onAvatarStyleSelected = viewModel::setAvatarStyle,
         tenancies = tenancies,
         currentSiteId = currentSiteId,
         switching = switching,
@@ -212,6 +216,11 @@ internal fun SettingsScreen(
     // while sparing them a mechanical update for a section they are not about.
     language: AppLanguage = AppLanguage.System,
     onLanguageSelected: (AppLanguage) -> Unit = {},
+    // `26-285`: the identical "defaulted trailing parameter" convention `26-92`'s own comment above
+    // states, restated for a third, unrelated per-device preference - `SettingsScreenTest`'s pre-existing
+    // call sites cost nothing for this row either.
+    avatarStyle: VisitorAvatarStyle = VisitorAvatarStyle.Emoji,
+    onAvatarStyleSelected: (VisitorAvatarStyle) -> Unit = {},
     pushAvailability: PushAvailability? = null,
     notificationsEnabled: Boolean = true,
     onOpenNotificationSettings: () -> Unit = {},
@@ -306,6 +315,26 @@ internal fun SettingsScreen(
                                 shape = SegmentedButtonDefaults.itemShape(index, AppLanguage.entries.size),
                                 icon = {},
                                 label = { Text(text = appLanguageLabel(entry)) },
+                            )
+                        }
+                    }
+                }
+
+                // `26-285`: «Аватары посетителей» - the identical `SegmentedButton`/
+                // `SingleChoiceSegmentedButtonRow` shape Тема and Язык above already establish, placed
+                // directly beneath Язык per the author's own placement (this screen's third "how this
+                // app itself presents" choice) and above Текущий сайт, a real operator question rather
+                // than a presentation preference.
+                item { SectionLabel(stringResource(R.string.settings_avatar_style_section)) }
+                item {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        VisitorAvatarStyle.entries.forEachIndexed { index, entry ->
+                            SegmentedButton(
+                                selected = entry == avatarStyle,
+                                onClick = { onAvatarStyleSelected(entry) },
+                                shape = SegmentedButtonDefaults.itemShape(index, VisitorAvatarStyle.entries.size),
+                                icon = {},
+                                label = { Text(text = avatarStyleLabel(entry)) },
                             )
                         }
                     }
@@ -718,6 +747,15 @@ private fun appLanguageLabel(language: AppLanguage): String =
         AppLanguage.System -> stringResource(R.string.settings_language_system)
         AppLanguage.Russian -> stringResource(R.string.settings_language_russian)
         AppLanguage.English -> stringResource(R.string.settings_language_english)
+    }
+
+/** `26-285`: [VisitorAvatarStyle]'s own two labels - the identical [themeModeLabel]/[appLanguageLabel]
+ * shape above, restated for a third segmented row. */
+@Composable
+private fun avatarStyleLabel(style: VisitorAvatarStyle): String =
+    when (style) {
+        VisitorAvatarStyle.Emoji -> stringResource(R.string.settings_avatar_style_emoji)
+        VisitorAvatarStyle.Initials -> stringResource(R.string.settings_avatar_style_initials)
     }
 
 @Composable

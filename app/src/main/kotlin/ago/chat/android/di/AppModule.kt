@@ -156,12 +156,14 @@ import ago.chat.android.session.AgoActiveSite
 import ago.chat.android.session.AgoAuthSession
 import ago.chat.android.session.DataStoreAppLanguagePreferences
 import ago.chat.android.session.DataStoreThemePreferences
+import ago.chat.android.session.DataStoreVisitorAvatarStylePreferences
 import ago.chat.android.session.OidcConfig
 import ago.chat.android.session.OperatorIdentityProvider
 import ago.chat.android.session.appLanguageDataStore
 import ago.chat.android.shell.DefaultPendingConversationOpener
 import ago.chat.android.shell.PendingConversationOpener
 import ago.chat.android.signin.SignInSession
+import ago.chat.android.ui.components.VisitorAvatarStylePreferences
 import ago.chat.android.ui.language.AppLanguagePreferences
 import ago.chat.android.ui.theme.ThemePreferences
 import android.content.Context
@@ -951,6 +953,16 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideThemePreferences(preferences: DataStoreThemePreferences): ThemePreferences = preferences
+
+    /**
+     * `26-285`: «Аватары посетителей», reusing [provideThemeDataStore]'s own unqualified file rather
+     * than a third `PreferenceDataStoreFactory.create` call — [DataStoreVisitorAvatarStylePreferences]'s
+     * own doc comment states why this preference, unlike Язык, has no reason to isolate its own file.
+     */
+    @Provides
+    @Singleton
+    public fun provideVisitorAvatarStylePreferences(preferences: DataStoreVisitorAvatarStylePreferences): VisitorAvatarStylePreferences =
+        preferences
 
     /**
      * `26-92`: the Язык preference's own file — [DataStoreAppLanguagePreferences]'s own doc comment
