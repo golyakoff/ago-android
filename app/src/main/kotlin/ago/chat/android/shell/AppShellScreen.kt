@@ -291,24 +291,19 @@ internal fun AppShellScreen(
     // entry the `⋮` hub offers (`docs/design/26-154-*.md`'s own accepted Q1/Q2), overtaking Настройка
     // (Календари).
     bookingsTab: BookingsTabSlot = {
-        showConfirmedSegment,
-        showClientsSegment,
-        showReadinessEntry,
-        showSetupSegment,
-        showMastersSegment,
-        showServicesSegment,
-        showHoursSegment,
+        gates,
         onConfigScreenChanged,
         onOpenSettings,
         ->
         BookingsRoute(
-            showConfirmedSegment = showConfirmedSegment,
-            showClientsSegment = showClientsSegment,
-            showReadinessEntry = showReadinessEntry,
-            showSetupSegment = showSetupSegment,
-            showMastersSegment = showMastersSegment,
-            showServicesSegment = showServicesSegment,
-            showHoursSegment = showHoursSegment,
+            showConfirmedSegment = gates.showConfirmedSegment,
+            showClientsSegment = gates.showClientsSegment,
+            showReadinessEntry = gates.showReadinessEntry,
+            showSetupSegment = gates.showSetupSegment,
+            showMastersSegment = gates.showMastersSegment,
+            showServicesSegment = gates.showServicesSegment,
+            showHoursSegment = gates.showHoursSegment,
+            showManualBookingEntry = gates.showManualBookingEntry,
             hubConnectionState = hubConnectionState,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
@@ -663,32 +658,42 @@ private fun AppShellContent(
             // for this whole destination's own visibility.
             composable(BottomDestination.Bookings.route()) {
                 bookingsTab(
-                    permissions.holds(Permission.CUSTOMER_READ),
-                    permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
-                    // `26-164`: `calendar:configure` alone - the gate `GetBookingReadinessHandler` itself
-                    // checks server-side. Its own parameter, threaded first among the config-menu gates
-                    // because Готовность is now the very first entry in the `⋮` hub, ahead of Настройка.
-                    permissions.holds(Permission.CALENDAR_CONFIGURE),
-                    // `26-142`: `calendar:configure` alone - the gate the tenant-configuration writes
-                    // (allowed origins, the calendar roster) check server-side. Its own parameter, threaded
-                    // second now, since Готовность overtook Настройка (Календари) as the hub's first entry.
-                    permissions.holds(Permission.CALENDAR_CONFIGURE),
-                    // `26-140`: `calendar:configure` alone - the gate the worker-dictionary writes check
-                    // server-side, its own parameter for the same reason each config-menu gate below is
-                    // (an operator holding only `customer:read` may read the customer base without
-                    // rewriting the tenant's worker dictionary).
-                    permissions.holds(Permission.CALENDAR_CONFIGURE),
-                    // `26-96`: `calendar:configure` alone - a fourth, independent gate, not the third
-                    // one reused (see [ago.chat.android.bookings.visibleBookingsConfigMenuEntries]' own
-                    // doc comment: an operator holding only `customer:read` may read the customer base
-                    // without rewriting the tenant's own service dictionary).
-                    permissions.holds(Permission.CALENDAR_CONFIGURE),
-                    // `26-97`: `calendar:configure` alone - the permission the working-hours writes
-                    // themselves check, never the wider Клиенты gate above. Currently the same
-                    // expression as the Услуги gate immediately above; each is its own parameter because
-                    // the two writes check the permission independently server-side, not because either
-                    // reuses the other's boolean.
-                    permissions.holds(Permission.CALENDAR_CONFIGURE),
+                    // `26-268`: every gate bundled into one [BookingsGates] record - that type's own doc
+                    // comment states why (a ninth positional `Boolean` here broke the Compose compiler's
+                    // own lowering of [BookingsTabSlot] as a bare function type).
+                    BookingsGates(
+                        showConfirmedSegment = permissions.holds(Permission.CUSTOMER_READ),
+                        showClientsSegment =
+                            permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                        // `26-164`: `calendar:configure` alone - the gate `GetBookingReadinessHandler`
+                        // itself checks server-side. Threaded first among the config-menu gates because
+                        // Готовность is now the very first entry in the `⋮` hub, ahead of Настройка.
+                        showReadinessEntry = permissions.holds(Permission.CALENDAR_CONFIGURE),
+                        // `26-142`: `calendar:configure` alone - the gate the tenant-configuration writes
+                        // (allowed origins, the calendar roster) check server-side. Threaded second now,
+                        // since Готовность overtook Настройка (Календари) as the hub's first entry.
+                        showSetupSegment = permissions.holds(Permission.CALENDAR_CONFIGURE),
+                        // `26-140`: `calendar:configure` alone - the gate the worker-dictionary writes
+                        // check server-side, its own field for the same reason each config-menu gate below
+                        // is (an operator holding only `customer:read` may read the customer base without
+                        // rewriting the tenant's worker dictionary).
+                        showMastersSegment = permissions.holds(Permission.CALENDAR_CONFIGURE),
+                        // `26-96`: `calendar:configure` alone - a fourth, independent gate, not the third
+                        // one reused (see [ago.chat.android.bookings.visibleBookingsConfigMenuEntries]' own
+                        // doc comment: an operator holding only `customer:read` may read the customer base
+                        // without rewriting the tenant's own service dictionary).
+                        showServicesSegment = permissions.holds(Permission.CALENDAR_CONFIGURE),
+                        // `26-97`: `calendar:configure` alone - the permission the working-hours writes
+                        // themselves check, never the wider Клиенты gate above. Currently the same
+                        // expression as the Услуги gate immediately above; each is its own field because
+                        // the two writes check the permission independently server-side, not because
+                        // either reuses the other's boolean.
+                        showHoursSegment = permissions.holds(Permission.CALENDAR_CONFIGURE),
+                        // `26-268`: `booking:create` alone - the gate `EnterManualBookingHandler` itself
+                        // checks server-side (`docs/backlog/26-268-*.md` §2), an eighth independent gate
+                        // for «Добавить вручную» rather than one more `⋮` hub entry.
+                        showManualBookingEntry = permissions.holds(Permission.BOOKING_CREATE),
+                    ),
                     // `26-157`: `onConfigScreenChanged` (positional - named arguments are not allowed when
                     // invoking a function-typed value) - whether a `⋮` configuration screen is open, so the
                     // bottom bar above hides itself while its modal page is showing (see `bookingsConfigActive`).
@@ -761,21 +766,39 @@ private fun AppShellContent(
 }
 
 /**
- * `26-157`: the Записи tab slot's own function type — the six visibility gates, then
- * `onConfigScreenChanged` (whether a `⋮` configuration screen is open, so the bottom bar can hide while its
- * modal page shows) and `onOpenSettings`. Named as a typealias so both declarations of it ([AppShellScreen]
- * and [AppShellContent]) keep the parameter names the call site's `onConfigScreenChanged =` argument needs,
- * yet stay within the line-length limit.
+ * `26-268`: Записи's own visibility gates, bundled into one record rather than left as individual
+ * [BookingsTabSlot] parameters — an eighth boolean (`showManualBookingEntry`) pushed that composable
+ * function type's own parameter count to ten, which the Kotlin/Compose compiler used by this project
+ * cannot lower (`IllegalArgumentException: Function with 11 params had 1 changed params but expected 2` —
+ * a real compiler limit on a `@Composable` function type's own arity once it crosses this project's build
+ * past nine declared parameters, not a style preference). Bundling every gate into one data class keeps
+ * [BookingsTabSlot] at three parameters for good, however many gates Записи grows next — the correct fix
+ * once the count itself was the problem, not a workaround to unwind later.
+ */
+internal data class BookingsGates(
+    val showConfirmedSegment: Boolean,
+    val showClientsSegment: Boolean,
+    val showReadinessEntry: Boolean,
+    val showSetupSegment: Boolean,
+    val showMastersSegment: Boolean,
+    val showServicesSegment: Boolean,
+    val showHoursSegment: Boolean,
+    // `26-268`: `booking:create` alone (`docs/backlog/26-268-*.md` §2) - an eighth, independent gate,
+    // threaded the identical "its own field" way every gate above already is, for «Добавить вручную»
+    // rather than one more `⋮` hub entry.
+    val showManualBookingEntry: Boolean,
+)
+
+/**
+ * `26-157`: the Записи tab slot's own function type — [BookingsGates] (`26-268`'s own bundling, see that
+ * type's doc comment for why), then `onConfigScreenChanged` (whether a `⋮` configuration screen is open,
+ * so the bottom bar can hide while its modal page shows) and `onOpenSettings`. Named as a typealias so both
+ * declarations of it ([AppShellScreen] and [AppShellContent]) keep the parameter names the call site's
+ * `onConfigScreenChanged =` argument needs, yet stay within the line-length limit.
  */
 internal typealias BookingsTabSlot =
     @Composable (
-        showConfirmedSegment: Boolean,
-        showClientsSegment: Boolean,
-        showReadinessEntry: Boolean,
-        showSetupSegment: Boolean,
-        showMastersSegment: Boolean,
-        showServicesSegment: Boolean,
-        showHoursSegment: Boolean,
+        gates: BookingsGates,
         onConfigScreenChanged: (Boolean) -> Unit,
         onOpenSettings: () -> Unit,
     ) -> Unit

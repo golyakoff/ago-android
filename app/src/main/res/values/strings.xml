@@ -855,6 +855,55 @@
     <string name="bookings_client_detail_status_no_show">Неявка</string>
 
     <!--
+        `26-268`/`adr/0188`: «Добавить вручную» - a phone-taken booking entered by the operator, straight
+        into `Booked`, no conversation (`docs/backlog/26-268-*.md` §3.4/§5.2). A header action on Записи,
+        gated on `booking:create` alone, opening a six-step guided sheet: phone (recognises an existing
+        client) → client → service → master → date/slot → review.
+    -->
+    <string name="bookings_manual_entry_action">Добавить вручную</string>
+    <string name="bookings_manual_title">Новая запись</string>
+    <string name="bookings_manual_step_format">Шаг %1$d из 6 · %2$s</string>
+    <string name="bookings_manual_step_phone">Телефон</string>
+    <string name="bookings_manual_step_client">Клиент</string>
+    <string name="bookings_manual_step_service">Услуга</string>
+    <string name="bookings_manual_step_worker">Мастер</string>
+    <string name="bookings_manual_step_slot">Дата и время</string>
+    <string name="bookings_manual_step_review">Проверьте</string>
+    <string name="bookings_manual_phone_label">Телефон клиента</string>
+    <string name="bookings_manual_phone_placeholder">+7 921 000-00-00</string>
+    <string name="bookings_manual_phone_hint">Сначала номер — по нему покажем, есть ли уже такой клиент. Поиск срабатывает сам, как только номер введён полностью.</string>
+    <string name="bookings_manual_phone_required_note">Телефон обязателен всегда — это ключ и к слоту, и к узнаванию клиента.</string>
+    <string name="bookings_manual_search_action">Найти клиента</string>
+    <string name="bookings_manual_edit_phone_action">Изменить</string>
+    <string name="bookings_manual_found_label">Найден клиент</string>
+    <string name="bookings_manual_many_found_label">Несколько клиентов с этим номером</string>
+    <string name="bookings_manual_none_found_title">Клиентов с этим номером нет</string>
+    <string name="bookings_manual_none_found_hint">Запишем как нового — имя укажете на следующем шаге.</string>
+    <string name="bookings_manual_continue_as_new_action">Продолжить как нового</string>
+    <string name="bookings_manual_choose_this_client_action">Это он</string>
+    <string name="bookings_manual_new_client_action">Новый клиент</string>
+    <string name="bookings_manual_returning_client_label">Постоянный клиент</string>
+    <string name="bookings_manual_returning_client_prefix_format">Постоянный · %1$s</string>
+    <!-- `adr/0147`: a phone is a hint, not proof - shown on every recognition frame so the operator never
+         mistakes a surfaced candidate for an automatic merge. -->
+    <string name="bookings_manual_phone_hint_not_proof">Совпадение по телефону — подсказка, не доказательство. Кто это, подтверждает оператор.</string>
+    <string name="bookings_manual_client_label">Клиент</string>
+    <string name="bookings_manual_existing_client_hint">Существующий контакт — имя и почту заново не вводим. Дальше сразу услуга.</string>
+    <string name="bookings_manual_name_label">Имя клиента</string>
+    <string name="bookings_manual_email_label">Эл. почта</string>
+    <string name="bookings_manual_email_optional_placeholder">необязательно</string>
+    <string name="bookings_manual_email_hint">На телефонном звонке почту сложно продиктовать без ошибок — поле можно пропустить. Клиента это не блокирует.</string>
+    <string name="bookings_manual_next_action">Далее</string>
+    <string name="bookings_manual_no_workers">Нет мастеров, оказывающих эту услугу.</string>
+    <string name="bookings_manual_no_slots">Нет свободных слотов на ближайшие дни.</string>
+    <string name="bookings_manual_new_client_value">Новый</string>
+    <string name="bookings_manual_returning_client_value">Постоянный</string>
+    <string name="bookings_manual_email_not_provided">не указана</string>
+    <string name="bookings_manual_no_conversation_note">Прямая запись в календарь — диалог и переписка не создаются.</string>
+    <string name="bookings_manual_submit_action">Создать запись</string>
+    <string name="bookings_manual_load_failed_unexpected">Не удалось загрузить данные для новой записи. Попробуйте ещё раз.</string>
+
+    <!--
         `26-96`: Записи's own «Услуги» segment - the tenant's service dictionary, with the edit and the
         withdrawal this product had no endpoint for at all until that item (a typo in a duration or a
         visitor-facing price was permanent). Gated on `calendar:configure` alone - a fourth, distinct

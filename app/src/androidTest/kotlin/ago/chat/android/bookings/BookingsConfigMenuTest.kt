@@ -41,6 +41,7 @@ class BookingsConfigMenuTest {
                 showMastersSegment = false,
                 showServicesSegment = false,
                 showHoursSegment = false,
+                showManualBookingEntry = false,
                 selectedTab = BookingsTab.Pending,
                 onSegmentSelected = {},
                 activeConfigTab = null,

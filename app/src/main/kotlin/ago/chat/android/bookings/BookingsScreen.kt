@@ -97,6 +97,10 @@ public fun BookingsRoute(
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
+    // `26-268`: `booking:create` alone (`docs/backlog/26-268-*.md` §2) - gates «Добавить вручную» in the
+    // header, threaded through unchanged to [BookingsScreen], the identical "the caller who already has
+    // the permission set computes the Boolean" split every gate above already draws.
+    showManualBookingEntry: Boolean,
     hubConnectionState: OperatorHubConnectionState,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
@@ -474,6 +478,7 @@ public fun BookingsRoute(
         showMastersSegment = showMastersSegment,
         showServicesSegment = showServicesSegment,
         showHoursSegment = showHoursSegment,
+        showManualBookingEntry = showManualBookingEntry,
         selectedTab = selectedTab,
         onSegmentSelected = { selectedTab = it },
         activeConfigTab = activeConfigTab,
@@ -627,6 +632,10 @@ internal fun BookingsScreen(
     showMastersSegment: Boolean,
     showServicesSegment: Boolean,
     showHoursSegment: Boolean,
+    // `26-268`: `booking:create` alone (`docs/backlog/26-268-*.md` §2) - gates the «Добавить вручную»
+    // header action alone, an eighth independent gate rather than a reuse of any segment/`⋮` boolean above
+    // (an operator may hold this without holding `customer:read`/`calendar:configure` at all).
+    showManualBookingEntry: Boolean,
     selectedTab: BookingsTab,
     onSegmentSelected: (BookingsTab) -> Unit,
     // `26-157`: `null` = the operational Записи view; non-null = the modal configuration page for that
@@ -838,6 +847,12 @@ internal fun BookingsScreen(
             showHoursSegment,
         )
 
+    // `26-268`: whether «Добавить вручную»'s own guided sheet is open - plain local navigation state, the
+    // identical "which sheet is open is UI, not network" split [ConfirmedBookingsBody]'s own
+    // `selectedBookingId`/`reschedulingBookingId` already draw, one level up: this sheet is reachable from
+    // the header on every segment, not only Утверждены, so it lives here rather than inside that body.
+    var showManualBookingSheet by rememberSaveable { mutableStateOf(false) }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
@@ -850,6 +865,19 @@ internal fun BookingsScreen(
                         // lines. `BookingsConfigMenu` still hides itself when [configMenuEntries] is empty,
                         // so nothing changes when there is nothing to show.
                         //
+                        // `26-268`: «Добавить вручную» — the mockup's own entry-point frame
+                        // (`docs/backlog/26-268-*.md` §5.2): a plain header icon action, LEFT of `⋮`
+                        // (Записи … [+] [⋮] [avatar]), never a bottom-right FAB - the author explicitly
+                        // rejected a FAB because it covered the last booking row on a real device. Ordinary
+                        // icon tone, the same as `⋮` beside it - no special tint, no filled background.
+                        if (showManualBookingEntry) {
+                            IconButton(onClick = { showManualBookingSheet = true }) {
+                                Icon(
+                                    imageVector = AgoIcons.Plus,
+                                    contentDescription = stringResource(R.string.bookings_manual_entry_action),
+                                )
+                            }
+                        }
                         // `26-157`: selecting an entry now opens it as a modal config page (via
                         // [onConfigSelected]) rather than swapping a body underneath the same shell.
                         BookingsConfigMenu(
@@ -979,6 +1007,31 @@ internal fun BookingsScreen(
                 }
             }
         }
+    }
+
+    // `26-268`: rendered outside the `Surface` above, the identical "its own `Dialog` window" reasoning
+    // [RescheduleBookingSheet]'s own doc comment states - a `ModalBottomSheet` needs no place inside this
+    // screen's own layout tree to draw over it. [ManualBookingSheet] obtains its own `hiltViewModel()`
+    // only while [showManualBookingSheet] is true, the identical Hilt-avoidance-while-closed shape every
+    // sibling sheet in this package already follows - `BookingsConfigMenuTest`'s own bare-`ComponentActivity`
+    // render of this composable never opens it, so it never triggers that lookup.
+    if (showManualBookingSheet) {
+        ManualBookingSheet(
+            onDismiss = { showManualBookingSheet = false },
+            onCreated = {
+                // The mockup's own last frame: the operator lands back on Утверждены with the new booking
+                // already in the list (`docs/backlog/26-268-*.md` §5.2) - switching the segment and asking
+                // the confirmed range to re-read is the same "the caller re-reads, the write result carries
+                // no fresh reading back" discipline [RescheduleBookingSheet]'s own `onRescheduled` follows.
+                // `onSegmentSelected`/`onRetryConfirmed` are safe no-ops for an operator who lacks
+                // `showConfirmedSegment` - `onRetryConfirmed` is `{}` in that case (`BookingsRoute`'s own
+                // wiring), and switching `selectedTab` to a segment `visibleBookingsSegments` never offers
+                // simply never renders anything.
+                showManualBookingSheet = false
+                onSegmentSelected(BookingsTab.Confirmed)
+                onRetryConfirmed()
+            },
+        )
     }
 }
 

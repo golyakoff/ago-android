@@ -365,4 +365,17 @@ private class FakeBookingsApi(
     override suspend fun fetchPersonBookings(personId: String) = throw UnsupportedOperationException()
 
     override suspend fun confirmOperatorVerifiedPhone(personId: String) = throw UnsupportedOperationException()
+
+    override suspend fun fetchPhoneCandidates(phone: String) = throw UnsupportedOperationException()
+
+    override suspend fun createManualBooking(
+        calendarId: String,
+        serviceId: String,
+        workerId: String,
+        startEventId: String,
+        name: String,
+        phone: String,
+        reusePersonId: String?,
+        email: String?,
+    ) = throw UnsupportedOperationException()
 }

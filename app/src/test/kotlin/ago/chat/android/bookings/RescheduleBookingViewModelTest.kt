@@ -6,8 +6,10 @@ import ago.chat.android.core.domain.bookings.BookingsQueueFailure
 import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneCandidatesResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
@@ -275,6 +277,19 @@ class RescheduleBookingViewModelTest {
         override suspend fun fetchPersonBookings(personId: String): PersonBookingsResult = throw UnsupportedOperationException()
 
         override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult = throw UnsupportedOperationException()
+
+        override suspend fun fetchPhoneCandidates(phone: String): PhoneCandidatesResult = throw UnsupportedOperationException()
+
+        override suspend fun createManualBooking(
+            calendarId: String,
+            serviceId: String,
+            workerId: String,
+            startEventId: String,
+            name: String,
+            phone: String,
+            reusePersonId: String?,
+            email: String?,
+        ): ManualBookingResult = throw UnsupportedOperationException()
 
         override suspend fun rejectBooking(bookingId: String): BookingActionResult = throw UnsupportedOperationException()
 

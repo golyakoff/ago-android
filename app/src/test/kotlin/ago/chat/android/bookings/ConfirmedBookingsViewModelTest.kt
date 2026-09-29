@@ -8,8 +8,10 @@ import ago.chat.android.core.domain.bookings.ConfirmPhoneResult
 import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneCandidatesResult
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
 import ago.chat.android.core.domain.bookings.ServicesResult
@@ -578,6 +580,20 @@ class ConfirmedBookingsViewModelTest {
 
         override suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult =
             throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun fetchPhoneCandidates(phone: String): PhoneCandidatesResult =
+            throw UnsupportedOperationException("not used by this class")
+
+        override suspend fun createManualBooking(
+            calendarId: String,
+            serviceId: String,
+            workerId: String,
+            startEventId: String,
+            name: String,
+            phone: String,
+            reusePersonId: String?,
+            email: String?,
+        ): ManualBookingResult = throw UnsupportedOperationException("not used by this class")
     }
 
     /** `26-162`: the identical fake `ContactsViewModelTest`'s own `FakePersonsApi` already establishes,

@@ -9,11 +9,14 @@ import ago.chat.android.core.domain.bookings.ConfirmedBooking
 import ago.chat.android.core.domain.bookings.ConfirmedBookingsResult
 import ago.chat.android.core.domain.bookings.Contact
 import ago.chat.android.core.domain.bookings.ContactsResult
+import ago.chat.android.core.domain.bookings.ManualBookingResult
 import ago.chat.android.core.domain.bookings.PendingBooking
 import ago.chat.android.core.domain.bookings.PendingBookingsResult
 import ago.chat.android.core.domain.bookings.PersonBooking
 import ago.chat.android.core.domain.bookings.PersonBookingStatus
 import ago.chat.android.core.domain.bookings.PersonBookingsResult
+import ago.chat.android.core.domain.bookings.PhoneCandidate
+import ago.chat.android.core.domain.bookings.PhoneCandidatesResult
 import ago.chat.android.core.domain.bookings.PhoneReveal
 import ago.chat.android.core.domain.bookings.PhoneRevealsResult
 import ago.chat.android.core.domain.bookings.RevealPhoneResult
@@ -517,6 +520,106 @@ public class KtorBookingsApi(
 
         return detail?.let { ConfirmPhoneResult.Refused(it) } ?: ConfirmPhoneResult.Failed(BookingsQueueFailure.Unexpected)
     }
+
+    /**
+     * `26-268`/`adr/0188`: `GET /api/v1/console/contacts/by-phone?phone=` — the identical
+     * check-base-URL-first, classify-never-invent shape every read above establishes, restated for this
+     * ninth endpoint for the same reason [fetchConfirmedBookings]'s own doc comment gives for not factoring
+     * the reads on this port into one shared helper.
+     */
+    override suspend fun fetchPhoneCandidates(phone: String): PhoneCandidatesResult {
+        val baseUrl = calendarApiBaseUrl ?: return PhoneCandidatesResult.NotConfigured
+
+        val response =
+            try {
+                client.get("$baseUrl/api/v1/console/contacts/by-phone") {
+                    parameter("phone", phone)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return PhoneCandidatesResult.Failed(classify(failure))
+            }
+
+        if (!response.status.isSuccess()) {
+            return PhoneCandidatesResult.Failed(BookingsQueueFailure.Unexpected)
+        }
+
+        return try {
+            PhoneCandidatesResult.Loaded(response.body<List<PhoneCandidateWireDto>>().map { it.toDomain() })
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A `200` whose body is not the promised shape is not "no match" - the identical
+            // `fetchPendingQueue`/`shapeGuard.ts` lesson, read onto this endpoint.
+            PhoneCandidatesResult.Failed(classify(failure))
+        }
+    }
+
+    /**
+     * `26-268`/`adr/0188`: `POST /api/v1/console/bookings/manual` — the identical `2xx`-or-refusal shape
+     * [updateService]/[revealCustomerPhone] establish for a write with a body of its own, restated with a
+     * `201` success body rather than a bare `204`.
+     */
+    override suspend fun createManualBooking(
+        calendarId: String,
+        serviceId: String,
+        workerId: String,
+        startEventId: String,
+        name: String,
+        phone: String,
+        reusePersonId: String?,
+        email: String?,
+    ): ManualBookingResult {
+        val baseUrl = calendarApiBaseUrl ?: return ManualBookingResult.Failed(BookingsQueueFailure.Unexpected)
+
+        val response =
+            try {
+                client.post("$baseUrl/api/v1/console/bookings/manual") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        ManualBookingRequestWireDto(
+                            calendarId = calendarId,
+                            serviceId = serviceId,
+                            workerId = workerId,
+                            startEventId = startEventId,
+                            name = name,
+                            phone = phone,
+                            reusePersonId = reusePersonId,
+                            email = email,
+                        ),
+                    )
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                return ManualBookingResult.Failed(classify(failure))
+            }
+
+        if (response.status.isSuccess()) {
+            return try {
+                val created = response.body<ManualBookingResponseWireDto>()
+                ManualBookingResult.Created(bookingId = created.bookingId, startsAt = created.startsAt, endsAt = created.endsAt)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                // A `201` whose body is not the promised shape is not a created booking - the identical
+                // `fetchPendingQueue`/`shapeGuard.ts` lesson, read onto this endpoint.
+                ManualBookingResult.Failed(classify(failure))
+            }
+        }
+
+        val detail =
+            try {
+                response.body<ProblemDetailsWireDto>().detail
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                null
+            }
+
+        return detail?.let { ManualBookingResult.Refused(it) } ?: ManualBookingResult.Failed(BookingsQueueFailure.Unexpected)
+    }
 }
 
 /** `Ago.Calendar.Contracts.TenantConfigurationResponse`, reduced to the one field this app reads —
@@ -838,4 +941,59 @@ private fun toPersonBookingStatus(wireStatus: String): PersonBookingStatus =
 @Serializable
 private data class ConfirmOperatorVerifiedPhoneResponseWireDto(
     val confirmedAt: String,
+)
+
+/**
+ * `26-268`/`adr/0188`: `Ago.Calendar.Contracts.ContactByPhoneResponse`, field for field — no name (the
+ * calendar holds none, `adr/0184`); [PhoneCandidate.displayName] is filled in later, client-side, by
+ * [ago.chat.android.bookings.ManualBookingViewModel].
+ */
+@Serializable
+private data class PhoneCandidateWireDto(
+    val personId: String,
+    val phone: String,
+    val masked: Boolean,
+    val noShowCount: Int,
+    val bookingCount: Int,
+    val phoneVerifiedAt: String? = null,
+    val phoneConfirmedByOperatorAt: String? = null,
+    val firstSeenAt: String,
+    val lastSeenAt: String,
+)
+
+private fun PhoneCandidateWireDto.toDomain() =
+    PhoneCandidate(
+        personId = personId,
+        phone = phone,
+        masked = masked,
+        noShowCount = noShowCount,
+        bookingCount = bookingCount,
+        phoneVerifiedAt = phoneVerifiedAt,
+        phoneConfirmedByOperatorAt = phoneConfirmedByOperatorAt,
+        firstSeenAt = firstSeenAt,
+        lastSeenAt = lastSeenAt,
+    )
+
+/** `26-268`/`adr/0188`: `Ago.Calendar.Contracts.ManualBookingRequest` — [reusePersonId]/[email] travel as
+ * JSON `null` when absent, matching the server's own optional fields
+ * ([ago.chat.android.core.domain.bookings.BookingsApi.createManualBooking]'s own doc comment). */
+@Serializable
+private data class ManualBookingRequestWireDto(
+    val calendarId: String,
+    val serviceId: String,
+    val workerId: String,
+    val startEventId: String,
+    val name: String,
+    val phone: String,
+    val reusePersonId: String? = null,
+    val email: String? = null,
+)
+
+/** `Ago.Calendar.Contracts.ManualBookingResponse`/`BookingConfirmedResponse` shape — the new booking's own
+ * id and claimed span, the one thing a `201` carries that a `204` veto write does not. */
+@Serializable
+private data class ManualBookingResponseWireDto(
+    val bookingId: String,
+    val startsAt: String,
+    val endsAt: String,
 )
