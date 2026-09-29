@@ -127,8 +127,10 @@ class BackContractMoreScreenTest {
      * now has zero rows and is not drawn ([buildMoreSections]'s own "a section with no rows is not
      * returned at all"), exactly as Каналы already behaves. `OfflineAutoReplyGatingTest` and
      * `CannedResponsesGatingTest` are where each row's own with-permission case lives, the identical
-     * split `WidgetInstallGatingTest` already establishes for «Установка виджета». This test keeps
-     * proving the rows that are still unconditional. */
+     * split `WidgetInstallGatingTest` already establishes for «Установка виджета». `26-301` moved «Тариф и
+     * оплата» under the same gate once its `PlaceholderDestinationScreen` branch became a real screen
+     * (`BillingGatingTest` is where its own with-permission case lives). This test keeps proving the one
+     * row that is still unconditional. */
     @Test
     fun theMoreListShowsTheNewAutomationAndAdministrationRowsAndNoSettingsRow() {
         composeTestRule.setContent {
@@ -159,7 +161,8 @@ class BackContractMoreScreenTest {
         composeTestRule.onNodeWithText("Автоответ вне смены").assertDoesNotExist()
         composeTestRule.onNodeWithText("Администрирование", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("Операторы и роли").assertExists()
-        composeTestRule.onNodeWithText("Тариф и оплата").assertExists()
+        // `26-301`: «Тариф и оплата» is gated now too (`BillingGatingTest` proves the with-permission case).
+        composeTestRule.onNodeWithText("Тариф и оплата").assertDoesNotExist()
     }
 
     /** A second back press, from the Ещё list itself (no row open), falls through to clause 3's own

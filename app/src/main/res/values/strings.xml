@@ -1456,6 +1456,74 @@
          needs it. -->
     <string name="more_placeholder_body">Появится в одной из следующих версий.</string>
 
+    <!-- `26-301`: Администрирование → «Тариф и оплата» - the billing v2 screen (`docs/backlog/26-301-*.md`):
+         Текущий тариф / Докупить сейчас / Следующий период, reusing `more_administration_billing_row`
+         above as both the Ещё row label and this screen's own app-bar title. -->
+    <string name="billing_section_current_plan">Текущий тариф</string>
+    <string name="billing_section_buy_now">Докупить сейчас</string>
+    <string name="billing_section_next_period">Следующий период</string>
+    <string name="billing_status_active">Активна</string>
+    <string name="billing_status_free">Бесплатный</string>
+    <string name="billing_field_operators">Операторы</string>
+    <string name="billing_field_administrators">Администраторы</string>
+    <string name="billing_field_channels">Каналы</string>
+    <string name="billing_field_current_charge">Текущее списание</string>
+    <string name="billing_field_paid_until">Оплачено до</string>
+    <string name="billing_field_payment_method">Способ оплаты</string>
+    <string name="billing_value_free">Бесплатно</string>
+    <string name="billing_value_per_month">/ мес</string>
+    <string name="billing_seats_value">%1$d из %2$d · до %3$d включено</string>
+    <!-- The live contract's `BillingStatusDto` carries only a `hasStoredPaymentMethod` boolean, no masked
+         card digits - unlike the approved mockup, which shows "Карта ·· 4242". Worded generically until a
+         masked-card field is added to the wire (flagged for the author). -->
+    <string name="billing_payment_method_saved">Карта сохранена</string>
+    <string name="billing_payment_method_not_saved">не сохраняется · ЮKassa</string>
+    <string name="billing_payment_method_none">не привязана</string>
+    <string name="billing_savecard_label">Сохранять способ оплаты для автосписаний</string>
+    <string name="billing_savecard_hint_on">Включено: мгновенная докупка списывается с сохранённой карты, подписка продлевается автоматически.</string>
+    <string name="billing_savecard_hint_off">Выключено: каждая оплата — через ЮKassa, автопродление отключено, способ оплаты не хранится.</string>
+    <string name="billing_savecard_on_warning">Списание с сохранённой карты произойдёт сразу — без перехода в ЮKassa.</string>
+    <string name="billing_savecard_off_warning">Способ оплаты не сохраняется: каждая покупка проходит отдельной оплатой в ЮKassa. Мгновенная докупка с карты и автосписание недоступны.</string>
+    <string name="billing_buy_hint">до %1$d включено, далее %2$s за место</string>
+    <string name="billing_buy_action">Докупить за %1$s</string>
+    <string name="billing_buy_action_yookassa">Докупить за %1$s · ЮKassa</string>
+    <string name="billing_connect_action">Подключить за %1$s</string>
+    <string name="billing_channel_included">✓ включён в тариф</string>
+    <string name="billing_channel_connected">✓ Подключён</string>
+    <string name="billing_channel_website">Сайт</string>
+    <string name="billing_channels_group_label">Каналы · %1$s / мес за каждый</string>
+    <string name="billing_proration_note">Оплата пропорционально остатку периода: текущий неполный день оплачивается полностью.</string>
+    <string name="billing_free_tier_note">На бесплатном тарифе разовая докупка недоступна. Расширьте состав в блоке «Следующий период» — при выходе за лимиты Соло подключится тариф Бизнес.</string>
+    <string name="billing_next_period_intro">Состав, который продлится %1$s. Меняйте — сумма пересчитается ниже.</string>
+    <string name="billing_next_period_channels_label">Какие каналы продлевать</string>
+    <string name="billing_breakdown_base">Тариф %1$s (база)</string>
+    <string name="billing_breakdown_extra_operators">Доп. операторы ×%1$d</string>
+    <string name="billing_breakdown_extra_admins">Доп. администраторы ×%1$d</string>
+    <string name="billing_breakdown_channel">Канал: %1$s</string>
+    <string name="billing_next_charge_label">Сумма следующего списания</string>
+    <string name="billing_next_charge_delta_up">+%1$s к текущему</string>
+    <string name="billing_next_charge_delta_down">−%1$s к текущему</string>
+    <string name="billing_next_period_note">Изменения вступают в силу со следующего периода. Сейчас деньги не списываются; при уменьшении возврат не производится.</string>
+    <string name="billing_save_composition_action">Сохранить состав</string>
+    <string name="billing_cancel_row_title">Не продлевать подписку</string>
+    <string name="billing_cancel_row_subtitle">Доступ — до %1$s, затем бесплатный Соло.</string>
+    <string name="billing_cancel_action">Не продлевать</string>
+    <string name="billing_cancel_dialog_title">Не продлевать подписку?</string>
+    <string name="billing_cancel_dialog_body">Доступ сохранится до %1$s, затем аккаунт перейдёт на бесплатный тариф Соло. Отменить решение можно в любой момент до этой даты.</string>
+    <string name="billing_cancel_dialog_keep">Оставить</string>
+    <string name="billing_cancel_scheduled_note">Подписка не будет продлена после %1$s.</string>
+    <string name="billing_payment_processing_title">Оплата обрабатывается</string>
+    <string name="billing_payment_processing_body">Ждём подтверждение от ЮKassa…</string>
+    <string name="billing_payment_timed_out">Оплата обрабатывается — обновите позже.</string>
+    <!-- `26-301`/§3: the live `SetNextPeriodCompositionRequest` and the administrator/channel purchase
+         endpoints have no token-based fallback (`BillingApi`'s own doc comment) - this is the one message
+         a person sees when there is no stored card and no way to establish one from this button. -->
+    <string name="billing_no_stored_payment_method">Способ оплаты не сохранён. Чтобы докупить без перехода в ЮKassa, сначала сохраните карту при следующей оплате.</string>
+    <string name="billing_payment_title">AGO Chat</string>
+    <string name="billing_payment_subtitle">Оплата подписки</string>
+    <string name="billing_transition_title">Переход на тариф Бизнес</string>
+    <string name="billing_transition_body">Сумма отобразится после сохранения состава.</string>
+
     <!-- `26-159`: Каналы → «Установка виджета» - the chat-widget embed snippet and its allowed origins,
          a chat site/channel setting read from `Ago.Chat.Api` (`GET /api/v1/sites/{siteId}/installation`),
          mirroring `ago-console`'s own `InstallSnippetPage`. One resource for both the Ещё row label and the
