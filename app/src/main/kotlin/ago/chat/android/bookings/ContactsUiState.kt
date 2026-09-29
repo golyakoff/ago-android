@@ -98,11 +98,13 @@ internal fun filterContacts(
  * `26-269`: the row's own warning-glyph rule — `true` iff [Contact.phoneVerifiedAt] **and**
  * [Contact.phoneConfirmedByOperatorAt] are both `null` (`docs/backlog/26-269-*.md` §3.3: "the single
  * actionable state... When it is verified *either* way, show no icon"). A plain `Boolean` property on
- * [Contact] rather than logic inlined in [PhoneStatusAndNoShowRow]'s `@Composable` body, so a plain JVM
- * unit test can assert the rule directly against a bare [Contact] — the identical "pull the rule out of
- * the composable so it is testable without Compose" reasoning [filterContacts] states for the search
- * match rule above. Never renamed to "verified"/"confirmed" singular: it answers "does this row need the
- * glyph", not "is the phone verified" — that remains two separate facts on [Contact] itself.
+ * [Contact] rather than logic inlined in [ContactCard]'s own phone-line `@Composable` body (`26-268`
+ * follow-up: originally `PhoneStatusAndNoShowRow`'s body, before that glyph moved inline with the phone
+ * number itself), so a plain JVM unit test can assert the rule directly against a bare [Contact] — the
+ * identical "pull the rule out of the composable so it is testable without Compose" reasoning
+ * [filterContacts] states for the search match rule above. Never renamed to "verified"/"confirmed"
+ * singular: it answers "does this row need the glyph", not "is the phone verified" — that remains two
+ * separate facts on [Contact] itself.
  */
 internal val Contact.phoneNeedsAttention: Boolean
     get() = phoneVerifiedAt == null && phoneConfirmedByOperatorAt == null

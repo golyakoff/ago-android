@@ -32,7 +32,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -74,9 +73,10 @@ import java.util.Locale
  *
  * `26-268` follow-up (author bug report 2026-09-29): the Предстоящие/Прошедшие segment renders its bookings
  * as a scrollable [LazyColumn] ([ClientDetailLoadedBody]), so this sheet carries the identical
- * `confirmValueChange`/[closeSheet] fix [ManualBookingSheet]'s own doc comment states in full — see that
- * comment for why a drag can no longer settle at [SheetValue.Hidden] while [closeSheet] (the X button, back,
- * a scrim tap) still closes it cleanly via [androidx.compose.material3.SheetState.hide].
+ * gestures-disabled fix [ManualBookingSheet]'s own doc comment states in full — see that comment for why
+ * `sheetGesturesEnabled = false` replaced an earlier, broken `confirmValueChange` attempt, and for why
+ * [closeSheet] (the X button, back, a scrim tap) is what still closes this sheet, via
+ * [androidx.compose.material3.SheetState.hide].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +99,7 @@ internal fun ClientDetailSheet(
     // whole read the moment its own write finished.
     LaunchedEffect(contact.customerId) { viewModel.open(contact) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val closeSheet: () -> Unit = {
         scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
@@ -108,6 +108,7 @@ internal fun ClientDetailSheet(
     ModalBottomSheet(
         onDismissRequest = closeSheet,
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
     ) {
         ClientDetailBody(
             state = state,
@@ -370,8 +371,13 @@ private fun ConfirmPhoneBanner(
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+            // `26-268` follow-up (author feedback 2026-09-29): the circled Material Symbols outlined
+            // `error` glyph [AgoIcons.ErrorCircle] already draws for exactly this "needs attention" case
+            // — see that icon's own doc comment — not the bare-stem-and-dot [AgoIcons.Exclamation], so
+            // this banner's own icon reads the same shape as the identical warning on the Клиенты list row
+            // ([ContactCard]'s own phone line in `ContactsScreen.kt`).
             Icon(
-                imageVector = AgoIcons.Exclamation,
+                imageVector = AgoIcons.ErrorCircle,
                 contentDescription = stringResource(R.string.bookings_contacts_phone_unverified_description),
                 tint = agoStatusColors().warning,
                 modifier = Modifier.padding(end = 8.dp),

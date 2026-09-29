@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -72,14 +71,21 @@ import kotlinx.coroutines.launch
  * [LazyColumn], and a bare [ModalBottomSheet] treats any downward drag — including one that starts on that
  * inner list, since Compose's nested-scroll connection hands the unconsumed part of every scroll gesture up
  * to the sheet — as a swipe-to-dismiss. That closed the whole wizard on the very gesture a step's own list
- * needs, forcing a reopen from scratch. `confirmValueChange = { it != SheetValue.Hidden }` on the
- * [androidx.compose.material3.SheetState] blocks exactly that one settle target (a drag can still reach
- * [SheetValue.Expanded], which is what lets the list keep scrolling) while leaving every *programmatic*
- * transition alone — [androidx.compose.material3.SheetState.hide] animates straight to `Hidden` without
- * asking `confirmValueChange` at all, which is what [closeSheet] below relies on. [onDismissRequest] is
- * wired to that same [closeSheet] rather than bare [onDismiss], so the system back button and a scrim tap —
- * the two dismissal paths a `ModalBottomSheet` still drives on its own even with dragging disabled — animate
- * the sheet away first instead of yanking it out of composition mid-frame.
+ * needs, forcing a reopen from scratch.
+ *
+ * `26-268` second follow-up (author regression report 2026-09-29): the first fix for that —
+ * `confirmValueChange = { it != SheetValue.Hidden }` on the [androidx.compose.material3.SheetState] —
+ * turned out to be broken two ways. Rejecting the `Hidden` settle target mid-drag fights the anchored-drag
+ * settling the drag gesture itself drives, so a swipe *up* would oscillate and stick instead of settling
+ * cleanly. And [androidx.compose.material3.SheetState.hide] cannot animate to `Hidden` while
+ * `confirmValueChange` rejects that exact value either, so [closeSheet] below never completed and the X
+ * button stopped closing the sheet at all. The fix here disables the sheet's drag gestures outright instead
+ * of fighting them — `sheetGesturesEnabled = false` on [ModalBottomSheet] — so neither swipe direction moves
+ * the sheet (no jitter) and the inner [LazyColumn]s scroll freely with nothing left to contest their scroll
+ * gestures for. Every dismissal now goes through [androidx.compose.material3.SheetState.hide] unopposed:
+ * [closeSheet] is wired to [onDismissRequest] too, so the system back button and a scrim tap — the two
+ * dismissal paths a `ModalBottomSheet` still drives on its own even with dragging disabled — animate the
+ * sheet away first instead of yanking it out of composition mid-frame.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,7 +101,7 @@ internal fun ManualBookingSheet(
         if (state is ManualBookingUiState.Created) onCreated()
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     // `26-268` follow-up doc comment above: the one path every dismissal - the X button, back, the scrim -
     // now shares, so the sheet always animates to `Hidden` before `onDismiss` tears down the view model.
@@ -106,6 +112,7 @@ internal fun ManualBookingSheet(
     ModalBottomSheet(
         onDismissRequest = closeSheet,
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
     ) {
         ManualBookingBody(
             state = state,

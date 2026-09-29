@@ -25,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -58,10 +57,11 @@ import kotlinx.coroutines.launch
  * layer.
  *
  * `26-268` follow-up (author bug report 2026-09-29): [RescheduleSlotList] is a scrollable [LazyColumn], so
- * this sheet carries the identical `confirmValueChange`/[closeSheet] fix [ManualBookingSheet]'s own doc
- * comment states in full — a downward drag on the slot list no longer settles at [SheetValue.Hidden], and
- * [closeSheet] (the X button, back, a scrim tap) is what still closes the sheet, via
- * [androidx.compose.material3.SheetState.hide] rather than a raw [onDismiss] call.
+ * this sheet carries the identical gestures-disabled fix [ManualBookingSheet]'s own doc comment states in
+ * full — `sheetGesturesEnabled = false` (replacing an earlier, broken `confirmValueChange` attempt) means
+ * no drag on the slot list moves the sheet at all, and [closeSheet] (the X button, back, a scrim tap) is
+ * what still closes the sheet, via [androidx.compose.material3.SheetState.hide] rather than a raw
+ * [onDismiss] call.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +81,7 @@ internal fun RescheduleBookingSheet(
         if (state is RescheduleBookingUiState.Saved) onRescheduled()
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val closeSheet: () -> Unit = {
         scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() }
@@ -90,6 +90,7 @@ internal fun RescheduleBookingSheet(
     ModalBottomSheet(
         onDismissRequest = closeSheet,
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
     ) {
         RescheduleBookingBody(state = state, onRetry = viewModel::refresh, onPick = viewModel::reschedule, onClose = closeSheet)
     }
