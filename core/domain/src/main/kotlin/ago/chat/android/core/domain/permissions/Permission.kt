@@ -30,6 +30,18 @@ public object Permission {
     /** The fourth, independent path to the same destination. */
     public const val CUSTOMER_READ: String = "customer:read"
 
+    /** `26-268`/`adr/0188`: "may enter a phone-taken booking by hand" — copied verbatim from `ago-chat`'s
+     * own `Ago.Chat.Domain.Permission` and from `Ago.Calendar.Domain.Permission` (both byte-for-byte,
+     * `docs/backlog/26-268-*.md` §2 — a permission the calendar checks server-side, not one this app
+     * invents). Gates the «Добавить вручную» entry alone — deliberately **not** paired with
+     * [CUSTOMER_READ]/`customer:edit`: the client the manual write creates is the booking's own trusted
+     * side-effect, the same reasoning that decided the server-side gate (`docs/backlog/26-268-*.md` §2).
+     * Added to [bookingsGate] too — a fifth, independent path to Записи, because an identity holding only
+     * this permission (none of the other four) would otherwise never see the destination that carries its
+     * own entry point, which the other four gates' own "earns Записи a place in the bar" reasoning applies
+     * to equally. */
+    public const val BOOKING_CREATE: String = "booking:create"
+
     /** Gates the roster row inside Команда specifically — the destination itself is always drawn,
      * since "Общение" is ungated (`navigation.md` §"Команда, Аналитика"). Not consumed by this item's
      * own hide-when-empty computation (Команда never collapses), but named here now so the item that
@@ -138,4 +150,5 @@ internal val bookingsGate: List<String> =
         Permission.BOOKING_REJECT,
         Permission.BOOKING_CANCEL,
         Permission.CUSTOMER_READ,
+        Permission.BOOKING_CREATE,
     )

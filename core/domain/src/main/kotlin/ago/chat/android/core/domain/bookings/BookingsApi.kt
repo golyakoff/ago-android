@@ -213,6 +213,129 @@ public interface BookingsApi {
      * [revealCustomerPhone].
      */
     public suspend fun confirmOperatorVerifiedPhone(personId: String): ConfirmPhoneResult
+
+    /**
+     * `26-268`/`adr/0188`: `GET /api/v1/console/contacts/by-phone?phone=...` — the manual-entry flow's own
+     * phone-first recognition read (`docs/backlog/26-268-*.md` §3.4): zero, one or several existing clients
+     * already sharing [phone]. Carries no name on the wire — [PhoneCandidate.displayName] starts `null`,
+     * merged in client-side by [ago.chat.android.bookings.ManualBookingViewModel] from
+     * [ago.chat.android.core.domain.persons.PersonsApi], the identical display-merge [fetchContacts]'s own
+     * doc comment states for [Contact.displayName].
+     *
+     * This read never picks a client on its own — it only surfaces candidates. The operator's own tap
+     * («Это он» / a pick-list row / «Новый клиент») is the identity assertion `adr/0147` requires ("a
+     * phone is a hint, not proof"), so this method never auto-merges.
+     *
+     * A ninth method on this same port, not a new adapter class — [KtorBookingsApi]'s own class doc
+     * comment already states why a fourth/.../eighth read or write earned no separate adapter, and this
+     * read shares every one of those properties too.
+     */
+    public suspend fun fetchPhoneCandidates(phone: String): PhoneCandidatesResult
+
+    /**
+     * `26-268`/`adr/0188`: `POST /api/v1/console/bookings/manual` — a direct, operator-authenticated
+     * command against the calendar, not a visitor's own booking request: claims [startEventId]'s run
+     * straight into `Booked`, with no confirmation veto window (`docs/backlog/26-268-*.md` §3.6). No
+     * `originConversationId` travels because none exists — the write never touches chat's own conversation
+     * model (§4 of that same document).
+     *
+     * [reusePersonId] is non-null exactly when the operator confirmed an existing client (`fetchPhoneCandidates`'s
+     * own «Это он» / pick-list row); `null` tells the server to mint a new person instead, exactly as a
+     * widget booking with no prior contact does (`adr/0184`). [name]/[phone] are sent either way — the
+     * server ignores them on the reuse path and mints from them on the new-client path, so this method
+     * carries one shape rather than a client-side branch duplicating that decision. [email] travels even
+     * though the server does not act on it until `26-268`'s own slice #3 lands (`ADR-0188`'s own
+     * Consequences) — an unreleased consumer simply ignores an extra JSON field it does not read yet, the
+     * same forward-compatible shape every other write on this port already relies on.
+     *
+     * `201`-or-refusal-or-failure — the identical three-way split every write on this port reduces to,
+     * restated with a success value ([ManualBookingResult.Created]) because, unlike the pure veto writes,
+     * there is a newly created booking's own id and span to hand back — [BookingActionResult] has no slot
+     * for that, which is why this is [ManualBookingResult] rather than a ninth reuse of it.
+     */
+    public suspend fun createManualBooking(
+        calendarId: String,
+        serviceId: String,
+        workerId: String,
+        startEventId: String,
+        name: String,
+        phone: String,
+        reusePersonId: String?,
+        email: String?,
+    ): ManualBookingResult
+}
+
+/**
+ * `26-268`/`adr/0188`: one existing client this tenant already has under a given phone number —
+ * `Ago.Calendar.Contracts.ContactByPhoneResponse`, reduced to the fields the recognition card and pick-list
+ * row render. Carries no name on the wire (`adr/0184`: the calendar holds no person copy) —
+ * [displayName] starts `null` and is merged in client-side the identical [Contact.displayName] way.
+ */
+public data class PhoneCandidate(
+    val personId: String,
+    val phone: String,
+    val masked: Boolean,
+    val noShowCount: Int,
+    /** How many bookings this person has ever had with this tenant — the "Постоянный клиент · N записи"
+     * history hint the recognition card renders (`docs/backlog/26-268-*.md` §3.4), read through
+     * [ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel] for its own Russian plural
+     * agreement rather than a second copy of that rule. */
+    val bookingCount: Int,
+    val phoneVerifiedAt: String?,
+    val phoneConfirmedByOperatorAt: String?,
+    val firstSeenAt: String,
+    val lastSeenAt: String,
+    val displayName: String? = null,
+)
+
+/**
+ * `26-268`: what asking "who already has this phone number" came back with — the identical three-arm
+ * shape [ContactsResult] already establishes; an empty [Loaded.candidates] is the honest "no match" case
+ * (`docs/backlog/26-268-*.md` §3.4's own "no match" frame), never folded into [Failed].
+ */
+public sealed interface PhoneCandidatesResult {
+    public data class Loaded(
+        val candidates: List<PhoneCandidate>,
+    ) : PhoneCandidatesResult
+
+    /** The identical "this deployment does not run AGO Calendar at all" fact
+     * [PendingBookingsResult.NotConfigured]'s own doc comment explains. */
+    public data object NotConfigured : PhoneCandidatesResult
+
+    /** [BookingsQueueFailure] reused again — this read reduces to the same "is it me, or is it broken"
+     * two-way question every other calendar read already answers with it. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : PhoneCandidatesResult
+}
+
+/**
+ * `26-268`/`adr/0188`: what asking to enter a manual booking came back with — the identical
+ * [BookingActionResult]/[RevealPhoneResult] three-way split, restated with a success value since a `201`
+ * names the row it just created rather than a bare acknowledgement.
+ */
+public sealed interface ManualBookingResult {
+    /** A `201 Created` — [bookingId] is the new row, [startsAt]/[endsAt] its claimed span, both read back
+     * from the server's own response rather than assumed from the slot the operator tapped (the run's real
+     * length is whatever [ago.chat.android.core.domain.workerslots.WorkerSlot] the server actually claimed
+     * starting at `startEventId`, computed server-side, never re-derived client-side). */
+    public data class Created(
+        val bookingId: String,
+        val startsAt: String,
+        val endsAt: String,
+    ) : ManualBookingResult
+
+    /** A non-2xx whose body carried a genuine RFC 7807 `detail` — shown verbatim, the identical
+     * [BookingActionResult.Refused] reasoning (the slot was claimed by someone else in the meantime, say). */
+    public data class Refused(
+        val detail: String,
+    ) : ManualBookingResult
+
+    /** Everything that is not a genuine server refusal — the identical [BookingActionResult.Failed]
+     * classification, reused here for the identical reason. */
+    public data class Failed(
+        val reason: BookingsQueueFailure,
+    ) : ManualBookingResult
 }
 
 /**
