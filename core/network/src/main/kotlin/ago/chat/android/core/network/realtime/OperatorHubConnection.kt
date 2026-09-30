@@ -80,8 +80,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * ([getTeamHistory], [getTeamDelta], [sendTeamMessage], [removeTeamMessage]), each with its own smaller
  * but equally fixed arity.
  *
- * What this class deliberately still does **not** do: `SetAwayAsync`/presence — no backlog item has
- * reached it yet.
+ * `26-309` adds [getMyPresence]/[setAway] — [OperatorPresenceControl]'s own doc comment states why a
+ * read and a write of the operator's own status get their own interface rather than joining
+ * [OperatorHubEvents] or [HubConnectionControl].
  */
 public class OperatorHubConnection(
     private val hubUrl: String,
@@ -89,7 +90,8 @@ public class OperatorHubConnection(
     private val activeSite: ActiveSiteSelection,
     private val backoff: HubReconnectBackoff = HubReconnectBackoff(),
 ) : OperatorHubEvents,
-    HubConnectionControl {
+    HubConnectionControl,
+    OperatorPresenceControl {
     private val buildLock = Mutex()
     private val subscription = MessageSubscription()
     private val reconnectAttempt = AtomicInteger(0)
@@ -420,6 +422,26 @@ public class OperatorHubConnection(
         requireConnection().invoke(REMOVE_TEAM_MESSAGE_METHOD, teamMessageId).await()
     }
 
+    /**
+     * `26-309`: [OperatorPresenceControl.getMyPresence] — `OperatorHub.GetMyPresenceAsync()`, called
+     * with no arguments (the operator is the connection's own JWT claim, never a parameter — see that
+     * interface's own doc comment on why no permission check is needed either). `Boolean::class.javaObjectType`,
+     * not `Boolean::class.java`: the identical boxed-vs-primitive reasoning [sendMessage]'s own
+     * `Int::class.javaObjectType` comment states, restated for the boolean this hub method returns rather
+     * than the sequence number that one does.
+     */
+    public override suspend fun getMyPresence(): Boolean =
+        requireConnection().invoke(Boolean::class.javaObjectType, GET_MY_PRESENCE_METHOD).await()
+
+    /**
+     * `26-309`: [OperatorPresenceControl.setAway] — `OperatorHub.SetAwayAsync(bool away)`. No return
+     * value, the identical `Completable`-returning `invoke` overload [removeTeamMessage] above already
+     * uses for a hub method with nothing to hand back.
+     */
+    public override suspend fun setAway(away: Boolean) {
+        requireConnection().invoke(SET_AWAY_METHOD, away).await()
+    }
+
     // ------------------------------------------------------------------------------ internals
 
     private fun requireConnection(): HubConnection = connection ?: error("OperatorHubConnection: connect() has not been called yet.")
@@ -584,5 +606,7 @@ public class OperatorHubConnection(
         const val REMOVE_TEAM_MESSAGE_METHOD = "RemoveTeamMessageAsync"
         const val TEAM_MESSAGE_RECEIVED_METHOD = "TeamMessageReceived"
         const val TEAM_MESSAGE_REMOVED_METHOD = "TeamMessageRemoved"
+        const val GET_MY_PRESENCE_METHOD = "GetMyPresenceAsync"
+        const val SET_AWAY_METHOD = "SetAwayAsync"
     }
 }

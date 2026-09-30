@@ -135,6 +135,10 @@ public fun ConversationListRoute(
     hubConnectionState: OperatorHubConnectionState,
     onOpenConversation: (String) -> Unit,
     onSignOut: () -> Unit,
+    // `26-309`: threaded straight through to the stateless `ConversationListScreen`'s own
+    // `AccountAvatarAction` - defaulted so every existing caller/test compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
@@ -208,6 +212,8 @@ public fun ConversationListRoute(
     ConversationListScreen(
         state = state,
         hubConnectionState = hubConnectionState,
+        isAway = isAway,
+        onSetAway = onSetAway,
         tabs = remember(canSeeAllConversations) { conversationListTabs(canSeeAllConversations) },
         onTabSelected = viewModel::onTabSelected,
         onRefresh = viewModel::refresh,
@@ -253,6 +259,10 @@ internal fun ConversationListScreen(
     onDismissClaimError: (String) -> Unit,
     onOpenConversation: (String) -> Unit,
     onSignOut: () -> Unit,
+    // `26-309`: threaded straight through to this screen's own `AccountAvatarAction` - defaulted so
+    // every existing caller/test compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     // `26-90`: which segments exist at all - two or three, never three with one greyed out
     // ([visibleConversationListTabs]'s own doc comment). Defaulted to the two every operator has, so
     // every existing caller and every existing test compiles and behaves exactly as before.
@@ -368,6 +378,8 @@ internal fun ConversationListScreen(
                             displayName = operatorDisplayName,
                             email = operatorEmail,
                             hubConnectionState = hubConnectionState,
+                            isAway = isAway,
+                            onSetAway = onSetAway,
                             onOpenSettings = onOpenSettings,
                             onSignOut = onSignOut,
                             modifier = Modifier.padding(end = 4.dp),

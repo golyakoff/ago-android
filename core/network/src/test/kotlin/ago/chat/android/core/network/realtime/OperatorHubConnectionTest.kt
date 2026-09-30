@@ -117,4 +117,29 @@ class OperatorHubConnectionTest {
             }
         }
     }
+
+    /**
+     * `26-309`: [OperatorHubConnection.getMyPresence] and [OperatorHubConnection.setAway] are guarded by
+     * the identical `requireConnection()` precondition every other invoke-based method already is — the
+     * same "fails fast rather than silently opening a socket" property
+     * `opening a past dialog before connect fails fast rather than silently opening a socket` proves for
+     * [OperatorHubConnection.getVisitorHistoryConversation] above, restated for the presence read and
+     * write rather than a history fetch.
+     */
+    @Test
+    fun `reading or writing presence before connect fails fast rather than silently opening a socket`() {
+        val connection =
+            OperatorHubConnection(
+                hubUrl = "https://chat-api.reserve-me.ru/hubs/operator",
+                accessTokens = MutableAccessTokenProvider(token = "a-token"),
+                activeSite = InMemoryActiveSite(),
+            )
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { connection.getMyPresence() }
+        }
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { connection.setAway(true) }
+        }
+    }
 }

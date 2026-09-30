@@ -259,9 +259,14 @@ public class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalVisitorAvatarStyle provides avatarStyle) {
                     val state by viewModel.state.collectAsState()
                     val hubConnectionState by viewModel.hubConnectionState.collectAsState()
+                    // `26-309`: threaded down beside `hubConnectionState`, exactly the same shape -
+                    // see `SignInViewModel.isAway`'s own doc comment for why this is a plain relay too.
+                    val isAway by viewModel.isAway.collectAsState()
                     SignInHost(
                         state = state,
                         hubConnectionState = hubConnectionState,
+                        isAway = isAway,
+                        onSetAway = viewModel::setAway,
                         consoleUrl = oidcConfig.consoleUrl,
                         onSignIn = viewModel::beginSignIn,
                         onChooseSite = viewModel::chooseSite,

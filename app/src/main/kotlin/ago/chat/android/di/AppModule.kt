@@ -82,6 +82,7 @@ import ago.chat.android.core.network.readiness.KtorBookingReadinessApi
 import ago.chat.android.core.network.realtime.HubConnectionControl
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubEvents
+import ago.chat.android.core.network.realtime.OperatorPresenceControl
 import ago.chat.android.core.network.recut.KtorRecutApi
 import ago.chat.android.core.network.restrictions.KtorVisitorRestrictionApi
 import ago.chat.android.core.network.schedule.KtorWorkingHoursApi
@@ -352,6 +353,18 @@ public object AppModule {
     @Provides
     @Singleton
     public fun provideHubConnectionControl(connection: OperatorHubConnection): HubConnectionControl = connection
+
+    /**
+     * `26-309`: [ago.chat.android.signin.SignInViewModel]'s own port for the operator's own availability —
+     * the identical "second view onto the one `@Singleton` graph node" shape [provideOperatorHubEvents]/
+     * [provideHubConnectionControl] above already establish, restated for the presence read/write pair
+     * instead of the message/event read half or the connect/disconnect write half. See
+     * [OperatorPresenceControl]'s own doc comment for why this is its own interface rather than one more
+     * method on either of those two.
+     */
+    @Provides
+    @Singleton
+    public fun provideOperatorPresenceControl(connection: OperatorHubConnection): OperatorPresenceControl = connection
 
     // `26-85`: everything `OperatorPresenceService`'s own gating needs, each a small `@Singleton` seam
     // for the identical reason [providePushRegistrationGateway] below already is one - see each

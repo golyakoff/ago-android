@@ -58,6 +58,9 @@ import androidx.compose.runtime.setValue
 internal fun AnalyticsTabHost(
     permissions: OperatorPermissions,
     hubConnectionState: OperatorHubConnectionState,
+    // `26-309`: threaded straight through to `AnalyticsRoute`'s own `AccountAvatarAction`.
+    isAway: Boolean,
+    onSetAway: suspend (Boolean) -> Boolean,
     operatorDisplayName: String?,
     operatorEmail: String?,
     onOpenSettings: () -> Unit,
@@ -82,6 +85,8 @@ internal fun AnalyticsTabHost(
     if (currentlyOpen == null) {
         AnalyticsRoute(
             hubConnectionState = hubConnectionState,
+            isAway = isAway,
+            onSetAway = onSetAway,
             onOpenSettings = onOpenSettings,
             onSignOut = onSignOut,
             reports = reports,

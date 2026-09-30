@@ -86,6 +86,17 @@
     <string name="hub_connection_connected">Подключено</string>
     <string name="hub_connection_reconnecting">Переподключение…</string>
 
+    <!-- `26-309`: the operator's own away/online status - `docs/backlog/26-309-*.md` §2. Every string
+         names the effect on the visitor, never a bare "Away"/"Online" repeated in a smaller font. -->
+    <string name="account_availability_online_label">Онлайн</string>
+    <string name="account_availability_away_label">Отошёл</string>
+    <string name="account_availability_go_away_action">Отойти</string>
+    <string name="account_availability_come_back_action">Вернуться</string>
+    <string name="account_availability_go_away_detail">Новые диалоги вам назначаться не будут</string>
+    <string name="account_availability_active_notice">Вы отошли — новые диалоги не назначаются</string>
+    <string name="account_availability_unavailable_note">Управление статусом доступно при активном соединении</string>
+    <string name="account_availability_toggle_error">Не удалось изменить статус</string>
+
     <string name="action_sign_out">Выйти</string>
     <!-- `26-32`'s own `action_more_options` (the conversation list's overflow ⋮ control) retired at
          `26-77`, along with `ConversationListOverflowMenu` itself - the account menu's own accessible
@@ -2190,10 +2201,11 @@
     <string name="notification_settings_time_picker_cancel">Отмена</string>
 
     <!-- `26-19`'s own Away note: `SetAwayAsync` is per operator, not per connection
-         (`docs/architecture.md`'s own Realtime section) - stated here, in place of a control, rather than
-         inventing a per-device toggle this screen has no business offering. -->
+         (`docs/architecture.md`'s own Realtime section). `26-309` adds the control this note used to say
+         did not exist - the account menu, not this screen - so the note now points there instead of
+         claiming away can't be managed from the app at all. -->
     <string name="notification_settings_away_section">Статус «Отошёл»</string>
-    <string name="notification_settings_away_note">Статус «Отошёл» относится к оператору, а не к этому телефону — он одинаковый на всех ваших устройствах, включая веб-консоль. Управлять им с этого экрана нельзя.</string>
+    <string name="notification_settings_away_note">Статус «Отошёл» относится к оператору, а не к этому телефону — он одинаковый на всех ваших устройствах, включая веб-консоль. Изменить его можно в меню аккаунта.</string>
 
     <!-- `26-18`: the notification's own title/text - never the message body and never the visitor's own
          identity (`PushNotificationPresenter`'s own doc comment states why in full), only the kind of

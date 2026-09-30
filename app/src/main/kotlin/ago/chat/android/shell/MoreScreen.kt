@@ -114,6 +114,10 @@ internal fun MoreScreen(
     // `false` so the back-contract tests that drive [MoreScreen] with no `site:erase` keep rendering exactly
     // the rows they did before this item.
     canEraseSite: Boolean = false,
+    // `26-309`: threaded straight through to [MoreListScreen]'s own `AccountAvatarAction`. Defaulted so
+    // every back-contract test constructing this composable directly compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
 ) {
     var openRowId by rememberSaveable { mutableStateOf<String?>(null) }
     val rows =
@@ -218,6 +222,8 @@ internal fun MoreScreen(
         MoreListScreen(
             rows = rows,
             hubConnectionState = hubConnectionState,
+            isAway = isAway,
+            onSetAway = onSetAway,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
             onOpenSettings = onOpenSettings,
@@ -232,6 +238,8 @@ internal fun MoreScreen(
 private fun MoreListScreen(
     rows: List<MoreRow>,
     hubConnectionState: OperatorHubConnectionState,
+    isAway: Boolean,
+    onSetAway: suspend (Boolean) -> Boolean,
     operatorDisplayName: String?,
     operatorEmail: String?,
     onOpenSettings: () -> Unit,
@@ -251,6 +259,8 @@ private fun MoreListScreen(
                             displayName = operatorDisplayName,
                             email = operatorEmail,
                             hubConnectionState = hubConnectionState,
+                            isAway = isAway,
+                            onSetAway = onSetAway,
                             onOpenSettings = onOpenSettings,
                             onSignOut = onSignOut,
                             modifier = Modifier.padding(end = 4.dp),

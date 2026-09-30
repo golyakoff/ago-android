@@ -3,12 +3,14 @@ package ago.chat.android.ui.components
 import ago.chat.android.R
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,10 +22,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 /**
  * `26-77`: the account menu — mockup section "08 · Аккаунт и шапка" — replacing the ad-hoc
@@ -54,9 +59,15 @@ import androidx.compose.ui.unit.dp
  * **Two independent accessibility nodes, not one merged sentence.** This composable deliberately does
  * *not* set `Modifier.semantics(mergeDescendants = true)` anywhere: the avatar's own clickable region
  * carries [R.string.account_menu_open_action] and the presence dot inside it carries its own
- * `"<label>: <state>"` description exactly as [HubConnectionDot] always has — the identical pair of
- * independently-announced facts a screen reader could already reach on every screen this replaces (the
- * dot, and the kebab/nothing beside it), now drawn as one visual unit instead of two.
+ * [presenceDotDescription] — the identical pair of independently-announced facts a screen reader could
+ * already reach on every screen this replaces (the dot, and the kebab/nothing beside it), now drawn as
+ * one visual unit instead of two.
+ *
+ * `26-309`: the dot's own description changed shape, not just its possible values — see
+ * [presenceDotDescription]'s own doc comment for why [OperatorHubConnectionState.Connected] now speaks
+ * bare availability («Онлайн»/«Отошёл») while every other state keeps the pre-existing `"Соединение:
+ * <state>"` wording verbatim. The account menu itself gained a matching «Отошёл»/«Онлайн» row —
+ * [AvailabilityMenuRow]'s own doc comment.
  *
  * @param displayName the signed-in operator's own name, from [ago.chat.android.session.OperatorIdentity] —
  * `null`/blank renders the honest fallbacks this file's own [initialsFor] and
@@ -66,12 +77,21 @@ import androidx.compose.ui.unit.dp
  * "never invented, rendered honestly" rule every optional line in this app already follows
  * ([ConversationRowSnippetLine][ago.chat.android.conversations.ConversationListScreen]'s own doc
  * comment states it first).
+ * @param isAway `26-309`: the operator's own away/online status - see `docs/backlog/26-309-*.md` §1 for
+ * why this folds into the presence dot rather than a second control, and [AvailabilityMenuRow]'s own
+ * doc comment for the confirm-then-update account-menu row this parameter also drives.
+ * @param onSetAway `26-309`: [ago.chat.android.signin.SignInViewModel.setAway], restated - `true` steps
+ * away, `false` comes back. Returns whether the server confirmed the change, so [AvailabilityMenuRow]
+ * can show its own error state without this composable or its caller owning any transient UI state of
+ * their own.
  */
 @Composable
 public fun AccountAvatarAction(
     displayName: String?,
     email: String?,
     hubConnectionState: OperatorHubConnectionState,
+    isAway: Boolean,
+    onSetAway: suspend (Boolean) -> Boolean,
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -81,8 +101,8 @@ public fun AccountAvatarAction(
     val fallbackInitial = stringResource(R.string.account_menu_fallback_initial)
     val initials = remember(displayName, fallbackInitial) { initialsFor(displayName, fallbackInitial) }
     val resolvedName = displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.account_menu_unknown_name)
-    val dotColor = colorFor(hubConnectionState)
-    val dotDescription = "${stringResource(R.string.hub_connection_label)}: ${labelFor(hubConnectionState)}"
+    val dotColor = colorFor(hubConnectionState, isAway)
+    val dotDescription = presenceDotDescription(hubConnectionState, isAway)
     val openMenuLabel = stringResource(R.string.account_menu_open_action)
 
     Box(modifier = modifier) {
@@ -130,6 +150,14 @@ public fun AccountAvatarAction(
                 }
             }
             HorizontalDivider()
+            // `26-309`: the «Отошёл»/«Онлайн» control - directly under the header, above «Настройки»
+            // (`docs/backlog/26-309-*.md` §2's own placement decision: beside the very dot it governs).
+            AvailabilityMenuRow(
+                isAway = isAway,
+                isConnected = hubConnectionState == OperatorHubConnectionState.Connected,
+                onSetAway = onSetAway,
+            )
+            HorizontalDivider()
             // `docs/backlog/26-77-*.md`'s own Scope item 3: a chevron, opening the existing Settings
             // screen - never a second sign-out pathway, never a colour of its own.
             DropdownMenuItem(
@@ -161,6 +189,103 @@ public fun AccountAvatarAction(
                     expanded = false
                     onSignOut()
                 },
+            )
+        }
+    }
+}
+
+/**
+ * `26-309`: the «Отошёл»/«Онлайн» account-menu row — `docs/backlog/26-309-*.md` §2, mirroring the
+ * console's own `AwayControl`'s `isAway ? come-back : go-away` shape and its three states:
+ *
+ * - **Current + action.** The status label and a caption naming the *visitor-facing* effect ("new chats
+ *   won't be assigned to you" / "you're receiving them again"), never a bare "Away"/"Online" repeated in
+ *   a smaller font — the console's own copy rule, restated.
+ * - **Disabled while not [isConnected].** [onSetAway] is a hub invoke; with no live socket it cannot
+ *   land, so the row says why rather than accepting a tap that could never have reached the server —
+ *   the identical guard [OperatorHubConnection.sendMessage]'s own `NotConnected` branch already enforces
+ *   one layer down.
+ * - **Pending, then confirm-or-error.** The button disables itself again the instant a tap starts a
+ *   call, and [isAway] is read from the caller's own state (`SignInViewModel.isAway`, updated only on a
+ *   confirmed server response) rather than flipped here — no optimistic update, the console's own
+ *   `23-20` judgement: "a control that already claims a state a failed call never actually reached" is
+ *   worse than a control that takes a beat to confirm. A failed call surfaces its own inline error line
+ *   rather than silently doing nothing.
+ *
+ * Deliberately not a `DropdownMenuItem`: neither of that composable's two click-and-close semantics fit
+ * a control with its own pending/error state that must stay visible (and the menu open) through a
+ * fallible round trip.
+ */
+@Composable
+private fun AvailabilityMenuRow(
+    isAway: Boolean,
+    isConnected: Boolean,
+    onSetAway: suspend (Boolean) -> Boolean,
+) {
+    var pending by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text =
+                        stringResource(
+                            if (isAway) R.string.account_availability_away_label else R.string.account_availability_online_label,
+                        ),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                )
+                Text(
+                    text =
+                        stringResource(
+                            if (isAway) {
+                                R.string.account_availability_active_notice
+                            } else {
+                                R.string.account_availability_go_away_detail
+                            },
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(
+                enabled = isConnected && !pending,
+                onClick = {
+                    val target = !isAway
+                    failed = false
+                    pending = true
+                    scope.launch {
+                        val succeeded = onSetAway(target)
+                        pending = false
+                        failed = !succeeded
+                    }
+                },
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            if (isAway) {
+                                R.string.account_availability_come_back_action
+                            } else {
+                                R.string.account_availability_go_away_action
+                            },
+                        ),
+                )
+            }
+        }
+        if (!isConnected) {
+            Text(
+                text = stringResource(R.string.account_availability_unavailable_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (failed) {
+            Text(
+                text = stringResource(R.string.account_availability_toggle_error),
+                style = MaterialTheme.typography.bodySmall,
+                color = agoStatusColors().dangerText,
             )
         }
     }

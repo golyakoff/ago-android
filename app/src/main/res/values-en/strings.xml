@@ -81,6 +81,15 @@
     <string name="hub_connection_connected">Connected</string>
     <string name="hub_connection_reconnecting">Reconnecting…</string>
 
+    <string name="account_availability_online_label">Online</string>
+    <string name="account_availability_away_label">Away</string>
+    <string name="account_availability_go_away_action">Step away</string>
+    <string name="account_availability_come_back_action">I\'m back</string>
+    <string name="account_availability_go_away_detail">New chats won\'t be assigned to you</string>
+    <string name="account_availability_active_notice">You\'re away — new chats aren\'t being assigned</string>
+    <string name="account_availability_unavailable_note">Status can be changed while connected</string>
+    <string name="account_availability_toggle_error">Couldn\'t change your status</string>
+
     <string name="action_sign_out">Sign out</string>
     <string name="action_dismiss">Dismiss</string>
     <string name="action_back">Back</string>
@@ -1371,7 +1380,7 @@
     <string name="notification_settings_time_picker_cancel">Cancel</string>
 
     <string name="notification_settings_away_section">"Away" status</string>
-    <string name="notification_settings_away_note">"Away" status belongs to the operator, not this phone — it\'s the same across every one of your devices, including the web console. It can\'t be managed from this screen.</string>
+    <string name="notification_settings_away_note">"Away" status belongs to the operator, not this phone — it\'s the same across every one of your devices, including the web console. You can change it from the account menu.</string>
 
     <string name="push_title_assigned">New conversation assigned to you</string>
     <string name="push_text_assigned">Open the app to view the conversation</string>

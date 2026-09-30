@@ -232,9 +232,12 @@ internal fun NotificationSettingsScreen(
                     }
                 }
 
-                // `26-19`'s own Away note: text only, never a control - `architecture.md`'s own Realtime
-                // section states `SetAwayAsync` is per operator, not per connection, and this screen's
-                // job is to say so rather than invent a per-device variant.
+                // `26-19`'s own Away note: `architecture.md`'s own Realtime section states `SetAwayAsync`
+                // is per operator, not per connection, so this screen's own job is only to say so, never
+                // to invent a per-device variant of it. `26-309` gave the app a real control for it - the
+                // account menu, not this screen - so the note now points there rather than saying away
+                // cannot be managed from the app at all (`notification_settings_away_note`, both
+                // languages).
                 item { SectionLabel(stringResource(R.string.notification_settings_away_section)) }
                 item {
                     Text(
