@@ -65,10 +65,13 @@ import kotlinx.coroutines.launch
  * bare-`ComponentActivity` androidTest (`BookingsConfigMenuTest`) never opens this sheet, so it never
  * triggers this lookup.
  *
- * [onCreated] fires exactly once, the moment [ManualBookingUiState.Created] is reached — the caller's job,
- * per [BookingsScreen]'s own wiring, is to close this sheet and switch to Утверждены so the new booking is
- * what renders next (`docs/backlog/26-268-*.md` §5.2's own last frame). This composable never touches
- * [ConfirmedBookingsViewModel] itself, the identical separation [RescheduleBookingSheet] already draws.
+ * [onCreated] fires exactly once, the moment [ManualBookingUiState.Created] is reached, with that state's
+ * own [ManualBookingUiState.Created.localDate] — the caller's job, per [BookingsScreen]'s own wiring, is to
+ * close this sheet, switch to Утверждены, and jump that segment's own day strip onto [localDate] so the new
+ * booking is what renders next (`docs/backlog/26-268-*.md` §5.2's own last frame; `26-311`: a booking made
+ * for a future day used to land back on Утверждены still anchored on today, off-screen until the operator
+ * hunted for it). This composable never touches [ConfirmedBookingsViewModel] itself, the identical
+ * separation [RescheduleBookingSheet] already draws.
  *
  * `26-268` follow-up (author bug report 2026-09-29): the Date/Time steps are each a scrollable
  * [LazyColumn], and a bare [ModalBottomSheet] treats any downward drag — including one that starts on that
@@ -94,7 +97,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ManualBookingSheet(
     onDismiss: () -> Unit,
-    onCreated: () -> Unit,
+    onCreated: (localDate: String) -> Unit,
     // `26-283`: non-`null` when this sheet was opened from a client's own detail hub «+ Записать» rather
     // than the plain header entry point — see [ManualBookingViewModel.open]'s own doc comment. Defaulted
     // to `null` so the header entry point's own call site keeps compiling unchanged.
@@ -105,7 +108,7 @@ internal fun ManualBookingSheet(
 
     LaunchedEffect(Unit) { viewModel.open(prefillClient) }
     LaunchedEffect(state) {
-        if (state is ManualBookingUiState.Created) onCreated()
+        (state as? ManualBookingUiState.Created)?.let { onCreated(it.localDate) }
     }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

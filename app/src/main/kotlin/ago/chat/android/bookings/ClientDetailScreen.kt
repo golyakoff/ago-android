@@ -170,7 +170,11 @@ internal fun ClientDetailSheet(
         ManualBookingSheet(
             prefillClient = manualBookingPrefillCandidate(loaded),
             onDismiss = { showManualBookingSheet = false },
-            onCreated = {
+            // `26-311`: this hub has no day-strip of its own to jump - only [BookingsScreen]'s own
+            // Утверждены segment does ([ManualBookingSheet]'s own doc comment) - so the new booking's own
+            // `localDate` is simply unused here, the identical "the caller uses only what it needs" shape
+            // every other multi-field write result on this port already follows.
+            onCreated = { _ ->
                 showManualBookingSheet = false
                 // `26-283`: the new booking just landed on the server - re-read so the hub's own
                 // Предстоящие segment picks it up, the identical "the caller re-reads, the write result

@@ -130,10 +130,17 @@ internal sealed interface ManualBookingUiState {
      * re-reads, the write result carries no fresh reading back" discipline
      * [ago.chat.android.core.domain.bookings.BookingActionResult.Succeeded]'s own doc comment states) —
      * carried here anyway because a terminal state that silently drops the very thing it just created would
-     * be the wrong default to set for the next write this port grows. */
+     * be the wrong default to set for the next write this port grows.
+     *
+     * `26-311`: [localDate] is the booking's own business-local `YYYY-MM-DD` day — [selectedSlot]'s own
+     * [ago.chat.android.core.domain.workerslots.WorkerSlot.localDate] at the moment [ManualBookingViewModel.submit]
+     * fired, not a client-side conversion of [startsAt] (an ISO instant, wrong across a DST/zone boundary).
+     * [ManualBookingSheet]'s own caller uses it to jump Утверждены's own day strip onto the day the booking
+     * actually landed on, rather than leaving it anchored on today. */
     data class Created(
         val bookingId: String,
         val startsAt: String,
         val endsAt: String,
+        val localDate: String,
     ) : ManualBookingUiState
 }
