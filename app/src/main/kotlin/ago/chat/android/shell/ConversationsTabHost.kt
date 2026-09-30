@@ -54,6 +54,11 @@ public fun ConversationsTabHost(
     activeSiteId: String?,
     hubConnectionState: OperatorHubConnectionState,
     onSignOut: () -> Unit,
+    // `26-309`: threaded straight through to `ConversationListRoute`'s own `AccountAvatarAction` -
+    // defaulted so every back-contract test constructing this composable directly compiles and
+    // behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
@@ -215,6 +220,8 @@ public fun ConversationsTabHost(
             ConversationListRoute(
                 activeSiteId = activeSiteId,
                 hubConnectionState = hubConnectionState,
+                isAway = isAway,
+                onSetAway = onSetAway,
                 viewModel = viewModel,
                 onOpenConversation = { conversationId ->
                     openConversationId = conversationId

@@ -63,6 +63,11 @@ public fun SignInHost(
     onSignOut: () -> Unit,
     onCancelSignIn: () -> Unit,
     onOpenConsole: (String) -> Unit,
+    // `26-309`: threaded straight through to `AppShellRoute`, the identical "plain value down, no
+    // screen owns it" shape [hubConnectionState] already is. Defaulted so every pre-existing caller
+    // (this file's own Previews, `LaunchScreenTest`) compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold { padding ->
@@ -113,6 +118,8 @@ public fun SignInHost(
                     AppShellRoute(
                         activeSiteId = state.activeSiteId,
                         hubConnectionState = hubConnectionState,
+                        isAway = isAway,
+                        onSetAway = onSetAway,
                         onSignOut = onSignOut,
                     )
             }

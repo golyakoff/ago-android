@@ -113,6 +113,10 @@ public fun BookingsRoute(
     // without the delete swipe, and a pure Admin with only `customer:erase` sees the swipe without cancel.
     canCancelBooking: Boolean = false,
     hubConnectionState: OperatorHubConnectionState,
+    // `26-309`: threaded straight through to the stateless [BookingsScreen]'s own `AccountAvatarAction` -
+    // defaulted so every existing caller/test compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     onOpenSettings: () -> Unit,
     onSignOut: () -> Unit,
     operatorDisplayName: String? = null,
@@ -633,6 +637,8 @@ public fun BookingsRoute(
         readinessState = readinessState,
         onRetryReadiness = onRefreshReadiness,
         hubConnectionState = hubConnectionState,
+        isAway = isAway,
+        onSetAway = onSetAway,
         operatorDisplayName = operatorDisplayName,
         operatorEmail = operatorEmail,
         onOpenSettings = onOpenSettings,
@@ -770,6 +776,8 @@ internal fun BookingsScreen(
     readinessState: ReadinessUiState?,
     onRetryReadiness: () -> Unit,
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     onOpenSettings: () -> Unit = {},
@@ -939,6 +947,8 @@ internal fun BookingsScreen(
                             displayName = operatorDisplayName,
                             email = operatorEmail,
                             hubConnectionState = hubConnectionState,
+                            isAway = isAway,
+                            onSetAway = onSetAway,
                             onOpenSettings = onOpenSettings,
                             onSignOut = onSignOut,
                             modifier = Modifier.padding(end = 4.dp),

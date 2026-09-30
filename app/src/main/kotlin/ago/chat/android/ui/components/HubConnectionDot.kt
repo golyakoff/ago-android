@@ -64,13 +64,18 @@ public fun HubConnectionDot(
     state: OperatorHubConnectionState,
     modifier: Modifier = Modifier,
 ) {
-    val description = "${stringResource(R.string.hub_connection_label)}: ${labelFor(state)}"
+    // `26-309`: `isAway = false` always - this bare dot never reflects availability (see this file's
+    // own top-of-file doc comment: nothing calls this composable any more since `26-88` removed
+    // `ThreadScreen`'s own use of it, but its behaviour is left exactly as it always was rather than
+    // silently drifting the moment `colorFor`/`labelFor` grew a second parameter for
+    // [ago.chat.android.ui.components.AccountAvatarAction]'s own presence dot).
+    val description = "${stringResource(R.string.hub_connection_label)}: ${labelFor(state, isAway = false)}"
     Box(
         modifier =
             modifier
                 .size(DotSize)
                 .clip(CircleShape)
-                .background(colorFor(state))
+                .background(colorFor(state, isAway = false))
                 .semantics { contentDescription = description },
     )
 }
@@ -78,25 +83,72 @@ public fun HubConnectionDot(
 /** The size the retired `HubConnectionDebugRow` already drew, carried over rather than re-chosen. */
 private val DotSize = 8.dp
 
-// `26-77`: `internal` rather than `private` - [ago.chat.android.ui.components.AccountAvatarAction]'s
-// own presence dot reads both of these directly, so the account menu's dot and this file's own dot
-// can never silently drift onto two different colour/wording rules for the identical
-// [OperatorHubConnectionState].
+/**
+ * `26-77`: `internal` rather than `private` - [ago.chat.android.ui.components.AccountAvatarAction]'s
+ * own presence dot reads both this and [labelFor] directly, so the account menu's dot and this file's
+ * own dot can never silently drift onto two different colour/wording rules for the identical
+ * [OperatorHubConnectionState].
+ *
+ * `26-309`: widened to take [isAway] - `docs/backlog/26-309-*.md` §1's own combined-state table.
+ * **Connection trouble outranks availability**: [isAway] only ever changes the colour while
+ * [state] is [OperatorHubConnectionState.Connected] - while the socket is down the server-side
+ * availability is unknowable and must not be asserted, so every other state ignores [isAway] entirely.
+ * `Connected && isAway` reads `agoStatusColors().warning` (a saturated amber, distinct from the
+ * `tertiary` "trying" tone below) rather than [AgoLive] - the dot now answers "can a visitor reach me
+ * right now", not merely "is the socket up".
+ */
 @Composable
-internal fun colorFor(state: OperatorHubConnectionState): Color =
+internal fun colorFor(
+    state: OperatorHubConnectionState,
+    isAway: Boolean,
+): Color =
     when (state) {
-        OperatorHubConnectionState.Connected -> AgoLive
+        OperatorHubConnectionState.Connected -> if (isAway) agoStatusColors().warning else AgoLive
         OperatorHubConnectionState.Connecting, OperatorHubConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary
         OperatorHubConnectionState.Disconnected -> agoStatusColors().dangerText
     }
 
+/**
+ * `26-309`: widened to take [isAway] - see [colorFor]'s own doc comment for the identical priority rule.
+ * **Only [OperatorHubConnectionState.Connected] speaks availability at all.** Every other state keeps
+ * its pre-existing `hub_connection_*` wording verbatim - this is the "unchanged wording" half of
+ * `docs/backlog/26-309-*.md` §1's own Notes, and the reason every instrumented assertion for
+ * `Disconnected`/`Connecting`/`Reconnecting` survives this change untouched.
+ */
 @Composable
-internal fun labelFor(state: OperatorHubConnectionState): String =
+internal fun labelFor(
+    state: OperatorHubConnectionState,
+    isAway: Boolean,
+): String =
     when (state) {
         OperatorHubConnectionState.Disconnected -> stringResource(R.string.hub_connection_disconnected)
         OperatorHubConnectionState.Connecting -> stringResource(R.string.hub_connection_connecting)
-        OperatorHubConnectionState.Connected -> stringResource(R.string.hub_connection_connected)
+        OperatorHubConnectionState.Connected ->
+            if (isAway) {
+                stringResource(R.string.account_availability_away_label)
+            } else {
+                stringResource(R.string.account_availability_online_label)
+            }
         OperatorHubConnectionState.Reconnecting -> stringResource(R.string.hub_connection_reconnecting)
+    }
+
+/**
+ * `26-309`: [ago.chat.android.ui.components.AccountAvatarAction]'s own presence-dot description -
+ * `docs/backlog/26-309-*.md` §1's own combined-state table draws a real distinction the bare
+ * `"<label>: <state>"` shape [HubConnectionDot] always used cannot express: **while [state] is
+ * [OperatorHubConnectionState.Connected], availability is the whole sentence** («Онлайн»/«Отошёл», with
+ * no "Соединение:" prefix - connection is fine and no longer the interesting fact); every other state
+ * keeps the prefixed `"Соединение: <label>"` wording verbatim, unchanged from before this item.
+ */
+@Composable
+internal fun presenceDotDescription(
+    state: OperatorHubConnectionState,
+    isAway: Boolean,
+): String =
+    if (state == OperatorHubConnectionState.Connected) {
+        labelFor(state, isAway)
+    } else {
+        "${stringResource(R.string.hub_connection_label)}: ${labelFor(state, isAway)}"
     }
 
 @Preview(showBackground = true)

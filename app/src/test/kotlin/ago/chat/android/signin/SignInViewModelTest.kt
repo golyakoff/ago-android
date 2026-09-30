@@ -13,6 +13,7 @@ import ago.chat.android.core.domain.permissions.OperatorPermissions
 import ago.chat.android.core.network.auth.AccessTokenProvider
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorPresenceControl
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.PushAvailability
@@ -384,6 +385,59 @@ class SignInViewModelTest {
             assertEquals(1, presenceController.signOutCalls)
         }
 
+    /**
+     * `26-309`: [SignInViewModel.setAway] does not gate on [SignInViewModel.hubConnectionState] itself
+     * (the *control*'s own disabled-while-not-connected rule is `AccountAvatarAction`'s job — see its
+     * own doc comment) — it only calls [OperatorPresenceControl.setAway] and updates [SignInViewModel.isAway]
+     * on success, so this is testable against a plain fake with no real socket at all, unlike
+     * `landing signed in also attempts to connect the hub` above (which genuinely needs
+     * [OperatorHubConnectionState.Connecting] to prove anything and settles for that alone).
+     */
+    @Test
+    fun `setAway updates isAway only when the presence control call succeeds`() =
+        runTest(dispatcher) {
+            val presenceControl = FakePresenceControl()
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    presenceControl = presenceControl,
+                )
+            advanceUntilIdle()
+            assertEquals(false, viewModel.isAway.value)
+
+            val succeeded = viewModel.setAway(true)
+            advanceUntilIdle()
+
+            assertTrue("a successful setAway call must report success", succeeded)
+            assertEquals(true, viewModel.isAway.value)
+            assertEquals(listOf(true), presenceControl.setAwayCalls)
+        }
+
+    /** `26-309`/`23-20`'s console precedent, restated: a failed call must never optimistically flip the
+     * shown state - [SignInViewModel.isAway] stays exactly where it was, and the caller learns the
+     * attempt failed from the returned `false` rather than from a state that silently never changed. */
+    @Test
+    fun `setAway leaves isAway unchanged and reports failure when the presence control call throws`() =
+        runTest(dispatcher) {
+            val presenceControl = FakePresenceControl(setAwayFailure = IllegalStateException("hub call failed"))
+            val viewModel =
+                viewModelWith(
+                    FakeIdentityApi(TenancyListing.Known(listOf(shop)), seat = ProbeOutcome.Accepted),
+                    presenceControl = presenceControl,
+                )
+            advanceUntilIdle()
+
+            val succeeded = viewModel.setAway(true)
+            advanceUntilIdle()
+
+            assertTrue("a failed setAway call must report failure, not throw", !succeeded)
+            assertEquals(
+                "a failed call must never optimistically flip the shown availability",
+                false,
+                viewModel.isAway.value,
+            )
+        }
+
     // ------------------------------------------------------------------------------------- fakes
 
     private fun viewModelWith(
@@ -393,6 +447,7 @@ class SignInViewModelTest {
         deviceRegistrar: DeviceRegistrar = FakeDeviceRegistrar(),
         registrationScheduler: DeviceRegistrationScheduler = FakeDeviceRegistrationScheduler(),
         presenceController: OperatorPresenceController = FakeOperatorPresenceController(),
+        presenceControl: OperatorPresenceControl = FakePresenceControl(),
     ): SignInViewModel =
         SignInViewModel(
             session = session,
@@ -401,6 +456,7 @@ class SignInViewModelTest {
             deviceRegistrar = deviceRegistrar,
             registrationScheduler = registrationScheduler,
             presenceController = presenceController,
+            presenceControl = presenceControl,
             // `26-13`/`26-17`'s own connect-on-sign-in fix: `routeNow()` now really does call
             // `connect()` on this instance. A real `OperatorHubConnection` over a deliberately
             // unreachable host (`example.invalid`, RFC 2606) is still simpler than a second port just
@@ -533,6 +589,25 @@ class SignInViewModelTest {
 
         override fun onSignedOut() {
             signOutCalls++
+        }
+    }
+
+    /** `26-309`: [SignInViewModel.setAway]'s own plain fake - no `com.microsoft.signalr` socket, the
+     * identical "test through a narrow interface" reasoning every other fake in this file already
+     * follows. [getMyPresence] is never exercised by this suite (see `setAway updates isAway only when
+     * the presence control call succeeds`'s own doc comment for why the connected-transition re-read is
+     * not independently provable at this level - the identical real-socket ceiling
+     * `landing signed in also attempts to connect the hub` already documents for `hubConnection.connect()`). */
+    private class FakePresenceControl(
+        private val setAwayFailure: Throwable? = null,
+    ) : OperatorPresenceControl {
+        val setAwayCalls = mutableListOf<Boolean>()
+
+        override suspend fun getMyPresence(): Boolean = error("not exercised here - no real hub connection reaches Connected")
+
+        override suspend fun setAway(away: Boolean) {
+            setAwayFailure?.let { throw it }
+            setAwayCalls.add(away)
         }
     }
 }

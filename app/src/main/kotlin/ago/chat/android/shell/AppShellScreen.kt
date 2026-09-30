@@ -103,6 +103,11 @@ public fun AppShellRoute(
     activeSiteId: String?,
     hubConnectionState: OperatorHubConnectionState,
     onSignOut: () -> Unit,
+    // `26-309`: threaded down to every tab's own `AccountAvatarAction`, the identical plain-value shape
+    // `hubConnectionState` already is. Defaulted so every back-contract test that constructs this route
+    // (or `AppShellScreen` directly) with no availability wiring compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     viewModel: AppShellViewModel = hiltViewModel(),
 ) {
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
@@ -124,6 +129,8 @@ public fun AppShellRoute(
         loadError = loadError,
         activeSiteId = currentActiveSiteId,
         hubConnectionState = hubConnectionState,
+        isAway = isAway,
+        onSetAway = onSetAway,
         operatorDisplayName = identity?.displayName,
         operatorEmail = identity?.email,
         unreadConversationsTotal = unreadConversationsTotal,
@@ -168,6 +175,13 @@ internal fun AppShellScreen(
     hubConnectionState: OperatorHubConnectionState,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    // `26-309`: read directly by every tab slot's own default below (`conversationsTab`/`bookingsTab`/
+    // `teamTab`) and passed straight through to `AppShellContent` for the two slots it invokes directly
+    // (`AnalyticsTabHost`/`MoreScreen`) - the identical "every tab slot below now takes one more
+    // argument" shape this function's own doc comment already states for `onOpenSettings`. Defaulted so
+    // every back-contract test constructing this composable directly compiles and behaves unchanged.
+    isAway: Boolean = false,
+    onSetAway: suspend (Boolean) -> Boolean = { false },
     operatorDisplayName: String? = null,
     operatorEmail: String? = null,
     // `26-46`: `null` (the default every back-contract test above still gets, unchanged) means "not
@@ -190,6 +204,8 @@ internal fun AppShellScreen(
         ConversationsTabHost(
             activeSiteId = activeSiteId,
             hubConnectionState = hubConnectionState,
+            isAway = isAway,
+            onSetAway = onSetAway,
             onSignOut = onSignOut,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
@@ -307,6 +323,8 @@ internal fun AppShellScreen(
             canEraseClient = gates.canEraseClient,
             canCancelBooking = gates.canCancelBooking,
             hubConnectionState = hubConnectionState,
+            isAway = isAway,
+            onSetAway = onSetAway,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
             onConfigScreenChanged = onConfigScreenChanged,
@@ -341,6 +359,8 @@ internal fun AppShellScreen(
         TeamRoute(
             canManageOperators = permissions.holds(Permission.SITE_MANAGE_OPERATORS),
             hubConnectionState = hubConnectionState,
+            isAway = isAway,
+            onSetAway = onSetAway,
             operatorDisplayName = operatorDisplayName,
             operatorEmail = operatorEmail,
             onOpenSettings = onOpenSettings,
@@ -360,6 +380,8 @@ internal fun AppShellScreen(
             AppShellContent(
                 permissions = permissions,
                 hubConnectionState = hubConnectionState,
+                isAway = isAway,
+                onSetAway = onSetAway,
                 operatorDisplayName = operatorDisplayName,
                 operatorEmail = operatorEmail,
                 unreadConversationsTotal = unreadConversationsTotal,
@@ -409,6 +431,11 @@ internal fun AppShellScreen(
 private fun AppShellContent(
     permissions: OperatorPermissions.Known,
     hubConnectionState: OperatorHubConnectionState,
+    // `26-309`: needed here (not only by `AppShellScreen`'s own tab-slot defaults) because this
+    // function is the only caller of `AnalyticsTabHost`/`MoreScreen` - the two destinations `26-77`
+    // never gave a Hilt-avoidance slot to (`AnalyticsTabHost`'s own call site comment below).
+    isAway: Boolean,
+    onSetAway: suspend (Boolean) -> Boolean,
     operatorDisplayName: String?,
     operatorEmail: String?,
     unreadConversationsTotal: Int?,
@@ -730,6 +757,8 @@ private fun AppShellContent(
                 AnalyticsTabHost(
                     permissions = permissions,
                     hubConnectionState = hubConnectionState,
+                    isAway = isAway,
+                    onSetAway = onSetAway,
                     operatorDisplayName = operatorDisplayName,
                     operatorEmail = operatorEmail,
                     onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
@@ -742,6 +771,8 @@ private fun AppShellContent(
                 // account-menu inputs every other destination above already receives.
                 MoreScreen(
                     hubConnectionState = hubConnectionState,
+                    isAway = isAway,
+                    onSetAway = onSetAway,
                     operatorDisplayName = operatorDisplayName,
                     operatorEmail = operatorEmail,
                     onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },

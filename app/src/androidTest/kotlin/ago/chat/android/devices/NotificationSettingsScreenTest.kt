@@ -159,8 +159,11 @@ class NotificationSettingsScreenTest {
         assertEquals(listOf(true), enabledCalls)
     }
 
+    /** `26-309`: this note used to say away could not be managed from the app at all - now that the
+     * account menu offers a real control (`AccountAvatarAction`'s own `AvailabilityMenuRow`), it points
+     * there instead, while still naming the per-operator/not-per-device fact this screen alone states. */
     @Test
-    fun theAwayNoteIsAlwaysPresentAndNamesNoPerDeviceControl() {
+    fun theAwayNoteIsAlwaysPresentAndPointsAtTheAccountMenu() {
         composeTestRule.setContent {
             NotificationSettingsScreen(
                 channelStates = bothChannelsOn,
@@ -175,7 +178,7 @@ class NotificationSettingsScreenTest {
         composeTestRule
             .onNodeWithText(
                 "Статус «Отошёл» относится к оператору, а не к этому телефону — он одинаковый на всех ваших " +
-                    "устройствах, включая веб-консоль. Управлять им с этого экрана нельзя.",
+                    "устройствах, включая веб-консоль. Изменить его можно в меню аккаунта.",
             ).assertExists()
     }
 

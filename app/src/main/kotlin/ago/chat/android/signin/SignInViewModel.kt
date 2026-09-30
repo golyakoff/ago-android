@@ -5,12 +5,14 @@ import ago.chat.android.core.domain.identity.PostSignInRouter
 import ago.chat.android.core.domain.identity.SignInDestination
 import ago.chat.android.core.network.realtime.OperatorHubConnection
 import ago.chat.android.core.network.realtime.OperatorHubConnectionState
+import ago.chat.android.core.network.realtime.OperatorPresenceControl
 import ago.chat.android.devices.DeviceRegistrar
 import ago.chat.android.devices.DeviceRegistrationScheduler
 import ago.chat.android.devices.PushAvailability
 import ago.chat.android.di.IoDispatcher
 import ago.chat.android.presence.OperatorPresenceController
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,10 +52,20 @@ public class SignInViewModel
         private val deviceRegistrar: DeviceRegistrar,
         private val registrationScheduler: DeviceRegistrationScheduler,
         private val presenceController: OperatorPresenceController,
+        // `26-309`: the away/online read+write port - see [OperatorPresenceControl]'s own doc comment
+        // for why this is a separate interface from [OperatorHubConnection]/[HubConnectionControl], and
+        // note the name collision with [presenceController] above ([OperatorPresenceController], no "l"):
+        // that one is `26-85`'s background-connection keep-alive gate, an unrelated axis this class
+        // never conflates with the operator's own deliberate away/online status.
+        private val presenceControl: OperatorPresenceControl,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow<SignInUiState>(SignInUiState.Starting)
         public val state: StateFlow<SignInUiState> = mutableState.asStateFlow()
+
+        /** [isAway]'s own backing field — written only by [observeAvailabilityOnConnect] (a fresh read)
+         * and by [setAway] (on the server's own confirmation, never optimistically). */
+        private val mutableIsAway = MutableStateFlow(false)
 
         /**
          * `26-13`'s own "a minimal connection-state surface" — a plain relay onto the app's one
@@ -65,6 +77,18 @@ public class SignInViewModel
          * left open (see that function's doc comment).
          */
         public val hubConnectionState: StateFlow<OperatorHubConnectionState> = hubConnection.state
+
+        /**
+         * `26-309`: the operator's own away/online status, re-read from [presenceControl] every time
+         * [hubConnectionState] transitions **into** [OperatorHubConnectionState.Connected] — the
+         * identical "no push for your own presence, poll on every connected transition" rule
+         * `docs/backlog/26-309-*.md` §3.2 states, mirroring `ago-console`'s own
+         * `OperatorConnectionProvider.tsx` poll-on-connect. `false` (Online) until the first such read
+         * lands, the same "assume the common case until told otherwise" default [hubConnectionState]
+         * itself starts at ([OperatorHubConnectionState.Disconnected]'s own honest-until-proven-worse
+         * shape, restated for a boolean instead of an enum).
+         */
+        public val isAway: StateFlow<Boolean> = mutableIsAway.asStateFlow()
 
         /**
          * `26-06`: a plain relay onto [DeviceRegistrar.pushAvailability] - the identical
@@ -114,7 +138,46 @@ public class SignInViewModel
 
         init {
             resumeSession()
+            observeAvailabilityOnConnect()
         }
+
+        /**
+         * `26-309`: re-reads [presenceControl] every time [hubConnectionState] transitions **into**
+         * [OperatorHubConnectionState.Connected] — never on every emission, since a `StateFlow` already
+         * suppresses a consecutive equal value, so every [OperatorHubConnectionState.Connected] this
+         * `collect` ever sees is, by construction, a fresh transition into it (the identical
+         * `TeamChatViewModel.everConnectedOnce`-free reasoning that class's own doc comment states for
+         * telling the first connect from a later reconnect apart, except here *every* such transition —
+         * first or Nth — re-reads, matching `docs/backlog/26-309-*.md` §3.2's "initial and reconnect
+         * alike"). Logged-not-fatal on failure: a stale bit for one cycle is cosmetic, and the *next*
+         * connected transition (this app's own reconnect loop always produces one, eventually) corrects
+         * it - the identical tolerance [routeNow]'s own fire-and-forget `hubConnection.connect()` already
+         * accepts for a transient failure.
+         */
+        private fun observeAvailabilityOnConnect() {
+            viewModelScope.launch {
+                hubConnectionState.collect { state ->
+                    if (state != OperatorHubConnectionState.Connected) return@collect
+                    runCatching { presenceControl.getMyPresence() }
+                        .onSuccess { away -> mutableIsAway.value = away }
+                        .onFailure { failure -> Log.w(TAG, "getMyPresence failed after connect", failure) }
+                }
+            }
+        }
+
+        /**
+         * `26-309`: the account menu's own toggle - see `AccountAvatarAction`'s own doc comment for the
+         * confirm-then-update contract this satisfies. Updates [isAway] **only on success**, never
+         * optimistically (`docs/backlog/26-309-*.md` §2's own "an optimistic update here would show a
+         * control that already claims a state a failed call never actually reached", `23-20`'s console
+         * precedent restated for this app). Returns whether it succeeded, so the caller can surface its
+         * own error state without this class owning any UI-transient (pending/error) concern of its own.
+         */
+        public suspend fun setAway(away: Boolean): Boolean =
+            runCatching { presenceControl.setAway(away) }
+                .onSuccess { mutableIsAway.value = away }
+                .onFailure { failure -> Log.w(TAG, "setAway($away) failed", failure) }
+                .isSuccess
 
         /** At every app start: is there a session, and if so where does this identity belong? */
         public fun resumeSession() {
@@ -302,4 +365,8 @@ public class SignInViewModel
                 SignInDestination.Registration -> SignInUiState.Registration
                 is SignInDestination.Unavailable -> SignInUiState.Unavailable(destination.failure)
             }
+
+        private companion object {
+            const val TAG = "SignInViewModel"
+        }
     }
