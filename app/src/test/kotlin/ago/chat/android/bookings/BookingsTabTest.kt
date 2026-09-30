@@ -70,6 +70,24 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             emptyList<BookingsTab>(),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
+                showReadinessEntry = false,
+                showSetupSegment = false,
+                showMastersSegment = false,
+                showServicesSegment = false,
+                showHoursSegment = false,
+            ),
+        )
+    }
+
+    /** `26-332`'s own Done-when: the Мастер настройки entry appears exactly on `calendar:configure`. An
+     * operator without it earns no config entry at all - the whole `⋮` stays hidden (the case above). */
+    @Test
+    fun `SetupWizard alone is a real combination, gated on calendar-configure`() {
+        assertEquals(
+            listOf(BookingsTab.SetupWizard),
+            visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = true,
                 showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = false,
@@ -86,6 +104,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Readiness),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
                 showReadinessEntry = true,
                 showSetupSegment = false,
                 showMastersSegment = false,
@@ -102,6 +121,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Calendars),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
                 showReadinessEntry = false,
                 showSetupSegment = true,
                 showMastersSegment = false,
@@ -118,6 +138,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Masters),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
                 showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = true,
@@ -132,6 +153,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Services),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
                 showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = false,
@@ -146,6 +168,7 @@ class BookingsConfigMenuEntriesTest {
         assertEquals(
             listOf(BookingsTab.Hours),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = false,
                 showReadinessEntry = false,
                 showSetupSegment = false,
                 showMastersSegment = false,
@@ -155,13 +178,14 @@ class BookingsConfigMenuEntriesTest {
         )
     }
 
-    /** `26-164`: the accepted product decision (`docs/design/26-154-*.md`'s own Q1/Q2, author-accepted
-     * 2026-09-26) - Готовность now leads the hub, ahead of Настройка (Календари) before Мастера before
-     * Услуги before Часы. */
+    /** `26-332`: the guided setup wizard now leads the hub, ahead of Готовность before Настройка (Календари)
+     * before Мастера before Услуги before Часы (`26-318`: the wizard is the guided front door, the readiness
+     * panel the map behind it). */
     @Test
-    fun `all entries are drawn, Readiness before Calendars before Masters before Services before Hours`() {
+    fun `all entries are drawn, SetupWizard before Readiness before Calendars before Masters before Services before Hours`() {
         assertEquals(
             listOf(
+                BookingsTab.SetupWizard,
                 BookingsTab.Readiness,
                 BookingsTab.Calendars,
                 BookingsTab.Masters,
@@ -169,6 +193,7 @@ class BookingsConfigMenuEntriesTest {
                 BookingsTab.Hours,
             ),
             visibleBookingsConfigMenuEntries(
+                showSetupWizardEntry = true,
                 showReadinessEntry = true,
                 showSetupSegment = true,
                 showMastersSegment = true,
