@@ -10,6 +10,7 @@ import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.initialsFor
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.AgoChatTheme
 import ago.chat.android.ui.theme.agoStatusColors
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -59,9 +60,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /**
@@ -673,7 +676,11 @@ internal fun ClientAvatar(
             ) {
                 Text(
                     text = initials,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    // Initials sized for the 40dp avatar: titleSmall (13sp) + 20%, rounded up to the next
+                    // even integer = 16sp (author, 2026-09-30). Given as an explicit `fontSize` rather than
+                    // by swapping the `titleSmall` token so the bump touches only the avatar's own initials,
+                    // never every other titleSmall use in the app.
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
@@ -707,9 +714,11 @@ internal fun ClientAvatar(
 // (that constant's own restraint: two independent rows, each naming its own gap beside its own citation).
 private val ContactRowAvatarGap = 13.dp
 
-// `.av{width:42px; height:42px}` - Клиенты's own list-row avatar size, distinct from
-// [ClientDetailLoadedBody]'s own 48dp header copy (the mockup draws the two at different sizes).
-private val ContactRowAvatarSize = 42.dp
+// Клиенты's own list-row avatar. 40dp to match the one shared avatar size every other list and panel in
+// the app uses (`VisitorAvatar`'s own 40dp default - the conversation list and the thread contact panel);
+// the mockup drew this row at 42px, but the author asked (2026-09-30) for one consistent avatar size
+// everywhere except the client-detail header, which stays deliberately larger at 48dp.
+private val ContactRowAvatarSize = 40.dp
 
 /**
  * `26-269`: the row's own no-show pill — [contact.noShowCount] worded through
@@ -763,6 +772,87 @@ internal fun NoShowPill(count: Int) {
                 ),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+        )
+    }
+}
+
+// --------------------------------------------------------------------------------------------------
+// Android Studio previews — не участвуют в сборке приложения, нужны только для визуального рендера
+// экрана в IDE (Split / Design). Открой этот файл в Android Studio и нажми «Split» справа сверху.
+// --------------------------------------------------------------------------------------------------
+
+private val previewContacts =
+    listOf(
+        Contact(
+            customerId = "1",
+            phone = "+7 999 123-45-67",
+            masked = false,
+            displayName = "Анна Смирнова",
+            noShowCount = 0,
+            phoneVerifiedAt = "2026-09-01T10:00:00Z",
+            phoneConfirmedByOperatorAt = null,
+            upcomingBookingCount = 2,
+        ),
+        Contact(
+            customerId = "2",
+            phone = "+7 ••• ••• ••-67",
+            masked = true,
+            displayName = "Игорь Петров",
+            noShowCount = 1,
+            phoneVerifiedAt = null,
+            phoneConfirmedByOperatorAt = null,
+            upcomingBookingCount = 0,
+        ),
+        Contact(
+            customerId = "3",
+            phone = "+7 921 000-11-22",
+            masked = false,
+            displayName = null,
+            noShowCount = 3,
+            phoneVerifiedAt = null,
+            phoneConfirmedByOperatorAt = null,
+            upcomingBookingCount = 1,
+        ),
+    )
+
+@Preview(name = "Клиенты — список", showBackground = true, locale = "ru")
+@Composable
+private fun ContactsBodyLoadedPreview() {
+    AgoChatTheme {
+        ContactsBody(
+            state = ContactsUiState.Loaded(contacts = previewContacts),
+            onRetry = {},
+            onReveal = {},
+            onSearchQueryChange = {},
+            onOpenDialog = {},
+        )
+    }
+}
+
+@Preview(name = "Клиенты — пусто", showBackground = true, locale = "ru")
+@Composable
+private fun ContactsBodyEmptyPreview() {
+    AgoChatTheme {
+        ContactsBody(
+            state = ContactsUiState.Loaded(contacts = emptyList()),
+            onRetry = {},
+            onReveal = {},
+            onSearchQueryChange = {},
+            onOpenDialog = {},
+        )
+    }
+}
+
+@Preview(name = "Клиенты — загрузка", showBackground = true, locale = "ru")
+@Composable
+private fun ContactsBodyLoadingPreview() {
+    AgoChatTheme {
+        ContactsBody(
+            state = ContactsUiState.Loading,
+            onRetry = {},
+            onReveal = {},
+            onSearchQueryChange = {},
+            onOpenDialog = {},
         )
     }
 }
