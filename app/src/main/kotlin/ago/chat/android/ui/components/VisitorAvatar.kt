@@ -100,7 +100,10 @@ public fun VisitorAvatar(
             ) {
                 Text(
                     text = initials,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    // Same 16sp the Клиенты initials use (ClientAvatar's own comment: titleSmall 13sp + 20%,
+                    // rounded up to the next even integer), so an Initials-mode visitor avatar and a client
+                    // avatar at the same 40dp render their initials identically.
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }

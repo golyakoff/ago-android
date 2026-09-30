@@ -397,7 +397,9 @@ internal fun initialsFor(
 
 // `.avatar{width:36px;height:36px}` - the mockup's own app-bar avatar size, and (`26-77` follow-up,
 // 2026-09-23) the menu header's own avatar too: the author's own live-device correction to this
-// file's first pass, which drew the header's copy visibly larger.
+// file's first pass, which drew the header's copy visibly larger. Left at 36dp on purpose when the rest
+// of the app's avatars were unified to 40dp (author, 2026-09-30): the app-bar chip is the one avatar the
+// author asked to keep as it was.
 private val AvatarSize = 36.dp
 private val HeaderMinWidth = 220.dp
 

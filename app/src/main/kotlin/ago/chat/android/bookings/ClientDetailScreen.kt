@@ -7,10 +7,12 @@ import ago.chat.android.core.domain.bookings.PersonBookingStatus
 import ago.chat.android.core.domain.bookings.PhoneCandidate
 import ago.chat.android.core.domain.bookings.businessLocalTimeOrNull
 import ago.chat.android.core.domain.bookings.confirmedBookingsCountLabel
+import ago.chat.android.core.domain.visitorEmojiPair
 import ago.chat.android.ui.components.VisitorIdentityText
 import ago.chat.android.ui.components.formatRuPhoneForDisplay
 import ago.chat.android.ui.components.russianPluralStringResource
 import ago.chat.android.ui.icons.AgoIcons
+import ago.chat.android.ui.theme.AgoChatTheme
 import ago.chat.android.ui.theme.agoStatusColors
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -58,11 +60,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -395,12 +395,18 @@ private fun ClientDetailLoadedBody(
     // `26-298` (live-testing screenshot): the top inset is trimmed again, from 4dp to 0dp - the close
     // row above already supplies the only clearance this header needs (see that row's own doc comment).
     Column(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) {
+        // Three top-level columns: [1] avatar, [2] name with the phone directly beneath it, [3] the two
+        // action icons. The icons live in their own column now, not on the phone line - an `IconButton`'s
+        // own 48dp min height used to stretch the phone row and push the number well below the name; with
+        // the icons out of that row, name and phone sit tight together, and the parent Row's own
+        // `CenterVertically` keeps both icons opposite the avatar.
         Row(verticalAlignment = Alignment.CenterVertically) {
             // `26-269` polish (B2): the header's own 48dp avatar - the identical three-way fallback
             // [ContactsScreen.kt]'s own 42dp list-row copy already draws, through the one shared
             // [ClientAvatar] composable.
             ClientAvatar(contact = contact, size = ClientDetailAvatarSize)
             Spacer(modifier = Modifier.width(ClientDetailAvatarGap))
+            // Column 2: name + phone, nothing else - so no control's height can open a gap between them.
             Column(modifier = Modifier.weight(1f)) {
                 val displayName = contact.displayName
                 // `26-308` (item 4, author screenshot): the inline warning glyph this header used to draw
@@ -408,31 +414,25 @@ private fun ClientDetailLoadedBody(
                 // harder-to-miss signal *in addition to* the banner below" - is gone. The banner is now the
                 // header's only unconfirmed-phone signal, so a phone that needs attention is never flagged
                 // twice in the same glance.
-                if (displayName != null) {
-                    Text(text = displayName, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                } else {
-                    VisitorIdentityText(
-                        id = contact.customerId,
-                        emojiCreature = contact.emojiCreature,
-                        emojiFood = contact.emojiFood,
-                        // `26-279` (A9): the identical further fallback `ContactsScreen.kt`'s own row
-                        // now passes - `Contact.phone` as the title plus «Без имени», never the raw
-                        // `customerId` this header used to leak through.
-                        phone = contact.phone,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    )
+                val titleStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                when {
+                    displayName != null -> Text(text = displayName, style = titleStyle)
+                    // A nameless but chat-known visitor keeps their «{creature} · {food}» identity as the
+                    // title - the phone still shows once in the row below, so nothing is duplicated for them.
+                    visitorEmojiPair(contact.emojiCreature, contact.emojiFood) != null ->
+                        VisitorIdentityText(
+                            id = contact.customerId,
+                            emojiCreature = contact.emojiCreature,
+                            emojiFood = contact.emojiFood,
+                            style = titleStyle,
+                        )
+                    // A manual client with neither a name nor a chat identity: just «Без имени» as the
+                    // title. The phone used to be repeated here (as the title) *and* in the row below - now
+                    // it shows once, below, and this line names the client instead of echoing the number.
+                    else -> Text(text = stringResource(R.string.bookings_confirmed_identity_no_name), style = titleStyle)
                 }
 
-                // `26-308` (item 2, author screenshot): `Позвонить`/`Диалог` move off the two big pill
-                // buttons below and onto this same phone row, as trailing icon buttons - the identical
-                // "always render both, chat then call, right-aligned" treatment [ConfirmedBookingRow] (the
-                // Записи ▸ Утверждены row style this item's own brief names) already draws, reused
-                // ([AgoIcons.Chat]/[AgoIcons.Call], plain [IconButton]s with no fill or outline) rather than
-                // inventing a second icon-button language on this same screen. The dialog icon stays
-                // `enabled` only when [ClientDetailUiState.Loaded.hasDialog] is true - the identical no-op
-                // posture [ConfirmedBookingRow]'s own doc comment states for a booking with no chat origin -
-                // while the call icon is always live, since [callAction] never depended on a dialog existing.
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         // `26-307`: a masked preview (`contact.masked`) never carries the full 10 digits, so
                         // [formatRuPhoneForDisplay] passes it through unchanged - only a real, complete number
@@ -455,19 +455,26 @@ private fun ClientDetailLoadedBody(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = { state.dialogConversationId?.let(onOpenDialog) }, enabled = state.hasDialog) {
-                        Icon(
-                            imageVector = AgoIcons.Chat,
-                            contentDescription = stringResource(R.string.bookings_client_detail_open_dialog_action),
-                        )
-                    }
-                    IconButton(onClick = callAction) {
-                        Icon(
-                            imageVector = AgoIcons.Call,
-                            contentDescription = stringResource(R.string.bookings_client_detail_call_action),
-                        )
-                    }
+                }
+            }
+            // Column 3: `Диалог`/`Позвонить` as trailing icon buttons - the identical "always render both,
+            // chat then call" treatment [ConfirmedBookingRow] already draws ([AgoIcons.Chat]/[AgoIcons.Call],
+            // plain [IconButton]s with no fill or outline). The dialog icon stays `enabled` only when
+            // [ClientDetailUiState.Loaded.hasDialog] is true - the identical no-op posture that row's own doc
+            // comment states for a booking with no chat origin - while the call icon is always live, since
+            // [callAction] never depended on a dialog existing.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { state.dialogConversationId?.let(onOpenDialog) }, enabled = state.hasDialog) {
+                    Icon(
+                        imageVector = AgoIcons.Chat,
+                        contentDescription = stringResource(R.string.bookings_client_detail_open_dialog_action),
+                    )
+                }
+                IconButton(onClick = callAction) {
+                    Icon(
+                        imageVector = AgoIcons.Call,
+                        contentDescription = stringResource(R.string.bookings_client_detail_call_action),
+                    )
                 }
             }
         }
@@ -525,7 +532,7 @@ private fun ClientDetailLoadedBody(
             upcomingCount = state.upcoming.size,
             pastCount = state.past.size,
             onSelected = onSegmentSelected,
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
         )
 
         val visible = state.visibleBookings
@@ -692,7 +699,7 @@ private fun ClientDetailPill(
  */
 @Composable
 private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
-    val smsConfirmedAt = state.contact.phoneVerifiedAt?.let { businessLocalShortDateOrNull(it) ?: "—" }
+    val smsConfirmedAt = state.contact.phoneVerifiedAt?.let { smsConfirmedFullDateOrNull(it) ?: "—" }
     val firstVisit = state.firstVisitLocalDate?.let(::businessLocalFullDateOrNull)
     val lastVisit = state.lastVisitLocalDate?.let(::businessLocalFullDateOrNull)
     val singleVisit = state.isSingleVisit
@@ -709,7 +716,7 @@ private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
                 labelStyle = labelStyle,
                 modifier = Modifier.padding(vertical = 12.dp),
             ) {
-                Text(text = stringResource(R.string.bookings_client_detail_sms_confirmed_value, smsConfirmedAt), style = valueStyle)
+                Text(text = smsConfirmedAt, style = valueStyle)
             }
         }
         if (singleVisit && firstVisit != null) {
@@ -753,9 +760,11 @@ private fun ClientDetailMetadataRows(state: ClientDetailUiState.Loaded) {
 // where this gets used, and why.
 private val ClientDetailCloseButtonRaise = 48.dp
 
-// `.av{width:48px; height:48px}` - the client-detail header's own avatar size, distinct from
-// [ContactsScreen.kt]'s own 42dp list-row copy (the mockup draws the two at different sizes).
-private val ClientDetailAvatarSize = 48.dp
+// The client-detail header's own avatar. 40dp to match every other client/visitor avatar in the app
+// (`ContactsScreen.kt`'s own list row, `VisitorAvatar`'s own 40dp default): the mockup drew this header
+// larger at 48px, but the author asked (2026-09-30) for one consistent avatar size everywhere except the
+// app-bar operator chip (`AccountAvatarAction`'s own 36dp), which stays as it was.
+private val ClientDetailAvatarSize = 40.dp
 
 // `.row{gap:13px}` - restated here for the header's own avatar/name gap, the identical value
 // [ContactsScreen.kt]'s own `ContactRowAvatarGap` carries for its own row (two independent screens, each
@@ -848,6 +857,11 @@ private fun BookingSegmentedControl(
             selected = selected == ClientDetailSegment.Past,
             onClick = { onSelected(ClientDetailSegment.Past) },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            // No leading checkmark on the selected segment - the identical `icon = {}` every other
+            // `SegmentedButton` in this app already sets (BookingsScreen, SettingsScreen,
+            // ConversationListScreen, TeamChatScreen, WidgetAppearanceEditor); this control was the one
+            // that still let Material draw its default check.
+            icon = {},
         ) {
             Text(text = "${stringResource(R.string.bookings_client_detail_past_segment)} $pastCount")
         }
@@ -855,6 +869,7 @@ private fun BookingSegmentedControl(
             selected = selected == ClientDetailSegment.Upcoming,
             onClick = { onSelected(ClientDetailSegment.Upcoming) },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            icon = {},
         ) {
             Text(text = "${stringResource(R.string.bookings_client_detail_upcoming_segment)} $upcomingCount")
         }
@@ -868,10 +883,11 @@ private fun BookingSegmentedControl(
  * «Неявка» badge for [PersonBookingStatus.NoShow] rows (the design mockup's own examples: a no-show is
  * marked on the row itself, not folded into the date line).
  *
- * `26-306` (author screenshot): the master's name used to sit in the sub-line, third of three pieces after
- * the date and before the duration — exactly the position a long name plus a long duration would crowd out
- * under the row's single-line ellipsis, truncating the duration itself. [clientBookingServiceAndMasterText]
- * and [clientBookingSubtitle]'s own doc comments state where each fact moved.
+ * The row is two stacked columns plus a trailing chevron: the first pairs the date (bold) over the time
+ * (muted), the second the master's name (bold) over "service · duration" (muted). The accent moved onto
+ * the date because this list spans many days and the day is what tells two bookings apart - the time led
+ * back when the list only ever showed a single day. [clientBookingServiceAndMaster] is the plain-Kotlin
+ * half of the second column's mapping, pinned by [ClientBookingRowTest] without a Compose host.
  *
  * `26-269` polish (B9): every row is now a tap target and draws the trailing chevron unconditionally —
  * [ClientDetailLoadedBody]'s own [onClick] routes an upcoming tap to the reschedule sheet and a past one
@@ -890,20 +906,34 @@ private fun ClientBookingRow(
     booking: PersonBooking,
     onClick: () -> Unit,
 ) {
+    val (serviceName, masterName) = clientBookingServiceAndMaster(booking)
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = businessLocalTimeOrNull(booking.startsAt) ?: "—",
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.width(52.dp),
-        )
+        // Column 1: date (bold) over time (muted). The date leads now - this list spans many days, so the
+        // day is the fact that tells two bookings apart; the time is secondary beneath it. Fixed width
+        // ([ClientBookingDateColumnWidth]) so every second column below lines up at the same x; the compact
+        // "5 окт 26" format is what keeps that width small.
+        Column(modifier = Modifier.width(ClientBookingDateColumnWidth)) {
+            Text(
+                text = clientBookingRowDateOrNull(booking.localDate) ?: "—",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = businessLocalTimeOrNull(booking.startsAt) ?: "—",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // Column 2: master (bold) over "service · duration" (muted).
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = clientBookingServiceAndMasterText(booking),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = masterName,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     // `26-306`: `weight(1f, fill = false)` - the identical `ConfirmedBookingRow` fix
@@ -911,7 +941,7 @@ private fun ClientBookingRow(
                     // this `Text` claims the whole remaining row width even when its own content is short,
                     // which would push [NoShowBadge] hard against the trailing edge with a dead gap before
                     // it rather than sitting right after the text.
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f, fill = false).padding(bottom = 4.dp),
                 )
                 if (booking.status == PersonBookingStatus.NoShow) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -919,7 +949,7 @@ private fun ClientBookingRow(
                 }
             }
             Text(
-                text = clientBookingSubtitle(booking),
+                text = clientBookingSubtitle(booking, service = serviceName),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -934,44 +964,29 @@ private fun ClientBookingRow(
     }
 }
 
-/**
- * `26-306` (author screenshot, СЕЙЧАС vs НАДО СДЕЛАТЬ): the master's name moves up from the sub-line
- * into the row's own first line, bold, beside the service - e.g. "Примерка **Алёна Матерн**" - because the
- * old placement (folded into [clientBookingSubtitle] below, three pieces deep) is exactly what truncated it
- * to "6 октября 2026 · Алёна Матерн · 9…" on a real name/duration combination. [clientBookingServiceAndMaster]
- * is the plain-Kotlin half of this mapping — which field goes on which line — pulled out so a JVM test can
- * pin it without a Compose UI test; this composable's only remaining job is joining the pair with a space
- * and bolding the second half through [buildAnnotatedString].
- */
-@Composable
-private fun clientBookingServiceAndMasterText(booking: PersonBooking) =
-    buildAnnotatedString {
-        val (service, master) = clientBookingServiceAndMaster(booking)
-        append(service)
-        append(" ")
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(master) }
-    }
-
-/** `26-306`: the row's own line-1 facts - service name (or "—" when absent, the identical fallback this
+/** `26-306`: the row's own facts - service name (or "—" when absent, the identical fallback this
  * row already used) paired with the master's display name, Compose-free so [ClientBookingRowTest] can
  * assert the mapping directly rather than through a rendered `AnnotatedString`. */
 internal fun clientBookingServiceAndMaster(booking: PersonBooking): Pair<String, String> =
     (booking.serviceName ?: "—") to booking.workerDisplayName
 
-/** "5 октября 2026 · 90 минут" - the mockup's own row sub-line (`26-306`), now two pieces rather than
- * three: the master's name moved up to the row's first line ([clientBookingServiceAndMasterText]'s own doc
- * comment states why), and the duration is spelled out in full through [russianPluralStringResource]
- * (`bookings_duration_minutes_full_*`) rather than the abbreviated «мин» badge
- * [ConfirmedBookingRow] uses - the mockup's own example spells "минут" out, and unlike that compact badge
- * this line has the width to say the whole word without wrapping or truncating it. Still joined by " · "
- * the identical way [WorkerGroupHeader]/`VisitorEmojiPairName` already join their own two: the middot is
- * punctuation, not a phrase, so it needs no resource of its own. A piece that fails to render (an
- * unparsable date, no duration) is simply omitted along with its own leading separator, never a stray
- * " · " left dangling. */
+/** "Стрижка · 90 минут" - the row's second-column sub-line: the service name paired with the duration
+ * spelled out in full through [russianPluralStringResource] (`bookings_duration_minutes_full_*`) rather
+ * than the abbreviated «мин» badge [ConfirmedBookingRow] uses - this line has the width to say the whole
+ * word without truncating it. Joined by " · " the identical way [WorkerGroupHeader] already joins its own
+ * two: the middot is punctuation, not a phrase, so it needs no resource of its own. The date moved up to
+ * the row's own first column (bold, above the time) now that the day - not the time - is what tells two
+ * bookings in this multi-day list apart ([ClientBookingRow]'s own doc comment). [service] is the already-
+ * resolved service name from [clientBookingServiceAndMaster] ("—" when the booking carries none, dropped
+ * here rather than shown as a bare placeholder); a missing duration is dropped along with its own
+ * separator too, never a stray " · " left dangling. */
 @Composable
-private fun clientBookingSubtitle(booking: PersonBooking): String {
+private fun clientBookingSubtitle(
+    booking: PersonBooking,
+    service: String,
+): String {
     val pieces = mutableListOf<String>()
-    businessLocalFullDateOrNull(booking.localDate)?.let(pieces::add)
+    service.takeIf { it != "—" }?.let(pieces::add)
     durationMinutesOrNull(booking.startsAt, booking.endsAt)?.let { minutes ->
         pieces.add(
             russianPluralStringResource(
@@ -1013,13 +1028,193 @@ private fun businessLocalFullDateOrNull(localDate: String): String? =
 
 private val CLIENT_BOOKING_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ru"))
 
-/** `26-269` polish (B6): "2 окт" - [Contact.phoneVerifiedAt]'s own short form for the metadata row's
- * value - day plus the abbreviated Russian month Java's own locale data already supplies for the `"MMM"`
- * pattern, no year (the mockup's own value is a recency date, not a historical one worth a year). Reads
- * the offset already embedded in the ISO string, the identical "no zone conversion of any kind" idiom
- * [businessLocalTimeOrNull]'s own doc comment states, restated here for a date rather than a clock time.
- * `null` on a malformed value, never a fabricated date. */
-private fun businessLocalShortDateOrNull(iso: String): String? =
-    runCatching { OffsetDateTime.parse(iso).toLocalDate().format(SMS_CONFIRMED_SHORT_DATE_FORMAT) }.getOrNull()
+/** "5 окт 26" - the booking row's own compact date (day, abbreviated Russian month, two-digit year), a
+ * separate format from [CLIENT_BOOKING_DATE_FORMAT]'s full "5 октября 2026" (still used by the Первый/
+ * Последний визит metadata rows). Short so the row's own fixed-width first column
+ * ([ClientBookingDateColumnWidth]) can align every second column identically without a long month name
+ * ("28 сент. 26") overrunning it. `null` on a malformed [localDate], the identical honest fallback
+ * [businessLocalFullDateOrNull] takes for its own input. */
+private fun clientBookingRowDateOrNull(localDate: String): String? =
+    runCatching { LocalDate.parse(localDate).format(CLIENT_BOOKING_ROW_DATE_FORMAT) }.getOrNull()
 
-private val SMS_CONFIRMED_SHORT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
+private val CLIENT_BOOKING_ROW_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yy", Locale.forLanguageTag("ru"))
+
+/** The booking row's own first-column width - fixed (not content-sized) so every row's second column
+ * starts at the same x, and generous enough for the widest realistic compact date: a two-digit day plus
+ * the longest abbreviated Russian month plus a two-digit year ("28 сент. 26"), with margin to spare. */
+private val ClientBookingDateColumnWidth = 100.dp
+
+/** "20 августа 2026" - the «Подтверждён по SMS» row's own value: the date [Contact.phoneVerifiedAt] was
+ * proven, in the same full "d MMMM yyyy" form the Первый/Последний визит rows use (reusing
+ * [CLIENT_BOOKING_DATE_FORMAT]). Reads the offset already embedded in the ISO string, the identical "no
+ * zone conversion of any kind" idiom [businessLocalTimeOrNull]'s own doc comment states, restated here for
+ * a date rather than a clock time. `null` on a malformed value, never a fabricated date. */
+private fun smsConfirmedFullDateOrNull(iso: String): String? =
+    runCatching { OffsetDateTime.parse(iso).toLocalDate().format(CLIENT_BOOKING_DATE_FORMAT) }.getOrNull()
+
+// --------------------------------------------------------------------------------------------------
+// Android Studio previews — не участвуют в сборке приложения, только визуальный рендер в IDE.
+// Превьюим содержимое шита (ClientDetailBody), а НЕ сам ClientDetailSheet: тот дергает hiltViewModel()
+// и оборачивается в ModalBottomSheet, что в превью не работает. Открой файл и нажми «Split».
+// --------------------------------------------------------------------------------------------------
+
+private val previewDetailContact =
+    Contact(
+        customerId = "1",
+        phone = "+7 999 123-45-67",
+        masked = false,
+        displayName = "Анна Смирнова",
+        noShowCount = 1,
+        phoneVerifiedAt = "2026-09-20T10:00:00+03:00",
+        phoneConfirmedByOperatorAt = null,
+        upcomingBookingCount = 2,
+    )
+
+private fun previewBooking(
+    id: String,
+    service: String,
+    worker: String,
+    startsAt: String,
+    endsAt: String,
+    localDate: String,
+    weekday: Int,
+    status: PersonBookingStatus,
+) = PersonBooking(
+    bookingId = id,
+    calendarId = "cal-1",
+    workerId = "w-$id",
+    workerDisplayName = worker,
+    serviceId = "s-$id",
+    serviceName = service,
+    startsAt = startsAt,
+    endsAt = endsAt,
+    localDate = localDate,
+    weekday = weekday,
+    phone = "+7 999 123-45-67",
+    masked = false,
+    originConversationId = null,
+    status = status,
+)
+
+private val previewUpcomingBookings =
+    listOf(
+        previewBooking(
+            id = "u1",
+            service = "Стрижка",
+            worker = "Мария",
+            startsAt = "2026-10-05T14:00:00+03:00",
+            endsAt = "2026-10-05T15:00:00+03:00",
+            localDate = "2026-10-05",
+            weekday = 1,
+            status = PersonBookingStatus.Booked,
+        ),
+        previewBooking(
+            id = "u2",
+            service = "Окрашивание",
+            worker = "Ольга",
+            startsAt = "2026-10-12T11:30:00+03:00",
+            endsAt = "2026-10-12T13:00:00+03:00",
+            localDate = "2026-10-12",
+            weekday = 1,
+            status = PersonBookingStatus.PendingConfirmation,
+        ),
+    )
+
+private val previewPastBookings =
+    listOf(
+        previewBooking(
+            id = "p1",
+            service = "Стрижка",
+            worker = "Мария",
+            startsAt = "2026-09-01T12:00:00+03:00",
+            endsAt = "2026-09-01T13:00:00+03:00",
+            localDate = "2026-09-01",
+            weekday = 2,
+            status = PersonBookingStatus.Booked,
+        ),
+        previewBooking(
+            id = "p2",
+            service = "Маникюр",
+            worker = "Ирина",
+            startsAt = "2026-08-15T16:00:00+03:00",
+            endsAt = "2026-08-15T17:00:00+03:00",
+            localDate = "2026-08-15",
+            weekday = 6,
+            status = PersonBookingStatus.NoShow,
+        ),
+    )
+
+@Preview(name = "Карточка клиента — записи", showBackground = true, locale = "ru", heightDp = 900)
+@Composable
+private fun ClientDetailLoadedPreview() {
+    AgoChatTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            ClientDetailBody(
+                state =
+                    ClientDetailUiState.Loaded(
+                        contact = previewDetailContact,
+                        upcoming = previewUpcomingBookings,
+                        past = previewPastBookings,
+                        dialogConversationId = "conv-1",
+                    ),
+                onRetry = {},
+                onReveal = {},
+                onConfirmPhone = {},
+                onSegmentSelected = {},
+                onOpenDialog = {},
+                canCancelBooking = true,
+                onCancelBooking = {},
+                onOpenManualBooking = {},
+                onClose = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Карточка клиента — без записей", showBackground = true, locale = "ru", heightDp = 700)
+@Composable
+private fun ClientDetailEmptyPreview() {
+    AgoChatTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            ClientDetailBody(
+                state =
+                    ClientDetailUiState.Loaded(
+                        contact = previewDetailContact.copy(displayName = null, upcomingBookingCount = 0),
+                        upcoming = emptyList(),
+                        past = emptyList(),
+                        dialogConversationId = null,
+                    ),
+                onRetry = {},
+                onReveal = {},
+                onConfirmPhone = {},
+                onSegmentSelected = {},
+                onOpenDialog = {},
+                canCancelBooking = false,
+                onCancelBooking = {},
+                onOpenManualBooking = {},
+                onClose = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Карточка клиента — загрузка", showBackground = true, locale = "ru")
+@Composable
+private fun ClientDetailLoadingPreview() {
+    AgoChatTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            ClientDetailBody(
+                state = ClientDetailUiState.Loading,
+                onRetry = {},
+                onReveal = {},
+                onConfirmPhone = {},
+                onSegmentSelected = {},
+                onOpenDialog = {},
+                canCancelBooking = false,
+                onCancelBooking = {},
+                onOpenManualBooking = {},
+                onClose = {},
+            )
+        }
+    }
+}
