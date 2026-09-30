@@ -104,6 +104,12 @@ internal fun ClientDetailSheet(
     // already checks server-side. Defaulted to `false` so every existing call site keeps compiling
     // unchanged.
     canCancelBooking: Boolean = false,
+    // `26-310`: reports this hub's own, freshly-loaded `upcoming.size` back to whichever screen opened
+    // it - [ContactsBody] threads this straight to [ContactsViewModel.applyUpcomingCount] so the Клиенты
+    // row's own « · N запись» badge (and the «С предстоящей записью»/«Без записей» filter it feeds) never
+    // drifts from what this sheet - the only place a booking gets cancelled from - just showed. Defaulted
+    // to a no-op so every existing call site keeps compiling unchanged.
+    onUpcomingCountChanged: (customerId: String, upcomingCount: Int) -> Unit = { _, _ -> },
 ) {
     val viewModel: ClientDetailViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -113,6 +119,20 @@ internal fun ClientDetailSheet(
     // re-derivation from `state.contacts`), and re-keying on that changed instance would restart the
     // whole read the moment its own write finished.
     LaunchedEffect(contact.customerId) { viewModel.open(contact) }
+
+    // `26-310`: fires on every [ClientDetailUiState.Loaded] this hub ever reaches - the initial load, a
+    // successful cancel ([ClientDetailViewModel.cancelBooking] already drops the row from `upcoming`
+    // before this recomposes), and a manual booking added from inside this same sheet (`viewModel.retry()`
+    // after `onCreated`) alike. Keyed on `state` itself, not `contact.customerId`: a `data class` equality
+    // check on the whole state means this effect only re-runs when the *count itself* (or anything else in
+    // [ClientDetailUiState.Loaded]) actually changed, never once per unrelated recomposition, and
+    // [ContactsViewModel.applyUpcomingCount]'s own no-op-when-unchanged guard means an initial load that
+    // merely confirms the list's existing count writes nothing back either.
+    LaunchedEffect(state) {
+        (state as? ClientDetailUiState.Loaded)?.let { loaded ->
+            onUpcomingCountChanged(loaded.contact.customerId, loaded.upcoming.size)
+        }
+    }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
