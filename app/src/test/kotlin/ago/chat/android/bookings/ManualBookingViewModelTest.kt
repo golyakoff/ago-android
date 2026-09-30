@@ -268,7 +268,10 @@ class ManualBookingViewModelTest {
             viewModel.submit()
             advanceUntilIdle()
 
-            assertEquals(ManualBookingUiState.Created("b1", "2026-10-02T14:00:00Z", "2026-10-02T15:00:00Z"), viewModel.state.value)
+            assertEquals(
+                ManualBookingUiState.Created("b1", "2026-10-02T14:00:00Z", "2026-10-02T15:00:00Z", SLOT.localDate),
+                viewModel.state.value,
+            )
             val request = requireNotNull(bookingsApi.lastManualBookingRequest)
             assertEquals("cal1", request.calendarId)
             assertEquals("s1", request.serviceId)
@@ -331,7 +334,42 @@ class ManualBookingViewModelTest {
             val request = requireNotNull(bookingsApi.lastManualBookingRequest)
             assertEquals("p1", request.reusePersonId)
             assertNull(request.email)
-            assertEquals(ManualBookingUiState.Created("b1", "2026-10-02T14:00:00Z", "2026-10-02T15:00:00Z"), viewModel.state.value)
+            assertEquals(
+                ManualBookingUiState.Created("b1", "2026-10-02T14:00:00Z", "2026-10-02T15:00:00Z", SLOT.localDate),
+                viewModel.state.value,
+            )
+        }
+
+    // `26-311`: [ManualBookingUiState.Created.localDate] must be the *slot's* own business-local day - a
+    // client-side conversion of `startsAt` (an ISO instant) would land on the wrong day across a DST/zone
+    // boundary ([ManualBookingUiState.Created]'s own doc comment). `SLOT.localDate` is deliberately not
+    // simply the calendar date of `SLOT.startsAt` reparsed - this test only proves the value is carried
+    // from `selectedSlot`, not recomputed from `startsAt`, which is the actual regression `26-311` fixes.
+    @Test
+    fun `submit carries the selected slot's own localDate, not a conversion of startsAt`() =
+        runTest(dispatcher) {
+            val bookingsApi = FakeBookingsApi(phoneCandidatesResult = PhoneCandidatesResult.Loaded(emptyList()))
+            // `FakeWorkerSlotsApi`'s own default already answers with `listOf(SLOT)` - no override needed.
+            val viewModel = viewModel(bookingsApi = bookingsApi)
+            viewModel.open()
+            advanceUntilIdle()
+
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина Мельникова")
+            viewModel.confirmClientStep()
+            viewModel.selectService(SERVICE)
+            viewModel.selectWorker(WORKER)
+            advanceUntilIdle()
+            viewModel.selectDate(SLOT.localDate)
+            viewModel.selectSlot(SLOT)
+
+            viewModel.submit()
+            advanceUntilIdle()
+
+            val created = viewModel.state.value as ManualBookingUiState.Created
+            assertEquals(SLOT.localDate, created.localDate)
         }
 
     @Test

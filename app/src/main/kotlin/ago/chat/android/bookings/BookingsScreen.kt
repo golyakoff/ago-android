@@ -198,6 +198,13 @@ public fun BookingsRoute(
     val onRevealConfirmed: (String) -> Unit
     val onPullToLoadWeek: (DateStripEdgeLoad) -> Unit
     val onJumpToToday: () -> Unit
+    // `26-311`: «Добавить вручную»'s own [ManualBookingSheet.onCreated] jump target - re-anchors and
+    // re-reads Утверждены around the *booking's own* day, the identical [ConfirmedBookingsViewModel.onDatePicked]
+    // the month/year date-picker already drives, rather than [onRetryConfirmed]'s own plain `refresh()`
+    // (which always re-selects today, [ConfirmedBookingsViewModel.refresh]'s own doc comment). A safe no-op
+    // for an operator lacking [showConfirmedSegment], the identical reasoning every sibling callback above
+    // already follows.
+    val onFocusConfirmedDate: (String) -> Unit
     if (showConfirmedSegment) {
         val confirmedViewModel: ConfirmedBookingsViewModel = hiltViewModel()
         val collectedConfirmedState by confirmedViewModel.state.collectAsStateWithLifecycle()
@@ -209,6 +216,7 @@ public fun BookingsRoute(
         // `26-233`: the day strip's own rubber-band edge-pull and «Сегодня» control.
         onPullToLoadWeek = confirmedViewModel::onPullToLoadWeek
         onJumpToToday = confirmedViewModel::jumpToToday
+        onFocusConfirmedDate = confirmedViewModel::onDatePicked
     } else {
         confirmedState = null
         onSelectDay = {}
@@ -217,6 +225,7 @@ public fun BookingsRoute(
         onRevealConfirmed = {}
         onPullToLoadWeek = {}
         onJumpToToday = {}
+        onFocusConfirmedDate = {}
     }
     // `26-117`: the booking-detail sheet's own «Перейти к диалогу» / chat icon
     // (`docs/backlog/26-117-*.md`'s own "Dialog link") reuses the identical cross-tab thread navigation
@@ -543,6 +552,7 @@ public fun BookingsRoute(
         onRevealConfirmed = onRevealConfirmed,
         onPullToLoadWeek = onPullToLoadWeek,
         onJumpToToday = onJumpToToday,
+        onFocusConfirmedDate = onFocusConfirmedDate,
         onOpenDialog = onOpenDialog,
         contactsState = contactsState,
         onRetryContacts = onRetryContacts,
@@ -703,6 +713,11 @@ internal fun BookingsScreen(
     onRevealConfirmed: (String) -> Unit,
     onPullToLoadWeek: (DateStripEdgeLoad) -> Unit,
     onJumpToToday: () -> Unit,
+    // `26-311`: «Добавить вручную»'s own jump-to-day target, threaded down to the [ManualBookingSheet]
+    // wiring further below - see [BookingsRoute]'s own doc comment on the identically-named local val for
+    // why this is not simply [onRetryConfirmed] again. Defaulted to a no-op so every existing call site
+    // (`BookingsConfigMenuTest` included) keeps compiling unchanged.
+    onFocusConfirmedDate: (String) -> Unit = {},
     onOpenDialog: (String) -> Unit,
     contactsState: ContactsUiState?,
     onRetryContacts: () -> Unit,
@@ -1082,18 +1097,27 @@ internal fun BookingsScreen(
     if (showManualBookingSheet) {
         ManualBookingSheet(
             onDismiss = { showManualBookingSheet = false },
-            onCreated = {
+            onCreated = { localDate ->
                 // The mockup's own last frame: the operator lands back on Утверждены with the new booking
                 // already in the list (`docs/backlog/26-268-*.md` §5.2) - switching the segment and asking
                 // the confirmed range to re-read is the same "the caller re-reads, the write result carries
                 // no fresh reading back" discipline [RescheduleBookingSheet]'s own `onRescheduled` follows.
-                // `onSegmentSelected`/`onRetryConfirmed` are safe no-ops for an operator who lacks
-                // `showConfirmedSegment` - `onRetryConfirmed` is `{}` in that case (`BookingsRoute`'s own
-                // wiring), and switching `selectedTab` to a segment `visibleBookingsSegments` never offers
-                // simply never renders anything.
+                // `26-311`: a plain `onRetryConfirmed()` used to re-read around *today* regardless of which
+                // day the booking actually landed on ([ConfirmedBookingsViewModel.refresh]'s own
+                // `anchorDate` default), leaving a future booking off-screen until the operator hunted for
+                // it. `onFocusConfirmedDate` re-anchors on the booking's own [localDate] and re-reads around
+                // it in one call ([ConfirmedBookingsViewModel.onDatePicked]) - it subsumes the plain refresh
+                // entirely, so `onRetryConfirmed` is no longer called here. `onRetryContacts()` refreshes
+                // Клиенты too, so a client minted by this same submit is not silently absent until the
+                // operator leaves and returns.
+                // `onSegmentSelected`/`onFocusConfirmedDate`/`onRetryContacts` are all safe no-ops for an
+                // operator who lacks the respective segment - both are `{}` in that case (`BookingsRoute`'s
+                // own wiring), and switching `selectedTab` to a segment `visibleBookingsSegments` never
+                // offers simply never renders anything.
                 showManualBookingSheet = false
                 onSegmentSelected(BookingsTab.Confirmed)
-                onRetryConfirmed()
+                onFocusConfirmedDate(localDate)
+                onRetryContacts()
             },
         )
     }

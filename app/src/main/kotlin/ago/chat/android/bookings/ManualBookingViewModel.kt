@@ -495,6 +495,10 @@ internal class ManualBookingViewModel
                                 bookingId = result.bookingId,
                                 startsAt = result.startsAt,
                                 endsAt = result.endsAt,
+                                // `26-311`: the slot's own business-local day, not a client-side conversion
+                                // of `result.startsAt` - [ManualBookingUiState.Created]'s own doc comment
+                                // states why that conversion would be wrong across a DST/zone boundary.
+                                localDate = slot.localDate,
                             )
                         }
 
