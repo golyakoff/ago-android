@@ -1365,7 +1365,7 @@
     <string name="settings_autostart_title_blocked">Autostart: not starting</string>
     <string name="settings_autostart_blocked_after_reboot">Didn\'t start automatically after the last restart</string>
     <string name="settings_autostart_recommendation_label">Recommendation</string>
-    <string name="settings_autostart_open_caption">This opens this phone\'s autostart settings.</string>
+    <string name="settings_autostart_open_caption">This tries to open this phone\'s autostart settings. If the screen doesn\'t open or nothing changes, turn autostart on manually: Huawei — Phone Manager → App launch; Xiaomi — Security → Autostart; Oppo/Realme — Protected apps; vivo — App manager → Autostart. Find AGO Chat in the list and enable it.</string>
     <string name="settings_autostart_not_needed_text">This phone most likely has no separate autostart setting — the general battery settings above are usually enough.</string>
     <string name="settings_autostart_limitation_note">Android has no single way to read this status on most phones — the exact state can\'t be confirmed, so this is shown as a recommendation, not a verified fact.</string>
     <string name="settings_autostart_manual_confirm_checkbox">Autostart is on — don\'t remind me</string>

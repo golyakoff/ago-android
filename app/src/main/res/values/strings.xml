@@ -2168,7 +2168,12 @@
          plainly rather than hedging. See `AutostartBootInference.kt`. -->
     <string name="settings_autostart_blocked_after_reboot">Не запустился автоматически после последней перезагрузки</string>
     <string name="settings_autostart_recommendation_label">Рекомендация</string>
-    <string name="settings_autostart_open_caption">Откроются настройки автозапуска для этого телефона.</string>
+    <!-- `26-328`: strengthened after a real Huawei device opened nothing when this button was tapped -
+         the caption now always states the manual path too, not only the auto-launch promise, since the
+         auto-launch is a best-effort guess this app cannot verify (see `AutostartAdvisor.kt`'s own doc
+         comment). Names the four restrictive OEMs' own app/menu labels so the manual path is followable
+         even when the button above does nothing. -->
+    <string name="settings_autostart_open_caption">Попробуем открыть настройки автозапуска для этого телефона. Если экран не откроется или ничего не изменится, включите автозапуск вручную: Huawei — «Диспетчер телефона» → «Запуск приложений»; Xiaomi — «Безопасность» → «Автозапуск»; Oppo/Realme — «Защищённые приложения»; vivo — «Диспетчер приложений» → «Автозапуск». Найдите AGO Chat в списке и включите его.</string>
     <string name="settings_autostart_not_needed_text">На этом телефоне отдельная настройка автозапуска, скорее всего, не нужна — обычно достаточно общих настроек батареи.</string>
     <string name="settings_autostart_limitation_note">Android не даёт единого способа прочитать этот статус на большинстве телефонов — точное состояние подтвердить нельзя, поэтому здесь показана рекомендация, а не проверенный факт.</string>
     <!-- `26-187`: the expanded card's own manual-confirm control - an operator on a restrictive OEM who has

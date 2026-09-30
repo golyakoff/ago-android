@@ -43,13 +43,6 @@ class AutostartAdvisorTest {
         )
         assertEquals(
             AutostartSettingsTarget.OemComponent(
-                "com.huawei.systemmanager",
-                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
-            ),
-            autostartTargetFor("HUAWEI"),
-        )
-        assertEquals(
-            AutostartSettingsTarget.OemComponent(
                 "com.coloros.safecenter",
                 "com.coloros.safecenter.permission.startup.StartupAppListActivity",
             ),
@@ -75,5 +68,47 @@ class AutostartAdvisorTest {
     fun `samsung and an unrecognised manufacturer have no known target`() {
         assertEquals(AutostartSettingsTarget.None, autostartTargetFor("samsung"))
         assertEquals(AutostartSettingsTarget.None, autostartTargetFor("Google"))
+    }
+
+    /**
+     * `26-328`: Huawei alone resolves to [AutostartSettingsTarget.OemComponentChain] rather than a single
+     * [AutostartSettingsTarget.OemComponent] - the real-device failure this item fixes was exactly a single
+     * component name that stopped resolving. Asserts the ordered candidate list (most-recently-observed
+     * component first) and the Phone Manager fallback package, both of which [autostartLaunchAttempts]
+     * relies on to build its own ordered plan.
+     */
+    @Test
+    fun `huawei resolves to an ordered component chain with a phone-manager fallback`() {
+        val target = autostartTargetFor("HUAWEI")
+        check(target is AutostartSettingsTarget.OemComponentChain)
+        assertEquals(
+            listOf(
+                AutostartSettingsTarget.OemComponent(
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                ),
+                AutostartSettingsTarget.OemComponent(
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.optimize.process.ProtectActivity",
+                ),
+                AutostartSettingsTarget.OemComponent(
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity",
+                ),
+            ),
+            target.candidates,
+        )
+        assertEquals("com.huawei.systemmanager", target.fallbackPackage)
+    }
+
+    /**
+     * `26-328`: case-insensitivity ("HUAWEI"/"huawei"/"Huawei") must hold for the chain the same way
+     * [`manufacturer matching is case-insensitive`] already proves it for a plain [AutostartSettingsTarget
+     * .OemComponent] - a data class's own `equals` makes this a direct comparison, no special-casing needed.
+     */
+    @Test
+    fun `huawei chain matching is case-insensitive`() {
+        assertEquals(autostartTargetFor("huawei"), autostartTargetFor("HUAWEI"))
+        assertEquals(autostartTargetFor("Huawei"), autostartTargetFor("HUAWEI"))
     }
 }

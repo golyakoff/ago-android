@@ -527,14 +527,25 @@ internal fun SettingsScreen(
                             // nothing - the identical "hidden, not shown-disabled" convention this
                             // screen's own doc comment already states for `switchableSites.size > 1` and
                             // the push-unavailable rows below, read onto a button instead of a section.
-                            if (autostartSettingsTarget is AutostartSettingsTarget.OemComponent) {
+                            // `26-328`: `!= None` rather than `is OemComponent` - a manufacturer with a
+                            // known [AutostartSettingsTarget.OemComponentChain] (Huawei) gets the button
+                            // too, since a chain is exactly as "known" as a single component, just less
+                            // certain about which exact name will resolve.
+                            if (autostartSettingsTarget != AutostartSettingsTarget.None) {
                                 OutlinedButton(onClick = onOpenAutostartSettings) {
                                     Text(text = stringResource(R.string.battery_awareness_autostart_action))
                                 }
+                                // `26-328`: this caption used to only promise the button would open
+                                // something ("Откроются настройки автозапуска для этого телефона.") - on
+                                // Алёна's Huawei it opened nothing, and an operator had no idea where else
+                                // to look. It now always states the manual path too, in `bodyMedium`
+                                // (not the muted `bodySmall`/`onSurfaceVariant` every other caption on this
+                                // card uses) so it reads as the real fallback it is, not a footnote -
+                                // `docs/backlog/26-328-*.md`'s own "auto-launch is a convenience, the
+                                // guidance is the guarantee".
                                 Text(
                                     text = stringResource(R.string.settings_autostart_open_caption),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
                             } else {
