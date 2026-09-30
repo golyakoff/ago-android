@@ -920,7 +920,7 @@ private fun ClientBookingRow(
                 text = clientBookingRowDateOrNull(booking.localDate) ?: "—",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = 4.dp),
             )
             Text(
                 text = businessLocalTimeOrNull(booking.startsAt) ?: "—",
