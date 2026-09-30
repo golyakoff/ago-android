@@ -302,51 +302,124 @@ internal class ManualBookingViewModel
         /** «Далее» on [ManualBookingStep.Client] — a no-op for a new client with a still-blank name (the
          * only client-side validation this flow makes; every other rule is the server's, per the same
          * "one refusal this app makes on its own" discipline [BookingActionErrorUi.InvalidDuration]'s own
-         * doc comment states). An [ManualBookingClient.Existing] client has nothing to validate. */
+         * doc comment states). An [ManualBookingClient.Existing] client has nothing to validate.
+         *
+         * `26-324`: lands on [ManualBookingStep.Service] to let the operator tap a row - unless the active
+         * service dictionary holds exactly one entry, in which case [withServiceSelected] auto-selects it,
+         * marks [ManualBookingStep.Service] skipped, and may itself skip straight past
+         * [ManualBookingStep.Worker] too (`docs/backlog/26-321-*.md`'s own "if there is exactly one
+         * eligible master, skip the selection step" - the identical rule this item applies to the service
+         * dictionary as well, since a lone service is the same one-option friction). */
         fun confirmClientStep() {
+            var workerToFetch: Worker? = null
             mutableState.update { current ->
                 val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
                 if (wizard.step != ManualBookingStep.Client) return@update current
                 val client = wizard.client ?: return@update current
                 if (client is ManualBookingClient.New && client.name.isBlank()) return@update current
-                wizard.copy(step = ManualBookingStep.Service)
+
+                val onlyService = wizard.services.singleOrNull()
+                val next =
+                    if (onlyService != null) {
+                        withServiceSelected(wizard, onlyService, serviceStepSkipped = true)
+                    } else {
+                        wizard.copy(step = ManualBookingStep.Service)
+                    }
+                if (next.step == ManualBookingStep.Date) workerToFetch = next.selectedWorker
+                next
             }
+            workerToFetch?.let(::fetchSlotsFor)
         }
 
         /** A tap on a service row selects and advances in one motion, rather than a select-then-"Далее"
          * pair — `docs/backlog/26-268-*.md`'s own "keep it simple", and there is nothing else a service row
-         * needs before moving on (unlike the Client step's own two text fields). */
+         * needs before moving on (unlike the Client step's own two text fields).
+         *
+         * `26-324`: the landing step is [withServiceSelected]'s own call - ordinarily
+         * [ManualBookingStep.Worker], but skipped straight to [ManualBookingStep.Date] when exactly one
+         * active worker offers [service]. */
         fun selectService(service: ConfiguredService) {
+            var workerToFetch: Worker? = null
             mutableState.update { current ->
                 val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
                 if (wizard.step != ManualBookingStep.Service) return@update current
-                wizard.copy(step = ManualBookingStep.Worker, selectedService = service)
+                val next = withServiceSelected(wizard, service, serviceStepSkipped = false)
+                if (next.step == ManualBookingStep.Date) workerToFetch = next.selectedWorker
+                next
+            }
+            workerToFetch?.let(::fetchSlotsFor)
+        }
+
+        /**
+         * `26-324`: shared by [selectService]'s own tap and [confirmClientStep]'s single-service auto-select
+         * — settles [ManualBookingUiState.Wizard.selectedService] and then either lands on
+         * [ManualBookingStep.Worker] for the operator to tap, or, when exactly one active worker offers
+         * [service], runs the identical select-and-land-on-Date [applyWorkerSelection] performs and records
+         * [ManualBookingStep.Worker] in [ManualBookingUiState.Wizard.skippedSteps] too - the same
+         * single-eligible-master rule `docs/backlog/26-321-*.md` asks for, applied here at the point [service]
+         * is settled rather than inside a later, separate "is there only one worker" step of its own.
+         * [serviceStepSkipped] records whether [ManualBookingStep.Service] itself was ever shown - `true`
+         * only from [confirmClientStep]'s own single-service branch - so [back] knows whether to walk past it
+         * too. The caller is responsible for firing [fetchSlotsFor] itself once this returns a
+         * [ManualBookingStep.Date] wizard, since a slot fetch is a side effect [mutableState.update]'s own
+         * pure lambda must not perform.
+         */
+        private fun withServiceSelected(
+            wizard: ManualBookingUiState.Wizard,
+            service: ConfiguredService,
+            serviceStepSkipped: Boolean,
+        ): ManualBookingUiState.Wizard {
+            val skippedSteps = if (serviceStepSkipped) wizard.skippedSteps + ManualBookingStep.Service else wizard.skippedSteps
+            val eligibleWorkers = wizard.workers.filter { it.isActive && service.serviceId in it.serviceIds }
+            val onlyWorker = eligibleWorkers.singleOrNull()
+            return if (onlyWorker != null) {
+                applyWorkerSelection(wizard, onlyWorker).copy(
+                    selectedService = service,
+                    skippedSteps = skippedSteps + ManualBookingStep.Worker,
+                )
+            } else {
+                wizard.copy(step = ManualBookingStep.Worker, selectedService = service, skippedSteps = skippedSteps)
             }
         }
 
         /** A tap on a master row - the identical one-motion select-and-advance [selectService] already
          * uses, then triggers the same-worker slot read [RescheduleBookingViewModel.load] already
-         * establishes (filtered to [WorkerSlotStatus.Available], the identical reason that class's own doc
-         * comment states: every other status is not a legal target to book into). Advances straight to
-         * [ManualBookingStep.Date] — the read this kicks off covers every day in the default range at once
-         * ([ManualBookingStep]'s own doc comment), so [ManualBookingStep.Date] and [ManualBookingStep.Slot]
-         * both read from it rather than either one fetching its own slice. */
+         * establishes via [fetchSlotsFor] (filtered to [WorkerSlotStatus.Available], the identical reason
+         * that class's own doc comment states: every other status is not a legal target to book into).
+         * Advances straight to [ManualBookingStep.Date] — the read this kicks off covers every day in the
+         * default range at once ([ManualBookingStep]'s own doc comment), so [ManualBookingStep.Date] and
+         * [ManualBookingStep.Slot] both read from it rather than either one fetching its own slice. */
         fun selectWorker(worker: Worker) {
             val current = mutableState.value as? ManualBookingUiState.Wizard ?: return
             if (current.step != ManualBookingStep.Worker) return
 
-            mutableState.update {
-                (it as? ManualBookingUiState.Wizard)?.copy(
-                    step = ManualBookingStep.Date,
-                    selectedWorker = worker,
-                    loadingSlots = true,
-                    slots = emptyList(),
-                    selectedDate = null,
-                    selectedSlot = null,
-                    actionError = null,
-                ) ?: it
-            }
+            mutableState.update { (it as? ManualBookingUiState.Wizard)?.let { wizard -> applyWorkerSelection(wizard, worker) } ?: it }
+            fetchSlotsFor(worker)
+        }
 
+        /** The pure half of a worker being settled - shared by [selectWorker]'s own tap and
+         * [withServiceSelected]'s single-eligible-worker auto-select (`26-324`). Never touches
+         * [ManualBookingUiState.Wizard.skippedSteps] itself: [selectWorker]'s own caller leaves it as it was
+         * (a genuine tap skips nothing new), while [withServiceSelected] adds [ManualBookingStep.Worker] to
+         * it afterwards, on the copy it returns. */
+        private fun applyWorkerSelection(
+            wizard: ManualBookingUiState.Wizard,
+            worker: Worker,
+        ): ManualBookingUiState.Wizard =
+            wizard.copy(
+                step = ManualBookingStep.Date,
+                selectedWorker = worker,
+                loadingSlots = true,
+                slots = emptyList(),
+                selectedDate = null,
+                selectedSlot = null,
+                actionError = null,
+            )
+
+        /** The same-worker slot read [selectWorker]'s own doc comment describes, extracted so
+         * [withServiceSelected]'s single-eligible-worker auto-select (`26-324`) can fire it too, once the
+         * state update that landed on [ManualBookingStep.Date] has already been applied. */
+        private fun fetchSlotsFor(worker: Worker) {
             viewModelScope.launch {
                 val today = LocalDate.now(ZoneOffset.UTC)
                 val range = defaultWorkerSlotsRange(today)
@@ -414,11 +487,20 @@ internal class ManualBookingViewModel
          * simply stay put and render again exactly as the operator left them. A no-op on
          * [ManualBookingStep.Phone] (nothing before it to go back to) and on any non-[ManualBookingUiState.Wizard]
          * state.
+         *
+         * `26-324`: walks past every step in [ManualBookingUiState.Wizard.skippedSteps] rather than always
+         * moving exactly one ordinal at a time - a single-service, single-eligible-worker booking never
+         * showed [ManualBookingStep.Service] or [ManualBookingStep.Worker] at all, so landing on either of
+         * them here would strand the operator on a step they never saw and cannot recognise.
          */
         fun back() {
             mutableState.update { current ->
                 val wizard = current as? ManualBookingUiState.Wizard ?: return@update current
-                val previous = ManualBookingStep.entries.getOrNull(wizard.step.ordinal - 1) ?: return@update current
+                var ordinal = wizard.step.ordinal - 1
+                while (ordinal >= 0 && ManualBookingStep.entries[ordinal] in wizard.skippedSteps) {
+                    ordinal--
+                }
+                val previous = ManualBookingStep.entries.getOrNull(ordinal) ?: return@update current
                 wizard.copy(step = previous)
             }
         }

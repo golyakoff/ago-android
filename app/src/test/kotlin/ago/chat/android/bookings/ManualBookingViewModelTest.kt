@@ -41,6 +41,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -487,14 +488,24 @@ class ManualBookingViewModelTest {
     @Test
     fun `back moves to the previous step without losing any already-entered state`() =
         runTest(dispatcher) {
-            val bookingsApi = FakeBookingsApi(phoneCandidatesResult = PhoneCandidatesResult.Loaded(listOf(CANDIDATE)))
-            val viewModel = viewModel(bookingsApi = bookingsApi)
+            // Two services on offer, and two workers who both offer the one this test picks - `26-324`'s
+            // own single-option skip never fires here, so every step below is genuinely shown, the identical
+            // ladder this test walked before that item existed.
+            val bookingsApi =
+                FakeBookingsApi(
+                    phoneCandidatesResult = PhoneCandidatesResult.Loaded(listOf(CANDIDATE)),
+                    servicesResult = ServicesResult.Loaded(listOf(SERVICE, SERVICE2)),
+                )
+            val workersApi =
+                FakeWorkersApi(WorkersResult.Loaded(workers = listOf(WORKER, WORKER2), calendars = emptyList(), services = emptyList()))
+            val viewModel = viewModel(bookingsApi = bookingsApi, workersApi = workersApi)
             viewModel.open()
             advanceUntilIdle()
             viewModel.onPhoneChanged(PHONE)
             advanceUntilIdle()
             viewModel.chooseCandidate(CANDIDATE)
             viewModel.confirmClientStep()
+            assertEquals(ManualBookingStep.Service, (viewModel.state.value as ManualBookingUiState.Wizard).step)
             // `selectService` is itself a one-motion select-and-advance ([selectService]'s own doc
             // comment) - this already lands on `Worker`, one step further than the tap that chose it.
             viewModel.selectService(SERVICE)
@@ -549,6 +560,175 @@ class ManualBookingViewModelTest {
             // No re-fetch on the way back - both days' slots, and the worker that was chosen, are untouched.
             assertEquals(listOf(SLOT, otherDaySlot), wizard.slots)
             assertEquals(WORKER, wizard.selectedWorker)
+        }
+
+    // `26-324`/`docs/backlog/26-321-*.md`: the first real-user feedback this item answers - an operator
+    // stalled on a "choose a master" step that had only one master to tap. The four tests below cover the
+    // service-step skip, the worker-step skip, `back` walking past whichever of the two were skipped, and
+    // the two "more than one option, nothing changes" controls the design doc's own recommendation implies.
+
+    @Test
+    fun `confirmClientStep auto-selects the only service and skips straight past it`() =
+        runTest(dispatcher) {
+            // The default `FakeBookingsApi` already offers exactly one service; two workers both eligible
+            // for it keep the *worker* step from skipping too, so this test isolates the service skip alone.
+            val workersApi =
+                FakeWorkersApi(WorkersResult.Loaded(workers = listOf(WORKER, WORKER2), calendars = emptyList(), services = emptyList()))
+            val viewModel = viewModel(workersApi = workersApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+
+            viewModel.confirmClientStep()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Worker, wizard.step)
+            assertEquals(SERVICE, wizard.selectedService)
+            assertEquals(setOf(ManualBookingStep.Service), wizard.skippedSteps)
+        }
+
+    @Test
+    fun `selectService auto-selects the only eligible worker, skips Worker and fires the slot fetch`() =
+        runTest(dispatcher) {
+            // Two services keep the *service* step from skipping, so this test isolates the worker skip:
+            // only `WORKER` offers `SERVICE`, `WORKER2` does not.
+            val bookingsApi = FakeBookingsApi(servicesResult = ServicesResult.Loaded(listOf(SERVICE, SERVICE2)))
+            val onlyEligible = WORKER2.copy(workerId = "w-other", serviceIds = listOf(SERVICE2.serviceId))
+            val workersApi =
+                FakeWorkersApi(
+                    WorkersResult.Loaded(workers = listOf(WORKER, onlyEligible), calendars = emptyList(), services = emptyList()),
+                )
+            val workerSlotsApi = FakeWorkerSlotsApi(WorkerSlotsResult.Loaded(listOf(SLOT)))
+            val viewModel = viewModel(bookingsApi = bookingsApi, workersApi = workersApi, workerSlotsApi = workerSlotsApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+            assertEquals(ManualBookingStep.Service, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.selectService(SERVICE)
+            // Before the fetch resolves: already on `Date`, `WORKER` already recorded as chosen.
+            val justSkipped = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Date, justSkipped.step)
+            assertEquals(WORKER, justSkipped.selectedWorker)
+            assertEquals(setOf(ManualBookingStep.Worker), justSkipped.skippedSteps)
+            assertTrue(justSkipped.loadingSlots)
+
+            advanceUntilIdle()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(listOf(SLOT), wizard.slots)
+            assertFalse(wizard.loadingSlots)
+        }
+
+    @Test
+    fun `back walks past both auto-skipped steps, landing back on Client`() =
+        runTest(dispatcher) {
+            // Default fixtures: one service, one eligible worker - both `Service` and `Worker` are skipped.
+            val viewModel = viewModel()
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+            advanceUntilIdle()
+            assertEquals(ManualBookingStep.Date, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.back()
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Client, wizard.step)
+            // Nothing the skip settled is lost by walking back past it.
+            assertEquals(SERVICE, wizard.selectedService)
+            assertEquals(WORKER, wizard.selectedWorker)
+        }
+
+    @Test
+    fun `back walks past only the step that was actually skipped, not one genuinely shown`() =
+        runTest(dispatcher) {
+            // Two services (Service shown), but `SERVICE`'s only eligible worker is `WORKER` (Worker
+            // skipped) - `back` from `Date` must land on `Service`, not `Worker`.
+            val bookingsApi = FakeBookingsApi(servicesResult = ServicesResult.Loaded(listOf(SERVICE, SERVICE2)))
+            val onlyEligible = WORKER2.copy(workerId = "w-other", serviceIds = listOf(SERVICE2.serviceId))
+            val workersApi =
+                FakeWorkersApi(
+                    WorkersResult.Loaded(workers = listOf(WORKER, onlyEligible), calendars = emptyList(), services = emptyList()),
+                )
+            val viewModel = viewModel(bookingsApi = bookingsApi, workersApi = workersApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+            viewModel.selectService(SERVICE)
+            advanceUntilIdle()
+            assertEquals(ManualBookingStep.Date, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.back()
+            assertEquals(ManualBookingStep.Service, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.back()
+            assertEquals(ManualBookingStep.Client, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+        }
+
+    @Test
+    fun `several services and several eligible workers show both steps, unchanged`() =
+        runTest(dispatcher) {
+            val bookingsApi = FakeBookingsApi(servicesResult = ServicesResult.Loaded(listOf(SERVICE, SERVICE2)))
+            val workersApi =
+                FakeWorkersApi(WorkersResult.Loaded(workers = listOf(WORKER, WORKER2), calendars = emptyList(), services = emptyList()))
+            val viewModel = viewModel(bookingsApi = bookingsApi, workersApi = workersApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+
+            viewModel.confirmClientStep()
+            assertEquals(ManualBookingStep.Service, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+
+            viewModel.selectService(SERVICE)
+            val afterService = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Worker, afterService.step)
+            assertEquals(emptySet<ManualBookingStep>(), afterService.skippedSteps)
+
+            viewModel.selectWorker(WORKER)
+            assertEquals(ManualBookingStep.Date, (viewModel.state.value as ManualBookingUiState.Wizard).step)
+        }
+
+    @Test
+    fun `zero eligible workers for the chosen service leaves Worker shown and empty, unchanged`() =
+        runTest(dispatcher) {
+            val bookingsApi = FakeBookingsApi(servicesResult = ServicesResult.Loaded(listOf(SERVICE, SERVICE2)))
+            val ineligible = WORKER2.copy(serviceIds = listOf(SERVICE2.serviceId))
+            val workersApi =
+                FakeWorkersApi(WorkersResult.Loaded(workers = listOf(ineligible), calendars = emptyList(), services = emptyList()))
+            val viewModel = viewModel(bookingsApi = bookingsApi, workersApi = workersApi)
+            viewModel.open()
+            advanceUntilIdle()
+            viewModel.onPhoneChanged(PHONE)
+            advanceUntilIdle()
+            viewModel.chooseNewClient()
+            viewModel.onNewClientNameChanged("Ирина")
+            viewModel.confirmClientStep()
+
+            viewModel.selectService(SERVICE)
+
+            val wizard = viewModel.state.value as ManualBookingUiState.Wizard
+            assertEquals(ManualBookingStep.Worker, wizard.step)
+            assertNull(wizard.selectedWorker)
+            assertEquals(emptySet<ManualBookingStep>(), wizard.skippedSteps)
         }
 
     @Test
@@ -722,6 +902,12 @@ class ManualBookingViewModelTest {
                 serviceIds = listOf("s1"),
                 calendarId = "cal1",
             )
+
+        // `26-324`: a second service/worker, used only by the tests that need more than one option on a
+        // step - the skip feature this item adds is specifically about there being exactly *one*.
+        val SERVICE2 = SERVICE.copy(serviceId = "s2", name = "Маникюр")
+
+        val WORKER2 = WORKER.copy(workerId = "w2", displayName = "Полина Орлова", serviceIds = listOf("s1"))
 
         val SLOT =
             WorkerSlot(
