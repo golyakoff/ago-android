@@ -19,15 +19,32 @@ public enum class DeviceModeStatus {
 }
 
 /**
- * Where the «Настройки автозапуска» button leads. [OemComponent] names a package/class pair this app has
- * a reverse-engineered mapping for; [None] means no such mapping exists for this manufacturer (Samsung, an
- * unrecognised OEM, or plain AOSP) — [SettingsScreen][ago.chat.android.shell.SettingsScreen] renders that
- * as plain explanatory text instead of a dead button, never as a button that opens nothing.
+ * Where the «Настройки автозапуска» button leads. [OemComponent] names a single package/class pair this app
+ * has a reverse-engineered mapping for; [OemComponentChain] is the same idea for a manufacturer whose exact
+ * component name has moved across OS releases (`26-328`) — see that type's own doc comment; [None] means no
+ * mapping exists at all for this manufacturer (Samsung, an unrecognised OEM, or plain AOSP) —
+ * [SettingsScreen][ago.chat.android.shell.SettingsScreen] renders that as plain explanatory text instead of
+ * a dead button, never as a button that opens nothing.
  */
 public sealed interface AutostartSettingsTarget {
     public data class OemComponent(
         public val packageName: String,
         public val className: String,
+    ) : AutostartSettingsTarget
+
+    /**
+     * `26-328`: some OEMs have shipped more than one component name for the *same* autostart screen across
+     * OS versions - Huawei chief among them, whose `com.huawei.systemmanager` app has renamed and re-guarded
+     * its startup-manager `Activity` across EMUI/HarmonyOS releases (`docs/backlog/26-328-*.md`). A single
+     * [OemComponent] can only ever be right for one such release; [candidates] holds every known variant, in
+     * the order [openAutostartSettings][ago.chat.android.devices.openAutostartSettings] should try them
+     * (most-recently-observed first), and [fallbackPackage], when set, is that OEM's own settings/manager
+     * app - launched via its own launcher intent, never a guessed component name - so a device whose exact
+     * screen this app has never seen still lands somewhere real inside the right app instead of nowhere.
+     */
+    public data class OemComponentChain(
+        public val candidates: List<OemComponent>,
+        public val fallbackPackage: String? = null,
     ) : AutostartSettingsTarget
 
     public data object None : AutostartSettingsTarget
@@ -96,10 +113,31 @@ internal fun autostartTargetFor(manufacturer: String): AutostartSettingsTarget =
                 "com.miui.securitycenter",
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
             )
+        // `26-328`: a single component (the original `StartupNormalAppListActivity` guess) turned out not
+        // to open on a real Huawei device - EMUI/HarmonyOS have used at least the three names below across
+        // releases, and newer builds additionally block third-party apps from launching `systemmanager`
+        // components at all (`ActivityNotFoundException`/`SecurityException`). The chain tries every known
+        // name before falling back to the Phone Manager app's own launcher intent - see
+        // [AutostartSettingsTarget.OemComponentChain]'s own doc comment for why that fallback is a launched
+        // app, not another guessed component.
         "huawei" ->
-            AutostartSettingsTarget.OemComponent(
-                "com.huawei.systemmanager",
-                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+            AutostartSettingsTarget.OemComponentChain(
+                candidates =
+                    listOf(
+                        AutostartSettingsTarget.OemComponent(
+                            "com.huawei.systemmanager",
+                            "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                        ),
+                        AutostartSettingsTarget.OemComponent(
+                            "com.huawei.systemmanager",
+                            "com.huawei.systemmanager.optimize.process.ProtectActivity",
+                        ),
+                        AutostartSettingsTarget.OemComponent(
+                            "com.huawei.systemmanager",
+                            "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity",
+                        ),
+                    ),
+                fallbackPackage = "com.huawei.systemmanager",
             )
         "oppo", "realme" ->
             AutostartSettingsTarget.OemComponent(

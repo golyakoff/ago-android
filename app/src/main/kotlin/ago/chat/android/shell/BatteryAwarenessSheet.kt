@@ -127,6 +127,16 @@ internal fun BatteryAwarenessSheet(
             FilledTonalButton(onClick = onOpenAutostartSettings, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Text(text = stringResource(R.string.battery_awareness_autostart_action))
             }
+            // `26-328`: this sheet had no manual fallback at all next to its own autostart button -
+            // `SettingsScreen`'s expanded «Автозапуск» card carried `settings_autostart_open_caption`
+            // already, but the first-launch sheet's copy of the same button did not. Shared verbatim
+            // rather than a sheet-specific string, since the underlying gap (auto-launch can silently
+            // fail on Huawei) and the manual path out of it are identical in both places.
+            Text(
+                text = stringResource(R.string.settings_autostart_open_caption),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
 
             Row(
                 modifier =
