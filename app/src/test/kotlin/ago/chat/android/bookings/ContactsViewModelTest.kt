@@ -589,6 +589,52 @@ class ContactsViewModelTest {
             )
         }
 
+    @Test
+    fun `26-310 applyUpcomingCount updates the matching row's own badge count`() =
+        runTest(dispatcher) {
+            val first = contact(id = "c1").copy(upcomingBookingCount = 2)
+            val second = contact(id = "c2").copy(upcomingBookingCount = 1)
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(first, second)))
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            // `ClientDetailSheet`'s own report after a cancel from inside the client-detail hub - the
+            // client dropped from 2 upcoming to 1, the identical fact this list's own row badge must now
+            // show without a second `fetchContacts` call.
+            viewModel.applyUpcomingCount("c1", 1)
+
+            assertEquals(
+                ContactsUiState.Loaded(listOf(first.copy(upcomingBookingCount = 1), second)),
+                viewModel.state.value,
+            )
+            assertEquals(1, api.contactsFetchCalls)
+        }
+
+    @Test
+    fun `26-310 applyUpcomingCount for a customer id not on the list is a no-op`() =
+        runTest(dispatcher) {
+            val only = contact(id = "c1").copy(upcomingBookingCount = 3)
+            val api = FakeBookingsApi(result = ContactsResult.Loaded(listOf(only)))
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            advanceUntilIdle()
+
+            viewModel.applyUpcomingCount("unknown-id", 0)
+
+            assertEquals(ContactsUiState.Loaded(listOf(only)), viewModel.state.value)
+        }
+
+    @Test
+    fun `26-310 applyUpcomingCount is a no-op before the list has loaded`() =
+        runTest(dispatcher) {
+            val api = FakeBookingsApi(hangFetch = true)
+            val viewModel = ContactsViewModel(api = api, personsApi = FakePersonsApi(), ioDispatcher = dispatcher)
+            dispatcher.scheduler.runCurrent()
+
+            viewModel.applyUpcomingCount("c1", 0)
+
+            assertEquals(ContactsUiState.Loading, viewModel.state.value)
+        }
+
     private fun contact(id: String) =
         Contact(
             customerId = id,

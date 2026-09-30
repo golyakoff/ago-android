@@ -315,6 +315,43 @@ internal class ContactsViewModel
                 (current as? ContactsUiState.Loaded)?.copy(blockedErasureClientId = null) ?: current
             }
         }
+
+        /**
+         * `26-310`: keeps this list's own [Contact.upcomingBookingCount] badge (the row's own
+         * « · N запись» suffix, [ContactsFilter]'s own «С предстоящей записью»/«Без записей» chip) in
+         * sync with [ClientDetailSheet]'s own, independently-loaded per-person booking read — the two
+         * never shared a count before this item, so a cancel performed *inside* that sheet (which only
+         * ever touches its own [ClientDetailUiState.Loaded.upcoming]) used to leave this list's own row
+         * showing the pre-cancel number until the next full [refresh].
+         *
+         * [ClientDetailSheet] calls this with its own current, authoritative `upcoming.size` every time
+         * its state reloads — on open, after a cancel, after a manual booking is added from inside it —
+         * rather than this class re-fetching the whole list itself: that sheet already paid for the one
+         * read this count comes from, and a second read here would just be the identical
+         * `PersonBookingsResult` fetched twice for no new fact. A no-op outside [ContactsUiState.Loaded]
+         * (nothing to update before the list has ever loaded) and for a [customerId] this list has no row
+         * for at all (the sheet can be reopened for a client this list's own `refresh` has since dropped) —
+         * the identical "match by id, touch only what matches" shape [reveal] already applies, restated
+         * here as a plain field copy rather than a network-driven replace.
+         */
+        fun applyUpcomingCount(
+            customerId: String,
+            upcomingCount: Int,
+        ) {
+            mutableState.update { current ->
+                val loaded = current as? ContactsUiState.Loaded ?: return@update current
+                loaded.copy(
+                    contacts =
+                        loaded.contacts.map { contact ->
+                            if (contact.customerId == customerId && contact.upcomingBookingCount != upcomingCount) {
+                                contact.copy(upcomingBookingCount = upcomingCount)
+                            } else {
+                                contact
+                            }
+                        },
+                )
+            }
+        }
     }
 
 /** `26-275`/`adr/0189`: `ErasePersonErrors.FutureBookingsExist`'s own stable `type`

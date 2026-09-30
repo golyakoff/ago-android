@@ -116,6 +116,11 @@ internal fun ContactsBody(
     // `26-275`: threaded straight through to [ClientDetailSheet] - see that composable's own doc comment
     // on why the Предстоящие row's new «Отменить» needs its own, separate permission.
     canCancelBooking: Boolean = false,
+    // `26-310`: threaded straight through to [ClientDetailSheet] - see that composable's own doc comment
+    // on why this list's own row badge needs to hear about a count that sheet alone can change. Defaulted
+    // to a no-op so every existing call site (this screen's own previews and androidTest hosts included)
+    // keeps compiling unchanged.
+    onUpcomingCountChanged: (customerId: String, upcomingCount: Int) -> Unit = { _, _ -> },
 ) {
     var selectedClientId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -206,6 +211,7 @@ internal fun ContactsBody(
             onDismiss = { selectedClientId = null },
             onOpenDialog = onOpenDialog,
             canCancelBooking = canCancelBooking,
+            onUpcomingCountChanged = onUpcomingCountChanged,
         )
     }
 }

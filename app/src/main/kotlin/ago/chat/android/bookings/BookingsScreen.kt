@@ -241,6 +241,10 @@ public fun BookingsRoute(
     val onContactsFilterChange: (ContactsFilter) -> Unit
     val onDeleteClient: (String) -> Unit
     val onDismissBlockedErasure: () -> Unit
+    // `26-310`: [ClientDetailSheet]'s own report of its freshly-loaded `upcoming.size` - the identical
+    // "the caller who already has the view model wires its own methods straight through" shape every
+    // other Клиенты callback here follows.
+    val onUpcomingCountChanged: (customerId: String, upcomingCount: Int) -> Unit
     if (showClientsSegment) {
         val contactsViewModel: ContactsViewModel = hiltViewModel()
         val collectedContactsState by contactsViewModel.state.collectAsStateWithLifecycle()
@@ -254,6 +258,7 @@ public fun BookingsRoute(
         // every other Клиенты callback above already establishes.
         onDeleteClient = contactsViewModel::deleteClient
         onDismissBlockedErasure = contactsViewModel::dismissBlockedErasure
+        onUpcomingCountChanged = contactsViewModel::applyUpcomingCount
     } else {
         contactsState = null
         onRetryContacts = {}
@@ -262,6 +267,7 @@ public fun BookingsRoute(
         onContactsFilterChange = {}
         onDeleteClient = {}
         onDismissBlockedErasure = {}
+        onUpcomingCountChanged = { _, _ -> }
     }
 
     // `26-96`: the identical Hilt-avoidance-when-ungated shape the two branches above establish,
@@ -541,6 +547,7 @@ public fun BookingsRoute(
         onContactsFilterChange = onContactsFilterChange,
         onDeleteClient = onDeleteClient,
         onDismissBlockedErasure = onDismissBlockedErasure,
+        onUpcomingCountChanged = onUpcomingCountChanged,
         servicesState = servicesState,
         onRetryServices = onRetryServices,
         onEditService = onEditService,
@@ -698,6 +705,10 @@ internal fun BookingsScreen(
     onContactsFilterChange: (ContactsFilter) -> Unit,
     onDeleteClient: (String) -> Unit,
     onDismissBlockedErasure: () -> Unit,
+    // `26-310`: [ClientDetailSheet]'s own report of its freshly-loaded `upcoming.size`, threaded through
+    // to [ContactsBody] - see that composable's own doc comment. Defaulted to a no-op so every existing
+    // call site (`BookingsConfigMenuTest` included) keeps compiling unchanged.
+    onUpcomingCountChanged: (customerId: String, upcomingCount: Int) -> Unit = { _, _ -> },
     servicesState: ServicesUiState?,
     onRetryServices: () -> Unit,
     onEditService: (ConfiguredService) -> Unit,
@@ -1034,6 +1045,7 @@ internal fun BookingsScreen(
                                 onDeleteClient = onDeleteClient,
                                 onDismissBlockedErasure = onDismissBlockedErasure,
                                 canCancelBooking = canCancelBooking,
+                                onUpcomingCountChanged = onUpcomingCountChanged,
                             )
                         }
 
