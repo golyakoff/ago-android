@@ -1069,6 +1069,37 @@
     <string name="readiness_precondition_calendar_published">Календарь опубликован</string>
 
     <!--
+        `26-332` (`26-318` port of `ago-console`'s own `26-329`): the guided setup wizard - a
+        readiness-driven stepper that leads a first-run tenant to a bookable calendar one step at a time.
+        The step is DERIVED from the same `booking-readiness` chain the Готовность panel renders (plus the
+        booking-trigger fact), never a local progress store, so the two can never disagree.
+    -->
+    <string name="setup_wizard_tab">Мастер настройки</string>
+    <string name="setup_wizard_intro">Пройдите эти шаги по порядку, чтобы календарь начал принимать записи. Можно уйти и вернуться в любой момент — мастер продолжит с того же места.</string>
+    <string name="setup_wizard_step_index">Шаг %1$d из %2$d</string>
+    <string name="setup_wizard_open_screen">Открыть экран</string>
+    <string name="setup_wizard_load_failed_unexpected">Не удалось загрузить мастер настройки. Попробуйте ещё раз.</string>
+    <string name="setup_wizard_create_calendar_title">Создайте календарь</string>
+    <string name="setup_wizard_create_calendar_intro">Укажите название и часовой пояс. Пока не публикуйте его — вы опубликуете его, когда всё остальное будет готово.</string>
+    <string name="setup_wizard_add_master_title">Добавьте мастера</string>
+    <string name="setup_wizard_add_master_intro">Добавьте на календарь хотя бы одного активного мастера. Можно пройти все следующие шаги для одного мастера, а остальных добавить потом на экране «Мастера», либо добавить несколько сразу.</string>
+    <string name="setup_wizard_add_service_title">Добавьте услугу</string>
+    <string name="setup_wizard_add_service_intro">Добавьте услугу, которую оказывает мастер, и назначьте её ему.</string>
+    <string name="setup_wizard_working_hours_title">Задайте рабочие часы</string>
+    <string name="setup_wizard_working_hours_intro">Укажите дни и часы работы мастера — из них рассчитываются слоты для записи.</string>
+    <string name="setup_wizard_confirm_schedule_title">Подтвердите график</string>
+    <string name="setup_wizard_confirm_schedule_intro">Подтвердите длительность слота и на сколько дней вперёд открывать запись — это превращает рабочие часы в слоты для записи.</string>
+    <string name="setup_wizard_materializing_title">Слоты генерируются</string>
+    <string name="setup_wizard_materializing_intro">Слоты рассчитываются в фоновом режиме. Это может занять несколько секунд — откройте «Слоты» мастера, чтобы проверить, и при необходимости пересчитайте график.</string>
+    <string name="setup_wizard_booking_trigger_title">Задайте слово-триггер для записи</string>
+    <string name="setup_wizard_booking_trigger_intro">Это фраза, которую клиент отправляет в чат, чтобы начать запись, — единственная точка входа в календарь. Пока задать её можно только в консоли: в приложении такой настройки ещё нет.</string>
+    <string name="setup_wizard_publish_title">Опубликуйте календарь</string>
+    <string name="setup_wizard_publish_intro">Всё готово. Опубликуйте календарь, чтобы клиенты могли записываться.</string>
+    <string name="setup_wizard_publish_intro_named">Всё готово. Опубликуйте календарь «%1$s», чтобы клиенты могли записываться.</string>
+    <string name="setup_wizard_done_title">Готово</string>
+    <string name="setup_wizard_done_message">Готово: напишите %1$s в чат, чтобы начать запись.</string>
+
+    <!--
         `26-140`: Записи's own «Мастера» segment - the worker dictionary, with the full create/edit/delete
         this product had no screen for at all until this item. A `⋮` config entry gated on
         `calendar:configure`, offered before Услуги (menu order Календари · Мастера · Услуги · Часы).

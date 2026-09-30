@@ -93,6 +93,10 @@ internal enum class MastersDrillDownKind {
 public fun BookingsRoute(
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    // `26-332`: the guided setup wizard's own `⋮` entry, `calendar:configure` alone - defaulted `false` so
+    // every existing caller/test keeps compiling unchanged (the identical shape `canEraseClient` below
+    // follows).
+    showSetupWizardEntry: Boolean = false,
     showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
@@ -183,6 +187,27 @@ public fun BookingsRoute(
     // when that happens.
     LaunchedEffect(activeConfigTab) {
         if (activeConfigTab == BookingsTab.Readiness) onRefreshReadiness()
+    }
+
+    // `26-332`: the guided setup wizard's own view model - the identical Hilt-avoidance-when-ungated shape
+    // [ReadinessViewModel] above establishes, gated on the same `calendar:configure`-derived Boolean: an
+    // operator lacking it never constructs [SetupWizardViewModel] and never triggers its `init`-time reads.
+    val setupWizardState: SetupWizardUiState?
+    val onRefreshSetupWizard: () -> Unit
+    if (showSetupWizardEntry) {
+        val setupWizardViewModel: SetupWizardViewModel = hiltViewModel()
+        val collectedSetupWizardState by setupWizardViewModel.state.collectAsStateWithLifecycle()
+        setupWizardState = collectedSetupWizardState
+        onRefreshSetupWizard = setupWizardViewModel::refresh
+    } else {
+        setupWizardState = null
+        onRefreshSetupWizard = {}
+    }
+    // `26-332`: "re-read on every open of the screen", the identical [ReadinessViewModel] discipline above -
+    // this view model persists for as long as the whole Записи route does, so a fresh derive on every
+    // *reopen* of the wizard needs an explicit trigger keyed on the one state that knows when that happens.
+    LaunchedEffect(activeConfigTab) {
+        if (activeConfigTab == BookingsTab.SetupWizard) onRefreshSetupWizard()
     }
 
     // `26-51`: [ConfirmedBookingsViewModel] is obtained by `hiltViewModel()` only inside this branch, so
@@ -517,6 +542,7 @@ public fun BookingsRoute(
         state = state,
         showConfirmedSegment = showConfirmedSegment,
         showClientsSegment = showClientsSegment,
+        showSetupWizardEntry = showSetupWizardEntry,
         showReadinessEntry = showReadinessEntry,
         showSetupSegment = showSetupSegment,
         showMastersSegment = showMastersSegment,
@@ -646,6 +672,8 @@ public fun BookingsRoute(
         },
         readinessState = readinessState,
         onRetryReadiness = onRefreshReadiness,
+        setupWizardState = setupWizardState,
+        onRetrySetupWizard = onRefreshSetupWizard,
         hubConnectionState = hubConnectionState,
         isAway = isAway,
         onSetAway = onSetAway,
@@ -680,6 +708,9 @@ internal fun BookingsScreen(
     state: BookingsUiState,
     showConfirmedSegment: Boolean,
     showClientsSegment: Boolean,
+    // `26-332`: the guided setup wizard's own `⋮` entry - defaulted `false` so every existing call site
+    // (`BookingsConfigMenuTest` included) keeps compiling and behaving unchanged.
+    showSetupWizardEntry: Boolean = false,
     showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
@@ -790,6 +821,11 @@ internal fun BookingsScreen(
     onOpenMastersRecutFromHours: (workerId: String, from: String) -> Unit,
     readinessState: ReadinessUiState?,
     onRetryReadiness: () -> Unit,
+    // `26-332`: the guided setup wizard's own state and retry - defaulted so every existing call site
+    // (`BookingsConfigMenuTest`) keeps compiling. `null` renders nothing (the identical "non-null exactly
+    // when the entry was offered" invariant every other config state here follows).
+    setupWizardState: SetupWizardUiState? = null,
+    onRetrySetupWizard: () -> Unit = {},
     hubConnectionState: OperatorHubConnectionState = OperatorHubConnectionState.Disconnected,
     isAway: Boolean = false,
     onSetAway: suspend (Boolean) -> Boolean = { false },
@@ -863,6 +899,12 @@ internal fun BookingsScreen(
             configTab = activeConfigTab,
             pendingState = state,
             onBack = onCloseConfig,
+            setupWizardState = setupWizardState,
+            onRetrySetupWizard = onRetrySetupWizard,
+            // `26-332`: the wizard's own «Открыть экран» - the identical in-hub swap [onFixReadiness] uses,
+            // expressed as [onConfigSelected] directly: it opens the config screen that owns the step's write
+            // ([SetupWizardStep.targetTab]), the same navigation this menu's own entries already use.
+            onGoToTab = onConfigSelected,
             readinessState = readinessState,
             onRetryReadiness = onRetryReadiness,
             // `26-164`: «Исправить»/«Слоты» is an in-hub swap to another config screen, expressed here as
@@ -911,6 +953,7 @@ internal fun BookingsScreen(
     val segments = visibleBookingsSegments(showConfirmedSegment, showClientsSegment)
     val configMenuEntries =
         visibleBookingsConfigMenuEntries(
+            showSetupWizardEntry,
             showReadinessEntry,
             showSetupSegment,
             showMastersSegment,
@@ -1074,9 +1117,11 @@ internal fun BookingsScreen(
                             )
                         }
 
-                    // `26-157`/`26-164`: the five configuration tabs are never a `selectedTab` - they are
-                    // opened as a modal page tracked by `activeConfigTab` (handled above), never selected in
-                    // the operational segmented view - so there is nothing for the operational `when` to draw.
+                    // `26-157`/`26-164`/`26-332`: the six configuration tabs are never a `selectedTab` - they
+                    // are opened as a modal page tracked by `activeConfigTab` (handled above), never selected
+                    // in the operational segmented view - so there is nothing for the operational `when` to
+                    // draw.
+                    BookingsTab.SetupWizard,
                     BookingsTab.Readiness,
                     BookingsTab.Calendars,
                     BookingsTab.Masters,
@@ -1142,6 +1187,12 @@ private fun BookingsConfigModalPage(
     configTab: BookingsTab,
     pendingState: BookingsUiState,
     onBack: () -> Unit,
+    // `26-332`: the guided setup wizard's own state, retry and navigation - rendered for
+    // [BookingsTab.SetupWizard] alone, the identical "non-null exactly when its entry was offered" invariant
+    // every sibling config state here follows.
+    setupWizardState: SetupWizardUiState?,
+    onRetrySetupWizard: () -> Unit,
+    onGoToTab: (BookingsTab) -> Unit,
     readinessState: ReadinessUiState?,
     onRetryReadiness: () -> Unit,
     onFixReadiness: (BookingPrecondition) -> Unit,
@@ -1207,6 +1258,12 @@ private fun BookingsConfigModalPage(
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 when (configTab) {
+                    // `26-332`: Мастер настройки - the guided setup wizard.
+                    BookingsTab.SetupWizard ->
+                        setupWizardState?.let {
+                            SetupWizardBody(state = it, onRetry = onRetrySetupWizard, onGoToTab = onGoToTab)
+                        }
+
                     // `26-164`: Готовность.
                     BookingsTab.Readiness ->
                         readinessState?.let {
@@ -1341,6 +1398,9 @@ private fun BookingsConfigMenu(
  * `when` never needs an `else` — the three operational segments never reach a menu row at all. */
 private fun configMenuIconFor(tab: BookingsTab): ImageVector =
     when (tab) {
+        // `26-332`: the wizard's own row glyph - the same «Готовность» readiness glyph, since the wizard is
+        // the guided front door onto that same readiness chain.
+        BookingsTab.SetupWizard -> AgoIcons.Readiness
         BookingsTab.Readiness -> AgoIcons.Readiness
         BookingsTab.Calendars -> AgoIcons.Calendars
         BookingsTab.Masters -> AgoIcons.Masters
@@ -1359,6 +1419,9 @@ private fun bookingsTabLabel(
         BookingsTab.Pending -> pendingSegmentLabel(countFor(pendingState))
         BookingsTab.Confirmed -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_confirmed)) }
         BookingsTab.Clients -> buildAnnotatedString { append(stringResource(R.string.bookings_tab_clients)) }
+        // `26-332`: the wizard's own short menu label - its page title reuses this same label (unlike
+        // Готовность, whose page renders the full question instead).
+        BookingsTab.SetupWizard -> buildAnnotatedString { append(stringResource(R.string.setup_wizard_tab)) }
         // `26-164`: the short menu label - see `BookingsConfigModalPage`'s own `title` for why the page
         // itself renders the full question instead of reusing this string.
         BookingsTab.Readiness -> buildAnnotatedString { append(stringResource(R.string.readiness_tab)) }

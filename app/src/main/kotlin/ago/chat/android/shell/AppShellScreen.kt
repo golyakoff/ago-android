@@ -314,6 +314,7 @@ internal fun AppShellScreen(
         BookingsRoute(
             showConfirmedSegment = gates.showConfirmedSegment,
             showClientsSegment = gates.showClientsSegment,
+            showSetupWizardEntry = gates.showSetupWizardEntry,
             showReadinessEntry = gates.showReadinessEntry,
             showSetupSegment = gates.showSetupSegment,
             showMastersSegment = gates.showMastersSegment,
@@ -694,6 +695,11 @@ private fun AppShellContent(
                         showConfirmedSegment = permissions.holds(Permission.CUSTOMER_READ),
                         showClientsSegment =
                             permissions.holds(Permission.CALENDAR_CONFIGURE) || permissions.holds(Permission.CUSTOMER_READ),
+                        // `26-332`: `calendar:configure` alone - [SetupWizardViewModel] reads
+                        // `booking-readiness` (and the module list), both gated on that permission
+                        // server-side. Threaded first among the config-menu gates because the guided setup
+                        // wizard is now the very first entry in the `⋮` hub, ahead of Готовность.
+                        showSetupWizardEntry = permissions.holds(Permission.CALENDAR_CONFIGURE),
                         // `26-164`: `calendar:configure` alone - the gate `GetBookingReadinessHandler`
                         // itself checks server-side. Threaded first among the config-menu gates because
                         // Готовность is now the very first entry in the `⋮` hub, ahead of Настройка.
@@ -821,6 +827,9 @@ private fun AppShellContent(
 internal data class BookingsGates(
     val showConfirmedSegment: Boolean,
     val showClientsSegment: Boolean,
+    // `26-332`: `calendar:configure` alone - the guided setup wizard's own `⋮` entry, threaded first among
+    // the config-menu gates (the wizard leads the hub, ahead of Готовность).
+    val showSetupWizardEntry: Boolean,
     val showReadinessEntry: Boolean,
     val showSetupSegment: Boolean,
     val showMastersSegment: Boolean,

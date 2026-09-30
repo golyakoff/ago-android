@@ -17,6 +17,14 @@ internal enum class BookingsTab {
     Confirmed,
     Clients,
 
+    /** `26-332` (`26-318` port): the guided setup wizard — a readiness-driven stepper that leads a
+     * first-run tenant through create-calendar → master → service → hours → schedule → publish, deriving
+     * *which* step from the same booking-readiness chain [BookingsTab.Readiness] renders
+     * ([deriveSetupWizardStep]). A `⋮` config entry, never a segment, and offered *first* — ahead of
+     * [Readiness]: the wizard is the guided front door, the Готовность panel the always-available map behind
+     * it (`26-318`'s own "let the user leave and resume — the readiness panel remains the map"). */
+    SetupWizard,
+
     /** `26-164`: the booking-readiness hub (menu label «Готовность», page title the full question «Может
      * ли клиент записаться прямо сейчас?») — the six-step chain, per calendar, that decides whether a
      * client can book right now. A `⋮` config entry, never a segment, and now the *very first* one offered
@@ -124,6 +132,12 @@ internal fun visibleBookingsSegments(
  * `GetBookingReadinessHandler` itself checks server-side, not a reuse of another entry's boolean.
  */
 internal fun visibleBookingsConfigMenuEntries(
+    // `26-332`: the guided setup wizard's own entry, `calendar:configure` alone (the identical gate every
+    // entry below is — [SetupWizardViewModel] reads `booking-readiness`, gated on that permission
+    // server-side), offered *first*: it is the guided front door a first-run tenant opens ahead of the
+    // Готовность map ([BookingsTab.SetupWizard]'s own doc comment). Its own parameter for the same reason
+    // each gate below is one.
+    showSetupWizardEntry: Boolean,
     showReadinessEntry: Boolean,
     showSetupSegment: Boolean,
     showMastersSegment: Boolean,
@@ -131,6 +145,7 @@ internal fun visibleBookingsConfigMenuEntries(
     showHoursSegment: Boolean,
 ): List<BookingsTab> =
     buildList {
+        if (showSetupWizardEntry) add(BookingsTab.SetupWizard)
         if (showReadinessEntry) add(BookingsTab.Readiness)
         if (showSetupSegment) add(BookingsTab.Calendars)
         if (showMastersSegment) add(BookingsTab.Masters)

@@ -619,6 +619,33 @@
     <string name="readiness_precondition_slots_materialized">Slots have been generated inside the horizon</string>
     <string name="readiness_precondition_calendar_published">The calendar is published</string>
 
+    <!-- `26-332` (`26-318` port): English half of the guided setup wizard - see `values/strings.xml`'s own
+         doc comment on this same key block for the full reasoning. -->
+    <string name="setup_wizard_tab">Setup guide</string>
+    <string name="setup_wizard_intro">Follow these steps, in order, to reach a bookable calendar. Leave and come back any time — this picks up wherever you left off.</string>
+    <string name="setup_wizard_step_index">Step %1$d of %2$d</string>
+    <string name="setup_wizard_open_screen">Open screen</string>
+    <string name="setup_wizard_load_failed_unexpected">Couldn\'t load the setup guide. Try again.</string>
+    <string name="setup_wizard_create_calendar_title">Create a calendar</string>
+    <string name="setup_wizard_create_calendar_intro">Give it a name and a time zone. Leave it unpublished for now — you\'ll publish it once everything else is ready.</string>
+    <string name="setup_wizard_add_master_title">Add a master</string>
+    <string name="setup_wizard_add_master_intro">Add at least one active master to the calendar. You can finish every step below for one master and add the rest later on the Masters screen, or add several now.</string>
+    <string name="setup_wizard_add_service_title">Add a service</string>
+    <string name="setup_wizard_add_service_intro">Add a service the master performs, and assign it to them.</string>
+    <string name="setup_wizard_working_hours_title">Set working hours</string>
+    <string name="setup_wizard_working_hours_intro">Pick the days and hours the master works — bookable slots are generated from them.</string>
+    <string name="setup_wizard_confirm_schedule_title">Confirm the schedule</string>
+    <string name="setup_wizard_confirm_schedule_intro">Confirm the slot length and how far ahead to open bookings — this is what turns working hours into bookable slots.</string>
+    <string name="setup_wizard_materializing_title">Generating slots</string>
+    <string name="setup_wizard_materializing_intro">Slots are being generated in the background. This can take a few seconds — open the master\'s Slots to check, and re-cut the schedule if needed.</string>
+    <string name="setup_wizard_booking_trigger_title">Set a booking trigger word</string>
+    <string name="setup_wizard_booking_trigger_intro">This is the phrase a visitor sends in chat to start booking — the calendar\'s only entry point. For now it can only be set in the console; the app has no setting for it yet.</string>
+    <string name="setup_wizard_publish_title">Publish the calendar</string>
+    <string name="setup_wizard_publish_intro">Everything is ready. Publish the calendar so clients can book.</string>
+    <string name="setup_wizard_publish_intro_named">Everything is ready. Publish “%1$s” so clients can book.</string>
+    <string name="setup_wizard_done_title">Done</string>
+    <string name="setup_wizard_done_message">Done: send %1$s in chat to start booking.</string>
+
     <!-- `26-140`: English half of Записи's own «Мастера» segment - see `values/strings.xml`'s own doc
          comment on this same key block for the full reasoning. -->
     <string name="masters_tab">Masters</string>
