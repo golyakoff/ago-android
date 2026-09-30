@@ -115,6 +115,12 @@ internal sealed interface ManualBookingUiState {
          * this value rather than re-fetching, per [ManualBookingStep]'s own doc comment. */
         val selectedDate: String? = null,
         val selectedSlot: WorkerSlot? = null,
+        /** `26-324`: which of [ManualBookingStep.Service]/[ManualBookingStep.Worker] were auto-selected and
+         * skipped rather than shown, because the step had exactly one option
+         * (`docs/backlog/26-321-*.md`'s own "if there is exactly one eligible master, skip the selection
+         * step"). [ManualBookingViewModel.back] walks past every step in here rather than always moving one
+         * ordinal at a time, so the operator never lands back on a step they never actually saw. */
+        val skippedSteps: Set<ManualBookingStep> = emptySet(),
         val submitting: Boolean = false,
         // `26-268`: [BookingActionErrorUi] reused rather than a fourth near-identical two-arm type - a
         // refusal/failure on this flow's own slot read or write reduces to the exact same "server refusal,
